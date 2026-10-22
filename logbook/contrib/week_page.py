@@ -54,7 +54,6 @@ from html import escape
 from pathlib import PurePosixPath
 from typing import TYPE_CHECKING, Any
 from urllib.parse import quote
-from zoneinfo import ZoneInfo
 
 from ..core import day as day_reader
 from ..core import day_start, drafts, goals, people
@@ -74,6 +73,7 @@ HOLD_DIR = PurePosixPath(
 )  # record-relative: where `lab hold census` writes (`labs.hold.REPORTS`)
 HOLD_CENSUSES = ("senders", "drive")  # the censuses of lines the record holds; the files one walks folders
 HOLD_FILES = tuple(HOLD_DIR / f"{c}.json" for c in HOLD_CENSUSES)  # what the page reads beside the chain
+FIRST_YEAR, LAST_YEAR = 2, 9998  # the weeks a page shows: its neighbours and nights within the calendar
 ID_SHOWN = 4  # line ids a figure links; the rest are counted
 MOVERS = 5  # the people who moved, at most
 VERDICTS = tuple(d.replace(" ", "-") for d in goals.DISPOSITIONS)  # as `goal review` takes them
@@ -141,6 +141,10 @@ def _ids(value: object) -> list[str]:
     return [v for v in value if isinstance(v, str)] if isinstance(value, list) else []
 
 
+def _list(value: object) -> list[Any]:
+    return value if isinstance(value, list) else []
+
+
 def _reads(tiers: Sequence[int] | None, tier: int) -> bool:
     return tiers is None or tier in tiers
 
@@ -195,9 +199,11 @@ def _names(site: Site) -> list[str]:
 
 def page_week(site: Site, week: str, expanded: bool = False) -> str:
     """`/week/YYYY-Www`: the week's parts, each folded with its summary (the module's docstring).
-    `ValueError` for a week the calendar does not have."""
+    `ValueError` for a week the calendar does not have, or one at its edge (the year 1 or 9999, whose
+    week before or after, or whose day's night, the calendar cannot hold)."""
+    if not FIRST_YEAR <= int(week[:4]) <= LAST_YEAR:
+        raise ValueError(f"{week}: the week page shows the years {FIRST_YEAR} to {LAST_YEAR}")
     week, monday, sunday = week_paper.parse_week(week)
-    zone = ZoneInfo(str(site.lb.meta["timezone"]))
     bounds = day_start.of(site.lb.meta)
     today = bounds.today(site.now()).isoformat()
     names = _names(site)
@@ -218,7 +224,7 @@ def page_week(site: Site, week: str, expanded: bool = False) -> str:
         else:
             empty.append(title.lower() if title != "Hold" else title)
 
-    add("The seven days", *_seven(site, days, bounds, zone))
+    add("The seven days", *_seven(site, days, bounds))
     if draft is not None:
         add("Where the week went", *_went(site, draft, names))
     else:
@@ -236,8 +242,10 @@ def page_week(site: Site, week: str, expanded: bool = False) -> str:
         add("People who moved", *_moved(site, week, monday, draft))
     else:
         empty += ["next week", "the question", "people who moved"]
-    add("The plan", *_plan(site, monday, sunday, today))
-    add("Hold", *_hold(site))
+    add("The plan", *_plan(site, monday, sunday, today, names))
+    held, hold_body, hold_tier = _hold(site)
+    add("Hold", held, hold_body)
+    tier = max(tier, hold_tier)
 
     before = week_paper.week_of((date.fromisoformat(monday) - timedelta(days=7)).isoformat())
     after = week_paper.week_of((date.fromisoformat(monday) + timedelta(days=7)).isoformat())
@@ -291,7 +299,7 @@ def _lines(site: Site, ids: Sequence[str]) -> str:
 
 
 def _seven(
-    site: Site, days: Sequence[tuple[str, Mapping[str, Any], Any]], bounds: day_start.DayStart, zone: ZoneInfo
+    site: Site, days: Sequence[tuple[str, Mapping[str, Any], Any]], bounds: day_start.DayStart
 ) -> tuple[str, str]:
     rows = []
     legend = ""
@@ -309,20 +317,26 @@ def _seven(
     return summary, f'<ol class="week">\n{"".join(rows)}</ol>\n{legend}'
 
 
+def _place(site: Site, p: Mapping[str, Any], names: Sequence[str]) -> str:
+    """A place's hours with its lines; a place named as a person is withheld, never beside its hours."""
+    lines = _lines(site, _ids(p.get("lines")))
+    if beside(f"{p.get('place')} {p.get('hours')}", names):
+        return f'<li class="line mute">{escape(WITHHELD_BESIDE)}{lines}</li>\n'
+    place, hours = escape(str(p.get("place") or "")), escape(str(p.get("hours")))
+    return f'<li class="line">{place}{DOT}{hours} h{lines}</li>\n'
+
+
 def _went(site: Site, draft: Mapping[str, Any], names: Sequence[str]) -> tuple[str, str]:
-    numbers = draft.get("numbers") or {}
+    found = draft.get("numbers")
+    numbers: Mapping[str, Any] = found if isinstance(found, dict) else {}
     out: list[str] = []
     counts: list[str] = []
-    places = [p for p in numbers.get("places") or [] if isinstance(p, dict)]
+    places = [p for p in _list(numbers.get("places")) if isinstance(p, dict)]
     if places:
-        rows = "".join(
-            f'<li class="line">{escape(str(p.get("place") or ""))}{DOT}{escape(str(p.get("hours")))} h'
-            f"{_lines(site, _ids(p.get('lines')))}</li>\n"
-            for p in places
-        )
+        rows = "".join(_place(site, p, names) for p in places)
         out.append(f'<h3>Hours by place</h3>\n<ul class="plain">\n{rows}</ul>\n')
         counts.append(_plural(len(places), "place"))
-    threads = [t for t in numbers.get("threads") or [] if isinstance(t, dict)]
+    threads = [t for t in _list(numbers.get("threads")) if isinstance(t, dict)]
     shown = []
     for t in threads:
         title = str(t.get("thread") or "")
@@ -374,12 +388,6 @@ def _went(site: Site, draft: Mapping[str, Any], names: Sequence[str]) -> tuple[s
     return DOT.join(counts) or "no figures", "".join(out)
 
 
-def _goal_days(
-    g: shelf_goals.Goal, shelf: shelf_goals.Shelf, days: Sequence[tuple[str, Any, Any]]
-) -> list[str]:
-    return [day for day, _data, marks in days if g in day_rhythm.touched(shelf, marks.lines)]
-
-
 def _goals(
     site: Site,
     shelf: shelf_goals.Shelf | None,
@@ -399,10 +407,11 @@ def _goals(
     for review in ((draft or {}).get("proposed") or {}).get("goals") or []:
         if isinstance(review, dict) and isinstance(review.get("goal"), str):
             proposed[str(shelf.by_line.get(review["goal"]) or review["goal"])] = review
+    by_day = [(day, day_rhythm.touched(shelf, marks.lines)) for day, _data, marks in days]
     shown = []
     touched_n = 0
     for g in shelf.goals:
-        on = _goal_days(g, shelf, days)
+        on = [day for day, touched in by_day if g in touched]
         if g.state != "open" and not on:
             continue
         touched_n += 1 if on else 0
@@ -423,7 +432,13 @@ def _goals(
         if review is not None and site.with_drafts:
             index = review.get("segment")
             why = ""
-            if isinstance(index, int) and 0 <= index < len(segments) and segments[index].get("supported"):
+            if (
+                isinstance(index, int)
+                and not isinstance(index, bool)
+                and 0 <= index < len(segments)
+                and isinstance(segments[index], dict)
+                and segments[index].get("supported")
+            ):
                 said = str(segments[index].get("text") or "")
                 if not beside(said, names):
                     why = f": {escape(said)}"
@@ -492,7 +507,8 @@ def _question(draft: Mapping[str, Any], names: Sequence[str]) -> tuple[str, str]
     text = str(asked["text"])
     if beside(text, names):
         return "one question", f'<p class="mute">{escape(WITHHELD_BESIDE)}</p>\n'
-    kind = str((asked.get("entity") or {}).get("type") or "idea")
+    entity = asked.get("entity")
+    kind = str(entity.get("type") or "idea") if isinstance(entity, dict) else "idea"
     command = f'logbook status {kind} "{asked.get("label") or ""}" STATUS'
     return "one question, asked once", (
         f'<p class="ink">{escape(text)}</p>\n'
@@ -504,7 +520,8 @@ def _question(draft: Mapping[str, Any], names: Sequence[str]) -> tuple[str, str]
 def _contacts(draft: Mapping[str, Any] | None) -> dict[str, tuple[str, int]]:
     """id → (name, contacts) of the people a week's draft counts (`numbers.people`)."""
     out: dict[str, tuple[str, int]] = {}
-    for p in ((draft or {}).get("numbers") or {}).get("people") or []:
+    numbers = (draft or {}).get("numbers")
+    for p in _list(numbers.get("people")) if isinstance(numbers, dict) else []:
         if isinstance(p, dict) and isinstance(p.get("id"), str):
             out[p["id"]] = (str(p.get("name") or ""), _n(p.get("contacts")))
     return out
@@ -534,7 +551,7 @@ def _moved(site: Site, week: str, monday: str, draft: Mapping[str, Any]) -> tupl
     )
 
 
-def _plan(site: Site, monday: str, sunday: str, today: str) -> tuple[str, str]:
+def _plan(site: Site, monday: str, sunday: str, today: str, names: Sequence[str]) -> tuple[str, str]:
     if not _reads(site.tiers, 1):
         return "", ""
     day = min(max(today, monday), sunday)  # the week's last day the clock has reached, its first ahead
@@ -545,8 +562,15 @@ def _plan(site: Site, monday: str, sunday: str, today: str) -> tuple[str, str]:
     if not found.mapped or (found.sprint is None and found.trip is None):
         return "", ""
 
+    def named(ref: Mapping[str, Any]) -> bool:  # a title that names a person stands beside the dates
+        return any(n in str(ref.get("title") or "") for n in names if n)
+
     def row(label: str, ref: Mapping[str, Any], after: str = "") -> str:
         line = site.href(f"/line/{quote(str(ref.get('line')), safe='')}") if ref.get("line") else None
+        if named(ref):
+            linked = escape(WITHHELD_BESIDE)
+            linked = f'<a href="{escape(line)}">{linked}</a>' if line is not None else linked
+            return f'<li class="line">{escape(label)}: {linked}</li>\n'
         title = escape(str(ref.get("title") or plan.UNTITLED))
         when = plan._date_text(ref.get("date"))
         linked = f'<a href="{escape(line)}">{title}</a>' if line is not None else title
@@ -555,7 +579,9 @@ def _plan(site: Site, monday: str, sunday: str, today: str) -> tuple[str, str]:
     rows, summary = [], []
     if found.sprint is not None:
         rows.append(row("the sprint", found.sprint))
-        summary.append(str(found.sprint.get("title") or plan.UNTITLED))
+        summary.append(
+            "the sprint" if named(found.sprint) else str(found.sprint.get("title") or plan.UNTITLED)
+        )
     if found.trip is not None:
         rows.append(row("the next trip", found.trip, f"{DOT}{plan._days_text(int(found.trip['days']))}"))
         summary.append(f"next trip {plan._days_text(int(found.trip['days']))}")
@@ -579,58 +605,63 @@ def hold_report(site: Site, census: str) -> dict[str, Any] | None:
     return found if isinstance(found, dict) and isinstance(found.get("totals"), dict) else None
 
 
-def _hold(site: Site) -> tuple[str, str]:
+def _hold(site: Site) -> tuple[str, str, int]:
     """Hold's senders and Drive censuses as they stand, counts only, each only where the page reads
-    every tier the report read; nothing of a name. The census itself is Hold's, a lab: the page reads
+    every tier up to the one the report says it read (a report that names no tier is not read);
+    nothing of a name. And the highest tier shown. The census itself is Hold's, a lab: the page reads
     what it wrote and never runs it."""
-    top = max(site.tiers) if site.tiers else None
-    rows, summary, above = [], [], []
+    rows, summary, left = [], [], []
+    shown = 0
     for census in HOLD_CENSUSES:
         report = hold_report(site, census)
         if report is None:
             continue
         tier = _n(report.get("tier"))
-        if site.tiers is not None and top is not None and (tier > top or (tier and tier not in site.tiers)):
-            above.append(f"the {census} census read tier {tier}")
+        if not 1 <= tier <= 3:
+            left.append(f"the {census} report names no tier")
+            continue
+        if site.tiers is not None and not all(t in site.tiers for t in range(1, tier + 1)):
+            left.append(f"the {census} census read tier {tier}")
             continue
         t = report["totals"]
         made = str(report.get("made_at") or "")[:10]
-        try:
-            if census == "senders" and t.get("received"):
-                said = [
-                    f"{_plural(int(t['senders']), 'sender')} wrote {_plural(int(t['received']), 'mail')}",
-                    f"{int(t['never_answered'])} never answered",
-                ]
-                letters = report.get("newsletters") or {}
-                if letters.get("held"):
-                    said.append(_plural(int(letters["senders"]), "newsletter"))
-                summary.append(_plural(int(t["senders"]), "sender"))
-            elif census == "drive" and t.get("files"):
-                days = int((report.get("settings") or {}).get("untouched_days") or 0)
-                said = [
-                    _plural(int(t["files"]), "file"),
-                    f"{int(t['untouched'])} untouched for {days} days",
-                    f"{int(t['shared'])} shared",
-                    f"{int(t['gone'])} trashed",
-                ]
-                summary.append(_plural(int(t["files"]), "file"))
-            else:
-                continue
-        except (KeyError, TypeError, ValueError):  # a report of another shape: not read, never a traceback
+        if census == "senders" and _n(t.get("received")):
+            said = [
+                f"{_plural(_n(t.get('senders')), 'sender')} wrote {_plural(_n(t.get('received')), 'mail')}",
+                f"{_n(t.get('never_answered'))} never answered",
+            ]
+            letters = report.get("newsletters")
+            if isinstance(letters, dict) and letters.get("held") is True:
+                said.append(_plural(_n(letters.get("senders")), "newsletter"))
+            summary.append(_plural(_n(t.get("senders")), "sender"))
+        elif census == "drive" and _n(t.get("files")):
+            settings = report.get("settings")
+            days = _n(settings.get("untouched_days")) if isinstance(settings, dict) else 0
+            said = [
+                _plural(_n(t.get("files")), "file"),
+                f"{_n(t.get('untouched'))} untouched for {days} days",
+                f"{_n(t.get('shared'))} shared",
+                f"{_n(t.get('gone'))} trashed",
+            ]
+            summary.append(_plural(_n(t.get("files")), "file"))
+        else:
             continue
+        shown = max(shown, tier)
         label = "Mail" if census == "senders" else "Drive"
         rows.append(
             f'<li>{label}: {escape(DOT.join(said))} <span class="mute">on {escape(made)}</span></li>\n'
         )
-    if above:
-        rows.append(f'<li class="mute">Not read here: {escape(", ".join(above))}.</li>\n')
+    if left:
+        rows.append(f'<li class="mute">Not read here: {escape(", ".join(left))}.</li>\n')
     if not rows:
-        return "", ""
-    return DOT.join(summary) or "not read here", (
+        return "", "", 0
+    return (
+        DOT.join(summary) or "not read here",
         f'<ul class="plain">\n{"".join(rows)}</ul>\n'
         '<p class="mute">Hold\'s census as it stands, counts only, from the reports Hold last wrote.'
         ' Its sweep stays Hold\'s: <code class="cmd">logbook lab hold census senders</code>, then'
-        ' <code class="cmd">drive</code>.</p>\n'
+        ' <code class="cmd">drive</code>.</p>\n',
+        shown,
     )
 
 

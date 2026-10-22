@@ -419,6 +419,59 @@ def test_a_draft_or_a_report_of_another_shape_is_never_a_traceback(lb: Logbook, 
     assert "<i>Home</i>" not in page
 
 
+def test_a_plan_title_or_a_place_that_names_a_person_is_never_beside_a_number(lb: Logbook) -> None:
+    """The plan's titles are synced text and a place is named by the owner: either may name a person, and
+    the page's figures (the dates, the days to go, the hours) never stand beside that name."""
+    lb.append_many(
+        [
+            notion("2026-06-02T08:00:00Z", TRIP, "Lofoten with Kari Nordmann", action="edited",
+                   parent={"type": "database", "id": TRIPS}, path=["Plan", "Trips"],
+                   properties={"When": {"start": "2026-07-03", "end": "2026-07-10"}}),
+        ]
+    )  # fmt: skip
+    page = _page(_site(lb))
+    assert beside(_seen(page), _names(lb)) == []
+    assert week_page.WITHHELD_BESIDE in html.unescape(_fold(page, "The plan"))
+    draft = {"line": "x", "model": MODEL, "segments": [], "numbers": {"places": [
+        {"place": "Kari Nordmann", "hours": 2.0, "lines": []}]}}  # fmt: skip
+    summary, body = week_page._went(_site(lb), draft, ["Kari Nordmann"])
+    assert beside(_seen(body), ["Kari Nordmann"]) == [] and summary
+
+
+@pytest.mark.parametrize(
+    "report",
+    [
+        {"totals": {"received": 9, "senders": 5, "never_answered": 1}},  # no tier
+        {"tier": "two", "totals": {"received": 9, "senders": 5, "never_answered": 1}},
+        {"tier": [1], "totals": {"received": 9, "senders": 5, "never_answered": 1}},
+        {"tier": 2, "totals": {"received": 9, "senders": 1e400, "never_answered": 1}},
+        {"tier": 1, "newsletters": [1], "settings": "x", "totals": {"received": 9, "senders": 5,
+                                                                    "never_answered": 1}},
+    ],
+)  # fmt: skip
+def test_a_hold_report_of_unknown_tier_is_not_read_and_none_is_a_traceback(lb: Logbook, report) -> None:
+    (lb.root / "state" / "hold" / "senders.json").write_text(json.dumps(report), encoding="utf-8")
+    for tiers in (None, (1,), ()):
+        page = _page(_site(lb, tiers=tiers))
+        tier = report.get("tier")
+        readable = isinstance(tier, int) and (tiers is None or all(t in tiers for t in range(1, tier + 1)))
+        if not readable:
+            assert "wrote 9 mails" not in page, (tiers, report)
+
+
+def test_a_question_whose_entity_is_not_an_object_is_never_a_traceback(lb: Logbook, monkeypatch) -> None:
+    odd = {"line": "y", "model": MODEL, "tier": 2, "segments": [],
+           "proposed": {"question": {"text": "Still exploring?", "entity": "idea", "label": 3},
+                        "goals": [{"goal": "g", "disposition": "done", "segment": True}]}}  # fmt: skip
+    monkeypatch.setattr(week_page, "week_draft", lambda site, week: (odd, None))
+    assert "Still exploring?" in _page(_site(lb))
+
+
+@pytest.mark.parametrize("week", ["0001-W01", "0001-W02", "9999-W52"])
+def test_a_week_at_the_calendar_s_edge_is_a_400_never_a_traceback(lb: Logbook, week: str) -> None:
+    assert _site(lb).respond(f"/week/{week}", "").status == 400
+
+
 def test_a_week_that_is_not_one_is_a_400(lb: Logbook) -> None:
     site = _site(lb)
     assert site.respond("/week/2026-W54", "").status == 400
