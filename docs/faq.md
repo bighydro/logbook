@@ -32,7 +32,7 @@ What comes back is a draft. It sits above your day, marked as a draft. Each pass
 
 ### A model on your own machine
 
-Some commands run a model on this machine: they transcribe recordings, describe photos, judge promises, tell voices apart and hear a spoken reflection. They need no entry, since the model runs here. While they run, the program tells the model's libraries not to fetch anything. The library that tells voices apart reports usage by default, and the program switches that off. A model the machine does not have is never fetched by itself. Only `--fetch-model` downloads one.
+Some commands run a model on this machine: they transcribe recordings, describe photos, judge promises, tell voices apart and hear a spoken reflection. They need no entry, since the model runs here. While they run, the program tells the model's libraries not to fetch anything. The library that tells voices apart reports usage by default, and the program switches that off. A model the machine does not have is never fetched by itself. Only `--fetch-model` downloads one, and `videos fetch --models` the models for videos.
 
 That is an instruction to the libraries, not a wall. The tests prove that the program's own code opens no connection. They run with a stand-in for the model, so they say nothing about the model itself, and the model files are outside the threat model. The program does not vouch for the models, or for who made them.
 
@@ -76,6 +76,6 @@ Not yet. There is no app to download. The record on a phone is on the roadmap, i
 
 What exists is the Library, `logbook serve`: pages your own machine serves to your browser. It answers that machine and no other. A phone reaches it through a tunnel or a private network you set up yourself. `/today` opens today's page, the one to keep on a phone.
 
-At the foot of each day you write a few sentences about it. Once a transcription model is installed, you can say them instead. The page proposes the promises it finds in your words, and you tick the ones you made. Then you sign. On the machine itself, or from a phone through a tunnel, the evening needs no terminal. Through a private network's own proxy, you can read the pages but not sign them.
+At the foot of each day you write a few sentences about it. Once a transcription model is installed, you can say them instead. The page proposes the promises it finds in your words, and you tick the ones you made. Then you sign. On the machine itself, or from a phone through a tunnel, the evening needs no terminal. Through a private network's own proxy, you can read the pages, and sign them too once `logbook setup phone` names your phone.
 
 **Where this is written.** [ROADMAP.md](ROADMAP.md), *4 · Everyone* · [In a browser](serve.md): *Three rules*, *Reaching it from another device*, *Reflect and Sign* · `tests/test_serve.py::test_refuses_to_bind_anything_but_loopback` · `tests/test_serve.py::test_today_is_the_current_day_in_the_records_timezone` · [The signed day](signed-day.md)

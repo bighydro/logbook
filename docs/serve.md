@@ -329,6 +329,62 @@ nothing it serves leaves the machine, so whatever you put in front of it decides
 them. Keep it to your own devices. The server does not know it is there and does not change for it:
 same pages, same headers, the same refusal of any other host.
 
+## From your phone
+
+Off by default. Behind Tailscale Serve the phone reads every page; with one setting it writes too:
+Reflect, With, Star and Sign on the Day, and the shelves' forms, each as from this machine.
+
+On the machine that serves the record (the Air):
+
+```bash
+tailscale serve --bg 8765        # https://server.tail1234.ts.net/ on your tailnet → http://127.0.0.1:8765
+logbook setup phone --origin https://server.tail1234.ts.net --login ines@example.org
+```
+
+`tailscale serve --bg 8765` puts the Library behind HTTPS on your tailnet, with the machine's own
+certificate, and keeps it there across restarts; tailscaled forwards each request to
+`127.0.0.1:8765`, so it reaches the server from loopback. It is not `tailscale funnel`, which would
+put the pages on the internet: never funnel this port. The origin is the address the phone opens,
+`https://` and the machine's tailnet name, nothing after it. The login is yours on the tailnet:
+`tailscale status` on the Air lists each device with the login it is signed in as (or
+`tailscale whois` with the phone's tailnet address, or the admin console's Users page). `setup
+phone` prints what it will write to `logbook.json`, asks for a yes typed at a terminal, and writes
+nothing else; the server reads it with each POST, so no restart. `logbook setup phone` alone says
+what is set, `--off` removes it, and `logbook doctor` names the origin on its `phone` line (the
+login shortened). Before you travel, star a line from the phone at home: a `303` and the star.
+
+What it allows: a POST that tailscaled forwards from your phone, all at once: from loopback, with
+the browser's `Origin` exactly the setting's (the host in any case, `:443` written or not), the
+`Host` the setting's host, and `Tailscale-User-Login`, the header Tailscale Serve sets from the
+device's tailnet identity, exactly your login, each header sent once, and not from inside a frame
+(`Sec-Fetch-Dest`, when the browser sends it, is `document`). Then the busy `409`, one write at a
+time, the CLI's own functions, the same headers: everything as from this machine.
+
+What stays refused, a `403` with nothing written: any other device or user on the tailnet (another
+login, or none: a tagged device and a Funnel request carry no login), another tailnet name, `http://`,
+another port, `Origin: null`, a page on another site in the phone's browser (its own origin), a form
+posted from a frame. Without the setting, the phone's forms are refused as they always were, and
+the refusal says what would allow them.
+
+A program on the tailnet is refused too. Behind Tailscale Serve every request arrives from
+loopback, so the server tells this machine's own requests from a proxy's by what the proxy adds: a
+request is *proxied* when its `Host` is not `127.0.0.1` or `[::1]` (any port; `localhost` is a
+name, not one of them) or when it carries any `Tailscale-*` or `X-Forwarded-*` header. A proxied
+POST is answered only as the phone's, through the checks above, and never because it carries no
+`Origin`: `curl` from any device on the tailnet, with no Origin or a login it typed, is a `403` with
+nothing written, the setting on or off. Requests to `http://127.0.0.1:8765` or
+`http://[::1]:8765` from this machine are answered as before (an SSH tunnel's `127.0.0.1:8766`
+too); a request naming any other host, `localhost` included, is treated as coming through a proxy,
+so a form posted to `http://localhost:8765` is refused unless it is the phone's. That rests on tailscaled sending the tailnet name as `Host`
+and adding its `X-Forwarded-*` headers, as Tailscale Serve does today; the star from the phone
+before you travel confirms the first, and a `curl` from another device that comes back `403` the
+second. Keep the tailnet name to your own devices all the same (every tier is on the pages it
+serves), and never `tailscale funnel` the port. Serve it as HTTPS, `tailscale serve --bg 8765`, never
+as a raw TCP forward (`tailscale serve --tcp`, or any port forward): a forward adds no header and
+keeps the client's own `Host`, so the server could not tell another device's request from this
+machine's. The policy's `write` list (the MCP door, ADR 0022)
+is not this and is never read here; ADR 0024 records the change.
+
 ## Places — name this place
 
 `/places` is two things. First the named places of `places.json`, as `setup places list` prints them,
@@ -369,12 +425,15 @@ binds 127.0.0.1 and runs as the record's own user: whoever can reach the form ca
 `setup places review` in a terminal here. The server holds it to that: a POST is answered only when
 the connection comes from this machine (the client address is loopback, `127.0.0.0/8` or `::1`) and,
 when the browser sends an `Origin` header, it names `127.0.0.1` or `[::1]` (the server's own pages,
-as reached from here; not `localhost`, a name, and not another scheme or host). Anything else is a
-`403` and nothing is written. Every page is sent with `Referrer-Policy: same-origin`, so the browser
+as reached from here; not `localhost`, a name, and not another scheme or host). A request that came
+through a proxy (its `Host` not `127.0.0.1` or `[::1]`, or a `Tailscale-*` or `X-Forwarded-*`
+header) is answered only as the owner's phone (*From your phone*). Anything else is a `403` and
+nothing is written. Every page is sent with `Referrer-Policy: same-origin`, so the browser
 names the page a form came from (`Origin: http://127.0.0.1:<port>`) and sends nothing to other sites
 (under `no-referrer` it would send `Origin: null`, and every form would be refused). Through an SSH
 tunnel the browser's origin is `127.0.0.1` and the form works; behind a proxy with its own name it is read-only, as every other page is written, and the
-naming is done here. `GET /places/review` is a `405`.
+naming is done here, unless the proxy is Tailscale Serve and `logbook setup phone` names it (*From
+your phone*). `GET /places/review` is a `405`.
 
 **A Day's stay without a name** carries a small *name this place* link to the Places page at its
 cluster (`/places?at=lat,lon`, which redirects to the page the cluster is on and scrolls to it, or

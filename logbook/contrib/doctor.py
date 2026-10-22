@@ -59,6 +59,12 @@ The checks, in the order they print:
 - `crossing`: `policy/crossing.json` is the documented shape and every destination's ceiling is listed
   as it counts today (ADR 0016); an entry past its `until` day counts as tier 0 and is a warn naming
   it (ADR 0022). No file is the defaults; a file that is not the shape is a fail naming it.
+- `phone`: whether the owner's own phone may write through the Library (`logbook setup phone`,
+  docs/serve.md): this machine only, as by default, or the origin it may write from and the login,
+  the part before @ shortened, never whole. A warn when the setting is not the shape (it lets nothing
+  in), or when it names an origin and no `tailscale` is found here (on the PATH doctor is given, or
+  where the macOS and Windows apps put it): nothing is run to find out, and without a PATH to look
+  on it says nothing of it.
 - `drafts`: a warn naming the days whose standing draft (RFC 0036) is above what the `dream` entry
   allows today, lowered, expired or removed since the day was dreamed: every reader withholds it
   (derived material follows the policy, not the head), and `dream --catch-up` dreams the day again
@@ -136,7 +142,7 @@ from ..core import (
 )
 from ..core.chain import Line, is_sealed
 from ..core.store import RETRACTION, FormatError, Logbook, read_line_at, retractions
-from . import adapters, first_run, home, last_run, schedule, serve, synthesis, videos
+from . import adapters, first_run, home, last_run, phone, schedule, serve, synthesis, videos
 from . import service as serve_service
 from .adapters import service_account
 
@@ -1410,6 +1416,51 @@ def serve_check(env: Mapping[str, str]) -> Check:
     return Check("serve", status, "; ".join(parts))
 
 
+#: where the Tailscale apps put the command when it is not on the PATH: macOS's app, Windows' installer
+TAILSCALE_APPS = (
+    Path("/Applications/Tailscale.app/Contents/MacOS/Tailscale"),
+    Path("C:/Program Files/Tailscale/tailscale.exe"),
+)
+Finder = Callable[[str, str], str | None]  # (command, PATH) -> its path, as shutil.which
+
+
+def _tailscale(command: str, path: str) -> str | None:
+    """`tailscale` on `path`, or where an app put it; read from the disk, never run."""
+    found = shutil.which(command, path=path)
+    if found is not None:
+        return found
+    return next((str(app) for app in TAILSCALE_APPS if app.is_file()), None)
+
+
+def phone_check(lb: Logbook, env: Mapping[str, str], found: Finder = _tailscale) -> Check:
+    """`phone` in logbook.json: whether the owner's phone may write through the Library, and from
+    which origin; the login shortened (`phone.shown`). A warn when it is not the shape, or when it
+    names an origin and `found` finds no `tailscale` on the PATH; no PATH, nothing said of it."""
+    meta = lb.meta
+    problem = phone.problem(meta)
+    if problem is not None:
+        return Check(
+            "phone", "warn", f"logbook.json phone lets nothing in: {problem}; `logbook setup phone` writes it"
+        )
+    setting = phone.of(meta)
+    if setting is None:
+        return Check(
+            "phone",
+            "pass",
+            "the Library is written from this machine only; `logbook setup phone` lets your phone write too",
+        )
+    detail = f"your phone may write through the Library from {setting.origin} as {phone.shown(setting.login)}"
+    path = env.get("PATH")
+    if path and found("tailscale", path) is None:
+        return Check(
+            "phone",
+            "warn",
+            f"{detail}, but no tailscale is found on this machine, and Tailscale Serve is what carries it"
+            " here",
+        )
+    return Check("phone", "pass", detail)
+
+
 def cloud_folder(root: Path, env: Mapping[str, str]) -> str | None:
     """The sync service whose folder holds `root`, by a part of its path (as given and resolved,
     so a symlink into the folder is seen) or the OneDrive variable; None for a plain folder."""
@@ -1488,6 +1539,7 @@ def run(
         checks.append(google)
     checks.extend(env_checks(lb, env, sources))
     checks.append(crossing_check(lb.root))
+    checks.append(phone_check(lb, env))
     withheld = drafts_check(lb, state)
     if withheld is not None:
         checks.append(withheld)

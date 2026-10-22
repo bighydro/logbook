@@ -56,7 +56,11 @@ to `/with` (`Site._with`: `presence.state`, the lines `logbook with` writes). Th
 acts, allowed because the server binds 127.0.0.1 and runs as the record's own user: a POST is
 answered only when the connection comes from this machine (the client address is loopback) and the
 form was submitted from the server's own pages (the browser's `Origin`, when it sends one, names
-127.0.0.1); anything else is a 403 and nothing is written. Every write is one at a time
+127.0.0.1); a request that came through a proxy (`phone.proxied`: a Host that is not 127.0.0.1 or
+[::1], or a `Tailscale-*` or `X-Forwarded-*` header) is answered only once `logbook setup phone`
+names the owner's own phone in `logbook.json` and it is the phone's, through Tailscale Serve
+(`phone.allows`: its origin, its Host and its login, all at once); anything else is a 403 and
+nothing is written. Every write is one at a time
 (`Site._write_lock`) and through the CLI's own function, under the record's writer lock and never
 waiting for it: another command writing is one answer for every act, the shelves', the Manifest's
 and the Day's alike (`Site._busy`): a 409, one sentence (`BUSY`), the form's input kept in a form
@@ -165,6 +169,7 @@ from . import (
     journeys,
     orgs,
     person_page,
+    phone,
     places_review,
     reflect,
     shelf_agents,
@@ -740,6 +745,8 @@ class Site:
         client: str,
         origin: str | None,
         upload: Upload | None = None,
+        *,
+        asked: phone.Asked | None = None,
     ) -> Response:
         """A POST: one of the forms of the server's own pages, each through the function the CLI
         runs for the same act. The Library's (`WRITE_PATHS`), under the record's writer lock: the
@@ -752,6 +759,11 @@ class Site:
         once (`_busy`: a 409, the form kept), and nothing is written. Refused (403, nothing
         written) unless `client`, the connection's address, is loopback and `origin`, the browser's
         Origin header when it sent one, names 127.0.0.1: this machine, the server's own pages. A
+        request that came through a proxy (`phone.proxied`: `asked`, its headers, name a Host that is
+        not 127.0.0.1 or [::1], or carry a `Tailscale-*` or `X-Forwarded-*` header) is answered only
+        when `logbook.json` names the owner's phone (`phone`, off by default) and the headers are the
+        phone's (`phone.allows`: the Origin, the Host and the login the setting names, read with each
+        POST), and never by the Origin's absence. A
         field sent more than once (the Sign form's boxes) arrives as its values joined with commas,
         as `--accept N,N` takes them; `upload` is the file a form carried, the Day's recording. One
         write at a time (`_write_lock`)."""
@@ -763,7 +775,13 @@ class Site:
                 f"nothing to post at {path}; the server's own forms post to {posts}, a Day's to"
                 f" /day/YYYY-MM-DD/reflect and /day/YYYY-MM-DD/sign, {STAR_PATH} and {WITH_PATH}",
             )
-        if not _loopback(client) or (origin is not None and not _loopback_origin(origin)):
+        # through Tailscale Serve (or any proxy): the phone's checks, or nothing
+        proxied = phone.proxied(asked)
+        if (
+            not _loopback(client)
+            or (proxied and not phone.allows(self.lb.meta, origin, asked))
+            or (not proxied and origin is not None and not _loopback_origin(origin))
+        ):
             where = f"from {client!r}" + (f", origin {origin!r}" if origin is not None else "")
             what = {
                 REVIEW_PATH: "a place is named from this machine only, through the server's own pages or"
@@ -789,7 +807,7 @@ class Site:
                 "a day is reflected on and signed from this machine only, through the server's own"
                 " pages or `logbook day reflect`",
             )
-            return self._error(403, f"refused {where}: {what}; nothing was written")
+            return self._error(403, f"refused {where}: {what}, {phone.FROM_PHONE}; nothing was written")
         try:
             if day_act is not None:
                 day, act = day_act.group(1), day_act.group(2)
@@ -4658,7 +4676,8 @@ class Handler(BaseHTTPRequestHandler):
         else:
             query = parse_qs(raw.decode("utf-8", "replace"), keep_blank_values=True)
             form = {k: ",".join(v) for k, v in query.items()}
-        response = site.write(path, form, str(self.client_address[0]), self.headers.get("Origin"), upload)
+        client, origin = str(self.client_address[0]), self.headers.get("Origin")
+        response = site.write(path, form, client, origin, upload, asked=phone.Asked.of(self.headers))
         self._send(response, body=True)
 
     def _answer(self, body: bool) -> None:
