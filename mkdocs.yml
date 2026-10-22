@@ -78,6 +78,7 @@ nav:
       - "0021 journey/v1 is the written form": adr/0021-journey-is-the-written-form.md
       - "0022 The record's home": adr/0022-the-records-home.md
       - "0023 Digital events do not make a stay": adr/0023-digital-events-do-not-make-a-stay.md
+      - "0024 The owner's phone writes through the Library": adr/0024-the-owners-phone-writes-through-the-library.md
       - "0025 Derived tables": adr/0025-derived-tables.md
   - RFCs:
       # The RFCs live in the repository under rfcs/, not under docs/; the site links there.
