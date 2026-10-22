@@ -396,6 +396,29 @@ def test_a_tier_1_page_shows_no_tier_2_name_or_number(lb: Logbook) -> None:
     assert re.search(r"\d+ files?", page), "Drive's lines are tier 1"
 
 
+def test_a_draft_or_a_report_of_another_shape_is_never_a_traceback(lb: Logbook, monkeypatch) -> None:
+    """SPEC §5: a reader never fails on a payload it cannot interpret. Counts that are text, ids that are
+    a string, a report whose tier is a word: each part reads what it can and the page answers."""
+    odd = {
+        "line": "019cadd3-0000-7000-8000-000000000002",
+        "model": MODEL,
+        "tier": 2,
+        "segments": [{"part": "next_week", "text": "<b>Sail</b>", "evidence": "e1", "supported": True}],
+        "numbers": {
+            "places": [{"place": "<i>Home</i>", "hours": "many", "lines": "abc"}, "not a place"],
+            "threads": [{"thread": "Harbour", "kind": "mail", "count": "twelve", "lines": [1, None]}],
+            "people": [{"id": 7, "name": "Kari Nordmann", "contacts": "lots"}],
+            "energy": {"sleep": {"nights": "seven", "hours": None, "lines": {}}, "training": "none"},
+        },
+        "proposed": {"goals": [{"goal": 3}, "x"], "question": {"text": 4}},
+    }
+    monkeypatch.setattr(week_page, "week_draft", lambda site, week: (odd, None))
+    (lb.root / "state" / "hold" / "senders.json").write_text('{"tier": "two", "totals": {"received": "x"}}')
+    page = _page(_site(lb))
+    assert "<b>Sail</b>" not in page and "&lt;b&gt;Sail&lt;/b&gt;" in page, "escaped, never markup"
+    assert "<i>Home</i>" not in page
+
+
 def test_a_week_that_is_not_one_is_a_400(lb: Logbook) -> None:
     site = _site(lb)
     assert site.respond("/week/2026-W54", "").status == 400

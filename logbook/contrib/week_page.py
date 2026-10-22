@@ -131,6 +131,16 @@ def _plural(n: int, noun: str, many: str | None = None) -> str:
     return f"{n} {noun if n == 1 else many or noun + 's'}"
 
 
+def _n(value: object) -> int:
+    """A count as the draft or a report keeps it; anything else (a string, a bool, a float) is 0."""
+    return value if isinstance(value, int) and not isinstance(value, bool) else 0
+
+
+def _ids(value: object) -> list[str]:
+    """The line ids a figure keeps (`lines`, `evidence`); anything but a list of strings is none."""
+    return [v for v in value if isinstance(v, str)] if isinstance(value, list) else []
+
+
 def _reads(tiers: Sequence[int] | None, tier: int) -> bool:
     return tiers is None or tier in tiers
 
@@ -307,7 +317,7 @@ def _went(site: Site, draft: Mapping[str, Any], names: Sequence[str]) -> tuple[s
     if places:
         rows = "".join(
             f'<li class="line">{escape(str(p.get("place") or ""))}{DOT}{escape(str(p.get("hours")))} h'
-            f"{_lines(site, p.get('lines') or [])}</li>\n"
+            f"{_lines(site, _ids(p.get('lines')))}</li>\n"
             for p in places
         )
         out.append(f'<h3>Hours by place</h3>\n<ul class="plain">\n{rows}</ul>\n')
@@ -318,19 +328,19 @@ def _went(site: Site, draft: Mapping[str, Any], names: Sequence[str]) -> tuple[s
         title = str(t.get("thread") or "")
         if beside(title, names):
             shown.append(
-                f'<li class="line mute">{escape(WITHHELD_BESIDE)}{_lines(site, t.get("lines") or [])}</li>\n'
+                f'<li class="line mute">{escape(WITHHELD_BESIDE)}{_lines(site, _ids(t.get("lines")))}</li>\n'
             )
             continue
         bits = [escape(title), escape(str(t.get("kind") or ""))]
         named = t.get("kind") == "chat" or any(n and n in title for n in names)
         if not named:  # a person is never beside a count: a chat is its counterpart, a title may name one
-            figure = _plural(int(t.get("count") or 0), "line")
+            figure = _plural(_n(t.get("count")), "line")
             if t.get("hours"):
                 figure += f", {t['hours']} h"
             elif t.get("minutes"):
                 figure += f", {t['minutes']} min"
             bits.append(escape(figure))
-        shown.append(f'<li class="line">{DOT.join(bits)}{_lines(site, t.get("lines") or [])}</li>\n')
+        shown.append(f'<li class="line">{DOT.join(bits)}{_lines(site, _ids(t.get("lines")))}</li>\n')
     if shown:
         out.append(f'<h3>Threads</h3>\n<ul class="plain">\n{"".join(shown)}</ul>\n')
         counts.append(_plural(len(shown), "thread"))
@@ -340,18 +350,18 @@ def _went(site: Site, draft: Mapping[str, Any], names: Sequence[str]) -> tuple[s
             rows_ = []
             sleep, training = energy.get("sleep"), energy.get("training")
             if isinstance(sleep, dict):
-                nights = _plural(int(sleep.get("nights") or 0), "night")
+                nights = _plural(_n(sleep.get("nights")), "night")
                 said = f"{nights}, {sleep.get('hours')} h asleep a night"
                 rows_.append(
-                    f'<li class="line">{escape(said)}{_lines(site, sleep.get("lines") or [])}</li>\n'
+                    f'<li class="line">{escape(said)}{_lines(site, _ids(sleep.get("lines")))}</li>\n'
                 )
             if isinstance(training, dict):
                 said = (
-                    f"{_plural(int(training.get('sessions') or 0), 'workout')},"
+                    f"{_plural(_n(training.get('sessions')), 'workout')},"
                     f" {training.get('minutes')} min of training"
                 )
                 rows_.append(
-                    f'<li class="line">{escape(said)}{_lines(site, training.get("lines") or [])}</li>\n'
+                    f'<li class="line">{escape(said)}{_lines(site, _ids(training.get("lines")))}</li>\n'
                 )
             out.append(f'<h3>Sleep and training</h3>\n<ul class="plain">\n{"".join(rows_)}</ul>\n')
             counts.append("sleep and training")
@@ -457,7 +467,7 @@ def proposal_html(site: Site, draft: Mapping[str, Any], names: Sequence[str]) ->
         written = f' <a href="{escape(href)}">the draft as written</a>' if href is not None else ""
         said = f'<p class="mute">{escape(WITHHELD_BESIDE)}{written}</p>\n'
     elif segment.get("supported"):
-        said = f"<p>{escape(text)}{_lines(site, segment.get('evidence') or [])}</p>\n"
+        said = f"<p>{escape(text)}{_lines(site, _ids(segment.get('evidence')))}</p>\n"
     else:
         why = f": {escape(str(segment['why']))}" if segment.get("why") else ""
         said = (
@@ -496,7 +506,7 @@ def _contacts(draft: Mapping[str, Any] | None) -> dict[str, tuple[str, int]]:
     out: dict[str, tuple[str, int]] = {}
     for p in ((draft or {}).get("numbers") or {}).get("people") or []:
         if isinstance(p, dict) and isinstance(p.get("id"), str):
-            out[p["id"]] = (str(p.get("name") or ""), int(p.get("contacts") or 0))
+            out[p["id"]] = (str(p.get("name") or ""), _n(p.get("contacts")))
     return out
 
 
@@ -579,7 +589,7 @@ def _hold(site: Site) -> tuple[str, str]:
         report = hold_report(site, census)
         if report is None:
             continue
-        tier = int(report.get("tier") or 0)
+        tier = _n(report.get("tier"))
         if site.tiers is not None and top is not None and (tier > top or (tier and tier not in site.tiers)):
             above.append(f"the {census} census read tier {tier}")
             continue
