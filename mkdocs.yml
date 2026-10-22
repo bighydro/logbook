@@ -124,6 +124,7 @@ nav:
   - The map (offline, drawn as SVG): map.md
   - The crossing: crossing.md
   - Export for Notion: export-notion.md
+  - The letter: letter.md
   - Promises: promises.md
   - Tasks: tasks.md
   - Describing keepers: describe.md

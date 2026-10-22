@@ -8,7 +8,7 @@ import sys
 from collections.abc import Callable, Iterator
 from pathlib import Path
 
-from ..contrib import notion_export, site, trip_bundle, vault, world, world_chart
+from ..contrib import letter, notion_export, site, trip_bundle, vault, world, world_chart
 from ..core import crossing, flights, policy, sealing, share, stays
 from ..core.chain import Line, is_sealed
 from ..core.export import day_packages, day_range, parse_day, write_package
@@ -26,7 +26,7 @@ def export_arguments(sub: Subparsers) -> None:
         " `vault FOLDER`: Markdown pages with wikilinks for Obsidian or Logseq, `site FOLDER`: the"
         " readers as static HTML, `world`: one page with the globe (or the chart, `--style chart`), the"
         " places, the assets and a time scrubber, `trip-bundle TRIP`: one trip for a member of the circle,"
-        " or `share day"
+        " `letter FROM TO`: a range of signed days read back, to print or hand to someone, or `share day"
         " YYYY-MM-DD --to NAME`: one day as a signed page",
     )
     s.add_argument(
@@ -53,14 +53,14 @@ def export_arguments(sub: Subparsers) -> None:
         metavar="DIR",
         help="where to write (default <root>/export/<date>/); share: the zip (default"
         " <root>/export/share/<to>/<date>.zip); world: the folder for world.html (default"
-        " <root>/export/world/)",
+        " <root>/export/world/); letter: the folder (default <root>/export/letter/<FROM>_<TO>_<unit>/)",
     )
     s.add_argument("--empty", action="store_true", help="with --days: also write days with no entries")
     s.add_argument(
         "--to",
         metavar="DESTINATION",
         help="crossing: the circle member, e.g. hermes; share: the member as policy/crossing.json names them;"
-        " world: the last day, YYYY-MM-DD (default: the record's)",
+        " world: the last day, YYYY-MM-DD (default: the record's); letter: the person it is for",
     )
     s.add_argument(
         "--from",
@@ -85,13 +85,13 @@ def export_arguments(sub: Subparsers) -> None:
         metavar="1|1,2|1,2,3",
         help="crossing: tiers to cross (default 1); vault, site: 1 or 1,2, never 3; share: the highest tier"
         " to share (default 1; never above the ceiling); world: 1, 1,2 or 1,2,3 (default 1,2, under the"
-        " ceiling)",
+        " ceiling); letter: up to the letter entry's ceiling, tier 3 only when typed",
     )
     s.add_argument("--kinds", metavar="a,b", help="crossing: only these kinds")
     s.add_argument(
         "--dry-run",
         action="store_true",
-        help="crossing, trip-bundle, notion: count and show the policy; write nothing",
+        help="crossing, trip-bundle, notion, letter: count and show the policy; write nothing",
     )
     s.add_argument(
         "--attachments",
@@ -151,7 +151,7 @@ def export_arguments(sub: Subparsers) -> None:
     s.add_argument(
         "--unsigned",
         action="store_true",
-        help="crossing: cross the lines of unsigned days too (default: signed days only; RFC 0034)",
+        help="crossing, letter: take the unsigned days too (default: signed days only; RFC 0034)",
     )
     s.add_argument(
         "--include-unsigned",
@@ -162,18 +162,45 @@ def export_arguments(sub: Subparsers) -> None:
     s.add_argument(
         "--force",
         action="store_true",
-        help="crossing, trip-bundle, notion: replace an --out (notion: FOLDER) that is not an earlier"
+        help="crossing, trip-bundle, notion, letter: replace an --out (notion: FOLDER) that is not an earlier"
         " bundle, and all in it",
+    )
+    s.add_argument(
+        "--unit",
+        choices=letter.UNITS,
+        help="letter: a page per day (default), week, month or journey",
+    )
+    s.add_argument("--title", metavar="TEXT", help="letter: the title on its front page")
+    s.add_argument("--front", metavar="FILE", help="letter: the front page, in your words, as written")
+    s.add_argument("--paper", choices=tuple(letter.PAPERS), help="letter: a5 (default) or letter")
+    s.add_argument(
+        "--card", action="store_true", help="letter --unit month: the month card, one page a month"
     )
     s.set_defaults(fn=cmd_export)
 
 
 SHARE = "share"  # `export share day`: the command `share day` until 0.6
+LETTER_ONLY = (
+    ("--unit", "unit"),
+    ("--title", "title"),
+    ("--front", "front"),
+    ("--paper", "paper"),
+    ("--card", "card"),
+)
 
 
 def cmd_export(a: argparse.Namespace) -> None:
     if a.with_drafts and a.path != site.DESTINATION:
         print(f"export {a.path}: --with-drafts goes with `export site`", file=sys.stderr)
+        sys.exit(2)
+    given = [flag for flag, dest in LETTER_ONLY if getattr(a, dest, None)]
+    if given and a.path != letter.DESTINATION:
+        what = f"export {a.path}" if a.path else "export"
+        print(
+            f"{what}: {given[0]} is the letter's, `logbook export letter FROM TO {given[0]} …`;"
+            " no other export takes it",
+            file=sys.stderr,
+        )
         sys.exit(2)
     if a.path == SHARE:
         if a.target != "day" or a.shared_day is None:
@@ -184,6 +211,9 @@ def cmd_export(a: argparse.Namespace) -> None:
             sys.exit(2)
         a.day = a.shared_day
         cmd_share(a)
+        return
+    if a.path == letter.DESTINATION:
+        _export_letter(a)
         return
     if a.shared_day is not None:
         print(f"export: {a.path!r} takes one argument, not {a.shared_day!r}", file=sys.stderr)
@@ -417,6 +447,70 @@ def _export_notion(lb: Logbook, a: argparse.Namespace) -> None:
         print(text)
     seq, digest = result.line["seq"], result.package_sha256[:12]
     print(f"  recorded as #{seq} {crossing.LINE_SCHEMA}, manifest sha256 {digest}…; nothing sent to Notion")
+
+
+def _export_letter(a: argparse.Namespace) -> None:
+    """letter FROM TO [--unit day|journey|week|month] [--card] [--title TEXT] [--front FILE] [--to NAME]
+    [--paper a5|letter] [--tier 1|1,2|1,2,3] [--unsigned] [--out DIR] [--force] [--dry-run]: a range of
+    signed days read back as one HTML file and the same as Markdown (`logbook/contrib/letter.py`), under
+    the `letter` entry of policy/crossing.json (ADR 0016), recorded as a crossing/v1 line (RFC 0011)."""
+    try:
+        if a.target is None or a.shared_day is None:
+            raise letter.LetterError("export letter takes two days, FROM TO: logbook export letter FROM TO")
+        unused = [
+            flag
+            for flag, given in (
+                ("--day", a.day),
+                ("--days", a.days),
+                ("--since", a.since),
+                ("--until", a.until),
+                ("--from", a.from_day),
+                ("--kinds", a.kinds),
+                ("--sealed", a.sealed),
+                ("--open", a.open),
+                ("--empty", a.empty),
+                ("--include-unsigned", a.include_unsigned),
+            )
+            if given
+        ]
+        if unused:
+            raise letter.LetterError(f"export letter takes no {unused[0]}: FROM TO is its range")
+        lb = Logbook.find()
+        req = letter.request(
+            lb,
+            a.target,
+            a.shared_day,
+            unit=a.unit,
+            tiers=a.tier,
+            unsigned=a.unsigned,
+            to=a.to,
+            title=a.title,
+            front=a.front,
+            paper=a.paper,
+            card=a.card,
+        )
+        out = Path(a.out).expanduser() if a.out else letter.default_out(lb, req)
+        if a.dry_run:
+            built = letter.build(lb, req, _airports(a.airports))
+            print(f"dry run: {letter.describe(req)}; nothing written")
+            print(
+                f"  policy: {policy.policy_path(lb.root)} {letter.DESTINATION} max_tier {req.entry.max_tier}"
+            )
+            for text in letter.rows(req, built):
+                print(text)
+            return
+        built, result = letter.export(lb, req, out, force=a.force, airports=_airports(a.airports))
+    except (ValueError, stays.SettingsError) as e:  # LetterError, and a policy file a reader refuses
+        print(f"export letter: {e}", file=sys.stderr)
+        sys.exit(2)
+    except OSError as e:
+        print(f"export letter: {e}", file=sys.stderr)
+        sys.exit(1)
+    print(f"{letter.describe(req)} {ARROW} {out}")
+    for text in letter.rows(req, built):
+        print(text)
+    seq, digest = result.line["seq"], result.package_sha256[:12]
+    print(f"  recorded as #{seq} {crossing.LINE_SCHEMA}, manifest sha256 {digest}…")
 
 
 def _export_vault(lb: Logbook, a: argparse.Namespace) -> None:
