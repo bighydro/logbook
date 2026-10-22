@@ -280,18 +280,19 @@ def test_every_link_to_a_row_on_the_day_lands_on_it(lb: Logbook) -> None:
     the Day itself, never to an anchor the Day does not have."""
     day = "2026-06-20"
     said = {
-        "mail": {"raw_id": "m:9", "thread": "m:9", "subject": "Lofoten mooring", "direction": "received",
-                 "from": {"email": "marina@example.org"}, "body": "Lofoten is due"},
+        "mail": {"raw_id": "m:9", "thread": "m:9", "subject": "Solvindbrygga mooring",
+                 "direction": "received", "from": {"email": "marina@example.org"},
+                 "body": "Solvindbrygga is due"},
         "message": {"raw_id": "s:9", "chat": {"id": "c:1", "type": "direct", "name": "Per Hansen"},
                     "from_me": False, "sender": {"kind": "phone", "value": "+447700900123"},
-                    "text": "Lofoten is ready"},
-        "event": {"raw_id": "ev:9", "title": "Lofoten haul-out"},
-        "task": {"raw_id": "t:9", "title": "Varnish Lofoten"},
-        "browse": {"raw_id": "b:9", "title": "Lofoten chandlery", "url": "https://example.org/solvind"},
-        "highlight": {"raw_id": "h:9", "text": "Lofoten heels well"},
-        "watch": {"raw_id": "w:9", "title": "Lofoten documentary"},
-        "listen": {"raw_id": "li:9", "title": "Lofoten shanty"},
-        "voice-memo": {"raw_id": "v:9", "transcript": "Lofoten needs fuel"},
+                    "text": "Solvindbrygga is ready"},
+        "event": {"raw_id": "ev:9", "title": "Solvindbrygga haul-out"},
+        "task": {"raw_id": "t:9", "title": "Varnish Solvindbrygga"},
+        "browse": {"raw_id": "b:9", "title": "Solvindbrygga chandlery", "url": "https://example.org/solvind"},
+        "highlight": {"raw_id": "h:9", "text": "Solvindbrygga heels well"},
+        "watch": {"raw_id": "w:9", "title": "Solvindbrygga documentary"},
+        "listen": {"raw_id": "li:9", "title": "Solvindbrygga shanty"},
+        "voice-memo": {"raw_id": "v:9", "transcript": "Solvindbrygga needs fuel"},
     }  # fmt: skip
     for hour, (kind, payload) in enumerate(said.items()):
         lb.append(
@@ -302,7 +303,7 @@ def test_every_link_to_a_row_on_the_day_lands_on_it(lb: Logbook) -> None:
             payload={"schema": f"{kind}/v1", **payload},
         )
     site = serve.Site(lb)
-    found = _get(site, "/search", "q=lofoten")
+    found = _get(site, "/search", "q=solvindbrygga")
     assert len(_hits(found)) == len(said)
     on_day = _get(site, f"/day/{day}")
     anchors = re.findall(rf'href="/day/{day}#(l-[^"]+)"', found)
@@ -318,13 +319,16 @@ def test_a_bracket_the_record_holds_is_not_a_mark(lb: Logbook) -> None:
         source="manual",
         kind="note",
         tier=2,
-        payload={"schema": "note/v1", "text": "Per said [urgent] the boatyard gate in Zürich is broken"},
+        payload={
+            "schema": "note/v1",
+            "text": "Per said [urgent] the boatyard gate at Solvind Kafé is broken",
+        },
     )
     site = serve.Site(lb)
     (hit,) = _hits(_get(site, "/search", "q=boatyard"))
     assert "[urgent]" in hit and "<mark>urgent</mark>" not in hit and "<mark>boatyard</mark>" in hit
-    (accent,) = _hits(_get(site, "/search", "q=zurich+boatyard"))
-    assert "<mark>Zürich</mark>" in accent  # the index folds the accent, and so does the mark
+    (accent,) = _hits(_get(site, "/search", "q=kafe+boatyard"))
+    assert "<mark>Kafé</mark>" in accent  # the index folds the accent, and so does the mark
     (prefix,) = _hits(_get(site, "/search", "q=boatya*"))
     assert "<mark>boatyard</mark>" in prefix
 
