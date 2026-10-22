@@ -427,6 +427,30 @@ class Index:
         stored.pop(INDEX_KEY, None)
         return stored == self._meta_of(meta, opened=bool(self.lb.identities))
 
+    def indexed(self) -> tuple[int, str]:
+        """The seq and head of the last line the index holds: what a reader of it reads up to."""
+        try:
+            stored = dict(self.db.execute("SELECT key, value FROM meta"))
+            return int(stored.get("seq", 0)), str(stored.get("head", ""))
+        except (sqlite3.DatabaseError, ValueError):
+            return 0, ""
+
+    def behind(self, meta: dict[str, Any]) -> bool:
+        """The same index `meta` asks for, short of its last lines: built for this schema, zone,
+        recipients and day, and opened or not as now, at a seq before `meta`'s. What a reader finds
+        between a writer's `logbook.json` and its index (SPEC §3's order): a prefix of the record,
+        every line of it whole. Anything else that does not match is not behind, only stale."""
+        try:
+            stored = dict(self.db.execute("SELECT key, value FROM meta"))
+            stored.pop(INDEX_KEY, None)
+            wanted = self._meta_of(meta, opened=bool(self.lb.identities))
+            rest = {k: v for k, v in stored.items() if k not in ("head", "seq")}
+            return rest == {k: v for k, v in wanted.items() if k not in ("head", "seq")} and int(
+                stored["seq"]
+            ) < int(meta["seq"])
+        except (sqlite3.DatabaseError, KeyError, ValueError):
+            return False
+
     @staticmethod
     def _meta_of(meta: dict[str, Any], opened: bool | None = None) -> dict[str, str]:
         """What the index records about the record it was built from. `opened` is whether the

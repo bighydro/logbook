@@ -1172,14 +1172,18 @@ class Site:
         """`logbook.json` as it is now. When its head has moved since the last request (a sync
         appended while the server runs), the index is brought to the new head here, once, under a
         lock, before any page reads it: the requests that arrive together wait for that one rebuild
-        instead of each starting its own on the same file."""
+        instead of each starting its own on the same file. While a writer is between `logbook.json`
+        and the index, the index is read as it stands and never rebuilt (`Logbook.index`): the meta
+        returned then names the last line the index holds, so a page's tag names what it read."""
         meta = self.lb.meta
         head = str(meta.get("head"))
         if head != self._head:
             with self._lock:
                 if head != self._head:
-                    with self.lb.index():
-                        pass
+                    with self.lb.index() as idx:
+                        seq, indexed = idx.indexed()
+                    if indexed != head:  # a writer between logbook.json and the index: what it holds
+                        return {**meta, "seq": seq, "head": indexed}
                     self._head = head
                     with self._kept_lock:  # every kept page names the old head in its tag
                         self._kept.clear()
