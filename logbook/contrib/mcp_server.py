@@ -357,8 +357,9 @@ class GatedIndex(Index):
         last_day: str | None = None,
         source: str | None = None,
         after_seq: int | None = None,
+        files: tuple[str | None, str | None] = (None, None),
     ) -> Iterator[Line]:
-        found = super().of_kind(kind, first_day, last_day, source, after_seq)
+        found = super().of_kind(kind, first_day, last_day, source, after_seq, files)
         return (line for line in found if self.gate.keep(line))
 
     def locations(self, first_day: str, last_day: str, subject: str | None = None) -> list[LocationRow]:

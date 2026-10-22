@@ -884,19 +884,33 @@ class Index:
         last_day: str | None = None,
         source: str | None = None,
         after_seq: int | None = None,
+        files: tuple[str | None, str | None] = (None, None),
     ) -> Iterator[Line]:
         """Every line of one kind, streamed in file order (one sequential sweep of the files, each
         opened once), so a kind with a million lines never sits in memory at once; with
         `first_day` or `last_day`, only the lines whose local day is inside the bounds (the
         (kind, day_local) index serves the cut), so a reader of one year never opens the others'
         files; with `source`, only that source's; with `after_seq`, only the lines appended after
-        that one (a reading brought forward from where it stopped, `people.read_whole`)."""
+        that one (a reading brought forward from where it stopped, `people.read_whole`); with `files`,
+        only the month files from the first (inclusive) to the second (exclusive), by the path's
+        order, which is the months' (`people_drift.real_contacts`)."""
         from .store import read_line_at
 
         found = self.db.execute(
             "SELECT file, offset FROM lines WHERE kind = ? AND day_local >= ? AND day_local <= ?"
-            " AND (? IS NULL OR source = ?) AND seq > ? ORDER BY file, offset",
-            (kind, first_day or "", last_day or "9999-12-31", source, source, after_seq or 0),
+            " AND (? IS NULL OR source = ?) AND seq > ? AND file >= ? AND (? IS NULL OR file < ?)"
+            " ORDER BY file, offset",
+            (
+                kind,
+                first_day or "",
+                last_day or "9999-12-31",
+                source,
+                source,
+                after_seq or 0,
+                files[0] or "",
+                files[1],
+                files[1],
+            ),
         ).fetchall()
         handle: Any = None
         current: str | None = None

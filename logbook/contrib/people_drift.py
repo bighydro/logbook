@@ -41,7 +41,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
 from typing import Any
 
-from ..core import machine, people, present, reading, stays
+from ..core import kept, machine, people, present, reading, stays
 from ..core.chain import Line
 from ..core.flights import Airports
 from ..core.resolve import Ref
@@ -80,57 +80,182 @@ class Contact:
 def real_contacts(lb: Logbook, report: people.Report) -> dict[str, Contact]:
     """The last real contact of every canonical person of `report`, by entity id, over its window:
     its days together, and the standing message, call, event and transcript lines of the window,
-    streamed one kind at a time through the index. Writes nothing."""
-    found: dict[str, Contact] = {}
+    streamed one kind at a time through the index. Writes nothing to the record. Over the record's
+    whole window (`people.read_whole`'s report), the reading is kept between heads (`_kept`)."""
+    whole = reading.record_days(lb)
+    if whole is not None and (report.first, report.last) == tuple(whole):
+        return _kept(lb, report)
+    return _read(lb, report)
 
-    def saw(entity: str | None, day: str, via: str, line: str) -> None:
-        if entity is None or entity not in report.known:
-            return
-        contact = Contact(day, via, line)
-        if contact.after(found.get(entity)):
-            found[entity] = contact
 
-    for person in report.people:
-        for shared in person.shared.values():
-            saw(person.entity, shared.day, TOGETHER, shared.lines[0] if shared.lines else "")
-    chats: dict[str, _Chat] = {}
+def _read(lb: Logbook, report: people.Report) -> dict[str, Contact]:
+    """`real_contacts` read from the lines, every one of the window."""
+    fold = _Fold(report)
+    fold.together()
     with lb.index() as idx:
         retracted = frozenset(retractions(idx.retractions()))
         for kind in KINDS:
             superseded = idx.superseded(kind)
             for line in idx.of_kind(kind, report.first, report.last):
-                id_ = str(line.get("id"))
-                at = stays.instant(line.get("at"))
-                if id_ in retracted or id_ in superseded or at is None:
-                    continue
-                day = report.days.day(at).isoformat()
-                payload = line.get("payload") or {}
-                if kind == "message":
-                    _message(payload, day, id_, chats, report, saw)
-                elif kind == "call":
-                    if payload.get("answered") is True:
-                        saw(_entity(_ref(payload.get("counterparty")), report), day, CALL, id_)
-                elif kind == "event":
-                    if payload.get("all_day") is True:
-                        continue
-                    attendees = payload.get("attendees")
-                    for attendee in attendees if isinstance(attendees, list) else []:
-                        if isinstance(attendee, dict) and attendee.get("response") != "declined":
-                            saw(_entity(_ref(attendee.get("ref")), report), day, MEETING, id_)
-                else:
-                    participants = payload.get("participants")
-                    for participant in participants if isinstance(participants, list) else []:
-                        if isinstance(participant, dict) and not machine.is_machine_participant(participant):
-                            saw(_participant(participant, report), day, MEETING, id_)
-    for chat_id, chat in chats.items():
-        if chat.mine is None:
-            continue
-        others = {e for e in chat.senders if e is not None}
-        entity = next(iter(others)) if len(others) == 1 else None
-        if entity is None and not chat.senders:
-            entity = _entity(promise_reader.chat_ref(chat_id), report)
-        saw(entity, chat.mine[0], MESSAGE, chat.mine[1])
-    return found
+                fold.line(kind, line, retracted, superseded)
+    return fold.finish()
+
+
+class _Fold:
+    """The reading of `real_contacts`, line by line: each person's contact to name so far (a later day,
+    else the stronger way; the first seen of equals), the days together first (`together`), and the
+    direct chats the owner wrote in, given to their one other person at the end (`finish`)."""
+
+    def __init__(self, report: people.Report, found: dict[str, Contact] | None = None):
+        self.report = report
+        self.found: dict[str, Contact] = {} if found is None else found
+        self.chats: dict[str, _Chat] = {}
+
+    def saw(
+        self, entity: str | None, day: str, via: str, line: str, into: dict[str, Contact] | None = None
+    ) -> None:
+        if entity is None or entity not in self.report.known:
+            return
+        found = self.found if into is None else into
+        contact = Contact(day, via, line)
+        if contact.after(found.get(entity)):
+            found[entity] = contact
+
+    def together(self) -> None:
+        for person in self.report.people:
+            for shared in person.shared.values():
+                self.saw(person.entity, shared.day, TOGETHER, shared.lines[0] if shared.lines else "")
+
+    def line(self, kind: str, line: Line, retracted: frozenset[str], superseded: Mapping[str, int]) -> None:
+        report = self.report
+        id_ = str(line.get("id"))
+        at = stays.instant(line.get("at"))
+        if id_ in retracted or id_ in superseded or at is None:
+            return
+        day = report.days.day(at).isoformat()
+        payload = line.get("payload") or {}
+        if kind == "message":
+            _message(payload, day, id_, self.chats, report, self.saw)
+        elif kind == "call":
+            if payload.get("answered") is True:
+                self.saw(_entity(_ref(payload.get("counterparty")), report), day, CALL, id_)
+        elif kind == "event":
+            if payload.get("all_day") is True:
+                return
+            attendees = payload.get("attendees")
+            for attendee in attendees if isinstance(attendees, list) else []:
+                if isinstance(attendee, dict) and attendee.get("response") != "declined":
+                    self.saw(_entity(_ref(attendee.get("ref")), report), day, MEETING, id_)
+        else:
+            participants = payload.get("participants")
+            for participant in participants if isinstance(participants, list) else []:
+                if isinstance(participant, dict) and not machine.is_machine_participant(participant):
+                    self.saw(_participant(participant, report), day, MEETING, id_)
+
+    def finish(self) -> dict[str, Contact]:
+        """The contacts, with each direct chat's last line of the owner's given to its one other person
+        (or, with nobody else in it, to the person its id names); this fold is left as it was."""
+        found = dict(self.found)
+        for chat_id, chat in self.chats.items():
+            if chat.mine is None:
+                continue
+            others = {e for e in chat.senders if e is not None}
+            entity = next(iter(others)) if len(others) == 1 else None
+            if entity is None and not chat.senders:
+                entity = _entity(promise_reader.chat_ref(chat_id), self.report)
+            self.saw(entity, chat.mine[0], MESSAGE, chat.mine[1], into=found)
+        return found
+
+
+# -- the whole record, kept between readings -----------------------------------------------------------------
+
+KEPT_VERSION = 1
+KEPT_FILE = "contacts-whole.json"  # beside the index (`kept`)
+OVERLAY = ("retraction", "resolution")
+
+
+def _kept(lb: Logbook, report: people.Report) -> dict[str, Contact]:
+    """`real_contacts` over the whole record, kept beside the index (`kept`, `KEPT_FILE`): for each
+    kind, the contact to name of each person over the month files before the current one, and the
+    direct chats as they stood there; then those files are not read again, the current month and
+    after are (every line, old and new), and the kept part stands where its lines stood in the
+    reading, before them. The contact to name is the first of the greatest, so the greatest of a
+    part, put where the part was, names the same one; the chats keep the order the reading met them.
+    A resolution or retraction appended, a line correcting one of `KINDS`, or a line in a month file
+    before the current one (a backfill): the whole record again. `tests/test_contacts_kept.py`."""
+    at = kept.path(lb, KEPT_FILE)
+    stamp = kept.stamp(lb, str(KEPT_VERSION), kept.code_digest(__file__), report.first)
+    held = kept.load(at)
+    with lb.index() as idx:
+        seq, head = idx.indexed()
+        newest = idx.db.execute(
+            f"SELECT max(file) FROM lines WHERE kind IN ({', '.join('?' * len(KINDS))})", KINDS
+        ).fetchone()[0]
+        cut = str(newest or "")  # the next kept part: the files before the current month's
+        usable = held is not None and held.get("version") == KEPT_VERSION and held.get("stamp") == stamp
+        if usable and held is not None:
+            since = int(held.get("seq", -1))
+            line = idx.by_seq(since) if since > 0 else None
+            appended = idx.appended(since) if 0 <= since <= seq else {}
+            earliest = idx.db.execute(
+                f"SELECT min(file) FROM lines WHERE seq > ? AND kind IN ({', '.join('?' * len(KINDS))})",
+                (since, *KINDS),
+            ).fetchone()[0]
+            usable = (
+                0 <= since <= seq
+                and (since == 0 or (line is not None and str(line.get("hash")) == str(held.get("head"))))
+                and not any(kind in appended for kind in OVERLAY)
+                and not any(appended.get(kind, ("", 0, 0))[2] for kind in KINDS)
+                and (earliest is None or str(earliest) >= str(held.get("cut", "")))
+            )
+        start = str(held["cut"]) if usable and held is not None else ""
+        retracted = frozenset(retractions(idx.retractions()))
+        fold = _Fold(report)
+        fold.together()
+        parts: dict[str, dict[str, Contact]] = {}
+        chats: dict[str, _Chat] = {}
+        for kind in KINDS:
+            superseded = idx.superseded(kind)
+            part = _Fold(report, _contacts_from(held["parts"].get(kind, {})) if usable and held else {})
+            if kind == "message" and usable and held is not None:
+                fold.chats, part.chats = _chats_from(held["chats"]), _chats_from(held["chats"])
+            for entity, contact in part.found.items():  # the kept files, where they stood
+                fold.saw(entity, contact.day, contact.via, contact.line)
+            if start < cut:
+                for line in idx.of_kind(kind, report.first, report.last, files=(start, cut)):
+                    part.line(kind, line, retracted, superseded)
+                    fold.line(kind, line, retracted, superseded)
+            for line in idx.of_kind(kind, report.first, report.last, files=(max(start, cut), None)):
+                fold.line(kind, line, retracted, superseded)
+            parts[kind] = part.found
+            if kind == "message":
+                chats = part.chats
+    kept.save(
+        at,
+        {
+            "version": KEPT_VERSION,
+            "stamp": stamp,
+            "seq": seq,
+            "head": head,
+            "cut": max(start, cut),
+            "parts": {
+                kind: {e: [c.day, c.via, c.line] for e, c in found.items()} for kind, found in parts.items()
+            },
+            "chats": {k: {"senders": list(c.senders), "mine": c.mine} for k, c in chats.items()},
+        },
+    )
+    return fold.finish()
+
+
+def _contacts_from(data: Mapping[str, Any]) -> dict[str, Contact]:
+    return {e: Contact(c[0], c[1], c[2]) for e, c in data.items()}
+
+
+def _chats_from(data: Mapping[str, Any]) -> dict[str, _Chat]:
+    return {
+        k: _Chat(set(c["senders"]), None if c["mine"] is None else (c["mine"][0], c["mine"][1]))
+        for k, c in data.items()
+    }
 
 
 @dataclass
