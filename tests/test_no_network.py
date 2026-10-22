@@ -156,6 +156,8 @@ READERS: tuple[tuple[str, ...], ...] = (
     ("review", "with", "--journey", "2026-06-09", "--json"),
     ("review", "speakers"),  # RFC 0038 §4: the queue reads the record and opens nothing
     ("review", "speakers", "--json"),
+    ("review", "receipts"),  # RFC 0043 §12: the mails read by rules, nothing looked up
+    ("review", "receipts", "--since", "2026-01-01", "--json"),
     ("show", "ideas", "--json"),
     ("setup", "assets", "status"),
     ("setup", "assets", "status", "--json"),
