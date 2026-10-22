@@ -30,8 +30,11 @@ from`, as on the Day):
 7. **The plan**: the sprint and the next trip (`plan.read`, the `sync notion` lines, tier 1) as the
    week's last day the clock has reached stood; titles and dates, each linked to its line, never to
    Notion: no URL but the server's own.
-8. **Hold**: the senders and Drive censuses (`labs.hold.census_senders`, `census_drive`) as the record
-   stands, through the gate: counts only, never a file's name or a sender. On the week page only.
+8. **Hold**: the senders and Drive censuses as they stand, from the reports `lab hold census` last wrote
+   under `state/hold/` (`HOLD_FILES`, which the page's tag digests): counts only, never a file's name or a
+   sender, and a report only where the page reads the tiers it read. The census is a lab and runs only
+   when the owner runs it: a page never imports it (the import arrow) and never runs it. On the week
+   page only.
 
 The draft's parts (2, 4, 5, 6 and the proposed verdicts of 3) are behind `with_drafts`: a static site
 built without its drafts (`export site`, #364) reads no draft and says so in one line. A model's
@@ -43,10 +46,12 @@ dispositions in the crossing), the pile untouched for 90 days, and closing the w
 
 from __future__ import annotations
 
+import json
 import re
 from collections.abc import Iterable, Mapping, Sequence
-from datetime import date, datetime, time, timedelta
+from datetime import date, timedelta
 from html import escape
+from pathlib import PurePosixPath
 from typing import TYPE_CHECKING, Any
 from urllib.parse import quote
 from zoneinfo import ZoneInfo
@@ -64,6 +69,11 @@ DOT = day_rhythm.DOT
 DASH = day_rhythm.DASH
 MONTHS = ("January", "February", "March", "April", "May", "June", "July", "August", "September", "October",
           "November", "December")  # fmt: skip
+HOLD_DIR = PurePosixPath(
+    "state/hold"
+)  # record-relative: where `lab hold census` writes (`labs.hold.REPORTS`)
+HOLD_CENSUSES = ("senders", "drive")  # the censuses of lines the record holds; the files one walks folders
+HOLD_FILES = tuple(HOLD_DIR / f"{c}.json" for c in HOLD_CENSUSES)  # what the page reads beside the chain
 ID_SHOWN = 4  # line ids a figure links; the rest are counted
 MOVERS = 5  # the people who moved, at most
 VERDICTS = tuple(d.replace(" ", "-") for d in goals.DISPOSITIONS)  # as `goal review` takes them
@@ -217,7 +227,7 @@ def page_week(site: Site, week: str, expanded: bool = False) -> str:
     else:
         empty += ["next week", "the question", "people who moved"]
     add("The plan", *_plan(site, monday, sunday, today))
-    add("Hold", *_hold(site, today, zone))
+    add("Hold", *_hold(site))
 
     before = week_paper.week_of((date.fromisoformat(monday) - timedelta(days=7)).isoformat())
     after = week_paper.week_of((date.fromisoformat(monday) + timedelta(days=7)).isoformat())
@@ -543,45 +553,74 @@ def _plan(site: Site, monday: str, sunday: str, today: str) -> tuple[str, str]:
     return DOT.join(summary), f'<ul class="plain">\n{"".join(rows)}</ul>\n{note}'
 
 
-def _hold(site: Site, today: str, zone: ZoneInfo) -> tuple[str, str]:
-    """Hold's senders and Drive censuses, counts only, through the gate; nothing of a name."""
-    from ..core.search import MAX_TIER
-    from ..labs import hold  # a lab: loaded by the week page, never by `--help`
+def hold_report(site: Site, census: str) -> dict[str, Any] | None:
+    """Hold's saved report of `census` (`state/hold/<census>.json`, as `lab hold census` last wrote it),
+    or None: no report, a folder that is a link or not a folder (never followed), or one that does not
+    read. Only its counts are shown; its rows hold names and are never read out."""
+    folder = site.lb.root.joinpath(*HOLD_DIR.parts)
+    for place in (folder.parent, folder):
+        if place.is_symlink() or (place.exists() and not place.is_dir()):
+            return None
+    path = folder / f"{census}.json"
+    try:
+        found = json.loads(path.read_bytes()) if path.is_file() and not path.is_symlink() else None
+    except (OSError, ValueError):
+        return None
+    return found if isinstance(found, dict) and isinstance(found.get("totals"), dict) else None
 
-    tiers = site.tiers
-    top = max(tiers) if tiers else MAX_TIER
-    now = datetime.combine(date.fromisoformat(today), time(), zone)  # the record's day: the tag's
-    rows, summary = [], []
-    if _reads(tiers, 2):
-        senders = site.shared(("hold-senders", top, today), lambda: hold.census_senders(site.lb, top, now))
-        t = senders["totals"]
-        if t["received"]:
-            said = [
-                f"{_plural(int(t['senders']), 'sender')} wrote {_plural(int(t['received']), 'mail')}",
-                f"{t['never_answered']} never answered",
-            ]
-            letters = senders["newsletters"]
-            if letters.get("held"):
-                said.append(_plural(int(letters["senders"]), "newsletter"))
-            rows.append(f"<li>Mail: {escape(DOT.join(said))}</li>\n")
-            summary.append(_plural(int(t["senders"]), "sender"))
-    drive = site.shared(("hold-drive", top, today), lambda: hold.census_drive(site.lb, top, now))
-    d = drive["totals"]
-    if d["files"]:
-        said = [
-            _plural(int(d["files"]), "file"),
-            f"{d['untouched']} untouched for {drive['settings']['untouched_days']} days",
-            f"{d['shared']} shared",
-            f"{d['gone']} trashed",
-        ]
-        rows.append(f"<li>Drive: {escape(DOT.join(said))}</li>\n")
-        summary.append(_plural(int(d["files"]), "file"))
+
+def _hold(site: Site) -> tuple[str, str]:
+    """Hold's senders and Drive censuses as they stand, counts only, each only where the page reads
+    every tier the report read; nothing of a name. The census itself is Hold's, a lab: the page reads
+    what it wrote and never runs it."""
+    top = max(site.tiers) if site.tiers else None
+    rows, summary, above = [], [], []
+    for census in HOLD_CENSUSES:
+        report = hold_report(site, census)
+        if report is None:
+            continue
+        tier = int(report.get("tier") or 0)
+        if site.tiers is not None and top is not None and (tier > top or (tier and tier not in site.tiers)):
+            above.append(f"the {census} census read tier {tier}")
+            continue
+        t = report["totals"]
+        made = str(report.get("made_at") or "")[:10]
+        try:
+            if census == "senders" and t.get("received"):
+                said = [
+                    f"{_plural(int(t['senders']), 'sender')} wrote {_plural(int(t['received']), 'mail')}",
+                    f"{int(t['never_answered'])} never answered",
+                ]
+                letters = report.get("newsletters") or {}
+                if letters.get("held"):
+                    said.append(_plural(int(letters["senders"]), "newsletter"))
+                summary.append(_plural(int(t["senders"]), "sender"))
+            elif census == "drive" and t.get("files"):
+                days = int((report.get("settings") or {}).get("untouched_days") or 0)
+                said = [
+                    _plural(int(t["files"]), "file"),
+                    f"{int(t['untouched'])} untouched for {days} days",
+                    f"{int(t['shared'])} shared",
+                    f"{int(t['gone'])} trashed",
+                ]
+                summary.append(_plural(int(t["files"]), "file"))
+            else:
+                continue
+        except (KeyError, TypeError, ValueError):  # a report of another shape: not read, never a traceback
+            continue
+        label = "Mail" if census == "senders" else "Drive"
+        rows.append(
+            f'<li>{label}: {escape(DOT.join(said))} <span class="mute">on {escape(made)}</span></li>\n'
+        )
+    if above:
+        rows.append(f'<li class="mute">Not read here: {escape(", ".join(above))}.</li>\n')
     if not rows:
         return "", ""
-    return DOT.join(summary), (
+    return DOT.join(summary) or "not read here", (
         f'<ul class="plain">\n{"".join(rows)}</ul>\n'
-        "<p class=\"mute\">Hold's census as the record stands, counts only. Its sweep stays Hold's:"
-        ' <code class="cmd">logbook lab hold census</code>.</p>\n'
+        '<p class="mute">Hold\'s census as it stands, counts only, from the reports Hold last wrote.'
+        ' Its sweep stays Hold\'s: <code class="cmd">logbook lab hold census senders</code>, then'
+        ' <code class="cmd">drive</code>.</p>\n'
     )
 
 

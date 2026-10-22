@@ -282,6 +282,7 @@ AUDIO_BYTES = 64 * 1024 * 1024  # the most a recording may carry: half an hour o
 STATE_FILES = (
     places_review.STATE_FILE,
     day_photos.STATE_FILE,
+    *week_page.HOLD_FILES,  # Hold's reports, whose counts the week page reads
 )  # record-relative bookkeeping the pages read, in the tag
 NO_MODEL = "No model touched this page. What a model drafted is marked as a draft."  # the Day's footer
 TIERS_SAID = (  # under the Day's header: what crosses where (SPEC §4), in the Library's words
@@ -1461,7 +1462,7 @@ class Site:
         ):
             return None
         parts = [self._started, path, query, json.dumps(meta, sort_keys=True)]
-        # a week's plan, its trip's days to go and Hold's untouched files move with the record's today
+        # a week's plan, and its trip's days to go, move with the record's today
         if (
             DAY_PATH.match(path) is not None
             or WEEK_PATH.match(path) is not None

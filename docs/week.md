@@ -54,8 +54,10 @@ part with nothing in it is not drawn: the empty ones are named once, in one mute
    name. Among the people each week's draft counts; a week whose week before has no draft has none.
 7. **The plan.** The sprint and the next trip ([the plan](plan.md)), as the plan stood on the week's
    last day the clock has reached: titles and dates, each linked to its line, never to Notion.
-8. **Hold.** [Hold](hold.md)'s senders and Drive censuses as the record stands, through the page's gate:
-   counts only, never a file's name or a sender. On the week page only.
+8. **Hold.** [Hold](hold.md)'s senders and Drive censuses as they stand: the counts of the reports
+   `logbook lab hold census senders` and `drive` last wrote under `state/hold/`, each with its day, and
+   only where the page reads every tier the report read; never a file's name or a sender. The page never
+   runs a census: run one again and the page follows. On the week page only.
 
 A week with no draft says so in one line, with the command that writes one once its Sunday is over, and
 the parts that rest on the draft (2, 4, 5, 6 and the proposed verdicts) are not drawn: nothing is
@@ -64,7 +66,8 @@ invented in their place.
 ## The rules
 
 - **Through the gate.** Every reader on the page reads through the page's tiers: the days, the draft
-  (`drafts.for_unit`, as the Sunday's Day reads it), the goals (tier 2), the plan (tier 1), Hold. A
+  (`drafts.for_unit`, as the Sunday's Day reads it), the goals (tier 2), the plan (tier 1), Hold's
+  reports (by the tier each says it read). A
   tier-1 page shows the ribbons, the plan and Drive's counts, and no name, goal or sentence of tier 2.
 - **Ink and pencil.** The numbers are the code's; the proposal and the proposed verdicts are the
   model's, in pencil, each with its lines. A site built without its drafts (`logbook export site`

@@ -44,6 +44,7 @@ from test_dream_week_question import name as name_entity
 from logbook.contrib import dream, entities, serve, week_page
 from logbook.core import goals, people, policy
 from logbook.core.store import Logbook
+from logbook.labs import hold
 
 TZ = ZoneInfo("Europe/Oslo")
 MONDAY, SUNDAY = "2026-06-15", "2026-06-21"
@@ -145,6 +146,9 @@ def _dreamed(root: Path, mp: pytest.MonkeyPatch, entry: dict[str, Any]) -> Path:
     fake(mp)
     _code, out, err = run_cli("dream", "--catch-up")
     assert f"{W25}  dreamed" in out, out + err
+    for census in ("senders", "drive"):  # Hold's reports, as the owner's last census left them
+        code, _out, err = run_cli("lab", "hold", "census", census)
+        assert code == 0, err
     return root
 
 
@@ -301,6 +305,22 @@ def test_hold_s_census_counts_only(lb: Logbook) -> None:
     assert DRIVE_FILE not in page and "crew-1" not in page, "never a file name"
 
 
+def test_hold_is_read_from_its_reports_which_are_in_the_tag(lb: Logbook) -> None:
+    """The page reads what `lab hold census` last wrote, where Hold writes it, and never runs a census;
+    a census run again is a new page, and without the reports the part is not drawn."""
+    assert week_page.HOLD_DIR.parts == hold.REPORTS.parts
+    site = _site(lb)
+    tag = site.etag(f"/week/{W25}", "", site.current())
+    lb.append_many([_mail("2026-05-20T07:00:00Z", NEWSLETTER, "n-3")])
+    assert run_cli("lab", "hold", "census", "senders")[0] == 0
+    after = site.etag(f"/week/{W25}", "", site.current())
+    assert after != tag
+    assert "wrote 3 mails" in _fold(_page(site), "Hold")
+    shutil.rmtree(lb.root / "state" / "hold")
+    page = _page(_site(lb))
+    assert "<h2>Hold</h2>" not in page and "Hold" in page[page.index('<p class="nothing">') :]
+
+
 def test_the_day_and_the_sunday_draft_link_the_week(lb: Logbook) -> None:
     site = _site(lb)
     for day in ("2026-06-17", SUNDAY):
@@ -368,8 +388,9 @@ def test_a_static_site_without_its_drafts_shows_no_pencil(lb: Logbook) -> None:
 
 def test_a_tier_1_page_shows_no_tier_2_name_or_number(lb: Logbook) -> None:
     page = _page(_site(lb, tiers=(1,)))
-    for word in ("Kari Nordmann", "Ola Nordmann", GOAL_SAIL, GOAL_READ, KEPT, SAUNA_ASKED, "senders"):
+    for word in ("Kari Nordmann", "Ola Nordmann", GOAL_SAIL, GOAL_READ, KEPT, SAUNA_ASKED, "never answered"):
         assert word not in page, word
+    assert "Not read here: the senders census read tier 2" in html.unescape(page), "said, never counted"
     assert page.count('<svg class="ribbon"') == 7, "the ribbons are where you were: tier 1"
     assert "Sprint 12" in page, "the plan is tier 1"
     assert re.search(r"\d+ files?", page), "Drive's lines are tier 1"
