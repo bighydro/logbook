@@ -13,7 +13,6 @@ logbook show timeline --week 2026-W25 --json    # an ISO week, a line per day
 logbook show timeline --month 2026-06           # a calendar of the month's nights
 logbook show timeline --year 2026               # twelve months and the journeys
 logbook show timeline --life                    # all years, per place and per vessel
-logbook setup places class Saltbu family        # the class of a place, the colour of its nights
 ```
 
 ## A moment
@@ -26,8 +25,9 @@ line, a photo or a call is already a stay), or a run aboard an asset (`aboard So
 - **the time**: the part of the stay on the day, `19:30–22:40`, and its length;
 - **who was there**: the confirmed in one list and the proposed in another, in grey with a `?` and
   the reason in words: *invited* (an attendee of a calendar entry), *spoke* (a recording), *you said*
-  (your own note), *face on photos* (a photo library's face, however many photos). Nothing new proposes
-  anyone here: these are the Day's own proposals, and a proposal is never shown as confirmed;
+  (your own note), *face on photos* (a photo library's face, however many photos), and no other reason.
+  Nothing new proposes anyone here: these are the Day's own proposals, and a proposal is never shown as
+  confirmed;
 - **the photos** taken during it, your own camera's first and the starred first;
 - **what passed during it**, placed by time and never by subject: the messages by conversation (who
   and where, `Kari Nordmann · iMessage`), the calls (who and which way, `Ola Nordmann · call in`), the
@@ -73,25 +73,24 @@ dots and the moves between them, from the record's own coordinates. Nothing is f
 
 ## A place's class
 
-Each night is one of four classes, its colour on the month and the year:
+Each night is one of four classes, its colour on the month and the year. The class is read from what
+`places.json` already has (`kind` and `tags`, [SPEC §3.2](../SPEC.md)), never from a key of its own, in
+this order:
 
-| class | without a `class` key |
+| class | when |
 |---|---|
-| `home` | a place of kind `home`, or a night within reach of one (the Day's 400 m rule) |
-| `family` | never: the family's places are yours to name |
 | `aboard` | a night aboard an asset |
+| `home` | a place of kind `home`, or a night within reach of one (the Day's 400 m rule) |
+| `family` | a place with the tag `family` (case aside) |
 | `away` | everything else |
 
-`places.json` keeps it under a key of its own, `class`, which only this reader reads; the format
-([SPEC §3.2](../SPEC.md)) does not list it and needs it nowhere else:
+So a place of kind `other` or `asset-berth` without a `family` tag, and a night at no named place, is
+`away`. To make a place one of the family's, give it the tag: `--tags family` when you add or name it
+(`logbook setup places add` or `name`), or by hand in the file:
 
 ```json
-{"Saltbu": {"lat": 59.66, "lon": 10.63, "radius_m": 150, "kind": "other", "class": "family"}}
+{"Saltbu": {"lat": 59.66, "lon": 10.63, "radius_m": 150, "kind": "other", "tags": ["family"]}}
 ```
-
-`logbook setup places class NAME CLASS` writes it: it says what it will write and what the place's class
-is now, asks, and writes only on a yes (`--yes` for scripts). Every other key of the file stays as it was,
-and nothing is appended to the record.
 
 ## Tiers and speed
 

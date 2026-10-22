@@ -1,18 +1,15 @@
 """A place's class (RFC 0043 §12): `home`, `family`, `aboard` or `away`, the colour of a night on the
-timeline. A reader-side key of `places.json`, `class`, that the spec does not know and never needs:
-absent, it is `home` for a place of kind `home`, `aboard` for a night aboard an asset, else `away`.
-`logbook setup places class NAME CLASS` writes it, saying what it will write and asking first."""
+timeline, read from what `places.json` already says and from no key of its own: `home` for a place of
+kind `home` (or a night within reach of one), `family` for a place tagged `family`, `aboard` for a night
+aboard an asset, else `away`."""
 
 from __future__ import annotations
 
-import contextlib
-import io
 import json
 from pathlib import Path
 
 import pytest
 
-from logbook import cli
 from logbook.core import places
 from logbook.core.store import Logbook
 
@@ -30,80 +27,41 @@ def lb(tmp_path: Path) -> Logbook:
     return found
 
 
-def _run(
-    *args: str, answer: str | None = None, monkeypatch: pytest.MonkeyPatch | None = None
-) -> tuple[str, int]:
-    out = io.StringIO()
-    if answer is not None and monkeypatch is not None:
-        monkeypatch.setattr("builtins.input", lambda prompt: (print(prompt, end=""), answer)[1])
-    code = 0
-    with contextlib.redirect_stdout(out), contextlib.redirect_stderr(out):
-        try:
-            cli.main(list(args))
-        except SystemExit as e:
-            code = e.code if isinstance(e.code, int) else 1
-    return out.getvalue(), code
-
-
-def test_without_a_class_a_place_is_home_by_its_kind_aboard_on_an_asset_else_away(lb: Logbook) -> None:
-    known = {p.name: p for p in places.read(lb.root)}
-    explicit = places.classes(lb.root)
-    assert explicit == {}
-    assert places.class_of(known["Home"], None, explicit) == "home"
-    assert places.class_of(known["Saltbu"], None, explicit) == "away"
-    assert places.class_of(known["Marina"], None, explicit) == "away"
-    assert places.class_of(known["Marina"], "nordlys", explicit) == "aboard"  # a night aboard the asset
-    assert places.class_of(None, "nordlys", explicit) == "aboard"
-    assert places.class_of(None, None, explicit) == "away"
-    assert places.class_of(None, None, explicit, home=True) == "home"  # a night within reach of home
-
-
-def test_a_class_in_the_file_wins_and_the_spec_s_keys_read_as_before(lb: Logbook) -> None:
+def _known(lb: Logbook, **changed: dict[str, object]) -> dict[str, places.Place]:
     document = json.loads(places.path_of(lb.root).read_text(encoding="utf-8"))
-    document["Saltbu"]["class"] = "family"
+    for name, keys in changed.items():
+        document[name].update(keys)
     places.path_of(lb.root).write_text(json.dumps(document), encoding="utf-8")
+    return {p.name: p for p in places.read(lb.root)}
+
+
+def test_without_a_family_tag_a_place_is_home_by_its_kind_aboard_on_an_asset_else_away(lb: Logbook) -> None:
     known = {p.name: p for p in places.read(lb.root)}
+    assert places.class_of(known["Home"], None) == "home"
+    assert places.class_of(known["Saltbu"], None) == "away"
+    assert places.class_of(known["Marina"], None) == "away"
+    assert places.class_of(known["Marina"], "nordlys") == "aboard"  # a night aboard the asset
+    assert places.class_of(None, "nordlys") == "aboard"
+    assert places.class_of(None, None) == "away"
+    assert places.class_of(None, None, home=True) == "home"  # a night within reach of home
+
+
+def test_a_family_tag_makes_a_place_the_family_s_case_aside(lb: Logbook) -> None:
+    known = _known(lb, Saltbu={"tags": ["cottage", " Family "]})
+    assert known["Saltbu"].tags == ("cottage", " Family ")  # the tags read as they are written
+    assert places.class_of(known["Saltbu"], None) == "family"
+    assert places.class_of(known["Saltbu"], "nordlys") == "aboard"  # a night aboard is aboard, wherever
+    assert places.class_of(known["Saltbu"], None, home=True) == "home"  # within reach of home is home
+
+
+def test_home_by_its_kind_stays_home_with_a_family_tag(lb: Logbook) -> None:
+    known = _known(lb, Home={"tags": ["family"]})  # the places module's own example
+    assert places.class_of(known["Home"], None) == "home"
+
+
+def test_a_class_key_in_places_json_is_not_read(lb: Logbook) -> None:
+    """The class is derived, never written: a `class` key some hand put in the file changes nothing."""
+    known = _known(lb, Saltbu={"class": "family"}, Home={"class": "away"})
     assert known["Saltbu"] == places.Place("Saltbu", 59.66, 10.63, 150.0, "other")  # the Place is unchanged
-    explicit = places.classes(lb.root)
-    assert explicit == {"Saltbu": "family"}
-    assert places.class_of(known["Saltbu"], None, explicit) == "family"
-
-
-def test_a_class_that_is_not_one_is_refused_naming_the_file(lb: Logbook) -> None:
-    document = json.loads(places.path_of(lb.root).read_text(encoding="utf-8"))
-    document["Saltbu"]["class"] = "cottage"
-    places.path_of(lb.root).write_text(json.dumps(document), encoding="utf-8")
-    with pytest.raises(places.PlaceError, match=r"places\.json.*Saltbu.*class"):
-        places.classes(lb.root)
-
-
-def test_setup_places_class_says_what_it_writes_asks_and_keeps_every_other_key(
-    lb: Logbook, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setenv("LOGBOOK_HOME", str(lb.root))
-    before = places.path_of(lb.root).read_text(encoding="utf-8")
-    said, code = _run("setup", "places", "class", "saltbu", "family", answer="n", monkeypatch=monkeypatch)
-    assert code == 0
-    assert "Saltbu: class family (now away, by its kind)" in said
-    assert "nothing written" in said
-    assert places.path_of(lb.root).read_text(encoding="utf-8") == before  # asked, said no: nothing written
-    said, code = _run("setup", "places", "class", "saltbu", "family", answer="y", monkeypatch=monkeypatch)
-    assert code == 0 and "wrote class family for Saltbu" in said
-    document = json.loads(places.path_of(lb.root).read_text(encoding="utf-8"))
-    assert document["Saltbu"] == {**PLACES["Saltbu"], "class": "family"}  # its unknown key kept
-    assert document["Home"] == PLACES["Home"] and list(document) == list(PLACES)
-    said, code = _run("setup", "places", "class", "Saltbu", "family", "--yes")
-    assert code == 0 and "already" in said
-
-
-def test_setup_places_class_with_yes_writes_and_refuses_what_is_not_a_place_or_a_class(
-    lb: Logbook, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setenv("LOGBOOK_HOME", str(lb.root))
-    said, code = _run("setup", "places", "class", "Home", "away", "--yes")
-    assert code == 0 and places.classes(lb.root) == {"Home": "away"}
-    said, code = _run("setup", "places", "class", "Nowhere Quay", "away", "--yes")
-    assert code == 2 and "Nowhere Quay" in said and "not a place" in said
-    said, code = _run("setup", "places", "class", "Home", "cottage", "--yes")
-    assert code == 2  # argparse refuses a class outside the four
-    assert places.classes(lb.root) == {"Home": "away"}
+    assert places.class_of(known["Saltbu"], None) == "away"
+    assert places.class_of(known["Home"], None) == "home"

@@ -10,8 +10,9 @@ promoted to one) or a run aboard an asset (`stays.fold`), as the Day lists them.
 - its **time** and duration, its real span and the part of it on the day;
 - its **people**, from the with module the Day reads (`present.company`): the confirmed in one list, the
   proposed in another, each with its reasons in words — `invited` (a calendar's attendee), `spoke` (a
-  recording), `you said` (the owner's note), `face on photos` (a library's face). No proposer is new
-  here; a proposal is never shown as confirmed. A person is a name and its reasons, never a number;
+  recording), `you said` (the owner's note), `face on photos` (a library's face), and no other. No
+  proposer is new here; a proposal is never shown as confirmed. A person is a name and its reasons,
+  never a number;
 - its **photos**, the owner's own camera first (`provenance` `camera`), the starred first within each;
 - what passed **during** its window, placed by time and never by subject: the messages by conversation
   (who and on which network, never how many), the calls (who and which way, never how long), the
@@ -69,6 +70,7 @@ CLASS_WORDS = {  # how a count of nights reads: "home 21 · the family's places 
 CONFIRMING = ("event", "transcript", "note")  # the evidence that can confirm company (`present`)
 ARROWS = f" {day_reader.ARROW} "  # a flight's airports, `OSL → ZRH`
 FACES = "face on photos"  # a face's reason, however many photos: no number beside a person
+REASONS = (("attendee of ", "invited"), ("spoke in ", "spoke"), ("note says with ", "you said"))  # `present`
 CAMERA = "camera"  # a photo's `provenance` when the owner's own camera took it
 WORDS_SHOWN = 3  # an agent session's turns of each side a moment carries; the rest are on its line
 WORDS_CHARS = 280
@@ -143,14 +145,13 @@ def day_of(
     rd = reading.read(lb, (d - timedelta(days=1)).isoformat(), day, airports, tiers)
     lines = day_reader.day_lines(rd, d)
     data = day_reader.of_reading(rd, day, None, lines)
-    given = named_places.classes(lb.root)
     money = _money_of_day(lb, day, rd)
     by_id = {str(line["id"]): line for line in lines}
     starred = _starred(lb, day, tiers)
     items: list[dict[str, Any]] = []
     for entry in data["timeline"]:
         if entry["kind"] in (stays.STAY, day_reader.ABOARD):
-            items.append(_moment(lb, entry, rd, by_id, given, starred, money))
+            items.append(_moment(lb, entry, rd, by_id, starred, money))
         elif entry["kind"] == stays.MOVE:
             items.append(_move(entry, rd))
         elif entry["kind"] == day_reader.FLIGHT:
@@ -161,7 +162,7 @@ def day_of(
         "weekday": data["weekday"],
         "tz": data["tz"],
         "week": week_of(day),
-        "night": _night(rd.night_after(day), rd.places, given, rd),
+        "night": _night(rd.night_after(day), rd.places, rd),
         "items": items,
         "track": [
             {"kind": e["kind"], "lat": e.get("lat"), "lon": e.get("lon"), "gap": bool(e.get("gap"))}
@@ -183,7 +184,6 @@ def _moment(
     entry: Mapping[str, Any],
     rd: reading.Reading,
     lines: Mapping[str, Line],
-    given: Mapping[str, str],
     starred: Mapping[str, object],
     money: Mapping[str, Any] | None,
 ) -> dict[str, Any]:
@@ -199,7 +199,7 @@ def _moment(
         "aboard": entry.get("aboard"),
         "place": entry.get("where") or "somewhere",
         "named": named is not None or entry["kind"] == day_reader.ABOARD,
-        "class": _class_of(entry, rd, given),
+        "class": _class_of(entry, rd),
         "start": entry["start"],
         "end": entry["end"],
         "start_local": entry["start_local"],
@@ -219,9 +219,9 @@ def _moment(
     return out
 
 
-def _class_of(entry: Mapping[str, Any], rd: reading.Reading, given: Mapping[str, str]) -> str:
-    """A Day row's class (`places.class_of`): its named place's, home when the stay lies within reach
-    of a home place (`stays.is_home`, the night rule), aboard on an asset, else away. The day and the
+def _class_of(entry: Mapping[str, Any], rd: reading.Reading) -> str:
+    """A Day row's class (`places.class_of`): aboard on an asset, home when the stay lies within reach
+    of a home place (`stays.is_home`, the night rule), family at a place tagged so, else away. The day and the
     week both ask here, so one stay has one class on both."""
     named = next((p for p in rd.places if p.name == entry.get("place")), None)
     home = (
@@ -241,7 +241,7 @@ def _class_of(entry: Mapping[str, Any], rd: reading.Reading, given: Mapping[str,
             rd.places,
         )
     )
-    return named_places.class_of(named, entry.get("aboard"), given, home=bool(home))
+    return named_places.class_of(named, entry.get("aboard"), home=bool(home))
 
 
 def _move(entry: Mapping[str, Any], rd: reading.Reading) -> dict[str, Any]:
@@ -288,24 +288,17 @@ def _people(found: Mapping[str, Any]) -> dict[str, list[dict[str, Any]]]:
 
 def because(reasons: Sequence[str]) -> list[str]:
     """The with module's reasons (`present`) in the timeline's words, each once: `invited`, `spoke`,
-    `you said`, `face on photos` (however many: no number beside a person); a reason it does not know,
-    as it is."""
+    `you said`, `face on photos` (however many: no number beside a person). These four are the card's
+    only reasons: a reason that is none of them is not shown, so no other proposer reaches the card
+    but through an RFC of its own."""
     words: list[str] = []
     faces = False
     for reason in reasons:
         if reason.startswith("face "):
             faces = True
             continue
-        word = (
-            "invited"
-            if reason.startswith("attendee of ")
-            else "spoke"
-            if reason.startswith("spoke in ")
-            else "you said"
-            if reason.startswith("note says with ")
-            else reason
-        )
-        if word not in words:
+        word = next((w for prefix, w in REASONS if reason.startswith(prefix)), None)
+        if word is not None and word not in words:
             words.append(word)
     if faces:
         words.append(FACES)
@@ -438,22 +431,21 @@ def _money_of_day(lb: Logbook, day: str, rd: reading.Reading) -> dict[str, Any] 
 def _night(
     night: stays.Night | None,
     known: Sequence[named_places.Place],
-    given: Mapping[str, str],
     rd: reading.Reading | reading.OwnerTrack,
 ) -> dict[str, Any]:
     """A night's class and where it was: `in transit` when no stay held it."""
     if night is None or night.stay is None:
         return {"class": IN_TRANSIT, "where": None}
-    return {"class": night_class(night, known, given), "where": _night_where(night, rd)}
+    return {"class": night_class(night, known), "where": _night_where(night, rd)}
 
 
-def night_class(night: stays.Night, known: Sequence[named_places.Place], given: Mapping[str, str]) -> str:
-    """The class of a night (`places.class_of`): aboard when aboard an asset, else its named place's
-    class, else home by the night rule (`stays.is_home`), else away; `in transit` with no stay."""
+def night_class(night: stays.Night, known: Sequence[named_places.Place]) -> str:
+    """The class of a night (`places.class_of`): aboard when aboard an asset, else home by the night
+    rule (`stays.is_home`), else family at a place tagged so, else away; `in transit` with no stay."""
     if night.stay is None:
         return IN_TRANSIT
     named = next((p for p in known if p.name == night.stay.place), None)
-    return named_places.class_of(named, night.aboard, given, home=night.home)
+    return named_places.class_of(named, night.aboard, home=night.home)
 
 
 def _night_where(night: stays.Night, rd: reading.Reading | reading.OwnerTrack) -> str | None:
@@ -496,7 +488,6 @@ def week_of_days(
     time, class, the confirmed by name), from one reading of the week and the day before it."""
     before = (date.fromisoformat(first) - timedelta(days=1)).isoformat()
     rd = reading.read(lb, before, last, airports, tiers)
-    given = named_places.classes(lb.root)
     days = []
     tier: int | None = None
     for day in day_range(first, last):
@@ -509,7 +500,7 @@ def week_of_days(
             chips.append(
                 {
                     "place": entry.get("where") or "somewhere",
-                    "class": _class_of(entry, rd, given),
+                    "class": _class_of(entry, rd),
                     "start_local": entry["start_local"],
                     "end_local": entry["end_local"],
                     "within_day": dict(entry["within_day"]),
@@ -523,7 +514,7 @@ def week_of_days(
             {
                 "day": day,
                 "weekday": data["weekday"],
-                "night": _night(rd.night_after(day), rd.places, given, rd),
+                "night": _night(rd.night_after(day), rd.places, rd),
                 "moments": chips,
             }
         )
@@ -616,7 +607,6 @@ def _days_of(
 ) -> tuple[list[dict[str, Any]], int | None, reading.OwnerTrack, dict[str, stays.Night]]:
     """Each day of the window: its night's class and where (a day inside the span of the owner's track
     the gate reads; none outside it), its photos, whether it is signed."""
-    given = named_places.classes(lb.root)
     track, nights = _nights(lb, first, last, airports, tiers)
     span = _days_span(lb, "location", tiers)
     with lb.index() as idx:
@@ -630,7 +620,7 @@ def _days_of(
         out.append(
             {
                 "day": day,
-                "night": _night(night, track.places, given, track) if tracked else None,
+                "night": _night(night, track.places, track) if tracked else None,
                 "photos": photos.get(day, 0),
                 "signed": day in signed,
             }
@@ -754,7 +744,6 @@ def life_of(
             "tier": None,
         }
     first, last = whole
-    given = named_places.classes(lb.root)
     days, tier, track, nights = _days_of(lb, first, last, airports, tiers)
     at_place, people_tier = _who_was_there(lb, track, first, last, tiers)
     known = {p.name: p for p in track.places}
@@ -770,7 +759,7 @@ def life_of(
     places_out = [
         {
             "place": name,
-            "class": named_places.class_of(known.get(name), None, given),
+            "class": named_places.class_of(known.get(name), None),
             "visits": len(found),
             "first": found[0],
             "last": found[-1],

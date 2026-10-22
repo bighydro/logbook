@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import contextlib
 import io
+import json
 import re
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -125,6 +126,13 @@ def test_the_reasons_read_in_words() -> None:
     assert moments.because(["attendee of Sail (all day)"]) == ["invited"]
 
 
+def test_a_reason_the_with_module_does_not_give_is_not_shown() -> None:
+    """The card's reasons are the four the with module gives: a proposer of another kind (an agent's,
+    "from Hermes") reaches the card only through an RFC of its own, so its reason is not read here."""
+    assert moments.because(["from Hermes"]) == []
+    assert moments.because(["from Hermes", "spoke in Call", "proposed by an agent"]) == ["spoke"]
+
+
 def test_a_gate_without_tier_three_has_no_money_slot(demo: Logbook) -> None:
     held = moments.read(demo, "day", OFFICE_DAY, tiers=NO_MONEY)
     assert "money" not in held
@@ -164,13 +172,15 @@ def test_a_month_counts_its_nights_by_class_and_says_signed_or_open(demo: Logboo
 
 
 def test_a_place_s_class_counts_apart(demo: Logbook, tmp_path: Path) -> None:
-    """The Cabin given the class `family`: its night counts as the family's places, not away."""
+    """The Cabin tagged `family` in places.json: its night counts as the family's places, not away."""
     copy = tmp_path / "copy"
     import shutil
 
     shutil.copytree(demo.root, copy)
     lb = Logbook(copy)
-    places.set_class(lb.root, "Cabin", "family")
+    document = json.loads(places.path_of(lb.root).read_text(encoding="utf-8"))
+    document["Cabin"]["tags"].append("family")
+    places.path_of(lb.root).write_text(json.dumps(document, indent=2) + "\n", encoding="utf-8")
     data = moments.read(lb, "month", "2026-06")
     assert data["nights"] == {"home": 18, "family": 1, "aboard": 6, "away": 5}
     assert moments.counts_text(data["nights"]) == "home 18 · the family's places 1 · aboard 6 · away 5"

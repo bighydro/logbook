@@ -7,10 +7,8 @@ naming, "named <lat>,<lon> as <name>", so the record says when the captain gave 
     {"Home": {"lat": 59.9139, "lon": 10.7522, "radius_m": 120, "kind": "home", "tags": ["family"]}}
 
 `kind` is `home`, `asset-berth` or `other` (absent is `other`); home regions are the places of kind
-`home`, and a night is at home when its stay lies in one. `tags` is free text. `class` (`home`,
-`family`, `aboard`, `away`) is the timeline's colour of a night there (RFC 0043 §12): a key of this
-reader's own that the spec does not list, absent meaning the place's kind says (`class_of`), written
-by `logbook setup places class` (`set_class`). Keys of an entry
+`home`, and a night is at home when its stay lies in one. `tags` is free text; a `family` tag makes
+the place one of the family's (`class_of`, RFC 0043 §12). Keys of an entry
 this module does not know are kept when the file is rewritten (SPEC §1 for `logbook.json`).
 
 `propose` is a reader (ADR 0013): the owner's unnamed stays of a window, grouped by place and ranked
@@ -41,7 +39,6 @@ KINDS = ("home", "asset-berth", "other")
 HOME, BERTH, OTHER = KINDS
 CLASSES = ("home", "family", "aboard", "away")  # a night's colour on the timeline (RFC 0043 §12)
 _, FAMILY, ABOARD, AWAY = CLASSES
-CLASS_KEY = "class"  # places.json's reader-side key for it; the spec ignores it (`classes`)
 DEFAULT_RADIUS_M = 150.0
 GROUP_M = 300.0  # unnamed stays this close are one proposal
 STAY_ID = re.compile(r"^(?:stay|stop):[^@]+@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)$")
@@ -131,53 +128,18 @@ def _document(root: Path) -> dict[str, Any]:
     return data
 
 
-def classes(root: Path) -> dict[str, str]:
-    """The `class` each place of the file was given (RFC 0043 §12, the timeline's colour of a night), by
-    place name: a reader-side key the spec does not know (SPEC §3.2 lists `kind` and `tags`), read here
-    and nowhere else, so a place without one reads as it always did. PlaceError, naming the file, for a
-    class that is not one of `CLASSES`."""
-    found: dict[str, str] = {}
-    for name, entry in _document(root).items():
-        if not isinstance(entry, dict) or CLASS_KEY not in entry:
-            continue
-        value = entry[CLASS_KEY]
-        if value not in CLASSES:
-            raise PlaceError(
-                f"{path_of(root)}: {name!r}: class must be one of {', '.join(CLASSES)}, not {value!r}"
-            )
-        found[str(name)] = str(value)
-    return found
-
-
-def class_of(place: Place | None, aboard: str | None, given: Mapping[str, str], home: bool = False) -> str:
-    """A stay's class, the colour of its night: aboard an asset, `aboard`; else the class `given` its
-    named place (`classes`); else `home` for a place of kind `home`, or a stay `home` says lies within
-    reach of one (`stays.is_home`, the night rule); else `away`."""
+def class_of(place: Place | None, aboard: str | None, home: bool = False) -> str:
+    """A stay's class, the colour of its night (RFC 0043 §12), read from what places.json already says
+    and from no key of its own: aboard an asset, `aboard`; a place of kind `home`, or a stay `home` says
+    lies within reach of one (`stays.is_home`, the night rule), `home`; a place tagged `family` (case
+    aside), `family`; else `away`."""
     if aboard is not None:
         return ABOARD
-    if place is not None and place.name in given:
-        return given[place.name]
     if (place is not None and place.kind == HOME) or home:
         return HOME
+    if place is not None and any(tag.strip().casefold() == FAMILY for tag in place.tags):
+        return FAMILY
     return AWAY
-
-
-def set_class(root: Path, name: str, value: str) -> tuple[str, str | None]:
-    """Give the place `name` (case aside) the class `value`, keeping every other key of the file as it
-    was written; returns the place's name as the file spells it and the class it was given before, None
-    when it had none. PlaceError for a name that is not a place or a class that is not one."""
-    if value not in CLASSES:
-        raise PlaceError(f"a class is one of {', '.join(CLASSES)}, not {value!r}")
-    document = _document(root)
-    found = next((n for n in document if n.casefold() == name.casefold()), None)
-    if found is None or not isinstance(document[found], dict):
-        raise PlaceError(
-            f"{name!r} is not a place in {path_of(root)}; `logbook setup places list` names them"
-        )
-    before = document[found].get(CLASS_KEY)
-    document[found][CLASS_KEY] = value
-    path_of(root).write_text(json.dumps(document, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-    return found, before if isinstance(before, str) else None
 
 
 def read(root: Path, default_radius_m: float = DEFAULT_RADIUS_M) -> list[Place]:

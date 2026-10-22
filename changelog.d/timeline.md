@@ -5,5 +5,6 @@
   passed during it and, at tier 3 only, what was paid; the month and the year count the nights by class,
   and all years lists each place and vessel with who was there, by name only ([the timeline](docs/timeline.md),
   RFC 0043 §11-12).
-- `logbook setup places class NAME CLASS`: a place's class (`home`, `family`, `aboard`, `away`), the colour
-  of its nights on the timeline, kept in `places.json` under a key only the timeline reads.
+- A place's class (`home`, `family`, `aboard`, `away`), the colour of its nights on the timeline, read from
+  what `places.json` already says: a place of kind `home`, a place tagged `family`, a night aboard an
+  asset, else away.
