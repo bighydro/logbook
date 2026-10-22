@@ -356,8 +356,10 @@ class GatedIndex(Index):
         first_day: str | None = None,
         last_day: str | None = None,
         source: str | None = None,
+        after_seq: int | None = None,
     ) -> Iterator[Line]:
-        return (line for line in super().of_kind(kind, first_day, last_day, source) if self.gate.keep(line))
+        found = super().of_kind(kind, first_day, last_day, source, after_seq)
+        return (line for line in found if self.gate.keep(line))
 
     def locations(self, first_day: str, last_day: str, subject: str | None = None) -> list[LocationRow]:
         where = (

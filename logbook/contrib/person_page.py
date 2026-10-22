@@ -112,9 +112,9 @@ def everyone(lb: Logbook, airports: Airports | None = None) -> Everyone | None:
     """`Everyone` of the record at its head; None for a record with no days. Read once and handed to
     `read` for every person's page (the Library keeps it while the head and the settings stand)."""
     whole = reading.record_days(lb)
-    if whole is None:
+    report = people.read_whole(lb, airports)  # kept between readings, brought forward by what was appended
+    if whole is None or report is None:
         return None
-    report = people.read(lb, *whole, airports)
     contacts = people_drift.real_contacts(lb, report)
     proposals = [p for p in promise_reader.extract(lb).proposals if p.status == "open"]
     return Everyone(whole, report, contacts, proposals)

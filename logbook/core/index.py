@@ -864,18 +864,20 @@ class Index:
         first_day: str | None = None,
         last_day: str | None = None,
         source: str | None = None,
+        after_seq: int | None = None,
     ) -> Iterator[Line]:
         """Every line of one kind, streamed in file order (one sequential sweep of the files, each
         opened once), so a kind with a million lines never sits in memory at once; with
         `first_day` or `last_day`, only the lines whose local day is inside the bounds (the
         (kind, day_local) index serves the cut), so a reader of one year never opens the others'
-        files; with `source`, only that source's."""
+        files; with `source`, only that source's; with `after_seq`, only the lines appended after
+        that one (a reading brought forward from where it stopped, `people.read_whole`)."""
         from .store import read_line_at
 
         found = self.db.execute(
             "SELECT file, offset FROM lines WHERE kind = ? AND day_local >= ? AND day_local <= ?"
-            " AND (? IS NULL OR source = ?) ORDER BY file, offset",
-            (kind, first_day or "", last_day or "9999-12-31", source, source),
+            " AND (? IS NULL OR source = ?) AND seq > ? ORDER BY file, offset",
+            (kind, first_day or "", last_day or "9999-12-31", source, source, after_seq or 0),
         ).fetchall()
         handle: Any = None
         current: str | None = None
@@ -889,6 +891,17 @@ class Index:
         finally:
             if handle is not None:
                 handle.close()
+
+    def appended(self, seq: int) -> dict[str, tuple[str, int, int]]:
+        """What was appended after `seq`, by kind: the earliest local day, how many lines, and how
+        many of them supersede another line. What a reading kept between heads asks before it
+        brings itself forward (`people.read_whole`); nothing read from the files."""
+        rows = self.db.execute(
+            "SELECT kind, min(day_local), count(*), sum(supersedes IS NOT NULL) FROM lines WHERE seq > ?"
+            " GROUP BY kind",
+            (seq,),
+        ).fetchall()
+        return {str(kind): (str(day), int(n), int(sup or 0)) for kind, day, n, sup in rows}
 
     def by_ids(self, ids: Iterable[str]) -> dict[str, Line]:
         """id → line for these line ids, read from the files; an id the record has no line for is

@@ -614,10 +614,9 @@ def read(lb: Logbook, book: google_contacts.Book | None = None) -> Report:
     standing = resolve.standing(lines)
     identities = resolve.identities_from(lines)
     rejected = rejections(reviews, frozenset(retractions(marks)))
-    window = reading.record_days(lb)
+    report = people.read_whole(lb)  # the whole window, kept between readings (`people.read_whole`)
     canonicals: dict[str, Canonical] = {}
-    if window is not None:
-        report = people.read(lb, *window)
+    if report is not None:
         channels = {
             entity: {name: c.lines for name, c in person.channels.items() if c.lines}
             for entity, person in report.known.items()
