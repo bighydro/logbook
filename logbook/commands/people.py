@@ -1,5 +1,6 @@
 """The people: `people`, `people --priority`, `people NAME` (the command `person` until 0.6), `people merge`,
-`people review`, `people drift`, `people nearby`, and the experimental `people ingest` and `people ask`."""
+`people review`, `people drift`, `people nearby`, and the experimental `people ingest` and `people ask`; and
+who was there's forms, `people not-with`, `lives-with`, `lives-in` and `city` (`who.py`, RFC 0043)."""
 
 from __future__ import annotations
 
@@ -43,12 +44,15 @@ def people_arguments(sub: Subparsers) -> None:
         " drift: who you used to see and have drifted from; nearby PLACE: who has been seen where you go;"
         " ingest NAME, ask NAME QUESTION: the relationship reader, experimental: a question answered by the"
         " model of LOGBOOK_DREAM_ENDPOINT under the `relationship` entry of policy/crossing.json, from the"
-        " person's lines at or under its max_tier on signed days, every claim citing them or unsupported",
+        " person's lines at or under its max_tier on signed days, every claim citing them or unsupported;"
+        " not-with NAME --from D1 --to D2, lives-with NAME --from D [--until D], lives-in NAME CITY: your"
+        " word on who was there, one note each; city CITY [--journey ID]: your people in a city, seen or"
+        " not yet on a journey (RFC 0043)",
     )
     s.add_argument(
         "name",
         nargs="?",
-        metavar="NAME|merge|review|drift|nearby|ingest|ask",
+        metavar="NAME|merge|review|drift|nearby|ingest|ask|not-with|lives-with|lives-in|city",
         help="one person's page: a name, an entity id, an email address, a phone number or kind:value;"
         " `merge`: the same person named twice or more, proposals with the evidence, merged only when told;"
         " `review`: the observed people not yet placed, proposed against the canonical ones, numbered,"
@@ -56,16 +60,22 @@ def people_arguments(sub: Subparsers) -> None:
         " for long; `nearby PLACE`: the people seen at or near a place; `ingest NAME`: one person's"
         " lines read into the relationship reader's store; `ask NAME QUESTION`: a question answered"
         " from it by the model, every claim citing lines of it or listed as unsupported, nothing written"
-        " (experimental)",
+        " (experimental); `not-with`, `lives-with`, `lives-in NAME CITY`, `city CITY`: who was there",
     )
     s.add_argument(
         "place",
         nargs="?",
         metavar="PLACE",
         help="nearby: lat,lon, a name of places.json, a city of the airports table, or an airport code;"
-        " ingest, ask: the person, as `people NAME` finds them",
+        " ingest, ask, not-with, lives-with, lives-in: the person, as `people NAME` finds them;"
+        " city: the city",
     )
-    s.add_argument("question", nargs="?", metavar="QUESTION", help="ask: the question about the person")
+    s.add_argument(
+        "question",
+        nargs="?",
+        metavar="QUESTION",
+        help="ask: the question about the person; lives-in: the city",
+    )
     s.add_argument(
         "--show-prompt", action="store_true", help="ask: print the prompt and the lines sent to the model"
     )
@@ -96,7 +106,12 @@ def people_arguments(sub: Subparsers) -> None:
     s.add_argument(
         "--show", action="store_true", help="drift: the days together of each, with where; never a word"
     )
-    s.add_argument("--journey", metavar="ID", help="nearby: where this journey or flight line goes")
+    s.add_argument(
+        "--journey",
+        metavar="ID",
+        help="nearby: where this journey or flight line goes; city: the journey (trip:FIRST:LAST, or a day"
+        " of it)",
+    )
     s.add_argument(
         "--days",
         nargs=2,
@@ -137,6 +152,9 @@ def people_arguments(sub: Subparsers) -> None:
         " contacts that share an address or a number; never a line of them; kept 24 h in"
         " state/google-contacts.json; give it with --accept and --reject too",
     )
+    from .who import people_arguments as who_arguments
+
+    who_arguments(s)
     g = s.add_mutually_exclusive_group()
     g.add_argument(
         "--priority",
@@ -170,6 +188,12 @@ def cmd_people(a: argparse.Namespace) -> None:
     the index (`logbook.core.people`). The window is the whole record, or one year, clipped to the days
     the record has a line on. Nothing is written. `people NAME` is one person's page (`cmd_person`);
     `people merge` the duplicates (`_people_merge`)."""
+    from . import who
+
+    if a.name in who.PEOPLE_FORMS:
+        who.people_form(a)
+        return
+    who.refuse_people_flags(a)
     if a.name in (INGEST, ASK):
         _relationship(Logbook.find(), a)
         return
