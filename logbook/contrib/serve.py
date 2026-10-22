@@ -132,6 +132,7 @@ import threading
 import time
 import traceback
 from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
+from concurrent.futures import CancelledError as FuturesCancelled
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FuturesTimeout
 from datetime import UTC, date, datetime, timedelta
@@ -5134,7 +5135,11 @@ class Handler(BaseHTTPRequestHandler):
             self._send(quick, body)
             return
         token = cancel.Token()
-        future = server.pool.submit(server.read, path, query, inm, token)
+        try:
+            future = server.pool.submit(server.read, path, query, inm, token)
+        except RuntimeError:  # the server is closing: no reading starts
+            self.close_connection = True
+            return
         deadline = time.monotonic() + server.limit_s
         while True:
             try:
@@ -5142,6 +5147,9 @@ class Handler(BaseHTTPRequestHandler):
                 break
             except FuturesTimeout:
                 pass
+            except FuturesCancelled:  # the server closed with the reading still waiting its turn
+                self.close_connection = True
+                return
             if self._gone():
                 token.cancel("the browser left")
                 self.close_connection = True
