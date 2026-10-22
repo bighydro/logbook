@@ -150,6 +150,37 @@ page as it is asked for. A file is named by the SHA-256 of its address, so no ad
 and two addresses that differ only in case are never one file. Deleting the folder loses nothing: the
 next build writes it again.
 
+## Never hangs
+
+The server keeps answering, whatever a page costs and whatever else writes the record.
+
+- **A page has a limit.** A page the build does not hold is read in a pool of two: however many are
+  asked for together, at most two are read at once, so a whole menu opened at once never holds the
+  record in memory a dozen times over. A page read longer than `--limit` (15 s by default) is stopped
+  and answered with one sentence (*Still reading*, a 503): it is being built in the background and
+  will be here as a file in a few minutes, and every other door opens as usual. Under `--live` the
+  sentence says the reading was stopped. A page the build holds never waits for the pool.
+- **A browser that leaves stops its reading.** The server looks at the connection while the page is
+  read; when the browser closes it, the reading stops at the next line it reads, and nothing is sent.
+  A broken pipe is a browser leaving, never a traceback in the log. A connection that sends nothing for
+  60 s is closed.
+- **A reader never waits on a writer.** A sync appends a line, then `logbook.json`, then the index
+  (SPEC §3). A page read in between finds the index a line short: it reads the record up to the last
+  line the index holds, every line of it whole, and names that head in its tag. It never rebuilds the
+  index from under the writer.
+- **A server that says nothing is restarted.** `serve --status` tells a server that answers, one that
+  takes the connection and says nothing for 5 s (`not answering`: stuck, or paused by the system),
+  and nothing at all apart, and names the command that restarts it. The server asks itself for its
+  icon every 30 s; two silences in a row, and it writes every thread's stack to its log and exits 70,
+  which the service manager starts again (launchd's `KeepAlive`, systemd's `Restart=on-failure`). A
+  process the system paused runs nothing, its watchdog included: the scheduled run (`sync
+  --scheduled`, four times a day) restarts it, `launchctl kickstart -k gui/<uid>/org.logbook.serve`
+  or `systemctl --user restart logbook-serve`, in one line. A system-domain service is restarted by
+  an administrator, and the line says how.
+- **When it does hang anyway**, `kill -USR1 <pid>` writes every thread's stack to the log
+  (`~/Library/Logs/logbook-serve.log` on macOS, the journal on Linux) while the server runs on: send
+  it, and the log says where it waits.
+
 ## Performance
 
 A Day is one `day.read`: one reading of the day and the day before through `index.sqlite`, the

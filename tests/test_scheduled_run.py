@@ -430,3 +430,35 @@ def test_close_goes_with_scheduled(lb: Logbook, capsys: pytest.CaptureFixture[st
     with pytest.raises(SystemExit) as e:
         cli.main(["sync", "--close"])
     assert e.value.code == 2 and "--scheduled" in capsys.readouterr().err
+
+
+def test_every_scheduled_run_restarts_a_serve_that_does_not_answer_before_the_doctor(
+    lb: Logbook, monkeypatch: pytest.MonkeyPatch, clock: list[datetime], capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A Library the system paused answers nothing and runs no watchdog: the run looks first
+    (`service.keep_answering`), so the doctor's `serve` line reads the server as it is after."""
+    from logbook.contrib import service
+
+    order: list[str] = []
+    monkeypatch.setattr(service, "keep_answering", lambda *_a, **_k: order.append("serve") or [])
+    real = doctor.run
+    monkeypatch.setattr(doctor, "run", lambda *a, **k: order.append("doctor") or real(*a, **k))
+    _fakes(monkeypatch, Fake("alpha", ("LOGBOOK_ALPHA_KEY",), drafts=1))
+    monkeypatch.setenv("LOGBOOK_ALPHA_KEY", "k")
+    status, _out, _err = _scheduled(capsys)
+    assert status == 0 and order == ["serve", "doctor"]
+
+
+def test_a_look_at_the_service_that_fails_never_fails_the_run(
+    lb: Logbook, monkeypatch: pytest.MonkeyPatch, clock: list[datetime], capsys: pytest.CaptureFixture[str]
+) -> None:
+    from logbook.contrib import service
+
+    def broken(*_a: Any, **_k: Any) -> Any:
+        raise OSError("launchctl is not here")
+
+    monkeypatch.setattr(service, "keep_answering", broken)
+    _fakes(monkeypatch, Fake("alpha", ("LOGBOOK_ALPHA_KEY",), drafts=1))
+    monkeypatch.setenv("LOGBOOK_ALPHA_KEY", "k")
+    status, out, _err = _scheduled(capsys)
+    assert status == 0 and "serve: could not look at the service: OSError: launchctl is not here" in out
