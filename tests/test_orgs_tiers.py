@@ -168,8 +168,9 @@ def test_a_crossing_under_a_ceiling_of_two_carries_no_org_status_no_reason_and_n
     policy = lb.root / "policy" / "crossing.json"
     policy.write_text(json.dumps({"hermes": {"max_tier": 2}}), encoding="utf-8")
     out = tmp_path / "out"
+    # `--all-mail`: this is the tier ceiling's test, and the orgs' mail is no person's (RFC 0045)
     code, _out, err = _run(capsys, "export", "crossing", "--to", "hermes", "--since", SINCE, "--until", UNTIL,
-                           "--tier", "1,2", "--unsigned", "--out", str(out))  # fmt: skip
+                           "--tier", "1,2", "--unsigned", "--all-mail", "--out", str(out))  # fmt: skip
     assert code == 0, err
     crossed = _jsonl(out / "entries.jsonl")
     manifest = json.loads((out / "manifest.json").read_text(encoding="utf-8"))

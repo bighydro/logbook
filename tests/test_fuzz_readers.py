@@ -503,6 +503,8 @@ def windowed_readers(
         ["review", "with", "--from", day, "--to", day],  # RFC 0043 §11: one day, inside the 60 a queue takes
         ["review", "with", "--week", week_paper.week_of(day), "--json"],
         ["people", "city", "Oslo", "--json"],
+        ["people", "mail", "--since", since, "--until", until],
+        ["people", "mail", "--since", since, "--until", until, "--json"],
         ["setup", "assets", "status"],
         ["setup", "assets", "status", "--json"],
         ["doctor"],

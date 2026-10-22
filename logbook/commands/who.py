@@ -104,7 +104,10 @@ def people_arguments(s: argparse.ArgumentParser) -> None:
     )
     g.add_argument("--to", metavar="DAY", help="not-with: the last day")
     g.add_argument(
-        "--until", metavar="DAY", help="lives-with: the last day lived together; alone, it ends it"
+        "--until",
+        metavar="DAY",
+        help="lives-with: the last day lived together; alone, it ends it; mail: the last local day, inclusive"
+        " (default: today)",
     )
 
 
