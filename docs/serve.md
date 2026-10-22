@@ -139,6 +139,18 @@ next build builds it again (the latest 500 of them). Between builds the pages ar
 lines a sync appended at noon are on today's Day at once and on the shelves at the next close, or after
 your next act.
 
+A build after the first renders what changed. It keeps the line it read through, and renders every
+door and the pages they link to again, but a Day only when a line landed on it or the day after, and a
+journey only when it holds such a day; the rest stay as they were built. The whole-record readings the
+doors share are kept beside the index and brought forward by the lines appended since, not read again:
+the people of the whole record (`people.read_whole`, behind every person's page and the people review),
+the promises (`promises.extract`), and each person's last real contact (`real_contacts`). Each is held
+to the reading of every line by its own tests, and reads the whole record again when what was appended
+is more than lines of later days: a resolution or a retraction, a line that corrects another, a
+backfill into a month already read, a changed setting, or a new version of the code. A resolution,
+retraction or review line, or a changed setting, also makes the next build a full one. `logbook serve
+--build --full` renders every page whatever the last build left, and is never needed in normal use.
+
 Where: `library/` beside the index, in the cache folder (`~/Library/Caches/logbook/<owner_id>/` on
 macOS, `~/.cache/logbook/<owner_id>/` on Linux, `%LOCALAPPDATA%\logbook\cache\<owner_id>\` on
 Windows), never in the record's folder. No export, vault, crossing or copy of the record carries it,
