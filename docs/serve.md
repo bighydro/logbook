@@ -108,6 +108,48 @@ kept pages and readings go, and every page reads the new lines, with no restart.
 rebuild happens once, under a lock, however many requests arrive at that moment; they wait for it
 rather than each starting their own on the same file.
 
+## Built ahead
+
+`logbook serve` answers from pages built ahead of time, not from the record while you wait
+([RFC 0047](https://github.com/bighydro/logbook/blob/main/rfcs/0047-the-librarys-doors.md) §8). Every door and shelf (`/`, `/days`, `/trips`,
+`/journeys`, `/people`, `/places`, `/world`, `/manifest`, `/manifest/people`, `/ideas`, `/promises`,
+`/goals`, `/agents`, `/assets`, `/gaps`) is built, with the Days of the last fortnight and the pages
+those shelves link to first (60 of each kind: the people at the top of People, this year's journeys,
+the orgs, the ideas, the goals, the promises). A built page is the page the server would have rendered
+at that moment, byte for byte, with one sentence added to its footer: `built 06:02`.
+
+When it is built:
+
+- **At the 06:00 close.** `sync --scheduled --close` builds the Library after the sync and the dream
+  and before `doctor`, and says so in one line: `library: 312 pages, 41 written, in 84 s`. A build
+  another process holds, or one that fails, is that one line and never fails the run.
+- **After every act on a page.** Reflect, Sign, a star, *with…*, a name, a merge, a status: the page
+  the act sends you back to and the front page are dropped at once, so you see what you wrote, and a
+  rebuild of the rest starts in the background on a thread of its own. Acts that come while it builds
+  are one more build, not one each. An act refused because the page was older than the record (409)
+  drops the page its form was on, so your reload is the page as it stands.
+- **By hand.** `logbook serve --build` builds now and says what it did. A page that fails is named and
+  the command exits 1; while another process builds it exits 75.
+- **The first time.** A server that finds no build starts one when it starts.
+
+What is never built: today's Day, whose shape moves with the hour (morning, live, evening; RFC 0043
+§5), the redirect of `/today`, and a photo's pixels. A page no build has written (a Day a year ago, a
+`/days` window you chose) is rendered when you ask for it and kept, so the next visit is a file and the
+next build builds it again (the latest 500 of them). Between builds the pages are as of their build:
+lines a sync appended at noon are on today's Day at once and on the shelves at the next close, or after
+your next act.
+
+Where: `library/` beside the index, in the cache folder (`~/Library/Caches/logbook/<owner_id>/` on
+macOS, `~/.cache/logbook/<owner_id>/` on Linux, `%LOCALAPPDATA%\logbook\cache\<owner_id>\` on
+Windows), never in the record's folder. No export, vault, crossing or copy of the record carries it,
+and nothing in it is a line. The folder is `0700` and every file `0600`: the pages hold what the
+Library shows, every tier of it, so only the record's user reads them. On a sealed record that means
+the built pages hold, in plain text on this disk, what the Library shows of the sealed lines, as the
+browser's own cache of those pages always has; `logbook serve --live` builds nothing and renders every
+page as it is asked for. A file is named by the SHA-256 of its address, so no address becomes a path
+and two addresses that differ only in case are never one file. Deleting the folder loses nothing: the
+next build writes it again.
+
 ## Performance
 
 A Day is one `day.read`: one reading of the day and the day before through `index.sqlite`, the

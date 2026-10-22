@@ -110,6 +110,7 @@ that no model touched it (`NO_MODEL`): its rows are computed and a model's draft
 from __future__ import annotations
 
 import base64
+import contextlib
 import email
 import functools
 import hashlib
@@ -168,6 +169,7 @@ from . import (
     gaps,
     ideas,
     journeys,
+    library_build,
     orgs,
     person_page,
     phone,
@@ -641,6 +643,8 @@ class Site:
         footer: str | None = None,
         voice: Voice | None = None,
         with_drafts: bool = True,
+        library: library_build.Library | None = None,
+        on_act: Callable[[], None] | None = None,
     ):
         self.lb = lb
         self.airports = airports or Airports.load()
@@ -652,6 +656,10 @@ class Site:
         self.footer = footer
         self.voice = voice
         self.with_drafts = with_drafts  # False: no model's draft (pencil) on the Day (`export site`)
+        # the pages built ahead (`library_build`): a GET is answered from them when they hold it, and a
+        # page rendered here is added to them; None renders every page (the tests, `export site`)
+        self.library = library
+        self.on_act = on_act  # told after an act changed the record: the server's rebuild, in the background
         self._lock = threading.Lock()
         # the review queues are read (their tables built once) and acted on under it
         self._review_lock = threading.Lock()
@@ -698,6 +706,8 @@ class Site:
             return self._error(405, f"{path} takes the forms of the server's own pages (POST), nothing else")
         if DAY_ACT.match(path) is not None:
             return self._error(405, f"{path} takes the Day page's forms (POST), nothing else")
+        if self.library is not None and (built := self._built(path, query, if_none_match)) is not None:
+            return built  # what the build wrote: no index opened, nothing read
         meta = self.current()
         self._add_indexes(str(meta.get("head")))
         if path == TODAY:
@@ -717,6 +727,8 @@ class Site:
             response = Response(200, self._page(path, params).encode("utf-8"), etag=etag, csp=csp)
             if etag is not None:
                 self._keep(etag, response)
+            if self.library is not None:
+                self._build_too(path, query, meta, response)
             return response
         except NotFound as e:
             return self._error(404, str(e))
@@ -742,7 +754,69 @@ class Site:
         except ValueError as e:  # a day that is not one, a window that runs backwards, a year that is not
             return self._error(400, str(e))
 
+    def _built(self, path: str, query: str, if_none_match: str | None) -> Response | None:
+        """The page the build holds at this address, as it was written; None when it holds none, or
+        the page is one the server always renders (`library_build.live`: today's Day, `/today`)."""
+        assert self.library is not None
+        try:
+            today = day_start.of(self.lb.meta).today(self.now()).isoformat()
+        except (day_start.DayStartError, KeyError, ValueError):
+            return None  # the page that says why is rendered
+        if library_build.live(path, today):
+            return None
+        found = self.library.page(library_build.address(path, query))
+        if found is None:
+            return None
+        page, body = found
+        if if_none_match is not None and _matches(if_none_match, page.etag):
+            return Response(304, b"", etag=page.etag)
+        csp = page.csp if page.csp is not None else CSP
+        return Response(page.status, body, etag=page.etag, location=page.location, csp=csp)
+
+    def _build_too(self, path: str, query: str, meta: Mapping[str, Any], response: Response) -> None:
+        """A page the build did not hold, rendered for this request, added to it (`asked`): the next
+        visit is a file. Never today's Day, and never a page the clock alone moves faster than a build."""
+        assert self.library is not None
+        try:
+            today = day_start.of(meta).today(self.now()).isoformat()
+        except (day_start.DayStartError, KeyError, ValueError):
+            return
+        if library_build.live(path, today):
+            return
+        target, head = library_build.address(path, query), str(meta.get("head") or "")
+        with contextlib.suppress(OSError):  # a full disk or a cache folder gone: the page was answered
+            self.library.put(target, response, head, asked=True)
+
+    def _after_act(self, path: str, form: Mapping[str, str], response: Response) -> None:
+        """An act changed the record: the built pages it changed are dropped at once (the server renders
+        them until the build writes them again, so the owner sees what was written), and the rebuild is
+        asked for (`on_act`). Which pages: the page the act returns to and the front page; refused
+        because the page was older than the record (409), the page the form was on, so the reload is
+        the page as it stands (`library_build.touched`)."""
+        if self.library is None:
+            return
+        back = urlsplit(response.location or "").path
+        self.library.drop(library_build.touched(self.library.pages(), path, response.status, back, form))
+        if self.on_act is not None and response.status < 400:
+            self.on_act()
+
     def write(
+        self,
+        path: str,
+        form: Mapping[str, str],
+        client: str,
+        origin: str | None,
+        upload: Upload | None = None,
+        *,
+        asked: phone.Asked | None = None,
+    ) -> Response:
+        """`_write`, and the built pages it changed dropped when it wrote (`_after_act`)."""
+        response = self._write(path, form, client, origin, upload, asked=asked)
+        with contextlib.suppress(OSError):  # the act is written; a cache that cannot be told is the build's
+            self._after_act(path, form, response)
+        return response
+
+    def _write(
         self,
         path: str,
         form: Mapping[str, str],
@@ -5014,7 +5088,13 @@ class Server(ThreadingHTTPServer):
 
     def __init__(self, port: int, site: Site):
         self.site = site
+        self.rebuilder: library_build.Rebuilder | None = None
         super().__init__((HOST, port), Handler)
+
+    def server_close(self) -> None:
+        if self.rebuilder is not None:
+            self.rebuilder.stop()
+        super().server_close()
 
     def server_bind(self) -> None:
         socketserver.TCPServer.server_bind(self)
@@ -5029,15 +5109,28 @@ def make_server(
     port: int = PORT,
     airports: Airports | None = None,
     voice: Voice | None = None,
+    built: bool = False,
+    say: Callable[[str], None] | None = None,
 ) -> Server:
     """The server, bound and ready to `serve_forever`. `HostError` for any host but 127.0.0.1,
-    before a socket is opened; OSError when the port is taken. `voice`: how a Day hears a recording."""
+    before a socket is opened; OSError when the port is taken. `voice`: how a Day hears a recording.
+    `built`: answer from the pages built ahead (`library_build`; `logbook serve` does by default),
+    rebuilt in the background after every act; False renders every page as it is asked for."""
     if host != HOST:
         raise HostError(
             f"serve binds {HOST} only, never {host!r}: the record is read from this machine, "
             "and nothing here leaves it"
         )
-    return Server(port, Site(lb, airports, voice=voice))
+    if not built:
+        return Server(port, Site(lb, airports, voice=voice))
+    library = library_build.Library(lb)
+    site = Site(lb, airports, voice=voice, library=library)
+    server = Server(port, site)
+    server.rebuilder = library_build.Rebuilder(lb, site, library, say).start()
+    site.on_act = server.rebuilder.kick
+    if not library.built():
+        server.rebuilder.kick()  # never built on this machine: the first build starts with the server
+    return server
 
 
 def serve(
@@ -5047,9 +5140,11 @@ def serve(
     airports: Airports | None = None,
     announce: Callable[[str], None] = print,
     voice: Voice | None = None,
+    built: bool = True,
 ) -> None:
-    """Serve the record until Ctrl-C. `HostError` and OSError as `make_server`."""
-    server = make_server(lb, host, port, airports, voice)
+    """Serve the record until Ctrl-C, from the pages built ahead unless `built` is False (`--live`).
+    `HostError` and OSError as `make_server`."""
+    server = make_server(lb, host, port, airports, voice, built=built, say=announce)
     try:
         bound = server.server_address[1]
         announce(
