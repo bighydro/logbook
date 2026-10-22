@@ -22,11 +22,12 @@ MIN_HOME_NIGHTS = 14
 
 
 def lab_arguments(sub: Subparsers) -> None:
-    """`logbook lab introductions|chapters`."""
+    """`logbook lab introductions|chapters|companies|hold`."""
     s = sub.add_parser(
         "lab",
         help="readers still finding their shape (docs/labs.md); read-only",
-        description="readers still finding their shape (docs/labs.md): introductions, chapters; read-only",
+        description="readers still finding their shape (docs/labs.md): introductions, chapters, companies;"
+        " read-only",
     )
     verbs = s.add_subparsers(dest="verb", required=True)
     for name, text in (
@@ -70,8 +71,40 @@ def lab_arguments(sub: Subparsers) -> None:
                 f" time (default {MIN_HOME_NIGHTS})",
             )
         v.set_defaults(fn=cmd_lab)
+    companies_arguments(verbs)
     hold_arguments(verbs)
     lab_map_arguments(verbs)
+
+
+def companies_arguments(verbs: Subparsers) -> None:
+    """`logbook lab companies DAY [--json]` (docs/companies.md, RFC 0043)."""
+    v = verbs.add_parser(
+        "companies",
+        help="the orgs one day touched: updates, meetings, documents (docs/companies.md)",
+        description="the orgs the Manifest names that DAY touched: an update mailed from one of their"
+        " domains, a meeting with someone of theirs, a document in one of their repositories; each with"
+        " its status (tier 3) and the lines, grouped by portfolio. Every tier is read, as your own"
+        " terminal reads it",
+    )
+    v.add_argument("day", metavar="DAY", help="YYYY-MM-DD")
+    v.add_argument("--json", action="store_true", help="the reading as JSON")
+    v.set_defaults(fn=cmd_companies)
+
+
+def cmd_companies(a: argparse.Namespace) -> None:
+    """`lab companies DAY [--json]`: `companies.companies_of`; a day that is not one is said, exit 2."""
+    from ..contrib import companies  # the orgs readers load the people review's adapters when they read
+
+    try:
+        found = companies.companies_of(Logbook.find(), a.day)
+    except ValueError as e:
+        print(f"lab companies: {e}", file=sys.stderr)
+        sys.exit(2)
+    if a.json:
+        print(json.dumps(found.to_json(), indent=2, ensure_ascii=False))
+        return
+    for row in companies.rows(found):
+        print(row)
 
 
 def hold_arguments(verbs: Subparsers) -> None:
