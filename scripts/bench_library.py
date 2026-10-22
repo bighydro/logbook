@@ -211,6 +211,7 @@ ROUTES = (
     "/promises",
     "/goals",
     "/agents",
+    "/week/{week}",
 )
 JOURNEY_LINK = re.compile(r'href="/journeys/(\d{4}-\d{2}-\d{2}/\d{4}-\d{2}-\d{2})"')
 
@@ -1165,6 +1166,12 @@ def open_index(root: Path) -> float:
     return round(time.perf_counter() - t, 3)
 
 
+def week_of(day: str) -> str:
+    """The ISO week a day is in, `YYYY-Www`, as the week page's path names it."""
+    year, week, _weekday = date.fromisoformat(day).isocalendar()
+    return f"{year}-W{week:02d}"
+
+
 def busiest_day(root: Path) -> str:
     with sqlite3.connect(next((root / "cache").rglob("index.sqlite"))) as db:
         day = db.execute(
@@ -1179,10 +1186,13 @@ def time_routes(
     root: Path, built: dict[str, Any], routes: list[str] | None, profiles: list[str], timeout: int
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     """Every route of `ROUTES` (or those `routes` names), each in a child of its own (`run_route`),
-    filled in from the record (`fill`): the busiest day, person, org, idea and the first journey.
+    filled in from the record (`fill`): the busiest day and its week, person, org, idea and the first
+    journey.
     Says each as it goes, on stderr."""
+    busiest = busiest_day(root)
     fill: dict[str, Any] = {
-        "day": busiest_day(root),
+        "day": busiest,
+        "week": week_of(busiest),  # the busiest day's week
         "person": built["busiest_person"],
         "org": built["org"],
         "idea": built["idea"],

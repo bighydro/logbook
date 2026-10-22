@@ -310,6 +310,8 @@ PAGES = (
     "/world",
     "/world?from=2026-06-15&to=2026-06-20",
     "/day/2026-06-14",  # a Sunday: the week's draft, when its week has one
+    "/week/2026-W24",  # the week page: its ribbons, the plan, Hold's census
+    "/week/2026-W24?open=1",
     LINE,
 )
 

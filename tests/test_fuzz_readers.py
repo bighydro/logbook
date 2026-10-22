@@ -468,6 +468,21 @@ def assert_day_serves(label: str, lb: Logbook, day: str) -> None:
                 )
 
 
+# the week page, served as `logbook serve` serves it, folded and open, at every tier and through a gate of
+# tier 1: the week a day is in, read from any record (most weeks with no week draft), never a traceback
+
+
+def assert_week_serves(label: str, lb: Logbook, day: str) -> None:
+    week = week_paper.week_of(day)
+    for tiers in (None, (1,)):
+        site = serve.Site(lb, tiers=tiers)
+        for query in ("", "open=1"):
+            response = site.respond(f"/week/{week}", query)
+            assert response.status == 200, (
+                f"{label}: /week/{week}?{query} through {tiers} answered {response.status}"
+            )
+
+
 # the Promises, Goals and Agents shelves, served as `logbook serve` serves them, at every tier and through
 # a gate of tiers 1 and 2: a page or a 404 for a detail the record does not hold, never a traceback
 SHELF_PAGES = ("/promises", "/promises?person=Ola Nordmann", "/goals", "/agents", "/agents?page=2")
@@ -677,6 +692,7 @@ def every_reader_reads(
         for args in windowed_readers(since, until, day, who, kind, by, which_lane, whose, n):
             assert_reads_cleanly(label, args)
         assert_day_serves(label, lb, day)
+        assert_week_serves(label, lb, day)
 
 
 # -- the properties ----------------------------------------------------------------------------------------

@@ -89,7 +89,8 @@ def test_every_route_at_once_answers(
     for key, value in bench._environment(root).items():
         if key.startswith("LOGBOOK_"):
             monkeypatch.setenv(key, value)
-    fill = {"day": bench.busiest_day(root), "person": built["busiest_person"], "org": built["org"]}
+    day = bench.busiest_day(root)
+    fill = {"day": day, "week": bench.week_of(day), "person": built["busiest_person"], "org": built["org"]}
     routes = [r.format(**fill, idea=built["idea"]) for r in bench.ROUTES if "{journey}" not in r]
     found = bench.together(root, routes)
     assert set(found["routes"]) == set(routes)

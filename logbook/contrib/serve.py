@@ -193,6 +193,7 @@ from . import (
     shelf_goals,
     shelf_promises,
     trip_page,
+    week_page,
     week_paper,
     world,
 )
@@ -250,6 +251,7 @@ PHOTOS = "photos"  # the Day page's anchor of its photo review, where the review
 WEEK = "week"  # the anchor of a Sunday's week draft (`dream week`), which the other six days link to
 LINE_PATH = re.compile(r"^/line/([^/]+)$")  # one line as written, read-only, through the gate
 PHOTO_PATH = re.compile(r"^/photo/([^/]+)$")  # a photo line's pixels from the attachment store, likewise
+WEEK_PATH = re.compile(r"^/week/(\d{4}-W\d{2})$")  # the week page (RFC 0043 §8, `week_page`), read-only
 CLOSE = "close"  # the Day page's anchor of Reflect and sign, where a write sends the owner back
 # pages the record's today moves too (this year, anniversaries, drift, the stale orgs and ideas): in the tag
 # /goals: a goal goes past; /world: its window ends on today, whatever the calendar holds after it
@@ -1455,10 +1457,16 @@ class Site:
             and ORG_PATH.match(path) is None
             and IDEA_PATH.match(path) is None
             and LINE_PATH.match(path) is None
+            and WEEK_PATH.match(path) is None
         ):
             return None
         parts = [self._started, path, query, json.dumps(meta, sort_keys=True)]
-        if DAY_PATH.match(path) is not None or path.startswith(CLOCK_PAGES):
+        # a week's plan, its trip's days to go and Hold's untouched files move with the record's today
+        if (
+            DAY_PATH.match(path) is not None
+            or WEEK_PATH.match(path) is not None
+            or path.startswith(CLOCK_PAGES)
+        ):
             # a Day's forms are there from the day the owner is in; this year, the coming
             # anniversaries and a silence move with it too
             try:
@@ -1622,6 +1630,8 @@ class Site:
             return self.page_gaps(params.get("since") or None)
         if path == "/world":
             return self.page_world(params.get("from") or None, params.get("to") or None)
+        if (m := WEEK_PATH.match(path)) is not None:
+            return week_page.page_week(self, m.group(1), expanded=params.get("open") == "1")
         raise NotFound(f"no page at {path}")
 
     def _error(self, status: int, message: str) -> Response:
@@ -1934,7 +1944,8 @@ class Site:
             f"<h1>{day} <small>{escape(data['weekday'] + held)}</small></h1>\n",
             "<!--meta-->",
             f'<p class="pager">{self.link(f"← {before}", f"/day/{before}")}{DOT}'
-            f"{self.link('the fortnight around', f'/days?from={a}&to={b}')}{DOT}{toggle}{close}"
+            f"{self.link('the fortnight around', f'/days?from={a}&to={b}')}{DOT}"
+            f"{week + DOT if (week := week_page.link_html(self, day)) else ''}{toggle}{close}"
             f"{self.link(f'{after} →', f'/day/{after}')}</p>\n",
             "" if self.static or data["sources"] else self._nothing_held(day),
             '<dl class="header">\n',
@@ -2471,6 +2482,8 @@ class Site:
             link = said if href is None else f'<a href="{escape(href)}#{WEEK}">{said}</a>'
             return f'<p class="mute week">The week {escape(week)} has a draft: {link}.</p>\n'
         out = [f'<h2 id="{WEEK}">The week {escape(week)}</h2>\n']
+        if page := week_page.link_html(self, day):
+            out.append(f'<p class="mute">{page}: its ribbons, goals and proposal</p>\n')
         if draft is not None:
             href = self.href(f"/line/{quote(str(draft['line']), safe='')}")
             if href is not None:
