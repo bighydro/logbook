@@ -65,6 +65,12 @@ def dream_arguments(sub: Subparsers) -> None:
     )
     s.add_argument("--dry-run", action="store_true", help="ask the model and check its answer; write nothing")
     s.add_argument(
+        "--evening",
+        action="store_true",
+        help="with day: dream today so far; the draft says so (extra.evening) and the morning's catch-up"
+        " dreams the day again when lines arrived since",
+    )
+    s.add_argument(
         "--window",
         nargs=2,
         metavar=("FROM", "TO"),
@@ -114,6 +120,11 @@ def cmd_dream(a: argparse.Namespace) -> None:
     if a.window is not None and a.verb != PERSON:
         print("dream: --window goes with `dream person NAME`", file=sys.stderr)
         sys.exit(2)
+    if a.evening and (a.catch_up or a.verb != VERB):
+        print(
+            "dream: --evening goes with `dream day DAY`, DAY today: it dreams today so far", file=sys.stderr
+        )
+        sys.exit(2)
     if a.since is not None and not a.catch_up:
         print("dream: --since goes with --catch-up: dream --catch-up --since 2026-06-01", file=sys.stderr)
         sys.exit(2)
@@ -149,6 +160,7 @@ def cmd_dream(a: argparse.Namespace) -> None:
             airports=_airports(a.airports),
             dry_run=a.dry_run,
             say=print if a.show_prompt else None,
+            evening=a.evening,
         )
     except (dreaming.DreamError, HeadMoved, ValueError, stays.SettingsError) as e:
         print(f"dream: {e}", file=sys.stderr)
@@ -160,6 +172,11 @@ def cmd_dream(a: argparse.Namespace) -> None:
     if found.proposals:
         k = len(found.proposals)
         counts += f"{drafts.DOT}{k} proposed event{'s' if k != 1 else ''}"
+    if found.links:
+        k = len(found.links)
+        counts += f"{drafts.DOT}{k} proposed link{'s' if k != 1 else ''}"
+    if p["extra"].get("evening"):
+        counts += f"{drafts.DOT}{drafts.EVENING}, read until {p['extra']['read_until']}"
     if found.line is None:
         print(f"{found.day}: dry run, nothing written{drafts.DOT}tier {found.tier}{drafts.DOT}{counts}")
     else:
@@ -171,19 +188,21 @@ def cmd_dream(a: argparse.Namespace) -> None:
         )
         if p.get("supersedes"):
             print(f"  dreamed again: supersedes {p['supersedes']}")
-    shown = {
-        "segments": [drafts.segment_json(s, None) for s in p["segments"]],
-        "proposals": found.proposals,
-    }
-    parts = p["extra"]["parts"]
-    for segment, part in zip(shown["segments"], parts, strict=True):
-        segment["part"] = part
-    for text in drafts.rows(shown, indent="  "):
+    for text in drafts.rows(found.shown(), indent="  "):
         print(text)
     if found.dropped:
         k = sum(found.dropped.values())
         why = ", ".join(f"{reason} {count}" for reason, count in found.dropped.items())
         print(f"  {k} proposed event{'s' if k != 1 else ''} dropped: {why}")
+    for key, what in (("dropped_links", "proposed link"), ("dropped_segments", "segment")):
+        counted = p["extra"].get(key) or {}
+        if counted:
+            k = sum(counted.values())
+            why = ", ".join(f"{reason} {count}" for reason, count in counted.items())
+            print(f"  {k} {what}{'s' if k != 1 else ''} dropped: {why}")
+    marked = (p["extra"].get("marked") or {}).get(dreaming.UNBACKED)
+    if marked:
+        print(f"  {marked} marked unsupported: {dreaming.UNBACKED}")
     if found.proposals and found.line is not None:
         print(f"  `logbook day sign {found.day} --accept N` writes a proposed event into the record")
     print("  a draft is a proposal: your signature and your notes are the facts (`day sign`)")
