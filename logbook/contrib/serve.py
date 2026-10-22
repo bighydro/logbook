@@ -5340,7 +5340,7 @@ def serve(
     """Serve the record until Ctrl-C, from the pages built ahead unless `built` is False (`--live`),
     a page read longer than `limit_s` stopped and said so. `HostError` and OSError as `make_server`."""
     server = make_server(lb, host, port, airports, voice, built=built, say=announce, limit_s=limit_s)
-    if hasattr(signal, "SIGUSR1"):  # `kill -USR1 <pid>`: every stack to the log, the server running on
+    if sys.platform != "win32":  # `kill -USR1 <pid>`: every stack to the log, the server running on
         with contextlib.suppress(AttributeError, ValueError, OSError):  # a stderr with no file under it
             faulthandler.register(signal.SIGUSR1, file=sys.stderr, all_threads=True)
     watchdog = Watchdog(int(server.server_address[1])).start()
