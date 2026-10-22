@@ -359,8 +359,16 @@ def _service_status(platform: str, home: Path, config_home: Path | None, port: i
         address = f"http://{serve.HOST}:{item.port}/"
         if service.answering(item.port):
             print(f"answering at {address}")
+            continue
+        silent = True
+        if service.probe(item.port) == service.NOT_ANSWERING:
+            restart = service.restart_command(item) or service.restart_by_hand(item)
+            print(
+                f"not answering at {address}: it takes the connection and says nothing in"
+                f" {service.PROBE_TIMEOUT_S:g} s; `{restart.text}` restarts it (the scheduled run does);"
+                f" its output: {item.log}"
+            )
         else:
-            silent = True
             print(f"nothing answers at {address}; its output: {item.log}")
     if silent:
         sys.exit(1)

@@ -411,6 +411,7 @@ def _sync_scheduled(a: argparse.Namespace) -> None:
         tested = _restore_test_state(lb)
         if tested is None or tested.at.astimezone(zone).date() != local.date():
             _restore_test_lines(lb, backup.restore_test(lb, env=os.environ, at=started))
+    _keep_serve_answering()
     checks = doctor.run(lb, os.environ)
     doctor.report(checks, sys.stdout)
     report = last_run.Doctor(
@@ -453,6 +454,20 @@ def _sync_scheduled(a: argparse.Namespace) -> None:
 
 DREAM_COMMAND = "logbook.commands.dream"  # the dream (RFC 0036): a command of its own, not in every version
 DREAM_ENTRY = "dream"  # its entry in policy/crossing.json: sending a day to a model is a crossing
+
+
+def _keep_serve_answering() -> None:
+    """Before `doctor`: a serve service that takes connections and answers nothing in 5 s (stuck, or
+    paused by the system) is restarted by its service manager, in one line (`service.keep_answering`).
+    Never an error of the run."""
+    from ..contrib import service
+
+    xdg = os.environ.get("XDG_CONFIG_HOME", "").strip()
+    config_home = Path(xdg).expanduser() if xdg else None
+    try:
+        service.keep_answering(service.system(), Path.home(), config_home, say=print)
+    except Exception as e:  # the run is the sync and the doctor; the Library is looked at again next time
+        print(f"serve: could not look at the service: {type(e).__name__}: {e}")
 
 
 def _build_library(lb: Logbook) -> str:
