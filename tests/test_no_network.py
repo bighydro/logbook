@@ -224,6 +224,13 @@ READERS: tuple[tuple[str, ...], ...] = (
     ("videos", "infer", "--dry-run"),
     ("review", "video"),  # the queue reads the record and the registries alone
     ("review", "video", "--json"),
+    (
+        "show",
+        "plan",
+        "2026-06-08",
+    ),  # RFC 0043 §9: no mapping here; `tests/test_plan.py` guards the mapped plan
+    ("show", "plan", "2026-06-08", "--json"),
+    ("show", "plan", "--coverage"),
 )
 
 

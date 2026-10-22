@@ -352,6 +352,11 @@ MUTATIONS: dict[str, Mutation | None] = {
 }
 
 
+PLAN_MAPPING = {
+    role: f"{n:08x}-0000-4000-8000-{n:012x}" for n, role in enumerate(("tasks", "sprints", "trips"), 1)
+}
+
+
 def make_record(root: Path, days: int, seed: int, mutations: frozenset[str]) -> Logbook:
     """The demo record of (`days`, `seed`) with the drafts reshaped before `append_many` writes them, so
     the record is hashed and chained as any writer's would be; then the folder-level reshaping."""
@@ -372,6 +377,8 @@ def make_record(root: Path, days: int, seed: int, mutations: frozenset[str]) -> 
         path = lb.log_dir.joinpath(*EMPTY_MONTH)
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(b"")
+    (lb.root / "policy").mkdir(exist_ok=True)  # `show plan` reads its databases under a mapping
+    (lb.root / "policy" / "notion.json").write_text(json.dumps({"plan": PLAN_MAPPING}), encoding="utf-8")
     return lb
 
 
@@ -464,6 +471,8 @@ def windowed_readers(
         ["day", day],
         ["day", day, "--json"],
         ["day", "reflect", day, "--text", REFLECTION, "--dry-run"],
+        ["show", "plan", day],
+        ["show", "plan", day, "--json"],
         ["show", "days", "--from", since, "--to", until],
         ["show", "days", "--from", since, "--to", until, "--json"],
         ["show", "trips", "--since", since, "--until", until],
@@ -506,6 +515,8 @@ WHOLE_RECORD_READERS: list[list[str]] = [
     ["show", "days", "--json"],
     ["show", "trips"],
     ["show", "trips", "--json"],
+    ["show", "plan", "--coverage"],
+    ["show", "plan", "--coverage", "--json"],
     *([["rollup", kind, "--json"] for kind in rollup.KINDS]),
     ["rollup", "countries"],
     ["setup", "places", "propose"],
