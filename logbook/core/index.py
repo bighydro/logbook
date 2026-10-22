@@ -759,22 +759,41 @@ class Index:
         ).fetchall()
         return self._read(found)
 
-    def stream(self, kind: str, first_day: str | None = None, last_day: str | None = None) -> Iterator[Line]:
+    def stream(
+        self,
+        kind: str,
+        first_day: str | None = None,
+        last_day: str | None = None,
+        after_seq: int | None = None,
+        through_seq: int | None = None,
+    ) -> Iterator[Line]:
         """`by_kind`, a thousand lines at a time: the same lines in the same chain order, read from the
         files as they are asked for, so a reader that keeps a few of a kind's million lines (an agent's
         chat among the messages, a promise among the words) never holds them all, nor where they all
         are: their seqs are read first, in one statement, so no read of the index stays open while the
         caller works; the lines are read through `read`, so an index that gates what it reads back
-        gates these too."""
+        gates these too. With `after_seq` and `through_seq`, only the lines appended in between (a
+        reading kept between heads, brought forward), found by the primary key's range."""
+        args: tuple[object, ...]
+        if after_seq is None:  # the kind's lines through the (kind, day_local) index
+            statement, args = (
+                "SELECT seq FROM lines WHERE kind = ? AND day_local >= ? AND day_local <= ? AND seq <= ?"
+                " ORDER BY seq",
+                (
+                    kind,
+                    first_day or "",
+                    last_day or "9999-12-31",
+                    through_seq if through_seq is not None else 2**62,
+                ),
+            )
+        else:  # the seq range first: `+` keeps the planner off the kind's index for a few new lines
+            statement, args = (
+                "SELECT seq FROM lines WHERE seq > ? AND seq <= ? AND +kind = ? AND +day_local >= ?"
+                " AND +day_local <= ? ORDER BY seq",
+                (after_seq or 0, through_seq or 2**62, kind, first_day or "", last_day or "9999-12-31"),
+            )
         seqs = array(
-            "q",
-            (
-                int(seq)
-                for (seq,) in self.db.execute(
-                    "SELECT seq FROM lines WHERE kind = ? AND day_local >= ? AND day_local <= ? ORDER BY seq",
-                    (kind, first_day or "", last_day or "9999-12-31"),
-                )
-            ),
+            "q", (int(seq) for (seq,) in self.db.execute(statement, args))
         )  # eight bytes a line; where each is, a thousand at a time by the primary key
         for n in range(0, len(seqs), STREAM_EVERY):
             chunk = seqs[n : n + STREAM_EVERY].tolist()

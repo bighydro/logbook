@@ -35,19 +35,14 @@ transcript's participant marked machine, whatever its name, name nobody."""
 
 from __future__ import annotations
 
-import contextlib
-import hashlib
-import json
-import os
 import re
 from collections.abc import Callable, Iterable, Iterator, Mapping
 from dataclasses import dataclass, field
 from datetime import date, timedelta
-from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from . import attribution, day_start, machine, policy, present, reading, resolve, speakers, stays, trips
+from . import attribution, day_start, kept, machine, policy, present, reading, resolve, speakers, stays, trips
 from . import places as named_places
 from .chain import Line
 from .day_start import DayStart
@@ -865,37 +860,21 @@ def read_whole(lb: Logbook, airports: Airports | None = None) -> Report | None:
     if whole is None:
         return None
     airports = airports or Airports.load()
-    path = lb.index_path.parent / MEMO_FILE
+    path = kept.path(lb, MEMO_FILE)
     stamp = _stamp(lb, airports)
-    kept = _memo_load(path)
-    found = None if kept is None else _forward(lb, kept, whole, stamp, airports)
+    held = kept.load(path)
+    found = None if held is None else _forward(lb, held, whole, stamp, airports)
     if found is None:
         found = _whole(lb, whole, stamp, airports)
     report, memo = found
-    with contextlib.suppress(OSError):  # a cache that cannot be written is read whole next time
-        _memo_save(path, memo)
+    kept.save(path, memo)  # one that cannot be written: the whole record is read next time
     return report
 
 
 def _stamp(lb: Logbook, airports: Airports) -> str:
-    """What a kept reading was read under, besides the lines: this version of it, `logbook.json`
-    without its head and seq (the zone, the day's start, the owner's addresses, the recipients),
-    whether the sealed lines open, the settings it reads (`places.json`, `assets.json`, every file of
-    `policy/`) and the airports table."""
-    meta = {k: v for k, v in lb.meta.items() if k not in ("head", "seq")}
-    parts = [str(MEMO_VERSION), json.dumps(meta, sort_keys=True), str(bool(lb.identities))]
-    files = [
-        lb.root / named_places.PLACES_FILE,
-        lb.root / "assets.json",
-        *sorted((lb.root / "policy").glob("*")),
-    ]
-    for f in files:
-        try:
-            parts.append(f"{f.name} {hashlib.sha256(f.read_bytes()).hexdigest()}")
-        except OSError:
-            parts.append(f"{f.name} -")
-    parts.append(airports.fingerprint())
-    return hashlib.sha256("\n".join(parts).encode("utf-8")).hexdigest()
+    """What a kept reading was read under besides the lines (`kept.stamp`): this version, the code,
+    the settings, and the airports table."""
+    return kept.stamp(lb, str(MEMO_VERSION), kept.code_digest(), airports.fingerprint())
 
 
 def _context(
@@ -1186,25 +1165,3 @@ def _before(known: Mapping[str, Person], cut: str) -> dict[str, Any]:
             "real": None if best is None else list(best),
         }
     return found
-
-
-def _memo_load(path: Path) -> dict[str, Any] | None:
-    try:
-        data = json.loads(path.read_bytes())
-    except (OSError, ValueError):
-        return None
-    return data if isinstance(data, dict) else None
-
-
-def _memo_save(path: Path, memo: Mapping[str, Any]) -> None:
-    """The kept reading, 0600 from its first byte, moved into place whole: it names the people of the
-    record and how often they wrote, and only the record's user reads it."""
-    tmp = path.with_name(f".{path.name}.{os.getpid()}.tmp")
-    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | getattr(os, "O_BINARY", 0), 0o600)
-    try:
-        with os.fdopen(fd, "wb") as fh:
-            fh.write(json.dumps(memo, separators=(",", ":")).encode("utf-8"))
-        os.replace(tmp, path)
-    except BaseException:
-        tmp.unlink(missing_ok=True)
-        raise
