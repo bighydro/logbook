@@ -351,6 +351,7 @@ def test_review_with_no_kind_lists_every_queue_and_writes_nothing(
         "place",
         "video",
         "goal",  # RFC 0036 amendment 1: the open goals not yet reviewed this week
+        "receipts",  # RFC 0043 §12: the receipt mails proposed as payments, tier 3
         "speakers",  # RFC 0038 §4: the voices not yet named, in the same shape
     ]
     assert "  4 proposals · 5 observed orgs not yet placed, 1 placed · tier 2" in out
@@ -363,6 +364,7 @@ def test_review_with_no_kind_lists_every_queue_and_writes_nothing(
         "place",
         "video",
         "goal",
+        "receipts",
         "speakers",
     }
     assert int(Logbook(lb.root).meta["seq"]) == seq, "nothing written"
