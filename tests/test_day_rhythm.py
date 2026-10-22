@@ -33,10 +33,11 @@ from dream_fortnight import (
     fortnight,
     run_cli,
 )
-from persona import CAFE, HOME, KARI, ZURICH, attendee, dwell, event, note, photo, utc
+from persona import CAFE, HOME, KARI, ZURICH, attendee, dwell, event, flight, note, photo, utc
 
 from logbook import cli
 from logbook.contrib import day_rhythm, notify, serve
+from logbook.core import day as day_reader
 from logbook.core import drafts, people
 from logbook.core.store import Logbook
 
@@ -641,6 +642,69 @@ def test_looking_back_reads_only_the_years_the_record_has(
     assert [last for _first, last in read] == [BACK[1], BACK[2], BACK[10]], (
         "a year with no line reads nothing"
     )
+
+
+def _endless(day: str, number: str) -> dict[str, Any]:
+    """A flight line with its departure and no arrival: the tracker lost it before it landed. It
+    leaves at 10:00, before the move to the cafe at 11:00 ends."""
+    line = flight(day, number, "OSL", "BGO", utc(day, "10:00"), utc(day, "11:00"))
+    del line["end"], line["payload"]["actual_arrival"]
+    return line
+
+
+def _today_and_back(lb: Logbook) -> None:
+    """/today on Wednesday goes to its Day page; the page and its looking back read every year."""
+    site = _site(lb, WEDNESDAY, "09:00")
+    today = site.respond("/today", "")
+    assert today.status == 302 and today.headers["Location"] == f"/day/{WEDNESDAY}"
+    _page(site, WEDNESDAY)
+    back = _fold(_page(site, WEDNESDAY, "open=1"), "Looking back")
+    years = re.findall(r'<li class="back"[^>]*><a href="/day/(\d{4}-\d{2}-\d{2})"', back)
+    assert years == [BACK[1], BACK[2], BACK[10]]
+    for then in BACK.values():
+        _page(site, then)
+
+
+def test_a_flight_with_no_end_years_back_ends_at_its_start(lb: Logbook) -> None:
+    lb.append(**_endless(BACK[1], "565"))
+    _today_and_back(lb)
+    data = day_reader.read(lb, BACK[1], serve.Airports.load())
+    (row,) = [entry for entry in data["timeline"] if entry["kind"] == day_reader.FLIGHT]
+    assert row["end"] is None and row["end_local"] is None
+    assert all(not entry.get("flights") for entry in data["timeline"]), "no move is covered by an instant"
+
+
+def test_a_flight_whose_start_cannot_be_read_years_back_is_skipped(
+    lb: Logbook, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    lb.append(**_endless(BACK[1], "565"))
+    lb.append(**flight(BACK[2], "567", "OSL", "BGO", utc(BACK[2], "10:00"), utc(BACK[2], "11:00")))
+    real = day_reader.flight_lines.standing
+
+    def unread(lines: Iterable[Any]) -> dict[Any, Any]:
+        return {
+            k: {**line, "at": None} if line["payload"]["date"] == BACK[2] else line
+            for k, line in real(lines).items()
+        }
+
+    monkeypatch.setattr(day_reader.flight_lines, "standing", unread)
+    _today_and_back(lb)
+    data = day_reader.read(lb, BACK[2], serve.Airports.load())
+    assert data["flights"] == [], "a flight with no start is not placed"
+
+
+def test_the_flights_over_a_move_skip_one_with_no_start_and_end_one_with_none_at_its_start() -> None:
+    start, end = datetime(2025, 6, 17, 9, 0, tzinfo=UTC), datetime(2025, 6, 17, 10, 0, tzinfo=UTC)
+    route = {"from": "OSL", "to": "BGO"}
+    flights = [
+        {"id": "unread", "start": None, "end": "2025-06-17T09:30:00Z", **route},
+        {"id": "endless", "start": "2025-06-17T09:15:00Z", "end": None, **route},
+        {"id": "later", "start": "2025-06-17T10:30:00Z", "end": None, **route},
+        {"id": "whole", "start": "2025-06-17T09:20:00Z", "end": "2025-06-17T09:50:00Z", **route},
+    ]
+    assert day_reader._covering(flights, start, end) == ["endless", "whole"]
+    assert day_reader._flown(start, end, flights) == ["OSL", "BGO"], "the one with both ends"
+    assert day_reader._flown(start, end, flights[:3]) == [], "an instant flies no move"
 
 
 def test_the_morning_folds_its_photos_into_the_record_and_adds_after_it(lb: Logbook) -> None:
