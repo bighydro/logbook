@@ -192,7 +192,7 @@ def test_a_full_build_removes_what_it_no_longer_names(lb: Logbook) -> None:
     stray = "/days?from=2026-06-01&to=2026-06-02"
     library.put(stray, site.respond("/days", "from=2026-06-01&to=2026-06-02"), "x")
     page = library.pages()[stray]
-    library_build.build(lb, site, library)
+    library_build.build(lb, site, library, full=True)
     assert stray not in library.pages() and not (library.folder / page.file).exists()
 
 
@@ -269,3 +269,79 @@ def test_a_build_names_its_pages_a_few_times_not_once_a_page(
     assert library_build.Library(lb).pages().keys() == library.pages().keys(), (
         "what was saved is what was built"
     )
+
+
+# -- incremental: what the lines since the last build touched ---------------------------------------------
+
+
+def _note(lb: Logbook, at: str, text: str) -> None:
+    lb.append(at=at, source="manual", kind="note", tier=2, payload={"schema": "note/v1", "text": text})
+
+
+def test_a_build_after_a_day_renders_what_the_day_touched_and_every_door(lb: Logbook) -> None:
+    library, _site, _first = _built(lb)
+    before = library.pages()
+    assert library.built()["full"] is True
+    _note(lb, "2026-06-15T10:00:00Z", "The boat is back in the water.")
+    second = library_build.build(lb, serve.Site(lb, now=lambda: JUNE), library)
+    built = library.built()
+    assert built["full"] is False and second.pages < len(before)
+    after = library.pages()
+    for day in ("2026-06-15", "2026-06-14"):  # the day, and the day before (its night)
+        assert (
+            after[f"/day/{day}"].at != before[f"/day/{day}"].at
+            or after[f"/day/{day}"].etag != before[f"/day/{day}"].etag
+        )
+    assert after["/day/2026-06-10"].at == before["/day/2026-06-10"].at, (
+        "a day nothing touched is left as built"
+    )
+    page = library.page("/day/2026-06-15")
+    assert page is not None and b"The boat is back in the water." in page[1]
+    for door in library_build.DOORS:
+        assert door in after, door
+    assert set(after) >= set(before), "an incremental build removes nothing"
+
+
+def test_nothing_appended_renders_the_doors_and_no_day(lb: Logbook) -> None:
+    library, _site, _first = _built(lb)
+    before = library.pages()
+    library_build.build(lb, serve.Site(lb, now=lambda: JUNE), library)
+    after = library.pages()
+    assert all(after[t].at == before[t].at for t in before if t.startswith("/day/"))
+    assert library.built()["full"] is False
+
+
+def test_a_resolution_a_setting_or_full_builds_every_page(lb: Logbook) -> None:
+    library, _site, _first = _built(lb)
+    lb.append(
+        at="2026-06-20T09:00:00Z",
+        source="manual",
+        kind="resolution",
+        tier=2,
+        payload={
+            "schema": "resolution/v1",
+            "ref": {"kind": "email", "value": "new.friend@example.org"},
+            "entity": {"type": "person", "id": "019ea000-0000-7000-8000-00000000f00d", "registry": "logbook"},
+            "label": "Nora Nordmann",
+            "method": "owner",
+        },
+    )
+    library_build.build(lb, serve.Site(lb, now=lambda: JUNE), library)
+    assert library.built()["full"] is True, "who is who changed: every page"
+    library_build.build(lb, serve.Site(lb, now=lambda: JUNE), library)
+    assert library.built()["full"] is False
+    (lb.root / "policy").mkdir(exist_ok=True)
+    (lb.root / "policy" / "stays.json").write_text('{"stay_min_s": 900}', encoding="utf-8")
+    library_build.build(lb, serve.Site(lb, now=lambda: JUNE), library)
+    assert library.built()["full"] is True, "a setting changed: every page"
+    library_build.build(lb, serve.Site(lb, now=lambda: JUNE), library, full=True)
+    assert library.built()["full"] is True
+
+
+def test_serve_build_full_says_every_page(lb: Logbook, capsys: pytest.CaptureFixture[str]) -> None:
+    cli.main(["serve", "--build"])
+    assert "(every page;" in capsys.readouterr().out
+    cli.main(["serve", "--build"])
+    assert "(what changed since the last;" in capsys.readouterr().out
+    cli.main(["serve", "--build", "--full"])
+    assert "(every page;" in capsys.readouterr().out

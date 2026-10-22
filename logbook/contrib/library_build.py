@@ -45,12 +45,12 @@ import threading
 import time
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urlsplit
 
-from ..core import day_start, sealing
+from ..core import day_start, kept, sealing
 from ..core.store import _alive
 
 if TYPE_CHECKING:
@@ -79,6 +79,9 @@ DOORS = (
     "/assets",
     "/gaps",
 )
+EVERYWHERE = ("retraction", "resolution", "entity", "entity-review", "people-review")  # who is who
+DAY_PAGE = re.compile(r"^/day/(\d{4}-\d{2}-\d{2})$")
+JOURNEY_PAGE = re.compile(r"^/journeys/(\d{4}-\d{2}-\d{2})/(\d{4}-\d{2}-\d{2})$")
 RECENT_DAYS = 14  # the Days of the last fortnight are built; today's is always rendered live
 EACH = 60  # detail pages of one kind the build follows from the doors
 ASKED = 500  # addresses the server added on demand, the latest kept and rebuilt
@@ -410,8 +413,6 @@ def targets(site: Site, today: str, asked: Sequence[str] = ()) -> list[str]:
     pages and variants the doors link to, `EACH` of a kind, in the order the doors list them; then the
     addresses asked for on demand. Reads the doors as it goes (they are rendered again by the build:
     the second reading is the server's kept page)."""
-    from datetime import date, timedelta
-
     out: list[str] = list(DOORS)
     first = date.fromisoformat(today)
     out += [f"/day/{(first - timedelta(days=n)).isoformat()}" for n in range(1, RECENT_DAYS + 1)]
@@ -451,17 +452,54 @@ class Result:
     failed: dict[str, str]
 
 
+def settled(lb: Logbook, site: Site) -> str:
+    """What the pages read besides the lines and the clock: `logbook.json` without its head and seq,
+    the settings beside the chain and the code (`kept.stamp`), and the review's bookkeeping and the
+    circle's pages (`Site._beside`). A build under another is a full one."""
+    return kept.stamp(lb, kept.code_digest(), *site._beside())
+
+
+def days_touched(lb: Logbook, since: int) -> set[str] | None:
+    """The local days the lines appended after `since` landed on, and each one's day before (its night
+    runs into the next morning); None when one of them changes who is who everywhere (`EVERYWHERE`),
+    which only a full build follows."""
+    with lb.index() as idx:
+        rows = idx.db.execute("SELECT DISTINCT kind, day_local FROM lines WHERE seq > ?", (since,)).fetchall()
+    if any(str(kind) in EVERYWHERE for kind, _day in rows):
+        return None
+    days = {str(day) for _kind, day in rows}
+    return days | {(date.fromisoformat(d) - timedelta(days=1)).isoformat() for d in days}
+
+
+def _wanted_since(target: str, days: set[str], built: Mapping[str, Page]) -> bool:
+    """Whether an incremental build renders `target` again: every door, detail and variant (they read
+    the whole record, and the kept readings make that cheap); a Day only when a line landed on it or
+    the day after, or when no build has written it; a journey only when it holds such a day."""
+    path = target.partition("?")[0]
+    if target not in built:
+        return True
+    if (day := DAY_PAGE.match(path)) is not None:
+        return day.group(1) in days
+    if (journey := JOURNEY_PAGE.match(path)) is not None:
+        first, last = journey.group(1), journey.group(2)
+        return any(first <= d <= last for d in days)
+    return True
+
+
 def build(
     lb: Logbook,
     site: Site | None = None,
     library: Library | None = None,
     only: Sequence[str] | None = None,
     say: Callable[[str], None] | None = None,
+    full: bool = False,
 ) -> Result:
-    """Build the Library: every target (`targets`), or `only` those addresses. Each page is
-    `site.respond`'s answer, kept when it is a 200 or a redirect; a page that fails is named in
-    `failed` and the build goes on. A full build removes the pages it no longer names. `Busy` when
-    another process is building."""
+    """Build the Library: what the lines appended since the last build touched (`days_touched`,
+    `_wanted_since`) and every door, or, when the last build was under other settings, when one of
+    those lines changes who is who, when there is no build yet, or with `full`, every target
+    (`targets`); or `only` those addresses. Each page is `site.respond`'s answer, kept when it is a
+    200 or a redirect; a page that fails is named in `failed` and the build goes on. A full build
+    removes the pages it no longer names. `Busy` when another process is building."""
     from . import serve
 
     library = library or Library(lb)
@@ -469,10 +507,20 @@ def build(
     started = time.monotonic()
     with library.building():
         head = str(lb.meta.get("head") or "")
+        with lb.index() as idx:
+            seq = idx.indexed()[0]
         today = day_start.of(lb.meta).today(site.now()).isoformat()
         before = library.pages()
+        last = library.built()
+        stamp = settled(lb, site)
+        days = None
+        if not full and only is None and last.get("settled") == stamp and isinstance(last.get("seq"), int):
+            days = days_touched(lb, int(last["seq"]))
+        incremental = days is not None
         asked = sorted((t for t, p in before.items() if p.asked), key=lambda t: before[t].at)[-ASKED:]
         wanted = list(only) if only is not None else targets(site, today, asked)
+        if days is not None and only is None:
+            wanted = [t for t in wanted if _wanted_since(t, days, before)]
         written = 0
         failed: dict[str, str] = {}
         for n, target in enumerate(wanted, 1):
@@ -497,7 +545,7 @@ def build(
                     say(f"  {n:,} of {len(wanted):,} pages, {time.monotonic() - started:.0f} s")
         library.save()
         removed = 0
-        if only is None:
+        if only is None and not incremental:
             keep = set(wanted)
             gone = [t for t in library.pages() if t not in keep]
             removed = len(library.drop(gone))
@@ -512,10 +560,13 @@ def build(
             library._built = {
                 "when": _stamp(library.now()),
                 "head": head,
+                "seq": seq if only is None else last.get("seq"),
+                "settled": stamp if only is None else last.get("settled"),
                 "seconds": seconds,
                 "pages": len(pages),
                 "written": written,
-                "full": only is None,
+                "rendered": len(wanted),
+                "full": only is None and not incremental,
             }
             library._save(library._pages, library._built)
     return Result(len(wanted), written, removed, seconds, failed)
