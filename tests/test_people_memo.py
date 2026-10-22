@@ -250,3 +250,20 @@ def test_a_stay_longer_than_the_lookback_is_read_back_to_where_it_began(
         assert found is not None and len(found.known[KARI_ID].days) == days.index(day) + 1
     assert count.whole == 1
     assert days[0] in looked, "read back to where the stay began"
+
+
+def test_a_day_that_arrives_after_the_next_one_is_still_the_whole_reading(
+    record: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A phone that syncs late: the messages of a day arrive after the next day's lines, inside the
+    days read again (`MARGIN_DAYS`). Brought forward, it is the whole reading."""
+    lb, rest = record(1)
+    count = Count(monkeypatch)
+    people.read_whole(lb)
+    for today, yesterday in zip(rest[1::2], rest[0::2], strict=False):
+        late = [d for d in yesterday if d["kind"] in ("message", "call")]
+        lb.append_many([d for d in yesterday if d not in late])
+        lb.append_many(today)
+        lb.append_many(late)
+        _same(lb, people.read_whole(lb))
+    assert count.whole == 1
