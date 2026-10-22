@@ -25,8 +25,9 @@ A GET form only: nothing is written, no script, nothing fetched, no reference bu
 paths; the page carries the Day's tokens and type (`TOKENS`, copied from `serve.STYLE`, which a test
 holds equal) and the server's one stylesheet, phone width first, every link and control a 44 px
 target. No person is a filter and no number stands beside a name: the page counts nothing but its pages.
-Superseded lines are hits as `show` prints both (`docs/search.md`); their mark is not on main
-yet, and `_superseded` is where it goes. An exported site (`export site`) has no server to ask, and
+A hit a later line of its kind supersedes is still a hit, marked as `logbook search` marks it,
+`superseded by #N`, a link to that line, when the gate lets that line through (`_superseded`). An
+exported site (`export site`) has no server to ask, and
 its search is one sentence."""
 
 from __future__ import annotations
@@ -82,6 +83,7 @@ li.hit mark{background:color-mix(in srgb,var(--accent) 25%,var(--bg));color:inhe
 li.hit a.id{display:inline-block;min-height:2.75rem;line-height:2.75rem;
 font:.78rem/2.75rem ui-monospace,monospace;color:var(--mute);overflow-wrap:anywhere}
 li.hit .superseded{color:var(--mute);font-size:.85rem}
+li.hit .superseded a{display:inline-block;min-height:2.75rem;line-height:2.75rem}
 @media (max-width:40rem){form.search button{padding:0 .6rem}li.hit .kind{min-width:0;margin-right:.4rem}}
 """
 )
@@ -119,6 +121,7 @@ def page_search(site: Site, params: Mapping[str, str]) -> str:
         with site.lb.index() as idx:
             hits, more = _gated(idx, q, site.tiers, PAGE * page)
             years = _years(idx)
+            superseded = _superseded(idx, hits[PAGE * (page - 1) : PAGE * page], site.tiers)
     except RuntimeError as e:  # a SQLite without FTS5: the index holds no search table
         parts.append(f"<p>{escape(str(e))}.</p>\n")
         return _document(site, parts)
@@ -131,7 +134,6 @@ def page_search(site: Site, params: Mapping[str, str]) -> str:
         return _document(site, parts)
     top = max(int(hit.line.get("tier") or 0) for hit in shown)
     parts[0] = f"<h1>Search {site.tier_small(f'page {page}{DOT}the best by rank', top)}</h1>\n"
-    superseded = _superseded(shown)
     tz = ZoneInfo(str(site.lb.meta["timezone"]))
     for day, on_day in search.Result(q, shown).days():
         parts.append(_day_html(site, day, on_day, superseded, tz, text))
@@ -246,15 +248,26 @@ def _link(label: str, href: str) -> str:
 # -- the hits --------------------------------------------------------------------------------------------
 
 
-def _superseded(hits: Sequence[search.Hit]) -> dict[str, str]:
-    """The mark of each shown hit that a later line supersedes, by line id: what the hit's row says
-    beside its kind. Empty until `search` marks superseded hits (fix/search-marks-superseded, built
-    beside this page): this is the one place that mark is read, and `_hit_html` already shows it."""
-    return {}
+Superseded = Mapping[str, tuple[str, str]]  # a hit's line id → the words of its mark, the superseder's id
+
+
+def _superseded(idx: Index, hits: Sequence[search.Hit], tiers: Sequence[int] | None) -> Superseded:
+    """The mark of each shown hit that a later line of its kind supersedes (`Hit.superseded_by`,
+    which `search.search` asks of the index): the words `logbook search` marks it with
+    (`search.mark`) and the superseding line's id, which the mark links to. Only when the gate lets
+    the superseding line through, as `/line/ID` would show it: a correction above the gate is no
+    mark, and the hit reads as the page would read it without that line."""
+    by = {str(hit.line["id"]): hit.superseded_by for hit in hits if hit.superseded_by is not None}
+    if not by:
+        return {}
+    found = idx.by_seqs(seq for seq, _id in by.values())
+    held = {str(line["id"]) for line in reading.crossing(found.values(), tiers)}
+    words = {str(hit.line["id"]): search.mark(hit).removeprefix(search.FIELD_BREAK) for hit in hits}
+    return {line_id: (words[line_id], later) for line_id, (_seq, later) in by.items() if later in held}
 
 
 def _day_html(
-    site: Site, day: str, hits: Sequence[search.Hit], superseded: Mapping[str, str], tz: ZoneInfo, text: str
+    site: Site, day: str, hits: Sequence[search.Hit], superseded: Superseded, tz: ZoneInfo, text: str
 ) -> str:
     head = site.link(f"{escape(day)} {escape(search.weekday(day))}", f"/day/{day}")
     terms = _terms(text)
@@ -263,7 +276,7 @@ def _day_html(
 
 
 def _hit_html(
-    site: Site, day: str, hit: search.Hit, superseded: str | None, tz: ZoneInfo, terms: Terms
+    site: Site, day: str, hit: search.Hit, superseded: tuple[str, str] | None, tz: ZoneInfo, terms: Terms
 ) -> str:
     """One hit: its time, a link to its Day (to its row there, for the kinds the Day gives a row,
     `ROWED`); its kind; the excerpt, the match marked; its line's id, a link to the line as written;
@@ -273,7 +286,11 @@ def _hit_html(
     row = f"#{_row_id(line_id)}" if line.get("kind") in ROWED else ""
     at = site.link(escape(f"{day} {_clock(line, tz)}"), f"/day/{day}{row}", "at")
     kind = f'<span class="kind">{escape(str(line["kind"]))}</span>'
-    mark = "" if superseded is None else f' <span class="superseded">{escape(superseded)}</span>'
+    mark = (
+        ""
+        if superseded is None
+        else f' <span class="superseded">{site.link(escape(superseded[0]), f"/line/{superseded[1]}")}</span>'
+    )
     return (
         f'<li class="hit" id="{_row_id(line_id)}">{at} {kind}{mark}'
         f'<q class="excerpt">{marked(hit.snippet, terms)}</q>'

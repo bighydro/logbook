@@ -159,7 +159,9 @@ the command's own.
   lists as rows of their own; a message is under its conversation there); its kind; an excerpt of
   up to sixteen words around the match, each matching word marked (the command's `[brackets]`,
   drawn; a bracket the record itself holds, `[urgent]` in a note, stays as written); and its line's
-  id, a link to `/line/ID`, the line as the record holds it.
+  id, a link to `/line/ID`, the line as the record holds it. A hit a later line supersedes says so
+  as the command does, `superseded by #N`, a link to that line, when the page's gate lets that line
+  through; a correction above the gate is no mark.
 - **The filters are links**: every kind with words and every year the record runs over (its span,
   as the front page says it, whatever the gate), the filter in force in bold and *every* to take
   it off. They are never counted: a count would cost
@@ -180,9 +182,9 @@ A page of hits is kept by its tag like every page of the record (`Site.etag`): a
 same head, it is not searched again (a millisecond). Otherwise the cost is the command's: the
 matches of the words, never the size of the record. On the five-million-line synthetic record of
 `scripts/bench_library.py` (ten years, 4 vCPUs), a fresh query in a running server answers in
-0.06 to 0.8 s — a name (`kari`, 205,000 lines) 0.47 s, a word (`fjord`) 0.41 s, a phrase
-(`"running late"`, 346,000 lines) 0.73 s, a name and a word together 0.06 s, page 5 of `fjord`
-0.40 s — and `kari` from a cold disk, the first request after a restart with nothing in the
+0.07 to 0.9 s — a name (`kari`, 205,000 lines) 0.63 s, a word (`fjord`) 0.45 s, a phrase
+(`"running late"`, 346,000 lines) 0.87 s, a name and a word together 0.07 s, page 5 of `fjord`
+0.46 s, each with its superseded hits marked — and `kari` from a cold disk, the first request after a restart with nothing in the
 operating system's cache, 1.5 s. A word in most lines costs its matches, every one ranked: the
 persona's surname, in 2.2 million of the five million, takes 4 s, as `logbook search` does.
 Narrow with a second word, a kind or a year.

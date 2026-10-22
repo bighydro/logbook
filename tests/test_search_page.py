@@ -15,6 +15,7 @@ import phone_width
 import pytest
 
 from logbook.contrib import search_page, serve
+from logbook.core.chain import Line
 from logbook.core.store import Logbook
 
 TZ = "Europe/Oslo"
@@ -338,3 +339,42 @@ def test_a_filter_that_finds_nothing_says_the_year_first(lb: Logbook) -> None:
     page = _get(serve.Site(lb), "/search", "q=marina&year=2025")
     assert "In 2025, nothing in the record matches marina." in page_text.seen(page)
     assert 'href="/search?q=marina"' in page  # the filter can be taken off
+
+
+def _supersede_the_dinner(lb: Logbook, tier: int) -> Line:
+    """Kari's dinner moved: a later note that supersedes the dinner note (seq 1), at `tier`."""
+    first = lb.line_by_seq(1)
+    assert first is not None and "Dinner" in first["payload"]["text"]
+    return lb.append(
+        at="2026-06-14T16:00:00Z",
+        source="manual",
+        kind="note",
+        tier=tier,
+        payload={
+            "schema": "note/v1",
+            "text": "Dinner with Kari moved to the marina",
+            "supersedes": first["id"],
+        },
+    )
+
+
+def test_a_superseded_hit_is_marked_with_the_line_that_superseded_it(lb: Logbook) -> None:
+    later = _supersede_the_dinner(lb, tier=2)
+    page = _get(serve.Site(lb, tiers=(1, 2)), "/search", "q=dinner")
+    (old,) = [h for h in _hits(page) if "running late" in h]
+    mark = f"superseded by #{later['seq']}"
+    assert mark in page_text.seen(old)  # the words `logbook search` marks it with
+    assert f'href="/line/{later["id"]}"' in old  # and the line that superseded it, a link
+    (new,) = [h for h in _hits(page) if "moved to" in h]
+    assert "superseded" not in new
+    assert phone_width.problems(page) == []
+    assert re.search(r"li\.hit \.superseded a\{[^}]*min-height:2\.75rem", search_page.SEARCH_STYLE)
+
+
+def test_a_superseding_line_above_the_gate_marks_nothing(lb: Logbook) -> None:
+    later = _supersede_the_dinner(lb, tier=3)
+    page = _get(serve.Site(lb, tiers=(1, 2)), "/search", "q=dinner")
+    (old,) = _hits(page)  # the tier-3 correction is no hit here, and no mark says it is there
+    assert "superseded" not in old and str(later["id"]) not in page and f"#{later['seq']}" not in page
+    every = _get(serve.Site(lb), "/search", "q=dinner")
+    assert f"superseded by #{later['seq']}" in page_text.seen(every)
