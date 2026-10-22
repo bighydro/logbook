@@ -51,6 +51,7 @@ from typing import TYPE_CHECKING, Any
 from urllib.parse import urlsplit
 
 from ..core import day_start, sealing
+from ..core.store import _alive
 
 if TYPE_CHECKING:
     from ..core.store import Logbook
@@ -85,6 +86,8 @@ DETAIL = re.compile(r"^/(people|journeys|org|idea|goals|promises|day)/")
 HREF = re.compile(r"""href\s*=\s*["']([^"']*)["']""", re.I)
 LIVE_PREFIXES = ("/photo/",)  # pixels from the attachment store: cheap, and not a page
 FOOTER = "</footer>"
+REPLACE_TRIES = 40  # Windows: a file held open by a reader is replaced again for up to two seconds
+SAVE_EVERY = 50  # a build names its pages in `pages.json` this many at a time, and at its end
 
 
 class Busy(Exception):
@@ -113,13 +116,22 @@ def _private_folder(path: Path) -> None:
 
 def _write_private(path: Path, data: bytes) -> None:
     """`data` at `path`, 0600 from its first byte: written to a sibling created with that mode, then
-    moved into place, so no reader sees half a page and no other user ever could read it."""
+    moved into place, so no reader sees half a page and no other user ever could read it. Windows
+    refuses to replace a file another thread holds open (the server reading the page it replaces):
+    the move is tried again for a moment, and the reader is done by then."""
     tmp = path.with_name(f".{path.name}.{os.getpid()}.{threading.get_ident()}.tmp")
     fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | getattr(os, "O_BINARY", 0), 0o600)
     try:
         with os.fdopen(fd, "wb") as fh:
             fh.write(data)
-        os.replace(tmp, path)
+        for attempt in range(REPLACE_TRIES):
+            try:
+                os.replace(tmp, path)
+                break
+            except PermissionError:
+                if sys.platform != "win32" or attempt == REPLACE_TRIES - 1:
+                    raise
+                time.sleep(0.05)
     except BaseException:
         tmp.unlink(missing_ok=True)
         raise
@@ -186,9 +198,14 @@ class Library:
         self._seen: tuple[int, int] | None = None
         self._pages: dict[str, Page] = {}
         self._built: dict[str, Any] = {}
+        self._dirty = False  # pages added (`put(save=False)`) and not yet in `pages.json`
 
     # -- reading ---------------------------------------------------------------------------------------
     def _load(self) -> None:
+        """`pages.json` read again when it changed on disk; never over pages this process added and
+        has not saved yet (`_dirty`), which the next `save` writes."""
+        if self._dirty:
+            return
         manifest = self.folder / MANIFEST
         try:
             st = manifest.stat()
@@ -249,10 +266,12 @@ class Library:
         _private_folder(self.folder)
         _write_private(self.folder / MANIFEST, (json.dumps(data, indent=1) + "\n").encode("utf-8"))
         self._seen = None  # read it back as written, mtime and all
+        self._dirty = False
 
-    def put(self, target: str, response: Response, head: str, asked: bool = False) -> Page:
+    def put(self, target: str, response: Response, head: str, asked: bool = False, save: bool = True) -> Page:
         """`response` kept at `target`: its bytes with the build's footer note, its file written when
-        the bytes changed, the manifest naming it."""
+        the bytes changed, the manifest naming it (written now, or with `save` False at the build's
+        next `save`, so a build of hundreds of pages writes `pages.json` a few times, not once each)."""
         when = self.now()
         local = self._local(when)
         body = stamped(response.body, local)
@@ -269,8 +288,16 @@ class Library:
             kept = pages.get(target)
             page.asked = asked or (kept is not None and kept.asked)
             pages[target] = page
-            self._save(pages, self._built)
+            self._pages = pages
+            self._dirty = True
+            if save:
+                self._save(pages, self._built)
         return page
+
+    def save(self) -> None:
+        """`pages.json` as this process holds it now: what `put(save=False)` added."""
+        with self._lock:
+            self._save(self._pages, self._built)
 
     def drop(self, targets: Iterable[str]) -> list[str]:
         """Forget `targets` (an act changed them): the server renders each until the next build
@@ -324,24 +351,6 @@ class Library:
             yield
         finally:
             lock.unlink(missing_ok=True)
-
-
-def _alive(pid: int) -> bool:
-    if sys.platform == "win32":
-        import ctypes
-
-        handle = ctypes.windll.kernel32.OpenProcess(0x1000, False, pid)  # type: ignore[attr-defined]
-        if not handle:
-            return False
-        ctypes.windll.kernel32.CloseHandle(handle)  # type: ignore[attr-defined]
-        return True
-    try:
-        os.kill(pid, 0)
-    except ProcessLookupError:
-        return False
-    except PermissionError:
-        return True
-    return True
 
 
 def live(path: str, today: str) -> bool:
@@ -479,11 +488,14 @@ def build(
                 failed[target] = f"{response.status}"
                 continue
             old = before.get(target)
-            page = library.put(target, response, head, asked=target in asked)
+            page = library.put(target, response, head, asked=target in asked, save=False)
             if old is None or old.etag != page.etag:
                 written += 1
-            if say is not None and n % 25 == 0:
-                say(f"  {n:,} of {len(wanted):,} pages, {time.monotonic() - started:.0f} s")
+            if n % SAVE_EVERY == 0:
+                library.save()  # the server answers from the pages built so far
+                if say is not None:
+                    say(f"  {n:,} of {len(wanted):,} pages, {time.monotonic() - started:.0f} s")
+        library.save()
         removed = 0
         if only is None:
             keep = set(wanted)

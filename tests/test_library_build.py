@@ -248,3 +248,24 @@ def test_the_server_answers_from_the_build_over_http(lb: Logbook) -> None:
         server.shutdown()
         server.server_close()
     assert os.environ.get("LOGBOOK_HOME")  # the conftest's, never the shell's
+
+
+def test_a_build_names_its_pages_a_few_times_not_once_a_page(
+    lb: Logbook, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(library_build, "SAVE_EVERY", 10)
+    library = library_build.Library(lb, now=lambda: JUNE)
+    saved: list[int] = []
+    real = library_build.Library._save
+
+    def counted(self: library_build.Library, pages: Any, built: Any) -> None:
+        saved.append(len(pages))
+        real(self, pages, built)
+
+    monkeypatch.setattr(library_build.Library, "_save", counted)
+    result = library_build.build(lb, serve.Site(lb, now=lambda: JUNE), library)
+    assert result.pages > library_build.SAVE_EVERY
+    assert len(saved) <= result.pages // library_build.SAVE_EVERY + 3, saved
+    assert library_build.Library(lb).pages().keys() == library.pages().keys(), (
+        "what was saved is what was built"
+    )
