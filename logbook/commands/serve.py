@@ -53,6 +53,14 @@ def serve_arguments(sub: Subparsers) -> None:
         " every act on a page build them too)",
     )
     s.add_argument(
+        "--limit",
+        type=float,
+        default=serve.LIMIT_S,
+        metavar="SECONDS",
+        help=f"stop reading a page after this long and say so (default {serve.LIMIT_S:g}); with the pages"
+        " built ahead, it is built in the background instead",
+    )
+    s.add_argument(
         "--live",
         action="store_true",
         help="render every page as it is asked for, never from the pages built ahead",
@@ -94,7 +102,13 @@ def cmd_serve(a: argparse.Namespace) -> None:
     lb = Logbook.find()
     try:
         serve.serve(
-            lb, host=a.host, port=a.port, airports=_airports(a.airports), voice=voice(), built=not a.live
+            lb,
+            host=a.host,
+            port=a.port,
+            airports=_airports(a.airports),
+            voice=voice(),
+            built=not a.live,
+            limit_s=max(1.0, a.limit),
         )
     except serve.HostError as e:
         print(f"serve: {e}", file=sys.stderr)

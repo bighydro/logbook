@@ -24,7 +24,7 @@ from pathlib import Path, PurePath
 from typing import IO, Any, BinaryIO, NamedTuple, TextIO
 
 from .. import FORMAT, PREVIOUS_FORMAT
-from . import attachments, policy, sealing
+from . import attachments, cancel, policy, sealing
 from .chain import (
     CONTENT_FIELDS,
     ENVELOPE_FIELDS,
@@ -1490,7 +1490,8 @@ class Logbook:
     def _parse(self, path: Path, n: int, raw: str | bytes) -> Line:
         """One stored line as a dict; a bad one is reported by file and line number. A last line
         with no newline that is not JSON is a file cut inside it (SPEC §3): said plainly, without
-        the decoder's position."""
+        the decoder's position. `Cancelled` first when the reading was stopped (`cancel.check`)."""
+        cancel.check()
         try:
             return parse_line(raw)
         except json.JSONDecodeError as e:
@@ -1700,7 +1701,9 @@ def retractions(lines: Iterable[Line]) -> dict[str, Line]:
 
 
 def read_line_at(fh: BinaryIO, offset: int) -> Line:
-    """The line that starts at byte `offset` of an open month file."""
+    """The line that starts at byte `offset` of an open month file; `Cancelled` first when the reading
+    was stopped (`cancel.check`)."""
+    cancel.check()
     fh.seek(offset)
     return parse_line(fh.readline())
 
