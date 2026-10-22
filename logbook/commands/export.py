@@ -154,6 +154,11 @@ def export_arguments(sub: Subparsers) -> None:
         help="crossing, letter: take the unsigned days too (default: signed days only; RFC 0034)",
     )
     s.add_argument(
+        "--all-mail",
+        action="store_true",
+        help="crossing: every mail the tiers and signed days let through, not people's mail only (RFC 0045)",
+    )
+    s.add_argument(
         "--include-unsigned",
         action="store_true",
         help="notion: the facts of unsigned days too, when the policy's notion entry allows it"
@@ -321,10 +326,11 @@ def _export_days(lb: Logbook, a: argparse.Namespace) -> None:
 
 def _export_crossing(lb: Logbook, a: argparse.Namespace) -> None:
     """crossing --to DEST --since RFC3339|last [--until RFC3339] [--tier 1|1,2|1,2,3] [--kinds a,b]
-    [--unsigned] [--out DIR] [--force] [--dry-run]: one crossing-package/v1 (RFC 0005) under the
-    destination's ceiling in policy/crossing.json (ADR 0016), the lines of signed days unless
-    `--unsigned` (RFC 0034), recorded as a crossing/v1 line (RFC 0011). The bundle replaces DIR
-    whole; a DIR that is not an earlier bundle is refused unless `--force` (docs/crossing.md)."""
+    [--unsigned] [--all-mail] [--out DIR] [--force] [--dry-run]: one crossing-package/v1 (RFC 0005)
+    under the destination's ceiling in policy/crossing.json (ADR 0016), the lines of signed days unless
+    `--unsigned` (RFC 0034), people's mail only unless `--all-mail` (RFC 0045), recorded as a
+    crossing/v1 line (RFC 0011). The bundle replaces DIR whole; a DIR that is not an earlier bundle is
+    refused unless `--force` (docs/crossing.md)."""
     generated_at = now_utc()  # also the default window end, and the crossing line's `at`
     try:
         if not a.to or not a.since:
@@ -340,6 +346,7 @@ def _export_crossing(lb: Logbook, a: argparse.Namespace) -> None:
             crossing.parse_kinds(a.kinds),
             open_sealed=a.open,
             signed_only=not a.unsigned,
+            all_mail=a.all_mail,
         )
     except crossing.EmptyWindow as e:
         print(f"{a.to}: {e}; nothing written")
@@ -787,6 +794,11 @@ def _crossing_rows(sel: crossing.Selection) -> Iterator[str]:
         yield (
             f"  {c['held_back_by_entry']} draft(s) held back: the entry they were written under (the"
             " 'dream' entry, a person's the 'relationship' entry) no longer allows their tier"
+        )
+    if c.get("mail_held_back"):
+        yield (
+            f"  {c['mail_held_back']} mail(s) held back: no person the record names is on them"
+            " (--all-mail sends them)"
         )
     if c["held_back_unsigned"]:
         yield (

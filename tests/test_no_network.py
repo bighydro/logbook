@@ -53,6 +53,8 @@ READERS: tuple[tuple[str, ...], ...] = (
         "days",
     ),
     ("show", "days", "--from", "2026-06-06", "--to", "2026-06-12", "--json"),
+    ("people", "mail", "--since", "2026-06-06", "--until", "2026-06-12"),
+    ("people", "mail", "--since", "2026-06-06", "--until", "2026-06-12", "--json"),
     ("show", "2026-06-08"),
     ("show", "2026-06-08", "--raw"),
     (
