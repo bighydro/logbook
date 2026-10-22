@@ -132,6 +132,7 @@ import threading
 import time
 import traceback
 from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
+from concurrent.futures import CancelledError as FuturesCancelled
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FuturesTimeout
 from datetime import UTC, date, datetime, timedelta
@@ -5134,7 +5135,11 @@ class Handler(BaseHTTPRequestHandler):
             self._send(quick, body)
             return
         token = cancel.Token()
-        future = server.pool.submit(server.read, path, query, inm, token)
+        try:
+            future = server.pool.submit(server.read, path, query, inm, token)
+        except RuntimeError:  # the server is closing: no reading starts
+            self.close_connection = True
+            return
         deadline = time.monotonic() + server.limit_s
         while True:
             try:
@@ -5142,6 +5147,9 @@ class Handler(BaseHTTPRequestHandler):
                 break
             except FuturesTimeout:
                 pass
+            except FuturesCancelled:  # the server closed with the reading still waiting its turn
+                self.close_connection = True
+                return
             if self._gone():
                 token.cancel("the browser left")
                 self.close_connection = True
@@ -5332,7 +5340,7 @@ def serve(
     """Serve the record until Ctrl-C, from the pages built ahead unless `built` is False (`--live`),
     a page read longer than `limit_s` stopped and said so. `HostError` and OSError as `make_server`."""
     server = make_server(lb, host, port, airports, voice, built=built, say=announce, limit_s=limit_s)
-    if hasattr(signal, "SIGUSR1"):  # `kill -USR1 <pid>`: every stack to the log, the server running on
+    if sys.platform != "win32":  # `kill -USR1 <pid>`: every stack to the log, the server running on
         with contextlib.suppress(AttributeError, ValueError, OSError):  # a stderr with no file under it
             faulthandler.register(signal.SIGUSR1, file=sys.stderr, all_threads=True)
     watchdog = Watchdog(int(server.server_address[1])).start()

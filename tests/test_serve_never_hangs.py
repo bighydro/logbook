@@ -7,6 +7,7 @@ Oslo persona's fortnight (`persona.py`), who does not exist."""
 
 from __future__ import annotations
 
+import contextlib
 import http.client
 import io
 import socket
@@ -107,6 +108,18 @@ def _get(port: int, path: str, timeout: float = 30) -> tuple[int, bytes, float]:
     return answer.status, body, time.monotonic() - began
 
 
+def _asking(port: int, path: str) -> threading.Thread:
+    """A browser asking for `path` in the background, until it is answered or the server closes."""
+
+    def ask() -> None:
+        with contextlib.suppress(OSError, http.client.HTTPException):
+            _get(port, path)
+
+    thread = threading.Thread(target=ask, daemon=True)
+    thread.start()
+    return thread
+
+
 def _until(condition: Any, seconds: float = 10) -> bool:
     deadline = time.monotonic() + seconds
     while time.monotonic() < deadline:
@@ -140,16 +153,14 @@ def test_a_page_over_the_limit_is_stopped_and_says_so(port: int, slow: Slow) -> 
 
 
 def test_other_pages_answer_while_one_is_read(port: int, slow: Slow) -> None:
-    threading.Thread(target=_get, args=(port, SLOW), daemon=True).start()
+    _asking(port, SLOW)
     assert _until(lambda: slow.now == 1)
     status, _body, took = _get(port, "/day/2026-06-17")
     assert status == 200 and took < 5
 
 
 def test_a_whole_menu_at_once_reads_at_most_renders_pages_at_once(port: int, slow: Slow) -> None:
-    asked = [threading.Thread(target=_get, args=(port, SLOW), daemon=True) for _ in range(8)]
-    for t in asked:
-        t.start()
+    asked = [_asking(port, SLOW) for _ in range(8)]
     for t in asked:
         t.join(30)
     assert slow.most <= serve.RENDERS, slow.most
@@ -195,7 +206,7 @@ def test_a_page_the_build_holds_answers_at_once_while_the_pool_is_full(lb: Logbo
     server = serve.Server(0, serve.Site(lb, now=lambda: JUNE, library=library), limit_s=20.0)
     for port in _start(server):
         for _ in range(serve.RENDERS + 1):
-            threading.Thread(target=_get, args=(port, SLOW), daemon=True).start()
+            _asking(port, SLOW)
         assert _until(lambda: slow.now == serve.RENDERS)
         status, body, took = _get(port, "/people")
         assert status == 200 and b"built 12:00" in body and took < 2
