@@ -378,3 +378,28 @@ def test_a_superseding_line_above_the_gate_marks_nothing(lb: Logbook) -> None:
     assert "superseded" not in old and str(later["id"]) not in page and f"#{later['seq']}" not in page
     every = _get(serve.Site(lb), "/search", "q=dinner")
     assert f"superseded by #{later['seq']}" in page_text.seen(every)
+
+
+def test_the_mark_is_the_last_correction_the_gate_holds_as_on_the_day(lb: Logbook) -> None:
+    """Corrected twice the same evening, the second time above the gate: the page names the first
+    correction, as the Day does through the same gate, and nothing of the second."""
+    dinner = lb.line_by_seq(1)
+    assert dinner is not None and "Dinner" in dinner["payload"]["text"]
+
+    def correct(at: str, tier: int, text: str) -> Line:
+        payload = {"schema": "note/v1", "text": text, "supersedes": str(dinner["id"])}
+        return lb.append(at=at, source="manual", kind="note", tier=tier, payload=payload)
+
+    first = correct("2026-06-10T19:00:00Z", 2, "Dinner with Kari moved to the marina")
+    second = correct("2026-06-10T20:00:00Z", 3, "Dinner with Kari, the bill split")
+    gated = serve.Site(lb, tiers=(1, 2))
+    page = _get(gated, "/search", "q=dinner")
+    (old,) = [h for h in _hits(page) if "running late" in h]
+    assert f"superseded by #{first['seq']}" in page_text.seen(old)
+    assert str(second["id"]) not in page and f"#{second['seq']}" not in page
+    assert f"superseded by #{first['seq']}" in page_text.seen(
+        _get(gated, "/day/2026-06-10")
+    )  # the Day's mark
+    every = _get(serve.Site(lb), "/search", "q=dinner")
+    (old_every,) = [h for h in _hits(every) if "running late" in h]
+    assert f"superseded by #{second['seq']}" in page_text.seen(old_every)

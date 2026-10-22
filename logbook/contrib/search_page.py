@@ -44,7 +44,7 @@ from zoneinfo import ZoneInfo
 
 from ..core import reading, search
 from ..core.chain import Line
-from ..core.index import Index
+from ..core.index import RETRACTED, Index
 
 if TYPE_CHECKING:  # the Site passes itself; serve imports this module, never the other way at import
     from .serve import Site
@@ -121,11 +121,11 @@ def page_search(site: Site, params: Mapping[str, str]) -> str:
         with site.lb.index() as idx:
             hits, more = _gated(idx, q, site.tiers, PAGE * page)
             years = _years(idx)
-            superseded = _superseded(idx, hits[PAGE * (page - 1) : PAGE * page], site.tiers)
+            shown = hits[PAGE * (page - 1) : PAGE * page]
+            superseded = _superseded(idx, shown, site.tiers)
     except RuntimeError as e:  # a SQLite without FTS5: the index holds no search table
         parts.append(f"<p>{escape(str(e))}.</p>\n")
         return _document(site, parts)
-    shown = hits[PAGE * (page - 1) : PAGE * page]
     if shown or kind is not None or year is not None:  # a filter that found nothing can be taken off
         parts.append(_filters(text, kind, year, years))
     if not shown:
@@ -252,18 +252,35 @@ Superseded = Mapping[str, tuple[str, str]]  # a hit's line id → the words of i
 
 
 def _superseded(idx: Index, hits: Sequence[search.Hit], tiers: Sequence[int] | None) -> Superseded:
-    """The mark of each shown hit that a later line of its kind supersedes (`Hit.superseded_by`,
-    which `search.search` asks of the index): the words `logbook search` marks it with
-    (`search.mark`) and the superseding line's id, which the mark links to. Only when the gate lets
-    the superseding line through, as `/line/ID` would show it: a correction above the gate is no
-    mark, and the hit reads as the page would read it without that line."""
-    by = {str(hit.line["id"]): hit.superseded_by for hit in hits if hit.superseded_by is not None}
-    if not by:
-        return {}
-    found = idx.by_seqs(seq for seq, _id in by.values())
-    held = {str(line["id"]) for line in reading.crossing(found.values(), tiers)}
-    words = {str(hit.line["id"]): search.mark(hit).removeprefix(search.FIELD_BREAK) for hit in hits}
-    return {line_id: (words[line_id], later) for line_id, (_seq, later) in by.items() if later in held}
+    """The mark of each shown hit that a later line of its kind supersedes: the words `logbook
+    search` marks it with (`search.mark`) and the superseding line's id, which the mark links to.
+    The superseder is the one `search.superseded_by` names (a line of the same kind naming it in
+    `supersedes`, the last in chain order, a retracted one superseding nothing), but among the lines
+    the gate lets through, as the Day reads its marks after its gate: corrected again above the gate,
+    the hit names the last correction the gate holds, and nothing of the other. One lookup per kind
+    in the `lines_kind_supersedes` index; nothing read from the files."""
+    wanted: dict[str, dict[str, search.Hit]] = {}  # kind → id → hit
+    for hit in hits:
+        wanted.setdefault(str(hit.line["kind"]), {})[str(hit.line["id"])] = hit
+    gate = _gate(tiers)
+    found: dict[str, tuple[str, str]] = {}
+    for kind, ids in wanted.items():
+        named = list(ids)
+        rows = idx.db.execute(
+            f"SELECT supersedes, seq, id FROM lines WHERE kind = ?"
+            f" AND supersedes IN ({', '.join('?' * len(named))}) AND tier IN ({', '.join('?' * len(gate))})"
+            f" AND id NOT IN ({RETRACTED}) ORDER BY seq",
+            (kind, *named, *gate),
+        )
+        for superseded, seq, line_id in rows:  # in chain order: the last one stays
+            hit = dataclasses.replace(ids[str(superseded)], superseded_by=(int(seq), str(line_id)))
+            found[str(superseded)] = (search.mark(hit).removeprefix(search.FIELD_BREAK), str(line_id))
+    return found
+
+
+def _gate(tiers: Sequence[int] | None) -> tuple[int, ...]:
+    """The tiers a gate lets through, every one when it reads them all."""
+    return (1, 2, 3) if tiers is None else tuple(sorted({int(t) for t in tiers}))
 
 
 def _day_html(

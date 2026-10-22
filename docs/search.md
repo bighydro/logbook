@@ -160,8 +160,8 @@ the command's own.
   up to sixteen words around the match, each matching word marked (the command's `[brackets]`,
   drawn; a bracket the record itself holds, `[urgent]` in a note, stays as written); and its line's
   id, a link to `/line/ID`, the line as the record holds it. A hit a later line supersedes says so
-  as the command does, `superseded by #N`, a link to that line, when the page's gate lets that line
-  through; a correction above the gate is no mark.
+  as the command does, `superseded by #N`, a link to that line: the last correction the page's
+  gate lets through, as the Day marks one, so a correction above the gate is never named.
 - **The filters are links**: every kind with words and every year the record runs over (its span,
   as the front page says it, whatever the gate), the filter in force in bold and *every* to take
   it off. They are never counted: a count would cost
