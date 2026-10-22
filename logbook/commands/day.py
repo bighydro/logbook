@@ -59,6 +59,7 @@ if TYPE_CHECKING:
 READERS = ("year", "trip", "trips", "days", "keepers", "stats")  # commands of their own until 0.6
 ORGS = ("org", "orgs")  # RFC 0037: one org's page, and the orgs (the Manifest's text)
 IDEAS = ("idea", "ideas")  # RFC 0037: one idea's page, and the ideas (the Ideas shelf's text)
+PLAN = "plan"  # RFC 0043 §9: the plan `sync notion` wrote, read and never run (`commands.plan`)
 
 
 def show_arguments(sub: Subparsers) -> None:
@@ -70,14 +71,15 @@ def show_arguments(sub: Subparsers) -> None:
         description="one day's lines (default today), a page (person, asset, place, org, idea), or a reader:"
         " year, trip, trips, days, keepers, stats, orgs (the orgs you named under their status, the most"
         " recent touch first, stale ones said; the passed with their reasons; the people with more than one"
-        " org), ideas (the ideas you named by stage, the most recent touch first, each with its reason)",
+        " org), ideas (the ideas you named by stage, the most recent touch first, each with its reason),"
+        " plan (today's tasks, the sprint and the next trip, from `sync notion`'s tier-1 lines)",
     )
     s.add_argument(
         "day",
         nargs="?",
         metavar="WHAT",
         help="YYYY-MM-DD or today; person|asset|place|org|idea NAME; year YYYY; trip ID-OR-DAY; trips; days;"
-        " keepers; stats; orgs; ideas",
+        " keepers; stats; orgs; ideas; plan [DAY]",
     )
     s.add_argument(
         "name",
@@ -162,6 +164,7 @@ def show_arguments(sub: Subparsers) -> None:
         metavar="TEXT",
         help="orgs: only the orgs in this portfolio, case and spaces aside (tier 3, on their status lines)",
     )
+    s.add_argument("--coverage", action="store_true", help="plan: the rows of each database the record knows")
     s.set_defaults(fn=cmd_show)
 
 
@@ -282,6 +285,11 @@ def cmd_show(a: argparse.Namespace) -> None:
         return
     if a.day in IDEAS:
         _show_ideas(a)
+        return
+    if a.day == PLAN:
+        from .plan import cmd_plan
+
+        cmd_plan(a)
         return
     lb = Logbook.find()
     if a.day in pages.PAGES:
