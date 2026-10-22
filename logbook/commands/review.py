@@ -18,7 +18,8 @@ writes the scene's no (`scene-review/v1`, never an `entity-review/v1` line), and
 
 `review with` is no kind either and no sitting: who the record puts with the owner over a journey, a
 week or a stretch, asked once (RFC 0043 §11, `logbook.contrib.review_with`, its command line in
-`who.py`); `--accept` takes a name there, and `review` alone does not list it, since it needs a stretch.
+`who.py`); `--accept` takes the queue's numbers there as here, and `review` alone does not list it,
+since it needs a stretch.
 
 A goal joins the sitting (RFC 0036 amendment 1, RFC 0037 §12): `review goal` asks each standing goal
 open today once a week, while its chain has no `review/v1` line dated this ISO week

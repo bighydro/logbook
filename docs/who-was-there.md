@@ -23,11 +23,20 @@ $ logbook with --from 2026-06-08 --to 2026-06-12 Ola
 
 One `with` note per person per day, the same line `logbook with DAY NAME` writes (the same function,
 `presence.state`), at the clock of that day's **longest stay**: the middle of the part of it that falls
-on the day, so the note lies inside the stay and the Day, `people` and the journeys read the person
-there. A day with no stay is stated as `logbook with DAY` states it, at noon (now, for today). A person already stated
-on a day is not stated again. Every day is written under one hold of the writer lock, and everything
-is checked before the first line: a stretch longer than 60 days, a day still to come, or a name that
-is nobody, two people or you is refused in one sentence, and nothing is written.
+in the day's waking hours, so the note lies inside the stay and the Day, `people` and the journeys read
+the person there.
+
+**Which hours count**: the waking hours of a day run from your `day_start` (in `logbook.json`, the
+clock your day begins at) on its date to local midnight after it. With `"day_start": "06:00"` the
+night after a day belongs to the day until 06:00 next morning, but its hours after midnight never count
+towards the longest stay, so that night never wins and no line lands after midnight. With no
+`day_start` (the default, `"00:00"`) the waking hours are the whole calendar day, so a night at home
+from midnight to 08:00 can still be the longest stay, as on the Wednesday above.
+
+A day with no stay is stated as `logbook with DAY` states it, at noon (now, for today). A person
+already stated on a day is not stated again. Every day is written under one hold of the writer lock,
+and everything is checked before the first line: a stretch longer than 60 days, a day still to come,
+or a name that is nobody, two people or you is refused in one sentence, and nothing is written.
 
 ## Not with
 
@@ -68,10 +77,12 @@ who was there, 2026-06-08 – 2026-06-14 (week 2026-W24)
   Kari Nordmann
       faces on 2 photos across 2 days · invited to 'Lunch'
       on Tue 9 Jun, Wed 10 Jun
+      --accept 1
   Ola Nordmann
       in the meeting notes of 'Boat plans'
       on Thu 11 Jun
-  answer: --accept NAME (every day of it) · --accept NAME --days D,D · --not NAME
+      --accept 2
+  answer: --accept N[,N] (every day of it) · --accept N --days D,D · --not NAME
 ```
 
 `review with --journey ID` (`trip:FIRST:LAST`, or a day of it), `--week YYYY-Www`, or `--from D1 --to
@@ -90,28 +101,40 @@ first (the most days, then the most evidence), ten at most, the rest counted. A 
 not place is counted for `logbook people review`, never listed. No number stands beside a name: the
 order is the only rank, and the counts live in the sentence of the evidence.
 
-The answers are the acts above:
+Each person's **number** is their place in the queue, from 1, as the rest of `review` numbers its
+proposals; it is printed on a line of its own under them, `--accept 1`, never beside the name, and in
+`--json` it is the person's place in `people`. The answers are the acts above:
 
 ```
-$ logbook review with --week 2026-W24 --accept Kari                     # every day of it that has begun
-$ logbook review with --week 2026-W24 --accept Kari --days 2026-06-10   # some days
-$ logbook review with --week 2026-W24 --not Ola                         # not with me
+$ logbook review with --week 2026-W24 --accept 1                     # every day of it that has begun
+$ logbook review with --week 2026-W24 --accept 1,2                   # two of them
+$ logbook review with --week 2026-W24 --accept 1 --days 2026-06-10   # some days
+$ logbook review with --week 2026-W24 --not Ola                      # not with me
 ```
+
+The numbers are the queue's as it stands when you answer: once someone is answered they leave it, and
+the people below them move up, so list the queue again before the next `--accept`. A name given to
+`--accept` is refused in one sentence that names the number form; `--not` still takes a name, and so
+does `logbook with --from D1 --to D2 NAME`, for someone the queue does not ask about. Any option
+`review with` does not take (another kind's, such as `--top` or `--since`) is refused in one sentence,
+and nothing is written.
 
 ## Your people in a city
 
 ```
-$ logbook people city Bergen --journey 2026-07-02
+$ logbook people city Bergen --trip 2026-07-02
 your people in Bergen, on journey trip:2026-07-01:2026-07-03
   Per Hansen  not yet
 ```
 
-The people the record places in a city, by their `lives-in` note, and with `--journey` whether each
-was **seen** on it: confirmed by the with module at one of its stays (a timed calendar entry
+The people the record places in a city, by their `lives-in` note, and with `--trip` (the journey,
+`trip:FIRST:LAST` or a day of it) whether each was **seen** on it: confirmed by the with module at one of its stays (a timed calendar entry
 they accepted, their voice or name in a recording, a note there that says *with* them), or stated with
 you on one of its days (`logbook with`, or an accepted answer of the queue). Names and
 *seen* / *not yet*, never a count. No contacts import keeps a city today (the iOS and Google contacts
 and WhatsApp's keep names, numbers and addresses only), so the `lives-in` note is the only source.
+`--journey` is `--trip`'s old name here, kept until the release after 1.0 and said once on stderr;
+everywhere else `--journey` is `people nearby`'s, a journey or a flight line.
 
 ## Your own camera
 

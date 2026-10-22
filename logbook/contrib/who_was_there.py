@@ -5,7 +5,8 @@
 - **With, across a stretch**: `logbook with --from D1 --to D2 NAME…` states the people present on every
   day of the stretch, one `with` note per person per day, each written by the function `logbook with`
   uses for one day (`presence.state`), at the clock of that day's **longest stay**: the middle of the
-  part of the stay that falls on the day, so the note lies inside the stay and the with module reads it
+  part of the stay that falls in the day's waking hours, from `day_start` to local midnight
+  (`longest_stay`), so the note lies inside the stay and the with module reads it
   there (SPEC §3.2.5 rule 3). A day with no stay is stated as `logbook with` states it without a clock
   (noon, or now for today). Everything is checked before the first line is written: a stretch longer
   than `MAX_DAYS`, a day still to come, a name that is nobody, several people or the owner each refuse
@@ -44,7 +45,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, time, timedelta
 from typing import Any
 
 from ..core import day_start, notes, people, presence, reading, stays
@@ -104,9 +105,14 @@ def longest_stay(
     day: str, found: Sequence[stays.Segment], days: day_start.DayStart, now: datetime
 ) -> str | None:
     """The clock (`HH:MM`, on the record's clock) in the middle of the part of the day's longest stay
-    that falls on the day and has already happened; None when no stay touches the day."""
-    start, end = days.span(day)
-    end = min(end, now.astimezone(days.zone))
+    that falls in its waking hours and has already happened; None when no stay touches them. The
+    waking hours are from the record's `day_start` on the day's date to local midnight after it (the
+    owner's answer to #351): under `"06:00"` the night after the day is the day's, but its hours after
+    midnight never make the longest stay, so a night at home never wins and no line lands in them.
+    Under the default `"00:00"` they are the whole calendar day."""
+    start, _end = days.span(day)
+    midnight = datetime.combine(parse_day(day) + timedelta(days=1), time(0), tzinfo=days.zone)
+    end = min(midnight, now.astimezone(days.zone))
     best: tuple[float, datetime, datetime] | None = None
     for stay in found:
         lo, hi = max(stay.start, start), min(stay.end, end)

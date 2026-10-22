@@ -188,6 +188,12 @@ def _asked(data: dict[str, Any]) -> dict[str, dict[str, Any]]:
     return {p["name"]: p for p in data["people"]}
 
 
+def _number(capsys: pytest.CaptureFixture[str], name: str, *stretch: str) -> str:
+    """The number `review with` gives `name` in the queue of `stretch`: their place in its list."""
+    names = [p["name"] for p in _queue(capsys, *stretch)["people"]]
+    return str(names.index(name) + 1)
+
+
 # -- with across a stretch -----------------------------------------------------------------------------------
 
 
@@ -309,7 +315,7 @@ def test_the_queue_of_a_week_says_the_evidence_in_words_and_the_days(
         "      faces on 2 photos across 2 days · invited to 'Lunch'",
         "      on Tue 9 Jun, Wed 10 Jun",
     ]
-    assert "--accept NAME" in text and "--not NAME" in text
+    assert "--accept N[,N]" in text and "--not NAME" in text
 
 
 def test_a_photo_received_in_a_chat_never_proposes(lb: Logbook, capsys: pytest.CaptureFixture[str]) -> None:
@@ -347,7 +353,7 @@ def test_no_number_stands_beside_a_name(lb: Logbook, capsys: pytest.CaptureFixtu
     outputs = [
         _queue(capsys, "--from", CREW_DAY, "--to", CREW_DAY),
         _queue(capsys, "--week", WEEK),
-        json.loads(_run(capsys, "people", "city", "Bergen", "--journey", TRIP_DAY, "--json")),
+        json.loads(_run(capsys, "people", "city", "Bergen", "--trip", TRIP_DAY, "--json")),
     ]
     for data in outputs:
         for person in data["people"]:
@@ -357,7 +363,7 @@ def test_no_number_stands_beside_a_name(lb: Logbook, capsys: pytest.CaptureFixtu
     for args in (
         ("review", "with", "--from", CREW_DAY, "--to", CREW_DAY),
         ("review", "with", "--week", WEEK),
-        ("people", "city", "Bergen", "--journey", TRIP_DAY),
+        ("people", "city", "Bergen", "--trip", TRIP_DAY),
     ):
         for row in _run(capsys, *args).splitlines():
             if any(name in row for name in names):
@@ -425,22 +431,22 @@ def test_lives_in_and_a_journey_to_bergen_lists_per_as_not_yet_then_seen(
     assert out == f"#{line['seq']} note  lives-in: Per Hansen, Bergen\n"
     assert line["payload"]["extra"] == {"person": PER_ID, "city": "Bergen", "from": "2020-05-01"}
     assert _run(capsys, "people", "city", "bergen").splitlines() == ["your people in bergen", "  Per Hansen"]
-    data = json.loads(_run(capsys, "people", "city", "Bergen", "--journey", TRIP_DAY, "--json"))
+    data = json.loads(_run(capsys, "people", "city", "Bergen", "--trip", TRIP_DAY, "--json"))
     assert data["journey"] == "trip:2026-07-01:2026-07-03"
     assert data["people"] == [
         {"person": PER_ID, "name": "Per Hansen", "city": "Bergen", "line": line["id"], "seen": False}
     ]
     assert (
-        _run(capsys, "people", "city", "Bergen", "--journey", TRIP_DAY).splitlines()[1]
+        _run(capsys, "people", "city", "Bergen", "--trip", TRIP_DAY).splitlines()[1]
         == "  Per Hansen  not yet"
     )
     # the journey's queue asks about him: his face, from the owner's camera, in Bergen
     per = _asked(_queue(capsys, "--journey", TRIP_DAY))["Per Hansen"]
     assert per["days"] == [TRIP_DAY] and per["evidence"] == "faces on 1 photo on one day"
-    _run(capsys, "review", "with", "--journey", TRIP_DAY, "--accept", "Per", "--days", TRIP_DAY)
+    per_n = _number(capsys, "Per Hansen", "--journey", TRIP_DAY)
+    _run(capsys, "review", "with", "--journey", TRIP_DAY, "--accept", per_n, "--days", TRIP_DAY)
     assert (
-        _run(capsys, "people", "city", "Bergen", "--journey", TRIP_DAY).splitlines()[1]
-        == "  Per Hansen  seen"
+        _run(capsys, "people", "city", "Bergen", "--trip", TRIP_DAY).splitlines()[1] == "  Per Hansen  seen"
     )
     assert "Per Hansen" not in _asked(_queue(capsys, "--journey", TRIP_DAY))
     assert (
@@ -453,21 +459,25 @@ def test_lives_in_and_a_journey_to_bergen_lists_per_as_not_yet_then_seen(
 
 def test_the_answers_write_through_the_acts(lb: Logbook, capsys: pytest.CaptureFixture[str]) -> None:
     seq = lb.meta["seq"]
-    _run(capsys, "review", "with", "--week", WEEK, "--accept", "Kari", "--days", "2026-06-10")
+    kari = _number(capsys, "Kari Nordmann", "--week", WEEK)
+    _run(capsys, "review", "with", "--week", WEEK, "--accept", kari, "--days", "2026-06-10")
     [one] = _labelled(lb, "with")
     assert one["payload"]["extra"] == {"person": KARI_ID} and _clock(one).date().isoformat() == "2026-06-10"
-    _run(capsys, "review", "with", "--week", WEEK, "--accept", "Kari")  # the whole stretch: the six days left
+    kari = _number(capsys, "Kari Nordmann", "--week", WEEK)
+    _run(capsys, "review", "with", "--week", WEEK, "--accept", kari)  # the whole stretch: the six days left
     assert len(_labelled(lb, "with")) == 7
+    # the refusals come while Ola is still in the queue, so he has a number to give
+    ola = _number(capsys, "Ola Nordmann", "--week", WEEK)
+    both = _refused(capsys, "review", "with", "--week", WEEK, "--accept", ola, "--not", "Ola")
+    assert "--accept and --not at once" in both
+    assert "is not a day of" in _refused(
+        capsys, "review", "with", "--week", WEEK, "--accept", ola, "--days", "2026-06-20"
+    )
     _run(capsys, "review", "with", "--week", WEEK, "--not", "Ola")
     [refusal] = _labelled(lb, "not-with")
     assert refusal["payload"]["extra"] == {"person": OLA_ID, "from": "2026-06-08", "to": "2026-06-14"}
     assert _queue(capsys, "--week", WEEK)["people"] == []
     assert lb.meta["seq"] == seq + 8
-    both = _refused(capsys, "review", "with", "--week", WEEK, "--accept", "Ola", "--not", "Ola")
-    assert "--accept and --not at once" in both
-    assert "is not a day of" in _refused(
-        capsys, "review", "with", "--week", WEEK, "--accept", "Ola", "--days", "2026-06-20"
-    )
     assert "--days goes with" in _refused(capsys, "review", "with", "--week", WEEK, "--days", "2026-06-10")
     assert "say one of" in _refused(capsys, "review", "with", "--week", WEEK, "--from", "2026-06-08")
     assert "go with `review with`" in _refused(capsys, "review", "person", "--week", WEEK)
@@ -515,7 +525,7 @@ def test_seen_on_a_journey_is_the_with_modules_confirmed_company_too(
 ) -> None:
     _run(capsys, "people", "lives-in", "Ola", "Bergen")
     _run(capsys, "people", "lives-in", "Per", "Bergen")
-    rows = _run(capsys, "people", "city", "Bergen", "--journey", TRIP_DAY).splitlines()
+    rows = _run(capsys, "people", "city", "Bergen", "--trip", TRIP_DAY).splitlines()
     assert rows[1:] == ["  Ola Nordmann  seen", "  Per Hansen  not yet"]  # Ola came to dinner on the 3rd
     _run(capsys, "people", "lives-in", "Ola", "Oslo")  # the latest note is where he lives
     assert _run(capsys, "people", "city", "Bergen").splitlines()[1:] == ["  Per Hansen"]
@@ -546,12 +556,12 @@ def test_a_retracted_relation_stands_no_more(lb: Logbook, capsys: pytest.Capture
     assert _asked(_queue(capsys, "--week", WEEK))["Kari Nordmann"]["days"] == ["2026-06-09", "2026-06-10"]
 
 
-def test_accept_takes_names_by_comma_and_the_other_kinds_options_are_refused(
+def test_accept_takes_numbers_by_comma_and_the_other_kinds_options_are_refused(
     lb: Logbook, capsys: pytest.CaptureFixture[str]
 ) -> None:
     seq = lb.meta["seq"]
     assert "--days goes with one --accept" in _refused(
-        capsys, "review", "with", "--week", WEEK, "--accept", "Kari,Ola", "--days", "2026-06-10"
+        capsys, "review", "with", "--week", WEEK, "--accept", "1,2", "--days", "2026-06-10"
     )
     assert "--top: not here" in _refused(capsys, "review", "with", "--week", WEEK, "--top", "3")
     assert "--radius: not with `people city`" in _refused(capsys, "people", "city", "Oslo", "--radius", "5")
@@ -559,5 +569,153 @@ def test_accept_takes_names_by_comma_and_the_other_kinds_options_are_refused(
         capsys, "with", "2026-06-12", "Ola", "--from", "2026-06-08", "--to", "2026-06-09"
     )
     assert lb.meta["seq"] == seq
-    _run(capsys, "review", "with", "--from", "2026-06-10", "--to", "2026-06-10", "--accept", "Kari,Ola")
-    assert sorted(line["payload"]["extra"]["person"] for line in _labelled(lb, "with")) == [KARI_ID, OLA_ID]
+    # Kari is proposed on the 10th and Ola on the 11th: a number is for someone the queue asks about
+    days = ("--from", "2026-06-10", "--to", "2026-06-11")
+    both = f"{_number(capsys, 'Kari Nordmann', *days)},{_number(capsys, 'Ola Nordmann', *days)}"
+    _run(capsys, "review", "with", *days, "--accept", both)
+    assert sorted(line["payload"]["extra"]["person"] for line in _labelled(lb, "with")) == sorted(
+        [KARI_ID, KARI_ID, OLA_ID, OLA_ID]
+    )
+
+
+# -- the owner's answers to #351 -----------------------------------------------------------------------------
+
+# the options `review with` takes; every other option of `review` is refused there
+WITH_TAKES = {"-h", "--accept", "--json", "--journey", "--week", "--from", "--to", "--days", "--not"}
+
+
+def _review_options() -> list[Any]:
+    from logbook.commands.parser import build_parser
+
+    root = build_parser()
+    commands = next(a for a in root._actions if a.dest == "cmd")
+    review = commands.choices["review"]  # type: ignore[union-attr]
+    return [action for action in review._actions if action.option_strings]
+
+
+def _given(action: Any) -> list[str]:
+    """The words that give `action` on the command line, a value its type accepts."""
+    if action.nargs == 0:
+        return [action.option_strings[-1]]
+    count = action.nargs if isinstance(action.nargs, int) else 1
+    return [action.option_strings[-1], *(["1"] * count)]
+
+
+def test_review_with_refuses_every_option_it_does_not_take(
+    lb: Logbook, capsys: pytest.CaptureFixture[str]
+) -> None:
+    seq = lb.meta["seq"]
+    since = _refused(capsys, "review", "with", "--week", WEEK, "--since", "2026-06-01")
+    assert "--since: not here" in since
+    others = [a for a in _review_options() if not WITH_TAKES & set(a.option_strings)]
+    assert {"--since", "--top", "--reject", "--say", "--unnamed", "--place"} <= {
+        a.option_strings[-1] for a in others
+    }
+    for action in others:
+        flag = action.option_strings[-1]
+        err = _refused(capsys, "review", "with", "--week", WEEK, *_given(action))
+        assert f"{flag}: not here" in err, (flag, err)
+    # a value that is falsy is still given: `--top 0` is refused, not read as absent
+    assert "--top: not here" in _refused(capsys, "review", "with", "--week", WEEK, "--top", "0")
+    assert "--all-above: not here" in _refused(capsys, "review", "with", "--week", WEEK, "--all-above", "0")
+    assert lb.meta["seq"] == seq
+
+
+def test_people_city_takes_trip_and_journey_is_its_old_name_for_one_release(
+    lb: Logbook, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _run(capsys, "people", "lives-in", "Per", "Bergen")
+    new = _run(capsys, "people", "city", "Bergen", "--trip", TRIP_DAY)
+    assert new.splitlines() == [
+        "your people in Bergen, on journey trip:2026-07-01:2026-07-03",
+        "  Per Hansen  not yet",
+    ]
+    cli.main(["people", "city", "Bergen", "--journey", TRIP_DAY])
+    old = capsys.readouterr()
+    assert old.out == new
+    assert old.err.count("\n") == 1 and ". " not in old.err, old.err
+    assert "--trip" in old.err and "--journey" in old.err
+    assert "both" in _refused(capsys, "people", "city", "Bergen", "--trip", TRIP_DAY, "--journey", TRIP_DAY)
+    # a journey the record does not hold: the refusal alone, one sentence, not the notice as well
+    assert "--journey is now --trip" not in _refused(
+        capsys, "people", "city", "Bergen", "--journey", "nonsense"
+    )
+    # --journey stays `people nearby`'s; --trip is `people city`'s alone
+    assert "--trip goes with `people city`" in _refused(capsys, "people", "nearby", "--trip", TRIP_DAY)
+    assert "--trip goes with `people city`" in _refused(capsys, "people", "mail", "--trip", TRIP_DAY)
+    assert "--trip goes with `people city`" in _refused(
+        capsys, "people", "lives-in", "Per", "Bergen", "--trip", TRIP_DAY
+    )
+    assert "--journey goes with `people nearby`" in _refused(
+        capsys, "people", "lives-in", "Per", "Bergen", "--journey", TRIP_DAY
+    )
+    from logbook.commands.parser import build_parser
+
+    commands = next(a for a in build_parser()._actions if a.dest == "cmd")
+    people = commands.choices["people"]  # type: ignore[union-attr]
+    helps = {a.option_strings[-1]: a.help for a in people._actions if a.option_strings}
+    assert "city" not in helps["--journey"] and helps["--trip"].startswith("city: ")
+
+
+def test_the_longest_stay_counts_waking_hours_only_from_day_start_to_midnight(
+    lb: Logbook, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Under a `day_start` of 06:00 the night after a day is the day's (to 06:00 next morning), but its
+    hours after midnight are not waking hours: they never make the longest stay, and no line lands in
+    them."""
+    lb.set_meta(day_start="06:00")
+    days = ["2026-06-08", "2026-06-09", "2026-06-10", "2026-06-11", "2026-06-12"]
+    found = who_was_there.with_stretch(lb, days[0], days[-1], ["Ola"], now=NOW)
+    assert [d.day for d in found] == days
+    for d in found:
+        assert d.at is not None and "06:00" <= d.at < "24:00", (d.day, d.at)
+    by_day = {_clock(line).date().isoformat(): _clock(line) for line in _labelled(lb, "with")}
+    assert sorted(by_day) == days  # each on its own date, none after midnight
+    # Wednesday: the evening at home, 18:30 to midnight, outlasts each half of the office split by lunch
+    wednesday = by_day["2026-06-10"]
+    assert 20 <= wednesday.hour < 22, wednesday  # the middle of the evening, never the night after
+    days_of = review_with.reading.day_start.of(lb.meta)
+    stays = review_with.reading.owner_track(lb, "2026-06-10", "2026-06-11").stays
+    assert who_was_there.longest_stay("2026-06-10", stays, days_of, NOW) == wednesday.strftime("%H:%M")
+
+
+def test_review_with_accept_takes_the_queues_numbers_and_refuses_a_name(
+    lb: Logbook, capsys: pytest.CaptureFixture[str]
+) -> None:
+    seq = lb.meta["seq"]
+    rows = _run(capsys, "review", "with", "--week", WEEK).splitlines()
+    # each person's number on a line of its own under them, never beside the name
+    assert rows[1:9] == [
+        "  Kari Nordmann",
+        "      faces on 2 photos across 2 days · invited to 'Lunch'",
+        "      on Tue 9 Jun, Wed 10 Jun",
+        "      --accept 1",
+        "  Ola Nordmann",
+        "      in the meeting notes of 'Boat plans'",
+        "      on Thu 11 Jun",
+        "      --accept 2",
+    ]
+    assert rows[-1] == "  answer: --accept N[,N] (every day of it) · --accept N --days D,D · --not NAME"
+    # in the JSON the number is the place in `people`, and no entry carries one
+    assert [p["name"] for p in _queue(capsys, "--week", WEEK)["people"]] == ["Kari Nordmann", "Ola Nordmann"]
+    name = _refused(capsys, "review", "with", "--week", WEEK, "--accept", "Kari")
+    assert "takes the queue's numbers, not a name" in name and "--accept 1,3" in name
+    assert "takes the queue's numbers" in _refused(
+        capsys, "review", "with", "--week", WEEK, "--accept", "1,Ola"
+    )
+    assert "no person 3 in the queue" in _refused(capsys, "review", "with", "--week", WEEK, "--accept", "3")
+    assert "numbered from 1" in _refused(capsys, "review", "with", "--week", WEEK, "--accept", "0")
+    # the crew day shows ten and counts two more: a number past the ten says how to state them
+    beyond = _refused(capsys, "review", "with", "--from", CREW_DAY, "--to", CREW_DAY, "--accept", "11")
+    assert "shows 10" in beyond and "logbook with --from D1 --to D2 NAME" in beyond
+    assert lb.meta["seq"] == seq
+    out = _run(capsys, "review", "with", "--week", WEEK, "--accept", "2", "--days", "2026-06-11")
+    [line] = _labelled(lb, "with")
+    assert line["payload"]["extra"] == {"person": OLA_ID} and out.startswith(
+        f"#{line['seq']} with Ola Nordmann"
+    )
+    # answered, Ola leaves the queue, and the numbers are the queue's as it now stands
+    assert [p["name"] for p in _queue(capsys, "--week", WEEK)["people"]] == ["Kari Nordmann"]
+    _run(capsys, "review", "with", "--week", WEEK, "--accept", "1", "--accept", "1")
+    assert {line["payload"]["extra"]["person"] for line in _labelled(lb, "with")} == {OLA_ID, KARI_ID}
+    assert _queue(capsys, "--week", WEEK)["people"] == []

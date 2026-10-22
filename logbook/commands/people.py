@@ -52,7 +52,7 @@ def people_arguments(sub: Subparsers) -> None:
         " model of LOGBOOK_DREAM_ENDPOINT under the `relationship` entry of policy/crossing.json, from the"
         " person's lines at or under its max_tier on signed days, every claim citing them or unsupported;"
         " not-with NAME --from D1 --to D2, lives-with NAME --from D [--until D], lives-in NAME CITY: your"
-        " word on who was there, one note each; city CITY [--journey ID]: your people in a city, seen or"
+        " word on who was there, one note each; city CITY [--trip ID]: your people in a city, seen or"
         " not yet on a journey (RFC 0043)",
     )
     s.add_argument(
@@ -116,8 +116,7 @@ def people_arguments(sub: Subparsers) -> None:
     s.add_argument(
         "--journey",
         metavar="ID",
-        help="nearby: where this journey or flight line goes; city: the journey (trip:FIRST:LAST, or a day"
-        " of it)",
+        help="nearby: where this journey or flight line goes",
     )
     s.add_argument(
         "--since",
@@ -209,6 +208,9 @@ def cmd_people(a: argparse.Namespace) -> None:
     if a.name == MAIL:  # its window's last day is who was there's --until, so before that refusal
         if a.from_ is not None or a.to is not None:
             print("people mail: --from and --to are not its window; --since and --until are", file=sys.stderr)
+            sys.exit(2)
+        if a.trip is not None:  # who was there's, refused here as on every other form
+            print("people mail: --trip goes with `people city`", file=sys.stderr)
             sys.exit(2)
         cmd_people_mail(a)
         return
