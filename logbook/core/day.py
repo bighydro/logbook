@@ -809,9 +809,7 @@ def _finish(
     if unnamed:  # RFC 0038 §3.4: counted, never named; the key only on a stay that has them
         entry["with"]["unnamed"] = unnamed
     if entry["kind"] == stays.MOVE:
-        entry["flights"] = [
-            f["id"] for f in flights if _instant(f["start"]) < end and (_instant(f["end"]) or start) > start
-        ]
+        entry["flights"] = [f["id"] for f in _covering(start, end, flights)]
         if not entry["airports"]:
             entry["airports"] = _flown(start, end, flights)
     return entry
@@ -824,15 +822,28 @@ def _flown(start: datetime, end: datetime, flights: Sequence[dict[str, Any]]) ->
     move no flight covers. A move's own pair is a flight's only (`stays`): a car move between two
     points near an airport names none."""
     length = (end - start).total_seconds()
-    for f in flights:
-        since, until = _instant(f["start"]), _instant(f["end"]) if f["end"] else None
-        if until is None or not (f["from"] and f["to"]):
+    for f, since, until in _spans(flights):
+        if until == since or not (f["from"] and f["to"]):
             continue
         overlap = (min(end, until) - max(start, since)).total_seconds()
         inside = start <= since and until <= end
         if length > 0 and overlap > 0 and (inside or overlap * 2 >= length):
             return [str(f["from"]), str(f["to"])]
     return []
+
+
+def _covering(start: datetime, end: datetime, flights: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
+    """The flights in the air during a move: departed before it ends and landed after it began."""
+    return [f for f, since, until in _spans(flights) if since < end and until > start]
+
+
+def _spans(flights: Sequence[dict[str, Any]]) -> Iterator[tuple[dict[str, Any], datetime, datetime]]:
+    """Each flight with its span: one without an end as ending at its start, one without a start
+    skipped (a Day's flight has one, `_flights`; a flight from anywhere else may not)."""
+    for f in flights:
+        since = _instant_or_none(f.get("start"))
+        if since is not None:
+            yield f, since, _instant_or_none(f.get("end")) or since
 
 
 # -- flights ------------------------------------------------------------------------------------------------
@@ -1154,7 +1165,18 @@ def _stamp(instant: datetime) -> str:
 
 
 def _instant(stamp: str) -> datetime:
+    """A stamp the Day must have (an entry's, a night's, a flight's start). None is refused here, by
+    name: a field that may be missing (a flight's end) is read with `_instant_or_none`."""
+    if stamp is None:
+        raise TypeError(
+            "_instant takes a stamp, not None; read a field that may be missing with _instant_or_none"
+        )
     return datetime.fromisoformat(stamp.replace("Z", "+00:00"))
+
+
+def _instant_or_none(stamp: str | None) -> datetime | None:
+    """A stamp that may be missing: None for None."""
+    return None if stamp is None else _instant(stamp)
 
 
 # -- text ----------------------------------------------------------------------------------------------------
