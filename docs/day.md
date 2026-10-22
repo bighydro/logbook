@@ -277,6 +277,76 @@ you open it, or until `?open=1` opens them all. Both come from the one reading t
 day; `logbook day` and `--json` are as they were, and so is a static site's Day (`logbook export
 site`), which counts the messages.
 
+## The page's four shapes
+
+The Day page has one look and four shapes, and it takes the one that fits the hour each time it is
+asked for. Nothing about the shape is stored; it is worked out from the clock, the evening hour and the
+day's signature on every request.
+
+- **morning**: today, from the day's start until 11:00, or until the first stay of note after the night
+  (somewhere that is not where you slept), whichever comes first.
+- **live**: the rest of today.
+- **evening**: today from the evening hour, the one the daily messages use
+  (`LOGBOOK_NOTIFY_EVENING_HOUR`, in the environment or in `~/.config/logbook/sync.env`), and every
+  earlier day not signed. With no evening hour set, today stays live until midnight.
+- **signed**: a day with a standing signature.
+
+A day ahead of today is live: nothing lived yet, the plan so far. A static site (`logbook export site`)
+has no clock, so its Day is the evening's, or the signed day's. It also skips the two parts that read
+beyond the day for every page it writes, the promises of Loose ends and Looking back.
+
+### `?shape=`
+
+`/day/2026-06-17?shape=morning` (or `live`, `evening`, `signed`) shows the same day in another shape, for
+reading. It says that it is shown for reading and links to the day's own shape. The forms on it are the
+page's own and do what they always do. A word that is not one of the four gets the shape the clock gives.
+
+### The ribbon
+
+The day in two lanes, from its start to its end (midnight to midnight unless `day_start` says
+otherwise), with the hours every three. **PLANNED** shows the calendar's timed entries: filled when
+something lived is beside one (the Day placed it at a stay or a move), hollow and dashed when nothing is
+(an entry the Day leaves unplaced). An all-day entry is not drawn. **LIVED** shows the stays, moves and
+time aboard in their colours, with calls as thin ticks. On today a line marks now. When the calendar
+has nothing timed the lane says so, and a day with no stay says why. A sentence for a screen reader
+says the same, and a legend names the colours. Nothing on it weighs the plan against the day.
+
+### The parts
+
+- **The header**: the weekday, the shape and the time; the date; where the night was spent, the weather
+  when the record has it, and who was there. Under it, as before, the nights, the country, the signature
+  and the *with…* row.
+- **For**: the chapter the day is in (its rules in quotes) and the goals the day touched, each linked.
+  A goal is touched when a line of it, a review of it, or a review naming one of the day's lines as what
+  it rests on was written on the day. With no chapter and no goal written at all, the page says it
+  can't tell what the day was for; with some written but none for this day, it says that instead.
+- **Yesterday** (morning): signed or open, how many it kept, what arrived after its signature (with a
+  link to sign again), what it carried, and the nearest earlier day still open, within 60 days.
+- **Today** (morning): the ribbon so far, then the day's timed entries and the promises due today, a row
+  each.
+- **One person** (morning): a birthday in the coming week, from a resolution line's
+  `extra.birthday`. Nothing when there is none.
+- **Loose ends**: the promises made on the day and the ones due on it, both ways (yours, asked of you,
+  owed to you), and the decisions the day's call syntheses wrote. Read-only. A promise is due on a day
+  when it was said in the 14 days before it.
+- **People**: who showed up, the most time together first, from the people confirmed at a row, the ones
+  you said were there and the people on the day's calls. Birthdays in the coming week are listed too.
+  A name never has a count, an age or a score beside it: a birthday is only its day.
+- **Looking back**: this day 1, 2, 3, 5 and 10 years ago, the ones the record has: where the night was
+  spent, who was there, how many photos were starred, and the first sentence of that day's reflection.
+- **Photos**: how many, how many starred, the starred ones this machine holds, then the photo review.
+  In the morning they are folded into the record, so *Add to today* comes straight after it.
+- **The record**: the folds, each with its summary in counts: the timeline under the day's track,
+  everything the day held, the sources and the rest. **Nothing from** names, in one line, every part
+  that has nothing for the day. The timeline and the sources are always there: a day with no line
+  says *nothing logged* and *none*.
+- **The pencil**: the dream's draft, as the page has always shown it, on ruled paper. Each sentence has
+  its evidence marks, and a sentence nothing supports is in italics, marked *unsupported*. A signed day
+  folds it at the foot, with how many of its proposals you confirmed.
+- **Close the day** (*Add to today* in the morning and live): Reflect and Sign, the same forms as before.
+
+Every row is computed from the record. What a model wrote is in pencil, with the lines it rests on.
+
 ## A synthetic example
 
 The Oslo persona of the test suite, who does not exist, spends a June Saturday aboard the yacht
