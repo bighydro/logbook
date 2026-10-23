@@ -229,6 +229,7 @@ NOT_A_LINK = (
 )
 KEPT_FROM = "from"  # `extra.from` of a line the owner kept from a draft: the draft's id
 KEPT_PROPOSAL = "proposal"  # `extra.proposal` of a kept line: the proposal's kind and identifying fields
+KEEPABLE = (LEARNED, DECISION, IDEAS, PHOTO)  # the parts whose sentences `--keep` keeps (RFC 0043 §5)
 UTC_STAMP = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z\Z")
 
 
@@ -671,9 +672,13 @@ def kept_keys(
 
 def proposal_key(proposal: Mapping[str, Any]) -> tuple[Any, ...] | None:
     """What identifies a proposal across drafts (amendment 2, *kept*): an event's title (its words,
-    case aside) and its span as instants; a link's entity and the lines it rests on. None for a
-    proposal of another kind, or one whose fields do not read."""
+    case aside) and its span as instants; a link's entity and the lines it rests on; a kept sentence's
+    part and its words, case aside (`learned`, `decision`, `ideas`, `photo`: RFC 0043 §6 rule 5). None
+    for a proposal of another kind, or one whose fields do not read."""
     kind = proposal.get("kind")
+    if kind in KEEPABLE:
+        words = " ".join(str(proposal.get("text") or "").split()).casefold()
+        return (kind, words) if words else None
     try:
         if kind == EVENT:
             title = " ".join(str(proposal.get("title") or "").split()).casefold()
@@ -926,6 +931,22 @@ def day_json(
     return out
 
 
+def keep_numbers(payload: Mapping[str, Any], segments: Sequence[Mapping[str, Any]]) -> dict[int, int]:
+    """What `--keep` numbers in a day's draft (RFC 0043 §5): segment index (from 0) → its number. A
+    link keeps the number it has among the proposals; a sentence of a part one keeps (`KEEPABLE`)
+    is numbered after the last proposal, in the draft's order, so a number never names two things
+    and `--accept`'s numbers never move. Read from the draft alone, so the numbers stay while the
+    draft stands."""
+    found = payload.get(PROPOSALS)
+    n = len(found) if isinstance(found, list) else 0
+    numbers: dict[int, int] = {}
+    for i, segment in enumerate(segments):
+        if segment.get("part") in KEEPABLE:
+            n += 1
+            numbers[i] = n
+    return numbers
+
+
 def dream_day_json(
     payload: Mapping[str, Any],
     segments: list[dict[str, Any]],
@@ -938,8 +959,10 @@ def dream_day_json(
     evening draft read up to (amendment 2); `lenses`, `{id, text, answered}` for each lens asked (a lens
     with no segment is printed by the reader as `NO_ANSWER`, never by the model); `entity` on each
     `ideas` segment, the idea it names; `links`, the proposed links (`links_json`), each `kept` when
-    the owner kept one of the same fields from any draft of the day; and `marked`, `dropped`,
-    `dropped_links`, `dropped_segments`, by why. Sets `entity` on the segments in place."""
+    the owner kept one of the same fields from any draft of the day, and its `keep`, the number
+    `--keep` takes (its proposal number); `keep` and `kept` on each segment of a part one keeps
+    (`keep_numbers`); and `marked`, `dropped`, `dropped_links`, `dropped_segments`, by why. Sets
+    `entity`, `keep` and `kept` on the segments in place."""
     found_extra = payload.get("extra")
     extra: Mapping[str, Any] = found_extra if isinstance(found_extra, dict) else {}
     answered = {str(s["part"])[len(LENS) :] for s in segments if str(s.get("part") or "").startswith(LENS)}
@@ -963,7 +986,12 @@ def dream_day_json(
             segments[n - 1]["entity"] = idea["entity"]
     links = links_json(payload, on_day, not_on)
     for link in links:
+        link["keep"] = link["number"]
         link["kept"] = kept.get(proposal_key(link) or ())
+    for i, number in keep_numbers(payload, segments).items():
+        segment = segments[i]
+        segment["keep"] = number
+        segment["kept"] = kept.get(proposal_key({"kind": segment["part"], "text": segment["text"]}) or ())
     until = extra.get("read_until")
     out: dict[str, Any] = {
         "evening": extra.get("evening") is True,
@@ -1317,7 +1345,8 @@ def head_text(draft: Mapping[str, Any], word: bool = True) -> str:
 
 
 def rows(draft: Mapping[str, Any], indent: str = "    ") -> Iterator[str]:
-    """The segments, one per row: the part's word, the text, then the evidence ids shortened; an
+    """The segments, one per row: the part's word, the text, then the evidence ids shortened and, for a
+    part one keeps, `keep N`, the number `--keep` takes, or `kept as #seq` once the owner kept it; an
     unsupported one starts with `~` and ends with `unsupported` (and why, when a reader found
     out), never run into the prose around it. After the last sentence of the story, its closing line
     as the reader computed it (`closing`); after the lenses answered, each lens asked and not
@@ -1352,10 +1381,16 @@ def _segment_row(segment: Mapping[str, Any], indent: str) -> str:
     part = str(segment.get("part") or "")
     label = PART_LABELS.get(part, part if part.startswith(LENS) else "") if part else ""
     mark = "  " if segment["supported"] else "~ "
-    if segment["supported"]:
+    if segment.get("kept"):
+        tail = f"kept as #{segment['kept']['seq']}"
+    elif segment["supported"]:
         tail = "[" + ", ".join(short_id(e) for e in segment["evidence"]) + "]"
     else:
         tail = UNSUPPORTED if not segment.get("why") else f"{UNSUPPORTED}: {segment['why']}"
+    if segment.get("keep") and segment["supported"] and not segment.get("kept"):  # `--keep`'s number (RFC
+        tail += (
+            f"  keep {segment['keep']}"  # 0043 §5), at the end: never beside a name the sentence opens with
+        )
     return f"{indent}{mark}{label:<9} {segment['text']}  {tail}"
 
 

@@ -252,27 +252,35 @@ def note_of(note: str | None) -> str | None:
     return " ".join(note.split()) or None
 
 
+def checked(lb: Logbook, ref: str) -> tuple[Line, Star | None]:
+    """The line `ref` names, if it takes a star, and its star standing (None when it has none); read
+    without writing, so a caller that writes more than the star (Keep and sign, RFC 0043 §5) checks it
+    before its first line. `StarError` for a line that takes no star, as `star` refuses it."""
+    found = _read(lb, ref)
+    line, id_ = found.line, str(found.line["id"])
+    kind = str(line.get("kind"))
+    if kind in MARKS:
+        raise StarError(f"#{line['seq']} is a {kind}, a mark itself; star the line it names")
+    if kind in UNKEPT:
+        raise StarError(
+            f"#{line['seq']} is a model's draft ({drafts.SCHEMA}), a proposal and not yours to keep:"
+            " star the lines it rests on, or sign the day to confirm what it says"
+        )
+    if id_ in found.retracted:
+        raise StarError(f"#{line['seq']} is retracted; a star names a line that stands")
+    if found.superseded_by is not None:
+        raise StarError(f"#{line['seq']} is superseded by #{found.superseded_by}; star that one")
+    return line, standing(found.marks, found.retracted).get(id_)
+
+
 def star(lb: Logbook, ref: str, note: str | None = None) -> tuple[Line, Line | None]:
     """Star the line `ref` names: (the line, the star or keeper line written), the second None when
     the line is starred already with this note or none. `StarError` for a line that takes no star."""
     note = note_of(note)
     with lb.writer():
         meta = lb.meta
-        found = _read(lb, ref)
-        line, id_ = found.line, str(found.line["id"])
+        line, current = checked(lb, ref)
         kind = str(line.get("kind"))
-        if kind in MARKS:
-            raise StarError(f"#{line['seq']} is a {kind}, a mark itself; star the line it names")
-        if kind in UNKEPT:
-            raise StarError(
-                f"#{line['seq']} is a model's draft ({drafts.SCHEMA}), a proposal and not yours to keep:"
-                " star the lines it rests on, or sign the day to confirm what it says"
-            )
-        if id_ in found.retracted:
-            raise StarError(f"#{line['seq']} is retracted; a star names a line that stands")
-        if found.superseded_by is not None:
-            raise StarError(f"#{line['seq']} is superseded by #{found.superseded_by}; star that one")
-        current = standing(found.marks, found.retracted).get(id_)
         if current is not None and (note is None or note == current.note):
             return line, None
         draft = _keeper(line, note) if kind == PHOTO else _star(line, note)

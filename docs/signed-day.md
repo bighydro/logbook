@@ -272,6 +272,62 @@ none of them is listed, and `--accept` naming one is refused with the reason. Wh
 entry still allows stands in on the Day, its own proposals are the ones listed. An event you accepted
 before the entry changed stays in the record: it is your line, not the model's.
 
+## Keep and sign
+
+The dream's draft is pencil: nothing in it is yours until you keep it ([RFC
+0043](https://github.com/bighydro/logbook/blob/main/rfcs/0043-the-day-page.md), §5). `logbook day DAY`
+numbers what you can keep, after the proposed events: each proposed link keeps its own number (`link 2`), and each sentence learned, decided, about
+an idea, and the photo of the day is numbered after the last proposal, at the end of its row (`keep
+3`). The numbers are the draft's, so they read the same under `day sign` and `day reflect`.
+`day sign` and `day reflect --sign` keep them, and more, before they sign:
+
+```
+logbook day sign 2026-10-20 --keep 3,5,2 --word calm
+logbook day sign 2026-10-20 --keep 4 --revisit 4=2026-11-20 --mend 4="Kari sails on Saturday, not Sunday."
+logbook day sign 2026-10-20 --done 1 --tomorrow 2 --let-go 3
+logbook day reflect 2026-10-20 --text "..." --sign --accept 1 --keep 3 --word steady
+```
+
+- **`--keep N,N`**: a sentence learned, decided or about an idea becomes one `note/v1` line on the day,
+  labelled `learned`, `decision` or `idea`, with `extra.from` the draft's id, `extra.segment` its part
+  and place among the draft's sentences, and `extra.proposal` its part and the draft's words (so a
+  later draft that says the same is shown kept, not proposed again); an idea's note carries the idea's
+  id (`extra.entity`). A link becomes the `entity/v1` line `review idea` (or `review org`) writes for it,
+  binding what the line shows to the entity, with `extra.from`. The photo of the day becomes a star
+  with the sentence as its note, as `logbook star` writes one (a `keeper/v1` of lane `memory`).
+- **`--mend N="…"`**: keep a sentence in your own words; the note carries them, and `extra.from` still
+  names the draft.
+- **`--revisit N=YYYY-MM-DD`**: on a decision you keep, the day it comes back: `extra.revisit`, a day
+  after the day you sign, which Looking back reads.
+- **`--word WORD`**: the day in a word, one of your own, as a `note/v1` labelled `word`. One word, not a
+  number, and one a day: a re-sign keeps the first, and to change it you retract it (`logbook repair
+  retract SEQ "another word"`) and sign again with `--word`.
+- **`--done T,T`, `--tomorrow T,T`, `--let-go T,T`**: the plan's tasks of the day answered, by the
+  numbers `logbook show plan DAY` prints. Each answer is one `note/v1` labelled `task`, the task's title
+  its text ([the plan](plan.md#what-the-record-answers)).
+
+Everything is checked before the first line is written, and one refusal writes nothing, in one
+sentence: a number the draft does not give, an event (`--accept` writes it), a sentence with nothing
+under it, one kept already, a photo starred already, `--mend` or `--revisit` for a sentence you did not
+keep, a revisit that is not a later day, a word that is two words or a number, a second word on the day,
+a task given two answers, one `show plan` does not list, one answered already. Then, under one hold of
+the writer lock, the lines are written in that order (the sentences, the links, the photo, the word,
+the answers), after the events you `--accept` and, under `day reflect`, after the reflection and its
+delegations; then the signature, which confirms them. Signing again keeps them, as it keeps any line it
+confirmed, and never writes them twice. A busy record (another command writing) is said in one
+sentence and nothing is written. Bare `logbook day DAY` refuses these flags; `day reflect` takes them
+only with `--sign`.
+
+**A signature never confirms the draft** (RFC 0043 §6 rule 3). A draft line on the page, the evening's
+dream of the day, is left out of `confirmed` by `day sign`, `--confirm all`, `day reflect --sign`, the Day
+page's Sign and the door's `sign_day`; `--confirm` or a disposition that names it is refused. The page
+digest still covers it, so you signed what you were shown. A day signed before this rule that confirmed
+its draft loses it on its next signature.
+
+`--keep` sits one letter from `--kept`, the disposition: `--kept` says what became of a commitment on
+the page, `--keep` keeps the dream's pencil in ink. The door's `sign_day` takes neither `--keep` nor
+any of these: agents propose, you keep.
+
 ## Readiness: is the day all in?
 
 Before signing you want to know whether everything that usually arrives has arrived. The Day's
