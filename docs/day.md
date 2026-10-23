@@ -179,8 +179,13 @@ are as they always were.
    with the span, the title, the place and the people: a proposal waiting for you starts with `?` and
    ends with `proposed` and its evidence (greyed on the `serve` page); one you accepted (`day sign
    --accept N`) says `confirmed as #seq`, and its event line sits among the day's events in the
-   timeline, where it places its people as a calendar entry does. The draft is a proposal; your
-   signature and your notes are the facts. `--no-dream` leaves it out. An earlier draft of the day
+   timeline, where it places its people as a calendar entry does. What you can keep is numbered
+   after the proposals: a sentence learned, decided, about an idea and the photo of the day end their
+   row with it (`keep 3`; at the end, so no number stands beside a name the sentence opens with), a
+   proposed link keeps its own (`link 2`), and `day sign
+   --keep N` keeps one before it signs; a sentence or link you kept says `kept as #seq` ([Keep and
+   sign](signed-day.md#keep-and-sign)). The draft is a proposal; your signature and your notes are the
+   facts. `--no-dream` leaves it out. An earlier draft of the day
    stays in the record, listed by id under `--json`, and `show` lists every draft line on the day it
    was written. A draft follows the `dream` entry of `policy/crossing.json`, not the head: one above
    the entry's `max_tier` today (lowered, expired or removed since) is not shown, and when the day's
@@ -460,7 +465,8 @@ from), `sources`, and `received`, one object per page the circle shared for the 
 `owner_id`, `created`, `max_tier`, `lines`, `held_back`, `by_kind`, `named` with each line's id,
 `attachments`); and, only on a day a model has dreamed, `draft`, the standing draft (`line`,
 `seq`, `source`, `model`, `tier`, `at`, `read_head`, `read_count`, `language`, `segments` each with
-`text`, `evidence`, `supported`, `why` and `part`, `unsupported` as a count, `proposals` each with
+`text`, `evidence`, `supported`, `why` and `part`, and on a sentence you can keep `keep` (its number)
+and `kept` (`line`, `seq`, or null), `unsupported` as a count, `proposals` each with
 `number`, `kind`, `title`, `start`, `end`, `start_local`, `end_local`, `place`, `where`, `people` (`id`,
 `name`), `evidence`, `supported`, `why` and `confirmed` (`line`, `seq`, or null), `proposals_unknown`, how
 many proposals are of a kind this reader does not know (counted, never shown, never malformed: `draft/v1`,

@@ -154,3 +154,28 @@ jobs:
         with: { results_file: results.sarif, results_format: sarif, publish_results: true }
       - uses: github/codeql-action/upload-sarif@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4.38.2
         with: { sarif_file: results.sarif }
+  stable:
+    # `stable` names the newest commit on main whose every check above passed: what a machine that
+    # updates itself follows instead of main (docs/install.md, "Following stable"). The scorecard is a
+    # report on the repository, not on the code, and an outage of GitHub's own API fails it (3c94a92):
+    # it never holds `stable` back. Never moved backwards: a run that finishes after a newer one leaves
+    # the tag on the newer commit.
+    needs: [test, nix, homebrew, docker, cross-impl]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions: { contents: write }
+    steps:
+      - uses: actions/checkout@v7
+        with: { fetch-depth: 0 }
+      - name: stable, moved to this commit when it is newer than where stable is
+        run: |
+          set -euo pipefail
+          git fetch --force origin 'refs/tags/stable:refs/tags/stable' 2>/dev/null || true
+          if git rev-parse -q --verify refs/tags/stable >/dev/null \
+             && ! git merge-base --is-ancestor refs/tags/stable "$GITHUB_SHA"; then
+            echo "stable is at $(git rev-parse --short refs/tags/stable), newer than $GITHUB_SHA: left there"
+            exit 0
+          fi
+          git tag -f stable "$GITHUB_SHA"
+          git push -f origin refs/tags/stable
+          echo "stable is $(git rev-parse --short "$GITHUB_SHA")"

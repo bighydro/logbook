@@ -32,7 +32,7 @@ from datetime import datetime
 from html import escape
 from typing import TYPE_CHECKING, Any, NamedTuple
 
-from ..core import day_start, goals, machine, reading
+from ..core import day_start, goals, kept, machine, reading
 from ..core.chain import Line
 from ..core.export import parse_day
 from ..core.index import Index
@@ -44,6 +44,7 @@ if TYPE_CHECKING:  # the Site passes itself; serve imports this module, never th
 
 TRANSCRIPT, MESSAGE = "transcript", "message"
 SOURCES = {"claude-code": "Claude Code", "claude": "Claude", "telegram": "Telegram"}
+KEPT_FILE, KEPT_VERSION = "agents-sessions.json", 1  # which lines are a session's, by seq
 PAGE_DAYS = 14  # days of sessions a page; "earlier" is the next page
 SHOWN = 3  # the owner's turns shown before the rest fold
 CHARS = 280  # a turn shown longer than this is cut, and whole in a fold of its own; a folded turn is whole
@@ -175,13 +176,63 @@ class Standing(NamedTuple):
 def standing(lb: Logbook, tiers: Sequence[int] | None = None) -> Standing:
     with lb.index() as idx:
         retracted = retractions(idx.retractions())
-        transcripts = _standing(idx, TRANSCRIPT, tiers, retracted)
-        messages = _standing(idx, MESSAGE, tiers, retracted)
+        sessions = _session_seqs(lb, idx)
+        if sessions is None:  # a record that keeps nothing (`kept.path`): every line streamed
+            transcripts = _standing(idx, TRANSCRIPT, tiers, retracted)
+            messages = _standing(idx, MESSAGE, tiers, retracted)
+        else:
+            transcripts = _standing_of(idx, TRANSCRIPT, sessions[TRANSCRIPT], tiers, retracted)
+            messages = _standing_of(idx, MESSAGE, sessions[MESSAGE], tiers, retracted)
         goal_lines = [
             g for g in reading.crossing(idx.by_kind(goals.KIND), tiers) if str(g["id"]) not in retracted
         ]
         reviews = goals.review_lines(reading.crossing(idx.by_kind(goals.REVIEW), tiers), retracted)
     return Standing(transcripts, messages, goal_lines, reviews)
+
+
+def _session_seqs(lb: Logbook, idx: Index) -> dict[str, list[int]] | None:
+    """The seqs of the lines of each kind that are a session's (`is_session`, which the line alone
+    decides), kept beside the index (`KEPT_FILE`) and read on from where they stopped: only the lines
+    appended since are streamed. A chain written again under the kept seqs, or other code, reads every
+    line again; None for a record that keeps nothing."""
+    path = kept.path(lb, KEPT_FILE)
+    if path is None:
+        return None
+    stamp = kept.stamp(lb, str(KEPT_VERSION), kept.code_digest(__file__))
+    seq, head = idx.indexed()
+    held = kept.load(path)
+    found: dict[str, list[int]] = {TRANSCRIPT: [], MESSAGE: []}
+    since: int | None = None
+    ours = held is not None and held.get("version") == KEPT_VERSION and held.get("stamp") == stamp
+    if held is not None and ours and kept.read_on(idx, held, {}, ()):
+        try:
+            found = {kind: [int(n) for n in held["sessions"][kind]] for kind in found}
+            since = int(held["seq"])
+        except (KeyError, TypeError, ValueError):
+            found, since = {TRANSCRIPT: [], MESSAGE: []}, None
+    for kind, seqs in found.items():
+        seqs.extend(
+            int(line["seq"])
+            for line in idx.stream(kind, after_seq=since, through_seq=seq)
+            if is_session(line)
+        )
+    kept.save(path, {"version": KEPT_VERSION, "stamp": stamp, "seq": seq, "head": head, "sessions": found})
+    return found
+
+
+def _standing_of(
+    idx: Index, kind: str, seqs: Sequence[int], tiers: Sequence[int] | None, retracted: Collection[str]
+) -> list[Line]:
+    """`_standing` of the session lines at `seqs`, read by seq, in chain order."""
+    superseded = _superseded(idx, kind)
+    lines = idx.by_seqs(seqs)
+    return [
+        line
+        for n in sorted(lines)
+        if reading.crossing([line := lines[n]], tiers)
+        and str(line["id"]) not in retracted
+        and str(line["id"]) not in superseded
+    ]
 
 
 def read(

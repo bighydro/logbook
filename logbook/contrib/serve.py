@@ -110,18 +110,32 @@ that no model touched it (`NO_MODEL`): its rows are computed and a model's draft
 from __future__ import annotations
 
 import base64
+import contextlib
+import contextvars
 import email
+import faulthandler
 import functools
 import hashlib
+import http.client
 import ipaddress
 import json
 import math
+import os
 import re
 import secrets
+import select
+import signal
+import socket
 import socketserver
+import sys
 import tempfile
 import threading
+import time
+import traceback
 from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
+from concurrent.futures import CancelledError as FuturesCancelled
+from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FuturesTimeout
 from datetime import UTC, date, datetime, timedelta
 from email.utils import collapse_rfc2231_value
 from html import escape
@@ -133,6 +147,7 @@ from zoneinfo import ZoneInfo
 
 from ..core import (
     assets,
+    cancel,
     chapter,
     day_start,
     drafts,
@@ -168,6 +183,7 @@ from . import (
     gaps,
     ideas,
     journeys,
+    library_build,
     orgs,
     person_page,
     phone,
@@ -187,6 +203,14 @@ if TYPE_CHECKING:  # the review reads the adapters' phone rules: loaded by the P
 T = TypeVar("T")
 HOST = "127.0.0.1"  # the one host the server binds; anything else is refused
 PORT = 8765
+LIMIT_S = 15.0  # a page read longer than this is stopped and said so (`serve --limit`)
+RENDERS = 2  # pages read at once; the rest wait their turn, within their limit
+WATCH_S = 0.25  # how often a waiting request looks at its reading and its browser
+IDLE_S = 60.0  # a kept-alive connection idle this long is closed
+WATCH_EVERY_S = 30.0  # the server asks itself for its icon this often (`Watchdog`)
+SILENT_S = 5.0  # an answer slower than this is no answer
+STUCK_AFTER = 2  # this many in a row, and the server leaves for its service manager to start again
+STUCK_EXIT = 70  # EX_SOFTWARE: a non-zero exit, which launchd's KeepAlive and systemd's on-failure restart
 WINDOW_DAYS = 14  # `/days` without a window: the record's last fortnight
 HEAD_CHARS = 12
 CSP = "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'"
@@ -228,7 +252,12 @@ LINE_PATH = re.compile(r"^/line/([^/]+)$")  # one line as written, read-only, th
 PHOTO_PATH = re.compile(r"^/photo/([^/]+)$")  # a photo line's pixels from the attachment store, likewise
 CLOSE = "close"  # the Day page's anchor of Reflect and sign, where a write sends the owner back
 # pages the record's today moves too (this year, anniversaries, drift, the stale orgs and ideas): in the tag
-CLOCK_PAGES = ("/people", "/manifest", "/org/", "/ideas", "/idea/", "/goals")  # /goals: a goal goes past
+# /goals: a goal goes past; /world: its window ends on today, whatever the calendar holds after it
+CLOCK_PAGES = ("/people", "/manifest", "/org/", "/ideas", "/idea/", "/goals", "/world")
+TRIP_KINDS: tuple[str, ...] | None = (
+    trips.READ_KINDS
+)  # the lines a year's trips parse; the rest from the index
+SPILL_DAYS = 2  # a reading of days holds the night after the last and the morning after that
 ID_SHOWN = 4  # line ids an evidence row prints; the rest are counted
 PAGE_SIZE = 20  # clusters a page of the review queue; "more" is the next page
 SHOWN = 30  # an org's timeline rows shown before the rest fold
@@ -590,6 +619,19 @@ class Stale(Exception):
     not what the page showed; a 409, nothing written."""
 
 
+_READS: contextvars.ContextVar[Reads | None] = contextvars.ContextVar("reads", default=None)
+
+
+class Reads(NamedTuple):
+    """What a page was made of, when it says (`Site.reads`): the lines of the local days `first` to
+    `last`, and of `kinds` the lines of any day; the record's settings and who is who beside them. A
+    built page that says it is rendered again only when a line comes for those (`library_build`)."""
+
+    first: str
+    last: str
+    kinds: tuple[str, ...] = ()
+
+
 class Response(NamedTuple):
     status: int
     body: bytes
@@ -597,6 +639,7 @@ class Response(NamedTuple):
     etag: str | None = None  # a page of the record at its head: kept by the browser, asked again
     location: str | None = None  # a redirect's target
     csp: str = CSP  # the Places page names its one inline script; every other page allows none
+    reads: Reads | None = None  # what the page was made of, when it says; None: the whole record
 
     @property
     def headers(self) -> dict[str, str]:
@@ -641,6 +684,8 @@ class Site:
         footer: str | None = None,
         voice: Voice | None = None,
         with_drafts: bool = True,
+        library: library_build.Library | None = None,
+        on_act: Callable[[], None] | None = None,
     ):
         self.lb = lb
         self.airports = airports or Airports.load()
@@ -652,6 +697,10 @@ class Site:
         self.footer = footer
         self.voice = voice
         self.with_drafts = with_drafts  # False: no model's draft (pencil) on the Day (`export site`)
+        # the pages built ahead (`library_build`): a GET is answered from them when they hold it, and a
+        # page rendered here is added to them; None renders every page (the tests, `export site`)
+        self.library = library
+        self.on_act = on_act  # told after an act changed the record: the server's rebuild, in the background
         self._lock = threading.Lock()
         # the review queues are read (their tables built once) and acted on under it
         self._review_lock = threading.Lock()
@@ -687,17 +736,48 @@ class Site:
     def tz(self) -> ZoneInfo:
         return ZoneInfo(str(self.lb.meta["timezone"]))
 
-    def respond(self, path: str, query: str = "", if_none_match: str | None = None) -> Response:
-        """The page at `path`. `if_none_match` is the request's header: when it names the page's
-        tag, a 304 and nothing rendered. The tag is taken before the page is read, so a head that
-        moves in between makes the tag older than the page, never newer: the next reload reads it
-        again rather than keeping a stale page."""
+    def quick(self, path: str, query: str = "", if_none_match: str | None = None) -> Response | None:
+        """The answer that reads nothing of the record, or None: the icon, a form's address asked with
+        a GET, and a page the build holds (`_built`). The server answers these on the request's own
+        thread; everything else is a reading, under the limit (`Handler`)."""
         if path == "/favicon.ico":
             return Response(204, b"", "image/x-icon")
         if path in WRITE_PATHS or path in LINE_ACTS:
             return self._error(405, f"{path} takes the forms of the server's own pages (POST), nothing else")
         if DAY_ACT.match(path) is not None:
             return self._error(405, f"{path} takes the Day page's forms (POST), nothing else")
+        if self.library is not None and (built := self._built(path, query, if_none_match)) is not None:
+            return built  # what the build wrote: no index opened, nothing read
+        return None
+
+    def still_reading(self, path: str, query: str, limit_s: float) -> Response:
+        """The page a reading over the limit is answered with (503): what happened and when the page
+        will be there, in one sentence each, never a spinner. With the build, the page is being
+        built in the background; without it (`--live`), the reading was stopped."""
+        target = path + (f"?{query}" if query else "")
+        again = f'<a href="{escape(target)}">this page again</a>'
+        if self.library is not None:
+            said = (
+                f"This page reads more of the record than the server reads while you wait ({limit_s:g} s)."
+                " It is being built now, in the background, and will be here as a page of its own in a"
+                f" few minutes; every other door opens as usual. Try {again} then."
+            )
+        else:
+            said = (
+                f"This page took longer than {limit_s:g} s to read, so the reading was stopped and this"
+                " machine is free for the other pages. Without `--live`, `logbook serve` builds every"
+                f" page ahead and answers it at once. Try {again}, or the front page."
+            )
+        body = f'<h1>Still reading</h1>\n<p class="busy">{said}</p>\n<p><a href="/">The front page</a></p>\n'
+        return Response(503, self.document("still reading", body).encode("utf-8"))
+
+    def respond(self, path: str, query: str = "", if_none_match: str | None = None) -> Response:
+        """The page at `path`. `if_none_match` is the request's header: when it names the page's
+        tag, a 304 and nothing rendered. The tag is taken before the page is read, so a head that
+        moves in between makes the tag older than the page, never newer: the next reload reads it
+        again rather than keeping a stale page."""
+        if (found := self.quick(path, query, if_none_match)) is not None:
+            return found
         meta = self.current()
         self._add_indexes(str(meta.get("head")))
         if path == TODAY:
@@ -713,10 +793,14 @@ class Site:
         csp = PLACES_CSP if path == "/places" else WORLD_CSP if path == "/world" else CSP
         if DAY_PATH.match(path) is not None:
             csp = DAY_CSP if self._records() else DAY_IMAGES
+        said = _READS.set(None)
         try:
-            response = Response(200, self._page(path, params).encode("utf-8"), etag=etag, csp=csp)
+            rendered = self._page(path, params).encode("utf-8")
+            response = Response(200, rendered, etag=etag, csp=csp, reads=_READS.get())
             if etag is not None:
                 self._keep(etag, response)
+            if self.library is not None:
+                self._build_too(path, query, meta, response)
             return response
         except NotFound as e:
             return self._error(404, str(e))
@@ -741,8 +825,79 @@ class Site:
             return self._error(500, str(e))
         except ValueError as e:  # a day that is not one, a window that runs backwards, a year that is not
             return self._error(400, str(e))
+        finally:
+            _READS.reset(said)
+
+    def reads(self, first: str, last: str, kinds: Sequence[str] = ()) -> None:
+        """Say that the page being rendered is made of the lines of the local days `first` to `last`, of
+        `kinds` those of any day, and the settings and who is who (`Reads`): its response carries it,
+        and the build renders it again only when a line comes for those. A page that says nothing is
+        made of the whole record."""
+        _READS.set(Reads(first, last, tuple(kinds)))
+
+    def _built(self, path: str, query: str, if_none_match: str | None) -> Response | None:
+        """The page the build holds at this address, as it was written; None when it holds none, or
+        the page is one the server always renders (`library_build.live`: today's Day, `/today`)."""
+        assert self.library is not None
+        try:
+            today = day_start.of(self.lb.meta).today(self.now()).isoformat()
+        except (day_start.DayStartError, KeyError, ValueError):
+            return None  # the page that says why is rendered
+        if library_build.live(path, today):
+            return None
+        found = self.library.page(library_build.address(path, query))
+        if found is None:
+            return None
+        page, body = found
+        if if_none_match is not None and _matches(if_none_match, page.etag):
+            return Response(304, b"", etag=page.etag)
+        csp = page.csp if page.csp is not None else CSP
+        return Response(page.status, body, etag=page.etag, location=page.location, csp=csp)
+
+    def _build_too(self, path: str, query: str, meta: Mapping[str, Any], response: Response) -> None:
+        """A page the build did not hold, rendered for this request, added to it (`asked`): the next
+        visit is a file. Never today's Day, and never a page the clock alone moves faster than a build."""
+        assert self.library is not None
+        try:
+            today = day_start.of(meta).today(self.now()).isoformat()
+        except (day_start.DayStartError, KeyError, ValueError):
+            return
+        if library_build.live(path, today):
+            return
+        target, head = library_build.address(path, query), str(meta.get("head") or "")
+        with contextlib.suppress(OSError):  # a full disk or a cache folder gone: the page was answered
+            self.library.put(target, response, head, asked=True)
+
+    def _after_act(self, path: str, form: Mapping[str, str], response: Response) -> None:
+        """An act changed the record: the built pages it changed are dropped at once (the server renders
+        them until the build writes them again, so the owner sees what was written), and the rebuild is
+        asked for (`on_act`). Which pages: the page the act returns to and the front page; refused
+        because the page was older than the record (409), the page the form was on, so the reload is
+        the page as it stands (`library_build.touched`)."""
+        if self.library is None:
+            return
+        back = urlsplit(response.location or "").path
+        self.library.drop(library_build.touched(self.library.pages(), path, response.status, back, form))
+        if self.on_act is not None and response.status < 400:
+            self.on_act()
 
     def write(
+        self,
+        path: str,
+        form: Mapping[str, str],
+        client: str,
+        origin: str | None,
+        upload: Upload | None = None,
+        *,
+        asked: phone.Asked | None = None,
+    ) -> Response:
+        """`_write`, and the built pages it changed dropped when it wrote (`_after_act`)."""
+        response = self._write(path, form, client, origin, upload, asked=asked)
+        with contextlib.suppress(OSError):  # the act is written; a cache that cannot be told is the build's
+            self._after_act(path, form, response)
+        return response
+
+    def _write(
         self,
         path: str,
         form: Mapping[str, str],
@@ -1172,14 +1327,18 @@ class Site:
         """`logbook.json` as it is now. When its head has moved since the last request (a sync
         appended while the server runs), the index is brought to the new head here, once, under a
         lock, before any page reads it: the requests that arrive together wait for that one rebuild
-        instead of each starting its own on the same file."""
+        instead of each starting its own on the same file. While a writer is between `logbook.json`
+        and the index, the index is read as it stands and never rebuilt (`Logbook.index`): the meta
+        returned then names the last line the index holds, so a page's tag names what it read."""
         meta = self.lb.meta
         head = str(meta.get("head"))
         if head != self._head:
             with self._lock:
                 if head != self._head:
-                    with self.lb.index():
-                        pass
+                    with self.lb.index() as idx:
+                        seq, indexed = idx.indexed()
+                    if indexed != head:  # a writer between logbook.json and the index: what it holds
+                        return {**meta, "seq": seq, "head": indexed}
                     self._head = head
                     with self._kept_lock:  # every kept page names the old head in its tag
                         self._kept.clear()
@@ -2474,7 +2633,11 @@ class Site:
         if last < first:
             parts.append(f"<p>no days in {year}: the record runs {whole[0]} {EN_DASH} {whole[1]}</p>\n")
             return self.document(f"trips {year}", "".join(parts), style=TABLES_STYLE)
-        rd = reading.read(self.lb, first, last, self.airports, self.tiers)
+        rd = self.shared(  # the door and its year's page are one reading
+            ("trips", first, last),
+            lambda: reading.read(self.lb, first, last, self.airports, self.tiers, TRIP_KINDS),
+        )
+        self.reads(first, (date.fromisoformat(last) + timedelta(days=SPILL_DAYS)).isoformat())
         found, warning = trips.trips(rd)
         if warning:
             parts.append(f"<p>{escape(warning)}</p>\n")
@@ -2638,7 +2801,13 @@ class Site:
         """The journeys that began in the year (default the record's last), the latest first, each
         a row: its name or dates linking its page, the bounds, the nights away, the places, the
         canonical people, the photos, the draft folded, and the evidence folded."""
-        shelf = journeys.shelf(self.lb, year, self.airports, self.tiers)
+        located = reading.record_days(self.lb, "location")
+        this = year or (located[1][:4] if located is not None else None)  # the door is its year's page
+        shelf = self.shared(
+            ("journeys", this), lambda: journeys.shelf(self.lb, this, self.airports, self.tiers)
+        )
+        if shelf.reads is not None:  # its days, and a draft of any day may name one of its journeys
+            self.reads(*shelf.reads, kinds=(drafts.KIND,))
         if shelf.year is None:
             return self.document("journeys", f"<h1>Journeys</h1>\n<p>{escape(shelf.warning or '')}</p>\n")
         links = DOT.join(
@@ -3953,7 +4122,7 @@ class Site:
         """`logbook export world`'s page, read as the export reads it by default (the `world` ceiling of
         the policy, the record's days or `from` and `to`): the same JSON, the same script, the
         Library's navigation above it and the policy in the header, not in the page."""
-        found = world.library_page(self.lb, first, last, self.nav, self.airports)
+        found = world.library_page(self.lb, first, last, self.nav, self.airports, self._today_of())
         if found is None:
             return self.document(
                 "world", "<h1>The world</h1>\n<p>the record has no day yet: nothing to draw</p>\n"
@@ -3964,14 +4133,10 @@ class Site:
         """`Index.activity` of the record as it stands, read once per window: the page moves with the
         clock, what it counts only with the head."""
 
-        def read() -> list[dict[str, Any]]:
-            with self.lb.index() as idx:
-                return idx.activity(first, last)
-
-        return self.shared(("activity", first, last), read)
+        return self.shared(("activity", first, last), lambda: gaps.activity_of(self.lb, first, last))
 
     def page_gaps(self, since: str | None) -> str:
-        data = gaps.report(self.lb, since=since, activity=self._activity)
+        data = gaps.report(self.lb, since=since, activity=self._activity, instant=self.now())
         tz = ZoneInfo(data["timezone"])
         body = (
             "<h1>Gaps <small>where each source went quiet</small></h1>\n"
@@ -4952,6 +5117,7 @@ class Handler(BaseHTTPRequestHandler):
     server_version = "logbook"
     sys_version = ""
     protocol_version = "HTTP/1.1"
+    timeout = IDLE_S  # a connection that sends nothing for this long is closed: no thread waits on it forever
 
     def do_GET(self) -> None:
         self._answer(body=True)
@@ -4992,18 +5158,70 @@ class Handler(BaseHTTPRequestHandler):
         self._send(response, body=True)
 
     def _answer(self, body: bool) -> None:
+        """A GET: what reads nothing (`Site.quick`: a built page) on this thread at once; a reading in
+        the server's pool (`Server.read`), at most `renders` at a time, under the limit. Over it, the
+        reading is stopped and the page is the one that says so (`Site.still_reading`), with the page
+        built in the background when the server builds; a browser that leaves stops its reading, and
+        is sent nothing."""
         assert isinstance(self.server, Server)
+        server = self.server
         path, _, query = self.path.partition("?")
-        response = self.server.site.respond(path, query, self.headers.get("If-None-Match"))
+        inm = self.headers.get("If-None-Match")
+        quick = server.site.quick(path, query, inm)
+        if quick is not None:
+            self._send(quick, body)
+            return
+        token = cancel.Token()
+        try:
+            future = server.pool.submit(server.read, path, query, inm, token)
+        except RuntimeError:  # the server is closing: no reading starts
+            self.close_connection = True
+            return
+        deadline = time.monotonic() + server.limit_s
+        while True:
+            try:
+                response = future.result(timeout=WATCH_S)
+                break
+            except FuturesTimeout:
+                pass
+            except FuturesCancelled:  # the server closed with the reading still waiting its turn
+                self.close_connection = True
+                return
+            if self._gone():
+                token.cancel("the browser left")
+                self.close_connection = True
+                return
+            if time.monotonic() >= deadline:
+                token.cancel(f"over the limit of {server.limit_s:g} s")
+                if server.rebuilder is not None:
+                    server.rebuilder.ask(path + (f"?{query}" if query else ""))
+                response = server.site.still_reading(path, query, server.limit_s)
+                break
+        if response is None:  # stopped before it was read: the limit, answered above, or a closing server
+            response = server.site.still_reading(path, query, server.limit_s)
         self._send(response, body)
 
+    def _gone(self) -> bool:
+        """Whether the browser closed the connection while its page is read: readable, and nothing to
+        read (a request pipelined behind this one is left where it is)."""
+        try:
+            readable, _, _ = select.select([self.connection], [], [], 0)
+            return bool(readable) and self.connection.recv(1, socket.MSG_PEEK) == b""
+        except (OSError, ValueError):
+            return True
+
     def _send(self, response: Response, body: bool) -> None:
-        self.send_response(response.status)
-        for name, value in response.headers.items():
-            self.send_header(name, value)
-        self.end_headers()
-        if body and response.status not in (204, 304):
-            self.wfile.write(response.body)
+        """The answer, or nothing when the browser has gone: a broken pipe is the browser's leaving,
+        never a traceback in the log."""
+        try:
+            self.send_response(response.status)
+            for name, value in response.headers.items():
+                self.send_header(name, value)
+            self.end_headers()
+            if body and response.status not in (204, 304):
+                self.wfile.write(response.body)
+        except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
+            self.close_connection = True
 
 
 class Server(ThreadingHTTPServer):
@@ -5012,9 +5230,31 @@ class Server(ThreadingHTTPServer):
 
     daemon_threads = True
 
-    def __init__(self, port: int, site: Site):
+    def __init__(self, port: int, site: Site, limit_s: float = LIMIT_S, renders: int = RENDERS):
         self.site = site
+        self.rebuilder: library_build.Rebuilder | None = None
+        self.limit_s = limit_s
+        # the readings: at most `renders` at once, however many pages are asked for together, so a
+        # whole menu opened at once never holds the record in memory a dozen times over
+        self.pool = ThreadPoolExecutor(max_workers=renders, thread_name_prefix="logbook-read")
         super().__init__((HOST, port), Handler)
+
+    def read(self, path: str, query: str, if_none_match: str | None, token: cancel.Token) -> Response | None:
+        """One page read in the pool under `token`; None when it was stopped (`cancel.Cancelled`)
+        before or while it was read."""
+        if token.cancelled:
+            return None
+        try:
+            with cancel.scope(token):
+                return self.site.respond(path, query, if_none_match)
+        except cancel.Cancelled:
+            return None
+
+    def server_close(self) -> None:
+        if self.rebuilder is not None:
+            self.rebuilder.stop()
+        self.pool.shutdown(wait=False, cancel_futures=True)
+        super().server_close()
 
     def server_bind(self) -> None:
         socketserver.TCPServer.server_bind(self)
@@ -5023,21 +5263,105 @@ class Server(ThreadingHTTPServer):
         self.server_port = int(port)
 
 
+def stacks() -> None:
+    """Every thread's stack to stderr, the log of a service: `faulthandler`'s, which needs no lock and
+    no allocation; `traceback`'s when stderr has no file under it."""
+    try:
+        faulthandler.dump_traceback(file=sys.stderr, all_threads=True)
+    except (AttributeError, ValueError, OSError):
+        names = {t.ident: t.name for t in threading.enumerate()}
+        for ident, frame in sys._current_frames().items():
+            print(f"thread {names.get(ident, ident)}:", file=sys.stderr)
+            print("".join(traceback.format_stack(frame)), file=sys.stderr)
+
+
+class Watchdog:
+    """The server asking itself, every `WATCH_EVERY_S`, for `/favicon.ico` (an empty 204 that reads
+    nothing of the record), as `serve --status` asks it from outside. `STUCK_AFTER` silences in a row
+    (no answer in `SILENT_S`) and it writes every thread's stack to the log, so the next hang says why,
+    then `stuck`: by default the process exits (`STUCK_EXIT`), and the service manager that runs it
+    starts it again. A process the system paused answers nothing and runs nothing, this thread
+    included: the scheduled run restarts that one (`sync --scheduled`)."""
+
+    def __init__(
+        self,
+        port: int,
+        stuck: Callable[[], None] | None = None,
+        every_s: float = WATCH_EVERY_S,
+        silent_s: float = SILENT_S,
+        after: int = STUCK_AFTER,
+        say: Callable[[str], None] = lambda text: print(text, file=sys.stderr, flush=True),
+    ):
+        self.port, self.every_s, self.silent_s, self.after, self.say = port, every_s, silent_s, after, say
+        self.stuck = stuck or self._leave
+        self._stop = threading.Event()
+        self._thread = threading.Thread(target=self._run, name="logbook-watchdog", daemon=True)
+        self.misses = 0
+
+    def start(self) -> Watchdog:
+        self._thread.start()
+        return self
+
+    def stop(self) -> None:
+        self._stop.set()
+
+    def answers(self) -> bool:
+        connection = http.client.HTTPConnection(HOST, self.port, timeout=self.silent_s)
+        try:
+            connection.request("HEAD", "/favicon.ico")
+            return connection.getresponse().status == 204
+        except (OSError, http.client.HTTPException):
+            return False
+        finally:
+            connection.close()
+
+    def _run(self) -> None:
+        while not self._stop.wait(self.every_s):
+            self.misses = 0 if self.answers() else self.misses + 1
+            if self.misses >= self.after:
+                self.say(
+                    f"serve: no answer from itself in {self.silent_s:g} s, {self.misses} times running;"
+                    " every thread's stack follows"
+                )
+                stacks()
+                self.stuck()
+                return
+
+    def _leave(self) -> None:
+        self.say("serve: leaving, for the service manager to start it again")
+        sys.stderr.flush()
+        os._exit(STUCK_EXIT)
+
+
 def make_server(
     lb: Logbook,
     host: str = HOST,
     port: int = PORT,
     airports: Airports | None = None,
     voice: Voice | None = None,
+    built: bool = False,
+    say: Callable[[str], None] | None = None,
+    limit_s: float = LIMIT_S,
 ) -> Server:
     """The server, bound and ready to `serve_forever`. `HostError` for any host but 127.0.0.1,
-    before a socket is opened; OSError when the port is taken. `voice`: how a Day hears a recording."""
+    before a socket is opened; OSError when the port is taken. `voice`: how a Day hears a recording.
+    `built`: answer from the pages built ahead (`library_build`; `logbook serve` does by default),
+    rebuilt in the background after every act; False renders every page as it is asked for."""
     if host != HOST:
         raise HostError(
             f"serve binds {HOST} only, never {host!r}: the record is read from this machine, "
             "and nothing here leaves it"
         )
-    return Server(port, Site(lb, airports, voice=voice))
+    if not built:
+        return Server(port, Site(lb, airports, voice=voice), limit_s)
+    library = library_build.Library(lb)
+    site = Site(lb, airports, voice=voice, library=library)
+    server = Server(port, site, limit_s)
+    server.rebuilder = library_build.Rebuilder(lb, site, library, say).start()
+    site.on_act = server.rebuilder.kick
+    if not library.built():
+        server.rebuilder.kick()  # never built on this machine: the first build starts with the server
+    return server
 
 
 def serve(
@@ -5047,9 +5371,16 @@ def serve(
     airports: Airports | None = None,
     announce: Callable[[str], None] = print,
     voice: Voice | None = None,
+    built: bool = True,
+    limit_s: float = LIMIT_S,
 ) -> None:
-    """Serve the record until Ctrl-C. `HostError` and OSError as `make_server`."""
-    server = make_server(lb, host, port, airports, voice)
+    """Serve the record until Ctrl-C, from the pages built ahead unless `built` is False (`--live`),
+    a page read longer than `limit_s` stopped and said so. `HostError` and OSError as `make_server`."""
+    server = make_server(lb, host, port, airports, voice, built=built, say=announce, limit_s=limit_s)
+    if sys.platform != "win32":  # `kill -USR1 <pid>`: every stack to the log, the server running on
+        with contextlib.suppress(AttributeError, ValueError, OSError):  # a stderr with no file under it
+            faulthandler.register(signal.SIGUSR1, file=sys.stderr, all_threads=True)
+    watchdog = Watchdog(int(server.server_address[1])).start()
     try:
         bound = server.server_address[1]
         announce(
@@ -5060,6 +5391,7 @@ def serve(
     except KeyboardInterrupt:
         announce("stopped")
     finally:
+        watchdog.stop()
         server.server_close()
 
 

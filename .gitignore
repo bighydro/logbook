@@ -30,3 +30,6 @@ state/
 # a disposable locator for the files, rebuilt whenever it is missing or stale (ADR 0007)
 index.sqlite
 .hypothesis/
+
+# the scale harness's synthetic record (tests/perf/run.py): millions of lines, rebuilt at will, never committed
+tests/perf/.record/
