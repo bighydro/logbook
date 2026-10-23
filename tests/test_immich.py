@@ -91,6 +91,7 @@ def test_registry_lists_immich_and_dawarich_as_live_adapters():
         "notion",
         "github",
         "weather",
+        "heard",  # RFC 0046: loaded from `adapters.UNLISTED`, after the table
     ]
     assert adapters.live("immich") is immich
     assert adapters.live("nope") is None

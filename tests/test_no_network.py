@@ -173,6 +173,8 @@ READERS: tuple[tuple[str, ...], ...] = (
     ("doctor", "--packet", "--out", OUT),
     ("search", "cabin"),
     ("search", "cabin", "--json"),
+    ("show", "heard", "--day", "2026-06-08"),  # RFC 0046: the texts `sync heard` stored, none in the demo
+    ("show", "heard", "--since", "2026-06-06", "--until", "2026-06-12", "--json"),
     ("import", "inbox", "list"),
     ("import", "inbox", "list", "--json"),
     ("import", "inbox", "clean", "--delete", "--dry-run"),
