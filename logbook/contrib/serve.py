@@ -253,6 +253,9 @@ PHOTO_PATH = re.compile(r"^/photo/([^/]+)$")  # a photo line's pixels from the a
 CLOSE = "close"  # the Day page's anchor of Reflect and sign, where a write sends the owner back
 # pages the record's today moves too (this year, anniversaries, drift, the stale orgs and ideas): in the tag
 CLOCK_PAGES = ("/people", "/manifest", "/org/", "/ideas", "/idea/", "/goals")  # /goals: a goal goes past
+TRIP_KINDS: tuple[str, ...] | None = (
+    trips.READ_KINDS
+)  # the lines a year's trips parse; the rest from the index
 SPILL_DAYS = 2  # a reading of days holds the night after the last and the morning after that
 ID_SHOWN = 4  # line ids an evidence row prints; the rest are counted
 PAGE_SIZE = 20  # clusters a page of the review queue; "more" is the next page
@@ -2629,7 +2632,7 @@ class Site:
         if last < first:
             parts.append(f"<p>no days in {year}: the record runs {whole[0]} {EN_DASH} {whole[1]}</p>\n")
             return self.document(f"trips {year}", "".join(parts), style=TABLES_STYLE)
-        rd = reading.read(self.lb, first, last, self.airports, self.tiers)
+        rd = reading.read(self.lb, first, last, self.airports, self.tiers, TRIP_KINDS)
         self.reads(first, (date.fromisoformat(last) + timedelta(days=SPILL_DAYS)).isoformat())
         found, warning = trips.trips(rd)
         if warning:

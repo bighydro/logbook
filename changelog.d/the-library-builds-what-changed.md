@@ -22,3 +22,5 @@
   counts the lines it holds back in one query: the same page, in a third of the time.
 - Gaps keeps every source's activity beside the index and adds the lines since; of two equally long
   silences it names the first.
+- A year's trips and journeys read only the lines a trip is made of (flights, weather, events,
+  transcripts, notes and photos) and the stays from the index: the same pages, read faster.

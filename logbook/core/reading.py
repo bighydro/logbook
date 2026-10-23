@@ -79,6 +79,8 @@ class Reading:
     # night's start, RFC 0036): not one of `nights`, which are the window's days', and empty at midnight
     nights_after: list[stays.Night] = field(default_factory=list)
     points: list[stays.Point] | None = None  # read from the index (`read(kinds=)`): every subject's points
+    kinds: tuple[str, ...] | None = None  # the kinds `lines` holds (`read(kinds=)`); None: every kind
+    window: tuple[datetime, datetime] | None = None  # the instants the reading holds, its start and end
 
     @property
     def voice_gate(self) -> tuple[int, ...] | None:
@@ -108,6 +110,25 @@ class Reading:
     def day_of(self, line: Line) -> str:
         """The local day of a line under the record's `day_start`."""
         return self.day_start.day_of(str(line["at"]))
+
+    def lines_of(self, first: str, last: str) -> list[Line]:
+        """The window's standing lines of every kind whose local day is in `[first, last]`, in chain
+        order: from `lines` when it holds every kind; else read from the index for those days alone,
+        through the reading's gate, as `read` holds them."""
+        if self.kinds is None or self.window is None:
+            return [line for line in self.lines if first <= self.day_of(line) <= last]
+        start, end = self.window
+        with self.lb.index() as idx:
+            found = crossing((line for _day, line in idx.between(first, last)), self.tiers)
+        kept = [
+            line
+            for line in found
+            if line["kind"] != RETRACTION
+            and str(line["id"]) not in self.retracted
+            and ((at := stays.instant(line["at"])) is not None and start <= at < end)
+        ]
+        kept.sort(key=lambda line: int(line["seq"]))
+        return [line for line in kept if first <= self.day_of(line) <= last]
 
     def of_kind(self, kind: str) -> list[Line]:
         return [line for line in self.lines if line.get("kind") == kind]
@@ -209,6 +230,7 @@ def read(
         if kinds is None:
             found = crossing((line for _day, line in idx.between(first, spill)), tiers)
         else:
+            kinds = tuple(dict.fromkeys(kinds))  # each once
             found = crossing((line for kind in kinds for line in idx.of_kind(kind, first, spill)), tiers)
             tracks, evidence = _tracked(idx, first, spill, start, end, tiers)
             points = [p for track in tracks.values() for p in track if p.at < end]
@@ -263,6 +285,8 @@ def read(
         tiers=None if tiers is None else tuple(int(t) for t in tiers),
         nights_after=nights_after,
         points=points,
+        kinds=None if kinds is None else tuple(kinds),
+        window=(start, end),
     )
 
 

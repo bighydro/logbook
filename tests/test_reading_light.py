@@ -133,3 +133,36 @@ def test_the_world_counts_every_line_of_its_window_from_the_index(tmp_path: Path
         dict(sorted(by_kind.items())),
         dict(sorted(held.items())),
     )
+
+
+def test_a_light_reading_s_lines_of_some_days_are_the_full_reading_s(demo_lb: Logbook) -> None:
+    for tiers in (None, (1,)):
+        full = reading.read(demo_lb, "2026-06-01", "2026-06-30", tiers=tiers)
+        light = reading.read(demo_lb, "2026-06-01", "2026-06-30", tiers=tiers, kinds=KINDS)
+        for first, last in (
+            ("2026-06-01", "2026-06-03"),
+            ("2026-06-12", "2026-06-12"),
+            ("2026-06-28", "2026-07-02"),
+        ):
+            assert light.lines_of(first, last) == full.lines_of(first, last)
+
+
+def test_the_trips_and_the_journeys_from_a_light_reading_are_the_full_one_s(
+    demo_lb: Logbook, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from datetime import UTC, datetime
+    from unittest import mock
+
+    from world_record import world_record
+
+    from logbook.contrib import journeys, serve
+
+    for lb in (demo_lb, world_record(tmp_path, monkeypatch)):
+        site = serve.Site(lb, now=lambda: datetime(2026, 8, 1, 9, 0, tzinfo=UTC))
+        years = sorted({d[:4] for d in reading.record_days(lb) or ()})
+        pages = [("/trips", f"year={y}") for y in years] + [("/journeys", f"year={y}") for y in years]
+        light = [site.respond(path, query).body for path, query in pages]
+        with mock.patch.object(serve, "TRIP_KINDS", None), mock.patch.object(journeys, "READ_KINDS", None):
+            full = [serve.Site(lb, now=site.now).respond(path, query).body for path, query in pages]
+        assert light == full
+        assert any(b"night" in body for body in light), "the pages hold trips"
