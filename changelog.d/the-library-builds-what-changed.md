@@ -7,3 +7,5 @@
   every line: on two million lines a person's page reads in seconds rather than minutes. A
   resolution, a retraction, a corrected line, a backfill or a changed setting reads the whole record
   again, as before.
+- The world keeps each year before the current one beside the index and reads only the current
+  year again, unless a line comes for an earlier year's days.
