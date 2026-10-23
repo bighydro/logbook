@@ -340,8 +340,39 @@ def voices(drafts: list[Draft], rng: random.Random) -> None:
     )  # fmt: skip
 
 
+def open_ends(drafts: list[Draft], rng: random.Random) -> None:
+    """Every span the record holds with one end unknown (#344's crash, `_instant(None)`): each line with
+    an `end` written with `end` null (SPEC §2: unknown), a passage left open (RFC 0020 rule 6); every
+    flight without its arrival, every other one without its departure too (`at` stays: the envelope
+    requires it); and the owner's track silent from the first flight's departure to the end of its
+    day, so the stay before it has no point after it and the day no arrival."""
+    flights = sorted((d for d in drafts if d["kind"] == "flight"), key=lambda d: str(d["at"]))
+    for n, f in enumerate(flights):
+        for key in (
+            "actual_arrival",
+            "scheduled_arrival",
+            *(("actual_departure", "scheduled_departure") * (n % 2)),
+        ):
+            f["payload"].pop(key, None)
+    for d in drafts:
+        if d.get("end") is not None:
+            d["end"] = None
+            if d["payload"].get("mode") == "passage":
+                d["payload"].setdefault("extra", {})["open"] = True
+    if flights:
+        gone, day = str(flights[0]["at"]), local_date(str(flights[0]["at"]), demo.TZ)
+        drafts[:] = [
+            d
+            for d in drafts
+            if not (
+                d["kind"] == "location" and str(d["at"]) >= gone and local_date(str(d["at"]), demo.TZ) == day
+            )
+        ]
+
+
 MUTATIONS: dict[str, Mutation | None] = {
     "goals-and-chapters": goals_and_chapters,
+    "open-ends": open_ends,
     "voices": voices,
     "optional-fields": drop_optional_fields,
     "owner-acts": owner_acts,
