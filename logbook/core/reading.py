@@ -78,6 +78,9 @@ class Reading:
     # the night after the last day when it is not the last day's own (a day that begins at or after the
     # night's start, RFC 0036): not one of `nights`, which are the window's days', and empty at midnight
     nights_after: list[stays.Night] = field(default_factory=list)
+    points: list[stays.Point] | None = None  # read from the index (`read(kinds=)`): every subject's points
+    kinds: tuple[str, ...] | None = None  # the kinds `lines` holds (`read(kinds=)`); None: every kind
+    window: tuple[datetime, datetime] | None = None  # the instants the reading holds, its start and end
 
     @property
     def voice_gate(self) -> tuple[int, ...] | None:
@@ -107,6 +110,25 @@ class Reading:
     def day_of(self, line: Line) -> str:
         """The local day of a line under the record's `day_start`."""
         return self.day_start.day_of(str(line["at"]))
+
+    def lines_of(self, first: str, last: str) -> list[Line]:
+        """The window's standing lines of every kind whose local day is in `[first, last]`, in chain
+        order: from `lines` when it holds every kind; else read from the index for those days alone,
+        through the reading's gate, as `read` holds them."""
+        if self.kinds is None or self.window is None:
+            return [line for line in self.lines if first <= self.day_of(line) <= last]
+        start, end = self.window
+        with self.lb.index() as idx:
+            found = crossing((line for _day, line in idx.between(first, last)), self.tiers)
+        kept = [
+            line
+            for line in found
+            if line["kind"] != RETRACTION
+            and str(line["id"]) not in self.retracted
+            and ((at := stays.instant(line["at"])) is not None and start <= at < end)
+        ]
+        kept.sort(key=lambda line: int(line["seq"]))
+        return [line for line in kept if first <= self.day_of(line) <= last]
 
     def of_kind(self, kind: str) -> list[Line]:
         return [line for line in self.lines if line.get("kind") == kind]
@@ -166,7 +188,7 @@ def record_span(lb: Logbook) -> tuple[str, str] | None:
     own bookkeeping (`BOOKKEEPING`) — so that an export's run does not move the window of the next
     (`export site`, `export world`). None when the record has no such line."""
     with lb.index() as idx:
-        spans = [idx.span(str(row["kind"])) for row in idx.kinds() if row["kind"] not in BOOKKEEPING]
+        spans = [idx.span(kind) for kind in idx.kind_names() if kind not in BOOKKEEPING]
     found = [span for span in spans if span is not None]
     if not found:
         return None
@@ -187,10 +209,14 @@ def read(
     last: str,
     airports: Airports | None = None,
     tiers: Sequence[int] | None = None,
+    kinds: Sequence[str] | None = None,
 ) -> Reading:
     """The reading of `[first, last]` (local days, inclusive); through the gate `tiers` when given
     (the module's docstring). Raises `stays.SettingsError` when the settings, the places or the
-    assets file is not what it should be. The settings file is never written here."""
+    assets file is not what it should be. The settings file is never written here. With `kinds`, the
+    reading of a reader that needs only those lines (the world's): its lines are those of `kinds`
+    alone, and the stays are derived from the index's own columns, every subject's points and the
+    owner's evidence, as from the lines (`_tracked`; `points` holds the window's points)."""
     bounds = day_start.of(lb.meta)  # DayStartError for a boundary this reader cannot parse (RFC 0036)
     tz = bounds.zone
     settings = stays.read_settings(lb.root)
@@ -199,8 +225,15 @@ def read(
     airports = airports or Airports.load()
     days = day_range(first, last)
     start, end, spill, nights_of = _window(bounds, first, last, settings)
+    points: list[stays.Point] | None = None
     with lb.index() as idx:
-        found = crossing((line for _day, line in idx.between(first, spill)), tiers)
+        if kinds is None:
+            found = crossing((line for _day, line in idx.between(first, spill)), tiers)
+        else:
+            kinds = tuple(dict.fromkeys(kinds))  # each once
+            found = crossing((line for kind in kinds for line in idx.of_kind(kind, first, spill)), tiers)
+            tracks, evidence = _tracked(idx, first, spill, start, end, tiers)
+            points = [p for track in tracks.values() for p in track if p.at < end]
         marks = idx.retractions()  # from every file: a retraction applies wherever its line is
         resolutions = idx.resolutions()
     retracted = retractions(marks)
@@ -211,15 +244,14 @@ def read(
         and ((at := stays.instant(line["at"])) is not None and start <= at < end)
     ]
     window.sort(key=lambda line: int(line["seq"]))
-    following = _first_points_after(found, end)
-    derived = stays.derive(
-        [*window, *following, *marks],
-        settings,
-        known,
-        {k: v.kind for k, v in registered.items()},
-        str(tz),
-        airports,
-    )
+    assets_kinds = {k: v.kind for k, v in registered.items()}
+    if kinds is None:
+        following = _first_points_after(found, end)
+        derived = stays.derive(
+            [*window, *following, *marks], settings, known, assets_kinds, str(tz), airports
+        )
+    else:
+        derived = stays.derive_tracks(tracks, evidence, settings, known, assets_kinds, str(tz), airports)
     night = stays.Nights(derived.segments, tz, settings, known).of  # the stays folded once, not once a day
     nights = [night(day) for day in days]
     nights_after = [night(day) for day in nights_of if day > last]
@@ -252,6 +284,9 @@ def read(
         retracted=retracted,
         tiers=None if tiers is None else tuple(int(t) for t in tiers),
         nights_after=nights_after,
+        points=points,
+        kinds=None if kinds is None else tuple(kinds),
+        window=(start, end),
     )
 
 
@@ -369,20 +404,22 @@ def _evidence(rows: list[EvidenceRow], start: datetime, end: datetime) -> list[s
     return [e for e in found if start <= e.at < end]
 
 
-def _somewhere(idx: Index, first: str, last: str, retracted: frozenset[str]) -> list[EvidenceRow]:
+def _somewhere(
+    idx: Index, first: str, last: str, retracted: frozenset[str], tiers: Sequence[int] | None = None
+) -> list[EvidenceRow]:
     """The evidence rows of [first, last] that promote, as `stays.derive` takes them from the lines:
     every row of the evidence kinds from the index's columns, less the events that happened nowhere
     (`stays.somewhere`). Those can only be told by their payload, so the events of each source in the
     window that is not a calendar are read whole (through `Index.of_kind`, which a gated index cuts as
     it cuts `Index.evidence`), and one row is set aside per standing line of them that carries no
     place and no people; a calendar's are never read."""
-    rows = idx.evidence(stays.EVIDENCE, first, last)
-    _days, present = idx.kind_source_days(first, last, (EVENT,))
+    rows = idx.evidence(stays.EVIDENCE, first, last, tiers)
+    _days, present = idx.kind_source_days(first, last, (EVENT,), tiers)
     nowhere: Counter[tuple[str, str | None]] = Counter()
     for _kind, source in sorted(present):
         if source in stays.CALENDARS:
             continue
-        for line in idx.of_kind(EVENT, first, last, source):
+        for line in crossing(idx.of_kind(EVENT, first, last, source), tiers):
             if str(line.get("id")) not in retracted and not stays.somewhere(line):
                 end = line.get("end")
                 nowhere[(str(line.get("at")), end if isinstance(end, str) and end else None)] += 1
@@ -394,6 +431,35 @@ def _somewhere(idx: Index, first: str, last: str, retracted: frozenset[str]) -> 
             continue
         kept.append(row)
     return kept
+
+
+def _tracked(
+    idx: Index, first: str, spill: str, start: datetime, end: datetime, tiers: Sequence[int] | None
+) -> tuple[dict[str | None, list[stays.Point]], list[stays.Evidence]]:
+    """What `stays.derive` takes from the lines of a window, from the index's own columns: every
+    subject's points of the window and, per subject, the first location line at or after its end
+    (`_first_points_after`: a point only when it has one and stands), and the owner's evidence
+    (`_somewhere`); through the gate `tiers`."""
+    rows = idx.location_rows(first, spill, tiers)
+    tracks: dict[str | None, list[stays.Point]] = {}
+    after: dict[str | None, tuple[datetime, int, stays.Point | None]] = {}
+    for seq, line_id, text, lat, lon, subject, gone in rows:
+        at = stays.instant(text)
+        if at is None or at < start:
+            continue
+        point = (
+            None if gone or lat is None or lon is None else stays.Point(at, lat, lon, subject, seq, line_id)
+        )
+        if at < end:
+            if point is not None:
+                tracks.setdefault(subject, []).append(point)
+        elif subject not in after or at < after[subject][0]:
+            after[subject] = (at, seq, point)
+    for subject, (_at, _seq, point) in after.items():
+        if point is not None:
+            tracks.setdefault(subject, []).append(point)
+    retracted = frozenset(idx.superseded(RETRACTION))
+    return tracks, _evidence(_somewhere(idx, first, spill, retracted, tiers), start, end)
 
 
 def _first_points_after(lines: list[Line], end: datetime) -> list[Line]:

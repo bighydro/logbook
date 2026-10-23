@@ -133,6 +133,14 @@ class Airports:
         if airport.icao:
             self._by_code[airport.icao] = airport
 
+    def fingerprint(self) -> str:
+        """A digest of the table as loaded (every code, position and city), so a reading kept under
+        one table is never handed out under another (`people.read_whole`)."""
+        whole = hashlib.sha256()
+        for a in self._rows:
+            whole.update(f"{a.iata}|{a.icao}|{a.lat}|{a.lon}|{a.municipality}\n".encode())
+        return whole.hexdigest()
+
     @classmethod
     def load(cls, override: Path | None = None) -> Airports:
         """The built-in table, then the rows of `override` (same columns; `icao`, `name`,

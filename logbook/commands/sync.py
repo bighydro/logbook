@@ -478,7 +478,7 @@ def _build_library(lb: Logbook) -> str:
     from ..contrib import library_build
 
     try:
-        result = library_build.build(lb)
+        result = library_build.build(lb, workers=library_build.workers_default(lb))
     except library_build.Busy as e:
         print(f"library: {e}; not built now")
         return "library busy"
