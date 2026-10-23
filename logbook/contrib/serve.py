@@ -111,6 +111,7 @@ from __future__ import annotations
 
 import base64
 import contextlib
+import contextvars
 import email
 import faulthandler
 import functools
@@ -252,6 +253,7 @@ PHOTO_PATH = re.compile(r"^/photo/([^/]+)$")  # a photo line's pixels from the a
 CLOSE = "close"  # the Day page's anchor of Reflect and sign, where a write sends the owner back
 # pages the record's today moves too (this year, anniversaries, drift, the stale orgs and ideas): in the tag
 CLOCK_PAGES = ("/people", "/manifest", "/org/", "/ideas", "/idea/", "/goals")  # /goals: a goal goes past
+SPILL_DAYS = 2  # a reading of days holds the night after the last and the morning after that
 ID_SHOWN = 4  # line ids an evidence row prints; the rest are counted
 PAGE_SIZE = 20  # clusters a page of the review queue; "more" is the next page
 SHOWN = 30  # an org's timeline rows shown before the rest fold
@@ -613,6 +615,19 @@ class Stale(Exception):
     not what the page showed; a 409, nothing written."""
 
 
+_READS: contextvars.ContextVar[Reads | None] = contextvars.ContextVar("reads", default=None)
+
+
+class Reads(NamedTuple):
+    """What a page was made of, when it says (`Site.reads`): the lines of the local days `first` to
+    `last`, and of `kinds` the lines of any day; the record's settings and who is who beside them. A
+    built page that says it is rendered again only when a line comes for those (`library_build`)."""
+
+    first: str
+    last: str
+    kinds: tuple[str, ...] = ()
+
+
 class Response(NamedTuple):
     status: int
     body: bytes
@@ -620,6 +635,7 @@ class Response(NamedTuple):
     etag: str | None = None  # a page of the record at its head: kept by the browser, asked again
     location: str | None = None  # a redirect's target
     csp: str = CSP  # the Places page names its one inline script; every other page allows none
+    reads: Reads | None = None  # what the page was made of, when it says; None: the whole record
 
     @property
     def headers(self) -> dict[str, str]:
@@ -773,8 +789,10 @@ class Site:
         csp = PLACES_CSP if path == "/places" else WORLD_CSP if path == "/world" else CSP
         if DAY_PATH.match(path) is not None:
             csp = DAY_CSP if self._records() else DAY_IMAGES
+        said = _READS.set(None)
         try:
-            response = Response(200, self._page(path, params).encode("utf-8"), etag=etag, csp=csp)
+            rendered = self._page(path, params).encode("utf-8")
+            response = Response(200, rendered, etag=etag, csp=csp, reads=_READS.get())
             if etag is not None:
                 self._keep(etag, response)
             if self.library is not None:
@@ -803,6 +821,15 @@ class Site:
             return self._error(500, str(e))
         except ValueError as e:  # a day that is not one, a window that runs backwards, a year that is not
             return self._error(400, str(e))
+        finally:
+            _READS.reset(said)
+
+    def reads(self, first: str, last: str, kinds: Sequence[str] = ()) -> None:
+        """Say that the page being rendered is made of the lines of the local days `first` to `last`, of
+        `kinds` those of any day, and the settings and who is who (`Reads`): its response carries it,
+        and the build renders it again only when a line comes for those. A page that says nothing is
+        made of the whole record."""
+        _READS.set(Reads(first, last, tuple(kinds)))
 
     def _built(self, path: str, query: str, if_none_match: str | None) -> Response | None:
         """The page the build holds at this address, as it was written; None when it holds none, or
@@ -2603,6 +2630,7 @@ class Site:
             parts.append(f"<p>no days in {year}: the record runs {whole[0]} {EN_DASH} {whole[1]}</p>\n")
             return self.document(f"trips {year}", "".join(parts), style=TABLES_STYLE)
         rd = reading.read(self.lb, first, last, self.airports, self.tiers)
+        self.reads(first, (date.fromisoformat(last) + timedelta(days=SPILL_DAYS)).isoformat())
         found, warning = trips.trips(rd)
         if warning:
             parts.append(f"<p>{escape(warning)}</p>\n")
@@ -2767,6 +2795,8 @@ class Site:
         a row: its name or dates linking its page, the bounds, the nights away, the places, the
         canonical people, the photos, the draft folded, and the evidence folded."""
         shelf = journeys.shelf(self.lb, year, self.airports, self.tiers)
+        if shelf.reads is not None:  # its days, and a draft of any day may name one of its journeys
+            self.reads(*shelf.reads, kinds=(drafts.KIND,))
         if shelf.year is None:
             return self.document("journeys", f"<h1>Journeys</h1>\n<p>{escape(shelf.warning or '')}</p>\n")
         links = DOT.join(

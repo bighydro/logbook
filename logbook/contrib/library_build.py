@@ -81,8 +81,7 @@ DOORS = (
 )
 EVERYWHERE = ("retraction", "resolution", "entity", "entity-review", "people-review")  # who is who
 DAY_PAGE = re.compile(r"^/day/(\d{4}-\d{2}-\d{2})$")
-TRIPS_YEAR = re.compile(r"^/trips\?year=(\d{4})$")
-TRIPS_SPILL_DAYS = 2  # a year's trips read the night after its last day, and the morning after that
+YEAR_PAGE = re.compile(r"^(/[a-z]+)\?year=\d{4}$")  # a year's page: its pager names every year
 JOURNEY_PAGE = re.compile(r"^/journeys/(\d{4}-\d{2}-\d{2})/(\d{4}-\d{2}-\d{2})$")
 RECENT_DAYS = 14  # the Days of the last fortnight are built; today's is always rendered live
 EACH = 60  # detail pages of one kind the build follows from the doors
@@ -170,6 +169,7 @@ class Page:
     at: str
     head: str
     asked: bool = False
+    reads: list[Any] | None = None  # [first, last, kinds]: what the page said it was made of (`Site.reads`)
 
     def to_json(self) -> dict[str, Any]:
         return {k: v for k, v in self.__dict__.items()}
@@ -189,7 +189,16 @@ def _page(v: object) -> Page | None:
         at=str(v.get("at") or ""),
         head=str(v.get("head") or ""),
         asked=bool(v.get("asked")),
+        reads=_reads(v.get("reads")),
     )
+
+
+def _reads(v: object) -> list[Any] | None:
+    """A page's `reads` as `pages.json` holds it, or None for one that says nothing or does not read."""
+    if not isinstance(v, list) or len(v) != 3 or not all(isinstance(d, str) for d in v[:2]):
+        return None
+    kinds = v[2]
+    return [v[0], v[1], [str(k) for k in kinds]] if isinstance(kinds, list) else None
 
 
 class Library:
@@ -287,7 +296,14 @@ class Library:
         if not (path.is_file() and path.read_bytes() == body):
             _write_private(path, body)
         etag = f'"b-{hashlib.sha256(body).hexdigest()[:20]}"'
-        page = Page(name, response.status, response.csp, response.location, etag, _stamp(when), head, asked)
+        reads = (
+            None
+            if response.reads is None
+            else [response.reads.first, response.reads.last, list(response.reads.kinds)]
+        )
+        page = Page(
+            name, response.status, response.csp, response.location, etag, _stamp(when), head, asked, reads
+        )
         with self._lock:
             self._load()
             pages = dict(self._pages)
@@ -463,36 +479,42 @@ def settled(lb: Logbook, site: Site) -> str:
     return kept.stamp(lb, kept.code_digest(), *site._beside())
 
 
-def days_touched(lb: Logbook, since: int) -> set[str] | None:
+def days_touched(lb: Logbook, since: int) -> tuple[set[str], set[str]] | None:
     """The local days the lines appended after `since` landed on, and each one's day before (its night
-    runs into the next morning); None when one of them changes who is who everywhere (`EVERYWHERE`),
-    which only a full build follows."""
+    runs into the next morning), and their kinds; None when one of them changes who is who everywhere
+    (`EVERYWHERE`), which only a full build follows."""
     with lb.index() as idx:
         rows = idx.db.execute("SELECT DISTINCT kind, day_local FROM lines WHERE seq > ?", (since,)).fetchall()
     if any(str(kind) in EVERYWHERE for kind, _day in rows):
         return None
     days = {str(day) for _kind, day in rows}
-    return days | {(date.fromisoformat(d) - timedelta(days=1)).isoformat() for d in days}
+    days |= {(date.fromisoformat(d) - timedelta(days=1)).isoformat() for d in days}
+    return days, {str(kind) for kind, _day in rows}
 
 
-def _wanted_since(target: str, days: set[str], built: Mapping[str, Page]) -> bool:
-    """Whether an incremental build renders `target` again: every door, detail and variant (they read
-    the whole record, and the kept readings make that cheap); a Day only when a line landed on it or
-    the day after, or when no build has written it; a journey only when it holds such a day; a year's
-    trips (`/trips?year=`, which reads that year's days and the morning after) only when a line landed
-    on them, or in a year no build has a page of, which every year's pager then names."""
+def _wanted_since(target: str, days: set[str], kinds: set[str], built: Mapping[str, Page]) -> bool:
+    """Whether an incremental build renders `target` again: a Day only when a line landed on it or the
+    day after, or when no build has written it; a journey only when it holds such a day; a page that
+    said what it was made of (`Site.reads`: a year's trips or journeys) only when a line landed on those
+    days or is of those kinds, or, for a year's page, landed in a year no build has that page of, which
+    every year's pager then names; every other page (they read the whole record, and the kept readings
+    make that cheap)."""
     path = target.partition("?")[0]
-    if target not in built:
+    page = built.get(target)
+    if page is None:
         return True
-    if (trips := TRIPS_YEAR.match(target)) is not None:
-        year = trips.group(1)
-        after = (date(int(year) + 1, 1, 1) + timedelta(days=TRIPS_SPILL_DAYS)).isoformat()
-        return any(f"{year}-01-01" <= d < after or f"/trips?year={d[:4]}" not in built for d in days)
     if (day := DAY_PAGE.match(path)) is not None:
         return day.group(1) in days
     if (journey := JOURNEY_PAGE.match(path)) is not None:
         first, last = journey.group(1), journey.group(2)
         return any(first <= d <= last for d in days)
+    if page.reads is not None:
+        first, last, read_kinds = page.reads
+        if any(first <= d <= last for d in days) or kinds & set(read_kinds):
+            return True
+        if (year := YEAR_PAGE.match(target)) is not None:
+            return any(f"{year.group(1)}?year={d[:4]}" not in built for d in days)
+        return False
     return True
 
 
@@ -523,14 +545,15 @@ def build(
         before = library.pages()
         last = library.built()
         stamp = settled(lb, site)
-        days = None
+        touched = None
         if not full and only is None and last.get("settled") == stamp and isinstance(last.get("seq"), int):
-            days = days_touched(lb, int(last["seq"]))
-        incremental = days is not None
+            touched = days_touched(lb, int(last["seq"]))
+        incremental = touched is not None
         asked = sorted((t for t, p in before.items() if p.asked), key=lambda t: before[t].at)[-ASKED:]
         wanted = list(only) if only is not None else targets(site, today, asked)
-        if days is not None and only is None:
-            wanted = [t for t in wanted if _wanted_since(t, days, before)]
+        if touched is not None and only is None:
+            days, kinds = touched
+            wanted = [t for t in wanted if _wanted_since(t, days, kinds, before)]
         written = 0
         failed: dict[str, str] = {}
         took: dict[str, float] = {}

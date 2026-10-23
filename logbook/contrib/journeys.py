@@ -50,6 +50,7 @@ from ..core.store import Logbook, retractions
 from . import promises as promise_reader
 from . import trip_page
 
+SPILL_DAYS = 2  # a reading holds the night after its last day and the morning after that
 MARGIN_DAYS = 31  # a year is read with a month either side: a journey over New Year is seen whole
 PHOTO = "photo"
 YEAR_DIGITS = 4
@@ -118,6 +119,7 @@ class Shelf:
     years: list[str]
     journeys: list[Journey]
     warning: str | None = None
+    reads: tuple[str, str] | None = None  # the local days read: the year, the margin, its journeys whole
 
     def to_json(self) -> dict[str, Any]:
         return {
@@ -173,7 +175,8 @@ def shelf(
     allowed = drafts.allowed(lb.root)
     out = [_journey(t, r, named, drafted, allowed, tiers) for t, r in pairs]
     out.sort(key=lambda j: j.trip.start, reverse=True)
-    return Shelf(year, years, out)
+    through = (date.fromisoformat(max(until, last)) + timedelta(days=SPILL_DAYS)).isoformat()
+    return Shelf(year, years, out, reads=(since, through))
 
 
 def _journey(
