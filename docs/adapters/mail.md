@@ -6,9 +6,9 @@ mbox file or folder of them; `logbook sync mail` reads the same mailbox live ove
 ([below](#mail-imap)), and `logbook sync gmail` a Gmail mailbox over the Gmail API on the one Google
 key ([below](#gmail-over-the-api)). Each writes one `mail/v1` line per message (RFC 0015): who, when,
 the subject, the thread, the labels, the body as text, the attachments by name and size. Tier 2 by
-default. All three write the same line for the same message, and each, before it writes, skips a message
-the record already holds by its `Message-ID` from any of the three
-([One email, one line](#one-email-one-line)).
+default. All three write the same line for the same message (but for Gmail's tab, which IMAP cannot
+say: [below](#the-tab-and-the-list-headers)), and each, before it writes, skips a message the record
+already holds by its `Message-ID` from any of the three ([One email, one line](#one-email-one-line)).
 
 ```bash
 logbook add mail ~/Takeout/Mail --account you@example.org --skip-labels Spam,Trash   # the whole export
@@ -32,6 +32,34 @@ logbook add mail inbox.mbox --restart                                   # from t
 | `body` | the `text/plain` part, else the `text/html` part stripped to text (`extra.body_from: html`); read from at most 64 KB of the part, a longer one cut and flagged `extra.body_truncated` |
 | `size` | the message's length in bytes as the export stores it |
 | `attachments` | one `{filename, media_type, bytes}` per attachment part, in order; with `--attachments` also `sha256` and `path` in the SPEC §1.1 store |
+| `extra.gmail_category` | Gmail's inbox tab, `primary`, `social`, `promotions`, `updates` or `forums`, from the `Category …` label in `X-Gmail-Labels`; absent when none ([below](#the-tab-and-the-list-headers)) |
+| `extra.list` | only for a message from a mailing list: `unsubscribe`, `one_click` and `id`, never a link ([below](#the-tab-and-the-list-headers)) |
+
+### The tab and the list headers
+
+Since 20 October 2026 (RFC 0015, amendment of that day) every road keeps two more facts under `extra`,
+never in the payload's own fields, so `labels`, `raw_id` and every dedupe key are what they were:
+
+- **`extra.gmail_category`**, Gmail's inbox tab: `primary`, `social`, `promotions`, `updates` or
+  `forums`. A Takeout names it among `X-Gmail-Labels` (`Category Personal` is the Primary tab, then
+  `Category Social`, `Category Promotions`, `Category Updates`, `Category Forums`, in any case); the label
+  stays in `labels` as Takeout spells it. `sync gmail` reads it from the API's `CATEGORY_*` label, which
+  stays out of `labels` as before. `sync mail` never writes it: IMAP's `X-GM-LABELS` does not carry the
+  tabs, and the source does not search each message to find out. A message whose labels name no tab has
+  no key.
+- **`extra.list`**, only when the message carries a list header: `{"unsubscribe": true}` for
+  `List-Unsubscribe`, `"one_click": true` when `List-Unsubscribe-Post` is there too, and `"id"` the
+  list's id alone (`letters.example.org` from `List-Id: Ines's letters <letters.example.org>`). Of a `List-Id`
+  only the dot-atom inside its angle brackets (or a bare one) is kept, never its phrase, and one that is a
+  link, a `mailto` or an address keeps no `id` and is counted. The unsubscribe
+  links and `mailto` addresses are **never** kept, not even in part: they carry a token that says who you
+  are. Header names are read in any case. A list header whose value does not parse is kept by its name
+  (`{"unsubscribe": true}` for a `List-Unsubscribe` with no `<link>`) and counted (`list headers that would
+  not parse`).
+
+Nothing already in the record is rewritten, and re-adding an export or syncing again appends nothing for
+a message the record holds (ADR 0017), so lines written before that day simply have neither key: absent
+means not said, never "not a list" or "Primary". `lab hold census senders` counts both ([Hold](../hold.md#senders)).
 
 The people on a message are never resolved here. Every sender and recipient stays in the line as
 `{email, name}`, the same ref a `resolution/v1` line names (RFC 0006), so one resolution of an
@@ -112,7 +140,9 @@ named, sized and digested (`sha256`; the bytes are in hand) and never stored.
 fetched with the message and written where the Takeout import puts `X-Gmail-Labels` and
 `X-GM-THRID` — `labels`, spelled as Takeout spells them (`Inbox`, `Sent`), and
 `extra.gmail_thread_id` — as they stood at ingest, once; the source never revisits a message to
-update them. On a server without the extension the line carries neither.
+update them. On a server without the extension the line carries neither. `X-GM-LABELS` does not
+carry Gmail's tabs, so a line from `sync mail` has no `extra.gmail_category`, with the extension or
+without; the list headers (`extra.list`) are read from the message as on every road.
 
 **The watermark is for economy, the record's refusal is the guarantee.** Per folder the source keeps
 `{uidvalidity, uid}` — the folder's `UIDVALIDITY` and the highest UID handled — under `resume` in
@@ -163,9 +193,11 @@ digested and never stored.
 
 **Labels in the profile's slot.** `labels` is spelled as IMAP's `X-GM-LABELS` gives it: `Inbox`,
 `Sent`, `Important`, `Starred` and your own labels by name (`Boat/Engine` for a nested one); the
-thread id is `extra.gmail_thread_id`, in decimal as IMAP and Takeout write it. Dropped, because IMAP
-never shows them and the line would differ: `UNREAD` (a flag, not a label) and the category tabs
-(`CATEGORY_UPDATES`, `CATEGORY_PROMOTIONS`, …). Labels are a snapshot at ingest, as over IMAP.
+thread id is `extra.gmail_thread_id`, in decimal as IMAP and Takeout write it. Dropped from `labels`,
+because IMAP never shows them: `UNREAD` (a flag, not a label) and the category tabs
+(`CATEGORY_UPDATES`, `CATEGORY_PROMOTIONS`, …). The tab is kept instead as `extra.gmail_category`
+(`updates`, `promotions`, …; [above](#the-tab-and-the-list-headers)), the one field in which this line
+differs from the one `sync mail` writes. Labels and the tab are a snapshot at ingest, as over IMAP.
 
 **Not a line.** A draft (neither sent nor received; its `Message-ID` is often the one the sent message
 will carry, which would then be refused), a message in Spam or Trash, and one deleted between being
@@ -195,7 +227,7 @@ else stops the run on one line, exit 1, the mark where it was.
   per-folder mark, and drafts, Spam and Trash left out.
 - **A personal `@gmail.com` account** has no Workspace to delegate from: `sync mail` with an app
   password.
-- **Both, for one mailbox**, is harmless: the lines are the same, and `sync --all` runs `mail` before
+- **Both, for one mailbox**, is harmless: the lines are the same but for the tab, and `sync --all` runs `mail` before
   `gmail`, so whichever reads a message first writes it and the other is refused it. To keep one, unset
   the `LOGBOOK_IMAP_*` variables, or switch `gmail` off in `policy/import.json` (its key stays for the
   other Google sources).
@@ -252,7 +284,8 @@ second mailbox's copy of the same message stays its own.
 
 `add` reports: messages without a `Message-ID` (keyed by digest), timed by the mbox separator (no
 `Date`), with the body taken from HTML, with the body cut at 64 KB, with undecodable bytes replaced,
-attachments referenced or stored, and messages skipped by label. A message with neither a readable
+attachments referenced or stored, messages skipped by label, and list headers that would not parse
+(each still kept by its name under `extra.list`). A message with neither a readable
 `Date` nor a readable separator is the only one skipped (`skipped_no_date`).
 
 `add mail`, `sync mail` and `sync gmail` report messages already in the record from another road or

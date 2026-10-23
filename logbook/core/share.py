@@ -34,8 +34,8 @@ from pathlib import Path
 from typing import Any, NamedTuple
 from zoneinfo import ZoneInfo
 
-from . import crossing, day_start, policy, stars
-from .chain import ENVELOPE_FIELDS, Line, canonical_json, compute_hash, parse_line
+from . import attachments, crossing, day_start, policy, sealing, stars
+from .chain import ENVELOPE_FIELDS, Line, canonical_json, compute_hash, is_sealed, parse_line
 from .export import SCHEMA as PACKAGE_SCHEMA
 from .export import entry, parse_day
 from .index import local_date
@@ -59,6 +59,10 @@ SEED_LEN = 32
 Stamp = tuple[int, int, int, int, int, int]  # a zip member's date_time
 CHUNK = 1 << 20
 TIER3_WARNING = crossing.TIER3_WARNING
+SEALED_DAY = (
+    "export share day {day}: this day holds sealed lines, and a shared page cannot carry them yet; "
+    "a sealed day shares after v1 (RFC 0029)"
+)
 
 
 class MissingExtra(ImportError):
@@ -232,6 +236,7 @@ class Selection:
     logged: int  # the day's lines, retractions and the retracted aside
     blobs: list[dict[str, Any]]  # SPEC §1.1 references the store holds, in the manifest's shape
     missing: int  # digests referenced whose file the store does not hold
+    sealed: int = 0  # of `lines`, those the record holds as `sealed/v1` (RFC 0029)
 
     @property
     def held_back(self) -> int:
@@ -269,8 +274,17 @@ def select(lb: Logbook, day: str, max_tier: int) -> Selection:
     (RFC 0041) is at its line's day and tier, so it crosses with its line, and never without it; so
     does a photo's star, its `memory` keeper (`stars.beside`)."""
     with lb.index() as idx:
-        rows = [line for line in idx.day(day) if line.get("kind") != RETRACTION]
+        # `Index.day`'s own query, the lines as the file holds them, so a sealed one is seen sealed;
+        # each is then opened as `Index.day` opens it
+        places = idx.db.execute("SELECT file, offset FROM lines WHERE day_local = ? ORDER BY seq", (day,))
+        stored = [
+            line
+            for line in idx.read([(str(f), int(o)) for f, o in places], opened=False)
+            if line.get("kind") != RETRACTION
+        ]
         retracted = retractions(idx.retractions())
+    sealed_seqs = {int(line["seq"]) for line in stored if is_sealed(line)}  # by seq: an id may repeat
+    rows = [lb.opened(line) for line in stored]
     rows = [line for line in rows if str(line["id"]) not in retracted]
     lines = sorted(
         (line for line in rows if int(line["tier"]) <= max_tier), key=lambda r: (str(r["at"]), int(r["seq"]))
@@ -278,7 +292,8 @@ def select(lb: Logbook, day: str, max_tier: int) -> Selection:
     crossing_ids = {str(line["id"]) for line in lines}
     lines = [line for line in lines if stars.beside(line, crossing_ids)]
     blobs, missing = crossing.blobs(lb, lines)
-    return Selection(lines, len(rows), [_attachment(b) for b in blobs], missing)
+    sealed = sum(1 for line in lines if int(line["seq"]) in sealed_seqs)
+    return Selection(lines, len(rows), [_attachment(b) for b in blobs], missing, sealed)
 
 
 def _attachment(blob: dict[str, Any]) -> dict[str, Any]:
@@ -315,12 +330,19 @@ def share_day(
 ) -> Shared:
     """Write the page for `to` at `out`, then append the crossing line: in that order, so a crash
     leaves at worst a page no line names. The key is made on first use; the policy is checked first,
-    so nothing is written when the request is refused."""
+    so nothing is written when the request is refused. A day whose page would carry a sealed line is
+    refused too, before the key or anything else is written: the page would carry it opened, under a
+    hash that covers its `sealed/v1` reference, which no receiver can recompute; a sealed day shares
+    after v1, when a page can carry sealed lines resealed to the receiver (RFC 0029). A sealed
+    attachment on a day of plain lines shares, opened and checked (`_copy_checked`)."""
     day = parse_day(day).isoformat()
     check_name(to)
     allowed = ceiling(lb, to, max_tier)
     meta = lb.meta
     lb._check_format(meta)  # a 0.1 record is refused here, before a page exists that no line could record
+    sel = select(lb, day, max_tier)
+    if sel.sealed:
+        raise ShareError(SEALED_DAY.format(day=day))
     seed, public = owner_key(lb)
     policy.write_default(lb.root)
     tz, head, owner_id = str(meta["timezone"]), str(meta["head"]), str(meta["owner_id"])
@@ -328,7 +350,6 @@ def share_day(
     boundary = {} if bounds.midnight else {day_start.KEY: bounds.text}
     created = created or now_utc()
     bundle_id = bundle_id or uuid7()
-    sel = select(lb, day, max_tier)
     lines_raw = _jsonl(sel.lines)
     package = {
         "schema": PACKAGE_SCHEMA,
@@ -374,7 +395,7 @@ def share_day(
             zf.writestr(zipfile.ZipInfo(PACKAGE_FILE, when), package_raw, zipfile.ZIP_DEFLATED)
             for blob in sel.blobs:
                 sha256 = str(blob["sha256"])
-                _copy_checked(lb.root / ATTACHMENTS_DIR / sha256, zf, f"{ATTACHMENTS_DIR}/{sha256}", when)
+                _copy_checked(lb, sha256, zf, when)
             zf.writestr(zipfile.ZipInfo(MANIFEST_FILE, when), manifest_raw, zipfile.ZIP_DEFLATED)
     except BaseException:
         tmp.unlink(missing_ok=True)
@@ -415,18 +436,28 @@ def _manifest_bytes(manifest: dict[str, Any]) -> bytes:
     return (json.dumps(manifest, indent=2, ensure_ascii=False, sort_keys=True) + "\n").encode("utf-8")
 
 
-def _copy_checked(src: Path, zf: zipfile.ZipFile, name: str, when: Stamp) -> None:
+def _copy_checked(lb: Logbook, sha256: str, zf: zipfile.ZipFile, when: Stamp) -> None:
     """One attachment into the zip, hashed on the way: a store file whose bytes do not match its
-    name is an error (SPEC §1.1), never something a receiver should find out."""
+    name is an error (SPEC §1.1), never something a receiver should find out. A sealed file is
+    opened with this machine's identity and its opened bytes are checked and zipped, as the lines
+    are opened (RFC 0029 §7, as `crossing._copy_checked` does)."""
+    src = lb.root / ATTACHMENTS_DIR / sha256
+    name = f"{ATTACHMENTS_DIR}/{sha256}"
+    sealed = sealing.is_sealed_file(src)
     digest = hashlib.sha256()
     info = zipfile.ZipInfo(name, when)
     info.compress_type = zipfile.ZIP_DEFLATED
-    with src.open("rb") as fi, zf.open(info, "w") as fo:
+    with (
+        attachments.opened(lb.root, sha256, lb.identities) as plain,
+        plain.open("rb") as fi,
+        zf.open(info, "w") as fo,
+    ):
         while chunk := fi.read(CHUNK):
             digest.update(chunk)
             fo.write(chunk)
-    if f"{ATTACHMENTS_DIR}/{digest.hexdigest()}" != name:
-        raise ShareError(f"{src} does not hash to its name (SPEC §1.1); the record needs repair first")
+    if digest.hexdigest() != sha256:
+        what = "opens to bytes that do not hash" if sealed else "does not hash"
+        raise ShareError(f"{src} {what} to its name (SPEC §1.1); the record needs repair first")
 
 
 def default_out(lb: Logbook, to: str, day: str) -> Path:

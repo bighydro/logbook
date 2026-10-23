@@ -31,7 +31,7 @@ import hashlib
 import re
 from collections import Counter
 from collections.abc import Iterable, Iterator, Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import UTC, date, datetime, time, timedelta
 from pathlib import Path, PurePosixPath
 from typing import Any
@@ -359,6 +359,7 @@ class _Builder:
         for first, last in _chunks(self.req.since, self.req.until):
             before = (date.fromisoformat(first) - timedelta(days=1)).isoformat()
             rd = reading.read(self.lb, before, last, self.airports)
+            rd = replace(rd, voice_tiers=self.req.tiers)  # read whole, gated line by line: and a voice's name
             for place in rd.places:
                 if place.name not in self.places:
                     self.names.claim(place.name)
@@ -450,7 +451,9 @@ class _Builder:
         if e["kind"] == day_reader.FLIGHT:
             text = _flight_text(e)
             page.flights.append(text)
-            span = f"{_clock(e['start'], self.tz, day_end)} {EN_DASH} {_clock(e['end'], self.tz, day_end)}"
+            span = _clock(e["start"], self.tz, day_end)
+            if e["end"] is not None:  # a flight with no arrival is written at its departure
+                span += f" {EN_DASH} {_clock(e['end'], self.tz, day_end)}"
             yield f"{indent}- {span} {text}"
             return
         within = e["within_day"]

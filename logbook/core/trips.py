@@ -47,6 +47,7 @@ NEAR_KM = 5.0  # else its coordinates, with `near <place>, x km` for a named pla
 CITY_KM = 30.0  # else its coordinates, with the city of the nearest large airport this close
 MERGE_M = 200.0  # consecutive route points this close are one
 WITH_MAX = 12  # names listed under "with", most evidence first
+READ_KINDS = (flight_lines.KIND, weather.KIND, *present.EVIDENCE_KINDS)  # what a trip reads of the lines
 EN_DASH = "\u2013"
 ARROW = "\u2192"
 
@@ -333,7 +334,9 @@ def companions(
     found = [
         c
         for stay in visited
-        for c in present.company(stay, evidence(stay), reading.identities, reading.places, reading.owner)
+        for c in present.company(
+            stay, evidence(stay), reading.identities, reading.places, reading.owner, reading.voice_gate
+        )
     ]
     confirmed = {_key(c) for c in found if c.status == present.CONFIRMED}
     merged: dict[tuple[str | None, str], present.Companion] = {}

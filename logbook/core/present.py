@@ -64,7 +64,7 @@ carrying one of the owner's own refs (`owner`, the addresses `logbook.json` list
 from __future__ import annotations
 
 import re
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date, timedelta
 from typing import Any
@@ -202,7 +202,11 @@ def _normal(name: str) -> str:
 
 
 def from_circle(
-    stay: Segment, lines: Iterable[Line], identities: Mapping[Ref, Identity], places: Sequence[Place] = ()
+    stay: Segment,
+    lines: Iterable[Line],
+    identities: Mapping[Ref, Identity],
+    places: Sequence[Place] = (),
+    tiers: Collection[int] | None = None,
 ) -> list[Presence]:
     """A circle page that places someone at the stay. The circle's bundle format is not defined
     yet (ARCHITECTURE: the circle); this names nobody until it is."""
@@ -210,7 +214,11 @@ def from_circle(
 
 
 def from_calendar(
-    stay: Segment, lines: Iterable[Line], identities: Mapping[Ref, Identity], places: Sequence[Place] = ()
+    stay: Segment,
+    lines: Iterable[Line],
+    identities: Mapping[Ref, Identity],
+    places: Sequence[Place] = (),
+    tiers: Collection[int] | None = None,
 ) -> list[Presence]:
     found = []
     for line in lines:
@@ -244,10 +252,14 @@ def from_calendar(
 
 
 def from_transcript(
-    stay: Segment, lines: Iterable[Line], identities: Mapping[Ref, Identity], places: Sequence[Place] = ()
+    stay: Segment,
+    lines: Iterable[Line],
+    identities: Mapping[Ref, Identity],
+    places: Sequence[Place] = (),
+    tiers: Collection[int] | None = None,
 ) -> list[Presence]:
     found = []
-    voices = attribution.Voices(identities)
+    voices = attribution.Voices(identities, tiers=tiers)  # a name learned above the gate: no name
     lines = list(lines)
     heard_again = _superseded_transcripts(lines)
     for line in lines:
@@ -266,6 +278,9 @@ def from_transcript(
                 continue  # the owner, the unnamed (`unnamed_at`), a voice not yet named
             if heard.far_end:
                 far.add(heard.entity)
+                continue
+            if heard.withheld:  # a name learned above the gate: nobody a reader can name, nor its line
+                spoke.add(heard.entity)
                 continue
             if not heard.name:
                 continue  # a person no line gives a label: nobody a reader can name
@@ -318,7 +333,11 @@ def from_transcript(
 
 
 def from_notes(
-    stay: Segment, lines: Iterable[Line], identities: Mapping[Ref, Identity], places: Sequence[Place] = ()
+    stay: Segment,
+    lines: Iterable[Line],
+    identities: Mapping[Ref, Identity],
+    places: Sequence[Place] = (),
+    tiers: Collection[int] | None = None,
 ) -> list[Presence]:
     found = []
     for line in lines:
@@ -349,7 +368,11 @@ def from_notes(
 
 
 def from_photos(
-    stay: Segment, lines: Iterable[Line], identities: Mapping[Ref, Identity], places: Sequence[Place] = ()
+    stay: Segment,
+    lines: Iterable[Line],
+    identities: Mapping[Ref, Identity],
+    places: Sequence[Place] = (),
+    tiers: Collection[int] | None = None,
 ) -> list[Presence]:
     found = []
     for line in lines:
@@ -403,6 +426,7 @@ def from_photos(
     return found
 
 
+# one signature for every source; only `from_transcript` reads `tiers` (a voice's name, RFC 0038 §3.4)
 FROM = (from_circle, from_calendar, from_transcript, from_notes, from_photos)
 
 
@@ -412,14 +436,16 @@ def present(
     identities: Mapping[Ref, Identity],
     places: Sequence[Place] = (),
     owner: Owner | None = None,
+    tiers: Collection[int] | None = None,
 ) -> list[Presence]:
     """Everyone the evidence puts at the stay, one entry per piece of evidence, sources in the
     order of `SOURCES`, lines in the order given. `places` (places.json) geocodes a calendar
-    entry's location; `owner` is left out, never their own company."""
+    entry's location; `owner` is left out, never their own company. `tiers`, the reading's gate:
+    a voice whose name was learned above it names nobody (`attribution.Voices`)."""
     found: list[Presence] = []
     for source in FROM:
         found.extend(
-            p for p in source(stay, lines, identities, places) if owner is None or not owner.holds(p)
+            p for p in source(stay, lines, identities, places, tiers) if owner is None or not owner.holds(p)
         )
     return found
 
@@ -430,11 +456,12 @@ def company(
     identities: Mapping[Ref, Identity],
     places: Sequence[Place] = (),
     owner: Owner | None = None,
+    tiers: Collection[int] | None = None,
 ) -> list[Companion]:
     """`present` merged per person (by entity id, else by name): confirmed before proposed, then
     by confidence, then by first evidence."""
     merged: dict[tuple[str | None, str], list[Presence]] = {}
-    for p in present(stay, lines, identities, places, owner):
+    for p in present(stay, lines, identities, places, owner, tiers):
         merged.setdefault((p.person, "" if p.person else p.name.casefold()), []).append(p)
     companions = []
     for group in merged.values():

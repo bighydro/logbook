@@ -1,7 +1,7 @@
 """A note on a day: one `note/v1` line (RFC 0010) in the owner's words, put on a given local day, its
 kind in the profile's `labels`. The one note path for a write that names a day: the MCP tool
-`note_day` (ADR 0022), `logbook day reflect` and a journey's name (`logbook.contrib.journeys.name`)
-append through `write`, and nowhere else.
+`note_day` (ADR 0022), `logbook day reflect`, a journey's name (`logbook.contrib.journeys.name`) and
+who was there's notes (`logbook.contrib.who_was_there`) append through `write`, and nowhere else.
 
 The line is what RFC 0010 says a note is: kind `note`, tier 2 whoever writes it, the text as given
 and never filtered, the kind as the one label (`note`, `proposal` or `reflection` through the door;
@@ -34,6 +34,8 @@ SCHEMA = "note/v1"
 TIER = 2  # RFC 0010: a note/v1 line is tier 2, whoever writes it
 NOTE, PROPOSAL, REFLECTION, DELEGATION = "note", "proposal", "reflection", "delegation"
 NAME = "name"  # the captain names a journey (ADR 0019): `add --trip`, the Journeys page
+# who was there (RFC 0043 §11, §12): `people not-with`, `people lives-with`, `people lives-in`
+NOT_WITH, LIVES_WITH, LIVES_IN = "not-with", "lives-with", "lives-in"
 
 
 class NoteError(ValueError):

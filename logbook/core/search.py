@@ -18,7 +18,10 @@ time order — each with the row `show` prints and a snippet of the matching wor
 
 Tier-aware: tiers 1 and 2 by default; tier 3 (money, health, the transcripts the reference
 adapters write at 3) only with `--tier 3`, as `export crossing` and `mcp` have it. A retracted line
-is never a hit. Nothing is written."""
+is never a hit. A hit a later line of its own kind supersedes (SPEC §3: not standing) is still a hit,
+marked with the line that superseded it, in the words `show` marks one with; `--standing` keeps
+standing hits only. The mark is asked of the index's `lines_kind_supersedes` index for the hits'
+ids, never of the search table. Nothing is written to the record."""
 
 from __future__ import annotations
 
@@ -36,6 +39,7 @@ if TYPE_CHECKING:
     from .index import Index
 
 LIMIT = 50  # hits shown without --limit
+STANDING_MARGIN = 4  # --standing first asks limit + limit // 4 + 1: room for the superseded hits it drops
 MAX_TIER = 2  # searched without --tier
 SNIPPET_TOKENS = 16  # the words a snippet shows around the match
 MARK = ("[", "]")  # around each matching word in a snippet
@@ -111,6 +115,7 @@ class Query:
     kinds: tuple[str, ...] | None
     max_tier: int
     limit: int
+    standing: bool = False  # standing hits only (`--standing`)
 
     def to_json(self) -> dict[str, Any]:
         return {
@@ -121,6 +126,7 @@ class Query:
             "kinds": None if self.kinds is None else list(self.kinds),
             "max_tier": self.max_tier,
             "limit": self.limit,
+            "standing": self.standing,
         }
 
 
@@ -130,6 +136,12 @@ class Hit:
     day: str  # the local day
     rank: float  # FTS5's bm25; lower is better
     snippet: str
+    superseded_by: tuple[int, str] | None = None  # the (seq, id) of the line of its kind that supersedes it
+
+    @property
+    def standing(self) -> bool:
+        """Not superseded (a retracted line is never a hit)."""
+        return self.superseded_by is None
 
     def to_json(self, summary: Callable[[Line], str]) -> dict[str, Any]:
         line = self.line
@@ -143,6 +155,8 @@ class Hit:
             "rank": self.rank,
             "snippet": self.snippet,
             "summary": summary(line),
+            "standing": self.standing,
+            "superseded_by": None if self.superseded_by is None else self.superseded_by[1],
         }
 
 
@@ -207,6 +221,7 @@ def query(
     kinds: Sequence[str] | None = None,
     max_tier: int = MAX_TIER,
     limit: int = LIMIT,
+    standing: bool = False,
 ) -> Query:
     """A checked query: the text holds a word, every kind is one the table holds, the window does
     not run backwards, the tier is 1 to 3 and the limit positive; else `QueryError`."""
@@ -227,22 +242,64 @@ def query(
         raise QueryError("--limit is at least 1")
     if kinds is not None:
         kinds = tuple(dict.fromkeys(k for kind in kinds for k in ALIASES.get(kind, (kind,))))
-    return Query(text, built, since, until, None if kinds is None else tuple(kinds), max_tier, limit)
+    return Query(
+        text, built, since, until, None if kinds is None else tuple(kinds), max_tier, limit, standing
+    )
 
 
 def search(idx: Index, q: Query) -> Result:
     """The hits of `q` through the index's search table: ranked by bm25, the window, the kinds
     and the tier cut in the query, a retracted line left out, each hit's line read from the files
-    (`Index.search`)."""
-    found = idx.search(q.expression, q.max_tier, q.since or "", q.until or "9999-12-31", q.kinds, q.limit)
-    lines = idx.read((file, offset) for _seq, _day, _rank, _snippet, file, offset in found)
-    return Result(
-        q,
-        [
-            Hit(line, day, rank, snippet.replace("\n", FIELD_BREAK))  # one line: the body's fields joined
-            for (_seq, day, rank, snippet, _file, _offset), line in zip(found, lines, strict=True)
-        ],
-    )
+    (`Index.search`), and each marked with the line of its own kind that supersedes it
+    (`superseded_by`). With `q.standing` a superseded hit is left out and the next by rank takes
+    its place: the query asks for a margin over the limit (`STANDING_MARGIN`), the lines are read
+    a limit at a time until the limit stands, and only when the answer runs out first is the query
+    asked again for twice as many, the hits already read skipped (the order is total, bm25 then
+    the later line first, so a longer answer begins with the shorter one). Each ask ranks every
+    match of the words again, so the margin spares the second ask whenever few hits are superseded."""
+    hits: list[Hit] = []
+    ask = q.limit + q.limit // STANDING_MARGIN + 1 if q.standing else q.limit
+    read = 0
+    while True:
+        found = idx.search(q.expression, q.max_tier, q.since or "", q.until or "9999-12-31", q.kinds, ask)
+        while read < len(found) and len(hits) < q.limit:
+            batch = found[read : read + q.limit]
+            lines = idx.read((file, offset) for _seq, _day, _rank, _snippet, file, offset in batch)
+            by = superseded_by(idx, lines)
+            for (seq, day, rank, snippet, _file, _offset), line in zip(batch, lines, strict=True):
+                hit = Hit(line, day, rank, snippet.replace("\n", FIELD_BREAK), by.get(seq))  # one row
+                if hit.standing or not q.standing:
+                    hits.append(hit)
+            read += len(batch)
+        if len(hits) >= q.limit or len(found) < ask:
+            return Result(q, hits[: q.limit])
+        ask *= 2
+
+
+def superseded_by(idx: Index, lines: Sequence[Line]) -> dict[int, tuple[int, str]]:
+    """seq → the (seq, id) of the line that supersedes it, for those of `lines` one does: the rule
+    `Index.superseded` reads by (a line of the same kind naming it in `supersedes`, the last in
+    chain order when several do, a retracted one superseding nothing), asked of the
+    `lines_kind_supersedes` index for these lines' ids alone, so the cost is the hits, never how
+    many lines of their kind were ever corrected. Nothing is read from the files."""
+    from .index import RETRACTED  # a function-level import: `index` imports this module
+
+    wanted: dict[str, dict[str, list[int]]] = {}  # kind → id → the seqs of `lines` with it
+    for line in lines:
+        wanted.setdefault(str(line["kind"]), {}).setdefault(str(line["id"]), []).append(int(line["seq"]))
+    found: dict[int, tuple[int, str]] = {}
+    for kind, ids in wanted.items():
+        named = list(ids)
+        for n in range(0, len(named), 500):
+            chunk = named[n : n + 500]
+            for superseded, seq, line_id in idx.db.execute(
+                f"SELECT supersedes, seq, id FROM lines WHERE kind = ? AND supersedes IN"
+                f" ({', '.join('?' * len(chunk))}) AND id NOT IN ({RETRACTED}) ORDER BY seq",
+                (kind, *chunk),
+            ):
+                for hit in ids[str(superseded)]:
+                    found[hit] = (int(seq), str(line_id))  # in chain order: the last one stays
+    return found
 
 
 # -- the body: the words of one line ----------------------------------------------------------------------
@@ -295,8 +352,8 @@ def _transcript_text(line: Mapping[str, Any], root: Path) -> Iterable[str]:
 
 def rows(result: Result, row: Callable[[Line], str]) -> Iterable[str]:
     """The result as `search` prints it: per day its date and weekday, then per hit the row `show`
-    prints (`row`) and the snippet under it; last, the count, with a word when the limit was
-    reached and when tier 3 was not searched."""
+    prints (`row`), marked when a line supersedes it (`mark`), and the snippet under it; last, the
+    count, with a word when the limit was reached and when tier 3 was not searched."""
     q = result.query
     if not result.hits:
         yield f"nothing matches: {q.text}"
@@ -307,12 +364,18 @@ def rows(result: Result, row: Callable[[Line], str]) -> Iterable[str]:
     for day, hits in days:
         yield f"{day} {weekday(day)}"
         for hit in hits:
-            yield row(hit.line)
+            yield row(hit.line) + mark(hit)
             yield f"         {hit.snippet}"
     footer = f"{_plural(len(result.hits), 'hit')} in {_plural(len(days), 'day')}"
     if result.full:
         footer += f"; the first {q.limit} by rank, --limit for more"
     yield footer
+
+
+def mark(hit: Hit) -> str:
+    """What follows a hit's row: nothing when it stands, else the line that superseded it, as `show`
+    marks a superseded line whose words it keeps."""
+    return "" if hit.superseded_by is None else f"{FIELD_BREAK}superseded by #{hit.superseded_by[0]}"
 
 
 def weekday(day: str) -> str:

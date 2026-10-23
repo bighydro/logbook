@@ -47,7 +47,7 @@ from typing import Any
 from urllib.parse import parse_qs, urlsplit
 from zoneinfo import ZoneInfo
 
-from ..core import crossing, policy, reading, stays
+from ..core import crossing, drafts, policy, reading, stays
 from ..core import year as year_reader
 from ..core.chain import Line
 from ..core.flights import Airports
@@ -92,6 +92,7 @@ class Request:
     until: str
     tiers: tuple[int, ...]
     max_tier: int
+    drafts: bool = False  # a model's drafts (pencil) on the Day pages: only when asked (`--with-drafts`)
 
     @property
     def years(self) -> list[str]:
@@ -110,11 +111,11 @@ def parse_tiers(text: str) -> tuple[int, ...]:
     return TIER_SETS[key]
 
 
-def request(lb: Logbook, tiers: tuple[int, ...]) -> Request | None:
+def request(lb: Logbook, tiers: tuple[int, ...], drafts: bool = False) -> Request | None:
     """The whole record, from the first day with a line to the last (a year before the track began
     has its Days index, and its Year page says what the Year reader says of it), held against the
-    policy: a tier above the ceiling for `site` is refused naming the file. None when the record has
-    no day at all."""
+    policy: a tier above the ceiling for `site` is refused naming the file. A model's drafts are left
+    out unless `drafts`. None when the record has no day at all."""
     whole = reading.record_span(lb)
     if whole is None:
         return None
@@ -129,7 +130,7 @@ def request(lb: Logbook, tiers: tuple[int, ...]) -> Request | None:
             f"{policy.expiry_note(lb.root, DESTINATION)}; "
             f'add {{"{DESTINATION}": {{"max_tier": {max(tiers)}}}}} to it if that is what you want'
         )
-    return Request(whole[0], whole[1], tiers, max_tier)
+    return Request(whole[0], whole[1], tiers, max_tier, drafts)
 
 
 # -- names: file stems and relative paths -------------------------------------------------------------------
@@ -274,8 +275,11 @@ class _Builder:
         footer = (
             f"exported from the record{DOT}tier {','.join(map(str, req.tiers))}{DOT}{escape(str(self.tz))}"
             f"{DOT}nothing here is fetched"
+            + (f"{DOT}a model's drafts included, each headed with its model" if req.drafts else "")
         )
-        self.view = serve.Site(lb, self.airports, tiers=req.tiers, href=self._href, footer=footer)
+        self.view = serve.Site(
+            lb, self.airports, tiers=req.tiers, href=self._href, footer=footer, with_drafts=req.drafts
+        )
 
     # -- reading --
 
@@ -285,6 +289,10 @@ class _Builder:
             self._count(first, last)
             data = year_reader.read(self.lb, year, self.airports, self.req.tiers)
             data["head"] = ""  # the page is a function of the lines, never of the head
+            if not self.req.drafts:
+                for pick in data["picks"]:
+                    if pick["page"] is not None:
+                        _leave_drafts_out(pick["page"])
             self.years[year] = data
             self.day_pages.update(str(p["day"]) for p in data["picks"] if p["day"])
             for listed in data["trips"]:
@@ -685,6 +693,7 @@ def export(lb: Logbook, req: Request, built: Build, folder: Path, generated_at: 
             "extra": {
                 "site": {
                     "years": built.years,
+                    "drafts": req.drafts,
                     "pages": dict(built.pages),
                     "files": {"written": written, "unchanged": unchanged, "total": len(built.files)},
                 }
@@ -696,6 +705,14 @@ def export(lb: Logbook, req: Request, built: Build, folder: Path, generated_at: 
 
 
 # -- helpers -----------------------------------------------------------------------------------------------
+
+
+def _leave_drafts_out(page: dict[str, Any]) -> None:
+    """A Day as a Year pick renders it, with nothing a model drafted: the keys `day --no-dream`
+    drops, and the model's row among the sources (a draft's `source` is `model:<name>`)."""
+    for key in ("draft", "draft_withheld", "syntheses", "syntheses_withheld"):
+        page.pop(key, None)
+    page["sources"] = [s for s in page["sources"] if not str(s["source"]).startswith(drafts.SOURCE_PREFIX)]
 
 
 def _day_after(day: str) -> str:

@@ -304,6 +304,9 @@ class GatedIndex(Index):
                 self.gate.withheld.add(place.seq)
         return kept
 
+    def window_tally(self, since: str, until: str) -> tuple[list[tuple[int, str, int]], list[Place]]:
+        return [], self.window(since, until)  # every line through the gate, counted by the caller
+
     def read(self, places: Iterable[tuple[str, int]], opened: bool = True) -> list[Line]:
         return self._kept(super().read(places, opened))
 
@@ -356,8 +359,11 @@ class GatedIndex(Index):
         first_day: str | None = None,
         last_day: str | None = None,
         source: str | None = None,
+        after_seq: int | None = None,
+        files: tuple[str | None, str | None] = (None, None),
     ) -> Iterator[Line]:
-        return (line for line in super().of_kind(kind, first_day, last_day, source) if self.gate.keep(line))
+        found = super().of_kind(kind, first_day, last_day, source, after_seq, files)
+        return (line for line in found if self.gate.keep(line))
 
     def locations(self, first_day: str, last_day: str, subject: str | None = None) -> list[LocationRow]:
         where = (
@@ -372,12 +378,36 @@ class GatedIndex(Index):
         ).fetchall()
         return rows
 
-    def evidence(self, kinds: Sequence[str], first_day: str, last_day: str) -> list[EvidenceRow]:
+    def location_rows(
+        self, first_day: str, last_day: str, tiers: Sequence[int] | None = None
+    ) -> list[tuple[int, str, str, float | None, float | None, str | None, bool]]:
+        where = "kind = 'location' AND day_local BETWEEN ? AND ?"
+        args: tuple[object, ...] = (first_day, last_day)
+        if tiers is not None:
+            where += f" AND tier IN ({', '.join('?' * len(tiers))})"
+            args += tuple(int(t) for t in tiers)
+        self._count_above(where, args)
+        found = self.db.execute(
+            f"SELECT seq, id, at, lat, lon, subject, id IN ({RETRACTED}) FROM lines"
+            f" WHERE {where} AND {self._cut} ORDER BY file, offset",
+            (*args, *self.gate.cut),
+        ).fetchall()
+        return [
+            (int(seq), str(i), str(at), lat, lon, None if subject is None else str(subject), bool(gone))
+            for seq, i, at, lat, lon, subject, gone in found
+        ]
+
+    def evidence(
+        self, kinds: Sequence[str], first_day: str, last_day: str, tiers: Sequence[int] | None = None
+    ) -> list[EvidenceRow]:
         where = (
             f"kind IN ({', '.join('?' * len(kinds))}) AND day_local BETWEEN ? AND ?"
             f" AND id NOT IN ({RETRACTED})"
         )
         args: tuple[object, ...] = (*kinds, first_day, last_day)
+        if tiers is not None:
+            where += f" AND tier IN ({', '.join('?' * len(tiers))})"
+            args += tuple(int(t) for t in tiers)
         self._count_above(where, args)
         rows: list[EvidenceRow] = self.db.execute(
             f"SELECT kind, at, end FROM lines WHERE {where} AND {self._cut} ORDER BY at, seq",
@@ -1044,6 +1074,7 @@ def tool_sign_day(lb: GatedLogbook, a: Arguments) -> dict[str, Any]:
     entries = None if confirm is None else [confirm] if isinstance(confirm, str) else _entries(a, "confirm")
     disposed = {value: _entries(a, value) for value in signing.DISPOSITIONS if a.get(value) is not None}
     record = Logbook(lb.root)
+    reflect.no_draft(record, day, [*(entries or []), *(e for found in disposed.values() for e in found)])
     chosen, keep = sign_again.confirmation(entries, bool(disposed))
     args = sign_again.again(record, day, chosen, keep, disposed, _string(a, "note"))  # under `call`'s hold
     hidden: set[str] = set()
@@ -1054,7 +1085,7 @@ def tool_sign_day(lb: GatedLogbook, a: Arguments) -> dict[str, Any]:
     line = signing.sign(
         record,
         day,
-        confirm=args.confirm,
+        confirm=reflect.ink(record, day, args.confirm),  # never a draft line (RFC 0043 §6 rule 3)
         note=args.note,
         at=_string(a, "at"),
         dispositions=args.dispositions,
@@ -1081,9 +1112,11 @@ def _shown_on_page(lb: GatedLogbook, record: Logbook, day: str) -> tuple[list[st
     0034 amendment 4, 18 and 19 October 2026): the ids of the page's lines the gate lets the agent
     see, in the page's order, and the ids of those it does not, which stay unconfirmed unless given a
     disposition. The page is read from the record itself, as `signing.sign` reads it; the caller says
-    nothing of a line above the gate but how many there are."""
+    nothing of a line above the gate but how many there are. A draft line is neither: a signature never
+    confirms one (RFC 0043 §6 rule 3)."""
     lines, retracted = reflect.day_lines(record, day)
-    page = reflect.on_page(lines, retracted)
+    drafted = {str(line["id"]) for line in lines if line.get("kind") == drafts.KIND}
+    page = reflect.on_page(lines, retracted) - drafted
     shown = [str(line["id"]) for line in lines if str(line["id"]) in page and lb.gate.shows(line)]
     return shown, set(page) - set(shown)
 

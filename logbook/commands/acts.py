@@ -1,6 +1,7 @@
 """The owner's acts on lines already in the record: `star`, `unstar` (RFC 0041) and `with`. Each is a
 function of `logbook.core` (`stars.star`, `stars.unstar`, `presence.state`) that the Day page of
-`logbook serve` calls too, so the line is the same from either."""
+`logbook serve` calls too, so the line is the same from either. `with --from D1 --to D2` is the same
+function once a day of the stretch (`logbook.contrib.who_was_there`, its command line in `who.py`)."""
 
 from __future__ import annotations
 
@@ -70,26 +71,39 @@ def cmd_unstar(a: argparse.Namespace) -> None:
 
 
 def with_arguments(sub: Subparsers) -> None:
-    """`logbook with DAY NAME [NAME…] [--at HH:MM]`."""
+    """`logbook with DAY NAME [NAME…] [--at HH:MM]`, and `logbook with --from D1 --to D2 NAME…`."""
     s = sub.add_parser(
         "with",
         help="who was there when the record could not see: one note per person",
         description="who was with you on DAY, in your words: one note/v1 line per person, `with"
-        " <name>`, labelled with, the company the people reader already reads (SPEC §3.2.5 rule 3)",
+        " <name>`, labelled with, the company the people reader already reads (SPEC §3.2.5 rule 3);"
+        " with --from D1 --to D2 (60 days at most), one such line per person on every day of the"
+        " stretch, at that day's longest stay (RFC 0043 §11)",
     )
-    s.add_argument("day", metavar="DAY", help="YYYY-MM-DD")
+    s.add_argument("day", metavar="DAY", nargs="?", help="YYYY-MM-DD (none with --from and --to)")
     s.add_argument(
         "names",
         metavar="NAME",
-        nargs="+",
+        nargs="*",
         help='a person the record names: a label, quoted ("Ola Nordmann"), a first or last name, an address',
     )
     s.add_argument("--at", metavar="HH:MM", help="the clock on the day; default noon, or now for today")
+    s.add_argument("--from", dest="from_", metavar="DAY", help="a stretch's first day, with --to")
+    s.add_argument("--to", metavar="DAY", help="a stretch's last day")
     s.set_defaults(fn=cmd_with)
 
 
 def cmd_with(a: argparse.Namespace) -> None:
-    """`with DAY NAME… [--at HH:MM]`: `presence.state`; a refusal is one sentence on stderr, exit 2."""
+    """`with DAY NAME… [--at HH:MM]`: `presence.state`; `with --from D1 --to D2 NAME…`:
+    `who_was_there.with_stretch` (`commands.who`); a refusal is one sentence on stderr, exit 2."""
+    if a.from_ is not None or a.to is not None:
+        from .who import with_stretch
+
+        with_stretch(a)
+        return
+    if a.day is None or not a.names:
+        print("with: say the day and at least one person: `logbook with DAY NAME [NAME…]`", file=sys.stderr)
+        sys.exit(2)
     try:
         found = presence.state(Logbook.find(), a.day, a.names, a.at)
     except (presence.WithError, ValueError) as e:

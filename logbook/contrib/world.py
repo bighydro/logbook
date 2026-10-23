@@ -33,10 +33,11 @@ which the stays reader computes, to the fewest decimals any of the owner's point
 and to `CENTRE_DECIMALS` at most (the precision of the stay's own id).
 
 It is an export and tier-gated like one (ADR 0016): the record is read through `reading.read(...,
-tiers)`, a year at a time, so a line whose tier is not asked for is not a stay, not a track, not a
-count; the chapters, read from the whole record since a chapter is named after it begins, pass the
-same gate. The default is tiers 1 and 2, under the `world` entry of `policy/crossing.json` (2 when the
-file does not name it; tier 3 needs the entry). The page says how many lines it held back. Every
+tiers)`, a year at a time (a year before the window's last kept beside the index, `_Years`, and read
+again only when a line comes for its days), so a line whose tier is not asked for is not a stay, not a
+track, not a count; the chapters, read from the whole record since a chapter is named after it begins,
+pass the same gate. The default is tiers 1 and 2, under the `world` entry of `policy/crossing.json` (2
+when the file does not name it; tier 3 needs the entry). The page says how many lines it held back. Every
 export appends one `crossing/v1` line (RFC 0011) with the destination `world`, the window, the counts
 and the digest of the page, through `Logbook.append`; nothing else is written to the record. The page
 is a function of the record's lines and settings alone (no head, no clock), so a re-run that changes
@@ -59,7 +60,7 @@ from bisect import bisect_left, bisect_right
 from collections import Counter
 from collections.abc import Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
-from datetime import date, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from functools import cache
 from html import escape
@@ -67,7 +68,7 @@ from importlib import resources
 from pathlib import Path
 from typing import Any
 
-from ..core import crossing, day_start, policy, reading, stays
+from ..core import crossing, day_start, kept, policy, reading, stays
 from ..core.assets import IDENTIFIERS, Asset
 from ..core.chain import Line
 from ..core.export import parse_day
@@ -95,6 +96,11 @@ JOURNEY_KINDS = ("journey", "trip")  # RFC 0031: readers accept both spellings
 JOURNEY_SCHEMAS = ("journey/v1", "trip/v1")
 CHAPTER, CHAPTER_SCHEMA = "chapter", "chapter/v1"
 PHOTO = "photo"
+READ_KINDS: tuple[str, ...] | None = (
+    *JOURNEY_KINDS,
+    PHOTO,
+)  # the lines a year's reading parses; the rest from the index
+KEPT_FILE, KEPT_VERSION = "world-years.json", 1  # the years before the window's last (`_Years`)
 TIER_SETS = {"1": (1,), "1,2": (1, 2), "1,2,3": (1, 2, 3)}
 DEFAULT_TIERS = (1, 2)
 PLACE_ID, ASSET_ID = "place:", "asset:"
@@ -156,12 +162,18 @@ def parse_tiers(text: str) -> tuple[int, ...]:
 
 
 def request(
-    lb: Logbook, first: str | None = None, last: str | None = None, tiers: tuple[int, ...] | None = None
+    lb: Logbook,
+    first: str | None = None,
+    last: str | None = None,
+    tiers: tuple[int, ...] | None = None,
+    today: str | None = None,
 ) -> Request | None:
     """The page asked for, held against the policy: `tiers` (default 1 and 2, as far as the ceiling
     goes) under the ceiling for `world`, which is refused naming the file; `first` and `last` (local
     days, default the record's first and last day with a line that observes one, `reading.record_span`)
-    checked. None when the record has no such day."""
+    checked. The default `last` is never after `today` (the owner's day, the wall clock's when not
+    given): a calendar entry in 2055 is a plan, and the slider runs to today, not to it. None when
+    the record has no such day."""
     try:
         max_tier = policy.world_ceiling(lb.root)
     except policy.PolicyError as e:
@@ -189,7 +201,10 @@ def request(
     whole = reading.record_span(lb)
     if whole is None:
         return None
-    since, until = first or whole[0], last or whole[1]
+    if today is None:
+        today = day_start.of(lb.meta).today(datetime.now(UTC)).isoformat()
+    since = first or whole[0]
+    until = last or max(min(whole[1], today), since)
     if since > until:
         raise WorldError(f"--from {since} is after --to {until}")
     return Request(since, until, tuple(tiers), max_tier)
@@ -320,6 +335,146 @@ class _Tally:
         self.last = last if self.last is None else max(self.last, last)
 
 
+@dataclass
+class _Part:
+    """What one reading of the window (a calendar year) adds to the page: the owner's fixes and their
+    decimals, each asset's first fix of every minute and the fixes counted, the owner's stays, the
+    journey lines, and the tallies of the places and the assets."""
+
+    points: list[tuple[datetime, int]] = field(default_factory=list)
+    fixes: dict[str, dict[int, _Fix]] = field(default_factory=dict)
+    held: Counter[str] = field(default_factory=Counter)
+    stays: list[_Stay] = field(default_factory=list)
+    journeys: dict[str, Line] = field(default_factory=dict)
+    places: dict[str, _Tally] = field(default_factory=dict)
+    assets: dict[str, _Tally] = field(default_factory=dict)
+
+    def to_json(self) -> dict[str, Any]:
+        def tallies(found: Mapping[str, _Tally]) -> dict[str, Any]:
+            return {k: [t.nights, sorted(t.photos), t.first, t.last] for k, t in found.items()}
+
+        return {
+            "points": [[at.isoformat(), d] for at, d in self.points],
+            "fixes": {
+                subject: [[minute, f.at.isoformat(), f.seq, f.lat, f.lon] for minute, f in minutes.items()]
+                for subject, minutes in self.fixes.items()
+            },
+            "held": dict(self.held),
+            "stays": [
+                [s.start.isoformat(), s.end.isoformat(), s.lat, s.lon, s.place, s.aboard, s.night]
+                for s in self.stays
+            ],
+            "journeys": list(self.journeys.values()),
+            "places": tallies(self.places),
+            "assets": tallies(self.assets),
+        }
+
+    @classmethod
+    def from_json(cls, data: Mapping[str, Any]) -> _Part:
+        def tallies(found: Mapping[str, Any]) -> dict[str, _Tally]:
+            return {
+                k: _Tally(int(n), set(photos), first, last) for k, (n, photos, first, last) in found.items()
+            }
+
+        at = datetime.fromisoformat
+        return cls(
+            [(at(t), int(d)) for t, d in data["points"]],
+            {
+                subject: {int(m): _Fix(at(t), int(seq), lat, lon) for m, t, seq, lat, lon in minutes}
+                for subject, minutes in data["fixes"].items()
+            },
+            Counter({str(k): int(v) for k, v in data["held"].items()}),
+            [
+                _Stay(at(a), at(b), lat, lon, place, aboard, bool(night))
+                for a, b, lat, lon, place, aboard, night in data["stays"]
+            ],
+            {str(line["id"]): line for line in data["journeys"]},
+            tallies(data["places"]),
+            tallies(data["assets"]),
+        )
+
+
+class _Years:
+    """The parts of the window before its last, kept beside the index (`kept`, `KEPT_FILE`) between
+    pages of the same gate and first day: a part read once is taken from there while no line has come
+    for the days it reads (its own and the night after) and nothing has been retracted since, under the
+    same code, settings and airports (`kept.stamp`); a chain written again under it (SPEC §3.1) keeps
+    nothing. Deleting the file loses nothing: the next page reads every part."""
+
+    def __init__(self, lb: Logbook, req: Request, stamp: str, seq: int, head: str) -> None:
+        self.lb, self.req, self.stamp, self.seq, self.head = lb, req, stamp, seq, head
+        self.parts: dict[str, Any] = {}
+        self.touched: set[str] = set()
+
+    @classmethod
+    def load(cls, lb: Logbook, req: Request, airports: Airports) -> _Years | None:
+        stamp = kept.stamp(lb, str(KEPT_VERSION), kept.code_digest(__file__), airports.fingerprint())
+        with lb.index() as idx:
+            seq, head = idx.indexed()
+            years = cls(lb, req, stamp, seq, head)
+            held = kept.load(kept.path(lb, KEPT_FILE))
+            if (
+                held is None
+                or held.get("version") != KEPT_VERSION
+                or held.get("stamp") != stamp
+                or held.get("first") != req.first
+                or held.get("tiers") != list(req.tiers)
+                or int(held.get("seq") or 0) > seq
+            ):
+                return years
+            since = int(held["seq"])
+            if (
+                since
+                and (line := idx.by_seq(since)) is not None
+                and str(line.get("hash")) != str(held["head"])
+            ):
+                return years
+            rows = idx.db.execute(
+                "SELECT DISTINCT kind, day_local FROM lines WHERE seq > ?", (since,)
+            ).fetchall()
+        if any(str(kind) == RETRACTION for kind, _day in rows):
+            return years
+        years.touched = {str(day) for _kind, day in rows}
+        years.parts = dict(held.get("parts") or {})
+        return years
+
+    def get(self, first: str, last: str) -> _Part | None:
+        """The kept part of `[first, last]`, or None when there is none or a line has come for its days."""
+        found = self.parts.get(f"{first}/{last}")
+        if found is None or found["reads"][1] >= self.req.last:
+            return None
+        if any(found["reads"][0] <= day <= found["reads"][1] for day in self.touched):
+            return None
+        try:
+            return _Part.from_json(found["part"])
+        except (KeyError, TypeError, ValueError):
+            return None
+
+    def put(self, first: str, last: str, part: _Part) -> None:
+        """`part` kept, when the days it reads end before the window's last: what the window's end cuts
+        (a stay, a fix, a photo after it) is then never in it, and the part is the same tomorrow."""
+        settings = stays.read_settings(self.lb.root)
+        spill = reading._window(day_start.of(self.lb.meta), first, last, settings)[2]
+        if spill < self.req.last:
+            self.parts[f"{first}/{last}"] = {"reads": [first, spill], "part": part.to_json()}
+
+    def save(self) -> None:
+        """The parts at the seq read under; those of a part no longer in the window are left out."""
+        wanted = {f"{first}/{last}" for first, last in self.req.chunks}
+        kept.save(
+            kept.path(self.lb, KEPT_FILE),
+            {
+                "version": KEPT_VERSION,
+                "stamp": self.stamp,
+                "first": self.req.first,
+                "tiers": list(self.req.tiers),
+                "seq": self.seq,
+                "head": self.head,
+                "parts": {k: v for k, v in self.parts.items() if k in wanted},
+            },
+        )
+
+
 @dataclass(frozen=True)
 class Build:
     """What one page holds, before anything is written: the bundle, its JSON as the page embeds it,
@@ -389,24 +544,46 @@ class _Builder:
     # -- reading --
 
     def read(self) -> None:
-        for first, last in self.req.chunks:
-            self._take(reading.read(self.lb, first, last, self.airports, self.req.tiers))
+        """Every year of the window, then the chapters and the counts. A year before the window's last
+        is kept beside the index (`_Years`) and taken from there while no line has come for its days
+        since; the last year is always read."""
+        chunks = self.req.chunks
+        years = _Years.load(self.lb, self.req, self.airports) if self.req.journey is None else None
+        for n, (first, last) in enumerate(chunks):
+            closed = years is not None and n < len(chunks) - 1
+            part = years.get(first, last) if years is not None and closed else None
+            if part is None:
+                rd = reading.read(self.lb, first, last, self.airports, self.req.tiers, READ_KINDS)
+                self.places, self.registry = list(rd.places), dict(rd.assets)
+                part = self._take(rd)
+                if years is not None and closed:
+                    years.put(first, last, part)
+            self._add(part)
+        if years is not None:
+            years.save()
         self._read_chapters()
         self._count()
 
-    def _take(self, rd: reading.Reading) -> None:
-        self.places = list(rd.places)
-        self.registry = dict(rd.assets)
+    def _take(self, rd: reading.Reading) -> _Part:
+        """What one reading adds to the page (`_Part`): a function of the lines of its days and the
+        night after, and of the settings, so a year's is the same while neither changes."""
+        part = _Part()
+        for p in rd.points or ():  # read from the index: every subject's points of the window
+            self._fix(p.at, p.seq, p.lat, p.lon, p.subject, rd, part)
         for line in rd.lines:
             kind = line.get("kind")
             if kind == "location":
-                self._fix(line, rd)
+                payload = line.get("payload") or {}
+                subject = payload.get("subject")
+                at = stays.instant(line.get("at"))
+                if at is not None:
+                    self._fix(at, int(line["seq"]), payload.get("lat"), payload.get("lon"), subject, rd, part)
             elif (
                 kind in JOURNEY_KINDS
                 and (line.get("payload") or {}).get("schema") in JOURNEY_SCHEMAS
                 and self._inside(line)
             ):
-                self.journey_lines[str(line["id"])] = line
+                part.journeys[str(line["id"])] = line
         nights = {
             (n.stay.start, n.stay.end)
             for n in rd.nights
@@ -418,22 +595,22 @@ class _Builder:
             start, end = max(s.start, self.start), min(s.end, self.end)
             if start >= end:
                 continue
-            self.stays.append(_Stay(start, end, s.lat, s.lon, s.place, s.aboard, (s.start, s.end) in nights))
+            part.stays.append(_Stay(start, end, s.lat, s.lon, s.place, s.aboard, (s.start, s.end) in nights))
         for n in rd.nights:
             if n.stay is None:
                 continue
             inner = n.innermost
             if inner is not None and inner.place is not None:
-                self.place_tally.setdefault(inner.place, _Tally()).nights += 1
+                part.places.setdefault(inner.place, _Tally()).nights += 1
             if n.aboard is not None:
-                self.asset_tally.setdefault(n.aboard, _Tally()).nights += 1
+                part.assets.setdefault(n.aboard, _Tally()).nights += 1
         owner = sorted(rd.owner_stays, key=lambda s: s.start)
         owner_starts = [s.start for s in owner]
         last = self.end - timedelta(seconds=1)  # the window's last instant: its end is the next day's start
         for s in owner:
             if s.place is not None and s.start < self.end and s.end > self.start:
                 first_day, last_day = self._day(max(s.start, self.start)), self._day(min(s.end, last))
-                self.place_tally.setdefault(s.place, _Tally()).seen(first_day, last_day)
+                part.places.setdefault(s.place, _Tally()).seen(first_day, last_day)
         aboard = sorted(
             (s for s in rd.derived.folded if s.subject is None and s.aboard is not None),
             key=lambda s: s.start,
@@ -445,29 +622,56 @@ class _Builder:
                 continue
             here = _containing(owner, owner_starts, at)
             if here is not None and here.place is not None:
-                self.place_tally.setdefault(here.place, _Tally()).photos.add(str(line["id"]))
+                part.places.setdefault(here.place, _Tally()).photos.add(str(line["id"]))
             on = _containing(aboard, aboard_starts, at)
             if on is not None and on.aboard is not None:
-                self.asset_tally.setdefault(on.aboard, _Tally()).photos.add(str(line["id"]))
+                part.assets.setdefault(on.aboard, _Tally()).photos.add(str(line["id"]))
+        return part
 
-    def _fix(self, line: Line, rd: reading.Reading) -> None:
-        """One location line of the window: the owner's, for the precision of the stays' centres; an
+    def _add(self, part: _Part) -> None:
+        """One year's part added to what the years before it gave, as one reading after another adds it."""
+        self.owner_points.extend(part.points)
+        for subject, minutes in part.fixes.items():
+            into = self.fixes.setdefault(subject, {})
+            for minute, fix in minutes.items():
+                kept = into.get(minute)
+                if kept is None or (fix.at, fix.seq) < (kept.at, kept.seq):
+                    into[minute] = fix
+        self.held_fixes.update(part.held)
+        self.stays.extend(part.stays)
+        self.journey_lines.update(part.journeys)
+        for mine, theirs in ((self.place_tally, part.places), (self.asset_tally, part.assets)):
+            for name, tally in theirs.items():
+                into_tally = mine.setdefault(name, _Tally())
+                into_tally.nights += tally.nights
+                into_tally.photos |= tally.photos
+                if tally.first is not None and tally.last is not None:
+                    into_tally.seen(tally.first, tally.last)
+
+    def _fix(
+        self,
+        at: datetime,
+        seq: int,
+        lat: object,
+        lon: object,
+        subject: object,
+        rd: reading.Reading,
+        part: _Part,
+    ) -> None:
+        """One location point of the window: the owner's, for the precision of the stays' centres; an
         asset's, the first of its minute kept (a receiver may report every few seconds, and a track is
         never drawn finer than `TRACK_STEP_MIN`). Counted once, by the reading whose day it is on (the
         readings overlap by the night after their last day)."""
-        payload = line.get("payload") or {}
-        found = _position(payload.get("lat"), payload.get("lon"))
-        at = stays.instant(line.get("at"))
-        if found is None or at is None or not self.start <= at < self.end:
+        found = _position(lat, lon)
+        if found is None or not self.start <= at < self.end:
             return
-        subject = payload.get("subject")
         if not isinstance(subject, str) or not subject:
-            self.owner_points.append((at, min(decimals(found[0]), decimals(found[1]))))
+            part.points.append((at, min(decimals(found[0]), decimals(found[1]))))
             return
         if rd.first <= self._day(at) <= rd.last:
-            self.held_fixes[subject] += 1
-        fix = _Fix(at, int(line["seq"]), own(found[0]), own(found[1]))
-        minutes = self.fixes.setdefault(subject, {})
+            part.held[subject] += 1
+        fix = _Fix(at, seq, own(found[0]), own(found[1]))
+        minutes = part.fixes.setdefault(subject, {})
         kept = minutes.get(minute := self._minute(at))
         if kept is None or (fix.at, fix.seq) < (kept.at, kept.seq):
             minutes[minute] = fix
@@ -515,8 +719,18 @@ class _Builder:
     def _count(self) -> None:
         """Every line of the window, crossing or held back, from the index's columns."""
         with self.lb.index() as idx:
-            found = idx.window(stays.instant_text(self.start), stays.instant_text(self.end))
-        for place in found:
+            counted, found = idx.window_tally(stays.instant_text(self.start), stays.instant_text(self.end))
+        for tier, kind, n in counted:  # plainly inside the window
+            if kind == RETRACTION:
+                continue
+            self.logged += n
+            if tier in self.req.tiers:
+                self.crossed += n
+                self.by_tier[tier] += n
+                self.by_kind[kind] += n
+            else:
+                self.held_by_kind[kind] += n
+        for place in found:  # at its edges, or stamped with an offset: by the exact instant
             at = stays.instant(place.at)
             if place.kind == RETRACTION or at is None or not self.start <= at < self.end:
                 continue
@@ -1347,12 +1561,12 @@ def console(built: Build, result: Result) -> Iterator[str]:
 
 
 def library_page(
-    lb: Logbook, first: str | None, last: str | None, nav: str, airports: Airports
+    lb: Logbook, first: str | None, last: str | None, nav: str, airports: Airports, today: str | None = None
 ) -> str | None:
     """The Library's `/world`: the page the export writes by default (the same request, the same
     JSON), with the Library's navigation and the policy left to the header; None for a record with
     no day."""
-    req = request(lb, first, last)
+    req = request(lb, first, last, today=today)
     if req is None:
         return None
     built = build(lb, req, airports)
