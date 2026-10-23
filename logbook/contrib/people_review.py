@@ -68,11 +68,11 @@ from dataclasses import dataclass, field
 from datetime import date, timedelta
 from typing import Any
 
-from ..core import day_start, machine, people, policy, present, reading, resolve, stays
+from ..core import day_start, kept, machine, people, policy, present, reading, resolve, stays
 from ..core.chain import Line
 from ..core.index import Index
 from ..core.resolve import Identity, Ref
-from ..core.store import Logbook, now_utc, retractions, uuid7
+from ..core.store import RETRACTION, Logbook, now_utc, retractions, uuid7
 from . import entities, google_contacts, people_merge
 from .adapters import phone as phones
 from .adapters import service_account
@@ -108,6 +108,12 @@ COLUMNS = (
     "samples",
 )
 SAMPLES = 3  # line ids kept per observed person, as evidence
+KEPT_FILE, KEPT_VERSION = "people-observed.json", 1  # each kind's observed people, beside the index
+OVERLAY = (RETRACTION, "resolution")  # what changes who is who: every line read again
+ROW_ORDER = (
+    "key_kind", "key_value", "entity", "labels", "refs", "sources", "kinds", "days", "first", "last", "count",
+    "tier", "samples",
+)  # an `Observed._row` as `Observed._from_row` takes it  # fmt: skip
 EMAIL, PHONE, NAME, TOGETHER = 60, 50, 20, 2  # the evidence, in points
 NAME_SOURCE, NAME_SOURCE_CAP, TOGETHER_CAP = 5, 10, 20
 CONTACT, CONTACT_NAME = 50, 20  # a Google contact holds the observed identifier and the canonical's, or name
@@ -330,6 +336,22 @@ class Observed:
         if len(self.samples) < SAMPLES:
             self.samples.append(line_id)
 
+    def merge(self, other: Observed) -> None:
+        """`other`'s lines added after this one's, as one reading of both adds them."""
+        self.labels.update(other.labels)
+        for ref, n in other.identifiers.items():
+            self.identifiers[ref] = self.identifiers.get(ref, 0) + n
+        self.sources.update(other.sources)
+        self.kinds.update(other.kinds)
+        self.days |= other.days
+        for day in (other.first, other.last):
+            if day is not None:
+                self.first = day if self.first is None else min(self.first, day)
+                self.last = day if self.last is None else max(self.last, day)
+        self.lines += other.lines
+        self.tier = max(self.tier, other.tier)
+        self.samples = [*self.samples, *other.samples][:SAMPLES]
+
     @property
     def name(self) -> str:
         """The display name shown most, the first written when tied; the identifier when none."""
@@ -442,11 +464,10 @@ def _table_current(idx: Index, stamp: Mapping[str, str]) -> bool:
 def build(lb: Logbook, idx: Index) -> list[Observed]:
     """The pure read: every observed person from the standing mail, message, transcript and event
     lines, streamed one kind at a time, keyed by the strongest identifier, the owner's own
-    identities left out, each placed when the record resolves it."""
+    identities left out, each placed when the record resolves it. Each kind's are kept beside the
+    index in file order (`_folds`) and read on from where they stopped while that reads the same."""
     meta = lb.meta
-    days = day_start.of(meta)  # a line's day under the record's day_start (RFC 0036)
     marks, resolutions = idx.retractions(), idx.resolutions()
-    retracted = frozenset(retractions(marks))
     identities = resolve.identities_from([*marks, *resolutions])
     owner = present.owner_of(
         str(meta.get("owner_id") or ""),
@@ -454,13 +475,55 @@ def build(lb: Logbook, idx: Index) -> list[Observed]:
         policy.owner_aliases(lb.root),
         identities,
     )
-    prefix = os.environ.get(DIAL_PREFIX_ENV, "").strip()
     found: dict[Ref, Observed] = {}
-    for kind in KINDS:
+    for fold in _folds(lb, idx, frozenset(retractions(marks)), identities, owner):
+        for key, o in fold.items():
+            if key in found:
+                found[key].merge(o)
+            else:
+                found[key] = Observed._from_row(_row_values(o._row()))
+    for o in found.values():
+        o.entity = placed(o, identities, owner)
+    return sorted(found.values(), key=lambda o: o.key)
+
+
+def _folds(
+    lb: Logbook,
+    idx: Index,
+    retracted: frozenset[str],
+    identities: Mapping[Ref, Identity],
+    owner: present.Owner,
+) -> list[dict[Ref, Observed]]:
+    """Each kind of `KINDS`'s observed people, in file order: read on from the kept ones when that
+    reads the same as every line (`kept.read_on`: no retraction or resolution since, which change who
+    is who, no line superseding another, none into an earlier month), else read from every line;
+    kept again (`KEPT_FILE`)."""
+    days = day_start.of(lb.meta)  # a line's day under the record's day_start (RFC 0036)
+    prefix = os.environ.get(DIAL_PREFIX_ENV, "").strip()
+    path = kept.path(lb, KEPT_FILE)
+    stamp = kept.stamp(lb, str(KEPT_VERSION), kept.code_digest(__file__), prefix)
+    seq, head = idx.indexed()
+    held = kept.load(path)
+    folds: list[dict[Ref, Observed]] | None = None
+    ours = held is not None and held.get("version") == KEPT_VERSION and held.get("stamp") == stamp
+    if held is not None and ours:
+        files = {str(k): str(v) for k, v in (held.get("files") or {}).items()}
+        if set(files) == set(KINDS) and kept.read_on(idx, held, files, OVERLAY):
+            try:
+                folds = [
+                    {o.key: o for o in (Observed._from_row(_row_values(r)) for r in held["folds"][kind])}
+                    for kind in KINDS
+                ]
+            except (KeyError, TypeError, ValueError):
+                folds = None
+    since = int(held["seq"]) if folds is not None and held is not None else None
+    if folds is None:
+        folds = [{} for _kind in KINDS]
+    for kind, found in zip(KINDS, folds, strict=True):
         superseded = idx.superseded(kind)
-        for line in idx.of_kind(kind):
+        for line in idx.of_kind(kind, after_seq=since):
             id_ = str(line.get("id"))
-            if id_ in retracted or id_ in superseded:
+            if int(line.get("seq") or 0) > seq or id_ in retracted or id_ in superseded:
                 continue
             at = stays.instant(line.get("at"))
             if at is None:
@@ -474,9 +537,25 @@ def build(lb: Logbook, idx: Index) -> list[Observed]:
                 if key is None:
                     continue
                 found.setdefault(key, Observed(key)).add(seen, source, kind, day, id_, tier)
-    for o in found.values():
-        o.entity = placed(o, identities, owner)
-    return sorted(found.values(), key=lambda o: o.key)
+    kept.save(
+        path,
+        {
+            "version": KEPT_VERSION,
+            "stamp": stamp,
+            "seq": seq,
+            "head": head,
+            "files": {kind: idx.last_file(kind, seq) for kind in KINDS},
+            "folds": {
+                kind: [o._row() for o in found.values()] for kind, found in zip(KINDS, folds, strict=True)
+            },
+        },
+    )
+    return folds
+
+
+def _row_values(row: Mapping[str, Any]) -> tuple[Any, ...]:
+    """A row of `Observed._row`, as the view reads it back (`COLUMNS`'s order)."""
+    return tuple(row[k] for k in ROW_ORDER)
 
 
 def _is_owner(seen: Seen, owner: present.Owner, identities: Mapping[Ref, Identity]) -> bool:

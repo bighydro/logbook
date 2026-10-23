@@ -28,3 +28,5 @@
   (`LOGBOOK_BUILD_WORKERS` sets how many).
 - Places keeps the owner's stays and what the lines name beside the index: a day reads the owner's
   track from a month before it, and the names of the lines appended, rather than the whole record.
+- The People page's review queue keeps each kind's observed people beside the index and reads only
+  the lines appended since.
