@@ -997,12 +997,14 @@ class Index:
         ).fetchall()
         return {str(kind): (str(file), int(sup or 0)) for kind, file, sup in rows}
 
-    def last_file(self, kind: str, seq: int) -> str:
-        """The last month file (by the path's order) a line of `kind` up to `seq` is in; empty for none."""
-        (found,) = self.db.execute(
-            "SELECT max(file) FROM lines WHERE kind = ? AND seq <= ?", (kind, seq)
+    def last_file(self, kind: str) -> str:
+        """The last month file (by the path's order) a line of `kind` is in; empty for none. A line's
+        month file is its stamp's (`Logbook._path_for`), so it is the file of the latest stamp: one
+        step down the (kind, at) index."""
+        found = self.db.execute(
+            "SELECT file FROM lines WHERE kind = ? ORDER BY at DESC LIMIT 1", (kind,)
         ).fetchone()
-        return str(found or "")
+        return "" if found is None else str(found[0])
 
     def by_ids(self, ids: Iterable[str]) -> dict[str, Line]:
         """id → line for these line ids, read from the files; an id the record has no line for is
@@ -1040,12 +1042,13 @@ class Index:
     def span(self, kind: str | None = None) -> tuple[str, str] | None:
         """The first and last local day with a line of `kind` (any kind when None); None when
         there is none. Nothing is read from the files."""
-        found = self.db.execute(
-            "SELECT min(day_local), max(day_local) FROM lines WHERE kind = coalesce(?, kind)", (kind,)
-        ).fetchone()
-        if found is None or found[0] is None:
+        where, args = ("", ()) if kind is None else (" WHERE kind = ?", (kind,))
+        # one aggregate a statement: each is a single step down the (kind, day_local) or day_local index
+        (first,) = self.db.execute(f"SELECT min(day_local) FROM lines{where}", args).fetchone()
+        (last,) = self.db.execute(f"SELECT max(day_local) FROM lines{where}", args).fetchone()
+        if first is None:
             return None
-        return str(found[0]), str(found[1])
+        return str(first), str(last)
 
     def source_days(
         self, first: str, last: str, tiers: Sequence[int] | None = None
@@ -1095,6 +1098,18 @@ class Index:
         """(lines, first `at`, last `at`); the stamps are None on an empty record."""
         n, first, last = self.db.execute("SELECT count(*), min(at), max(at) FROM lines").fetchone()
         return int(n), first, last
+
+    def kind_names(self) -> list[str]:
+        """The kinds the record has a line of, in order: one step down the (kind, day_local) index a
+        kind, never a pass over the lines (`kinds` counts them)."""
+        found: list[str] = []
+        while (
+            row := self.db.execute(
+                "SELECT kind FROM lines WHERE kind > ? ORDER BY kind LIMIT 1", (found[-1] if found else "",)
+            ).fetchone()
+        ) is not None:
+            found.append(str(row[0]))
+        return found
 
     def kinds(self) -> list[dict[str, Any]]:
         """Per kind, most lines first: lines, first and last local day, distinct sources."""

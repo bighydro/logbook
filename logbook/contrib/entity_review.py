@@ -562,7 +562,7 @@ def _org_folds(lb: Logbook, idx: Index, ctx: Context) -> list[_OrgFold]:
             "stamp": stamp,
             "seq": seq,
             "head": head,
-            "files": {kind: idx.last_file(kind, seq) for kind in ORG_KINDS},
+            "files": {kind: idx.last_file(kind) for kind in ORG_KINDS},
             "folds": {fold.kind: fold.to_json() for fold in folds},
         },
     )

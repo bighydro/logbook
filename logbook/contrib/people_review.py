@@ -544,7 +544,7 @@ def _folds(
             "stamp": stamp,
             "seq": seq,
             "head": head,
-            "files": {kind: idx.last_file(kind, seq) for kind in KINDS},
+            "files": {kind: idx.last_file(kind) for kind in KINDS},
             "folds": {
                 kind: [o._row() for o in found.values()] for kind, found in zip(KINDS, folds, strict=True)
             },

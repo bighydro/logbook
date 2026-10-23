@@ -288,7 +288,7 @@ def _touches(
             "stamp": stamp,
             "seq": seq,
             "head": head,
-            "files": {kind: idx.last_file(kind, seq) for kind in entity_review.ORG_KINDS},
+            "files": {kind: idx.last_file(kind) for kind in entity_review.ORG_KINDS},
             "touches": {kind: [_touch_json(t) for t in found] for kind, found in by_kind.items()},
         },
     )

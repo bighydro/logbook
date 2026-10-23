@@ -188,7 +188,7 @@ def record_span(lb: Logbook) -> tuple[str, str] | None:
     own bookkeeping (`BOOKKEEPING`) — so that an export's run does not move the window of the next
     (`export site`, `export world`). None when the record has no such line."""
     with lb.index() as idx:
-        spans = [idx.span(str(row["kind"])) for row in idx.kinds() if row["kind"] not in BOOKKEEPING]
+        spans = [idx.span(kind) for kind in idx.kind_names() if kind not in BOOKKEEPING]
     found = [span for span in spans if span is not None]
     if not found:
         return None
