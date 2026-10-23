@@ -1,0 +1,10 @@
+[tool]
+requirements = [{ name = "openlogbook", extras = ["mcp"], specifier = "==0.7.0" }]
+python = "3.12"
+entrypoints = [
+    { name = "logbook", install-path = "/home/ines/.local/bin/logbook", from = "openlogbook" },
+]
+
+[tool.options]
+no-index = true
+find-links = ["file:///home/ines/src/dist"]

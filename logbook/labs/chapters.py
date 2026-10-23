@@ -258,7 +258,7 @@ def _chapter(
             entry["stays"] += 1
             entry["lines"] += [id_ for id_ in (stay.first_line, stay.last_line) if id_]
         for c in present.present(
-            stay, evidence.near(stay), reading.identities, reading.places, reading.owner
+            stay, evidence.near(stay), reading.identities, reading.places, reading.owner, reading.voice_gate
         ):
             if c.status != present.CONFIRMED:
                 continue

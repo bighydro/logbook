@@ -177,6 +177,10 @@ INDEX_KEY = "index_key"  # meta: the blinding key, sealed to the recipients (RFC
 INSERT = "INSERT INTO lines VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
 INSERT_TEXT = f"INSERT INTO {SEARCH} (rowid, body, kind, tier, day) VALUES (?, ?, ?, ?, ?)"
 
+GAP_MS = "round((julianday(at) - julianday(prev)) * 86400000)"  # a stretch, to the millisecond
+UTC_SECONDS = (
+    "[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]"  # a stamp to the second
+)
 RETRACTED = "SELECT supersedes FROM lines WHERE kind = 'retraction' AND supersedes IS NOT NULL"  # a subquery
 
 Row = tuple[
@@ -427,6 +431,30 @@ class Index:
         stored.pop(INDEX_KEY, None)
         return stored == self._meta_of(meta, opened=bool(self.lb.identities))
 
+    def indexed(self) -> tuple[int, str]:
+        """The seq and head of the last line the index holds: what a reader of it reads up to."""
+        try:
+            stored = dict(self.db.execute("SELECT key, value FROM meta"))
+            return int(stored.get("seq", 0)), str(stored.get("head", ""))
+        except (sqlite3.DatabaseError, ValueError):
+            return 0, ""
+
+    def behind(self, meta: dict[str, Any]) -> bool:
+        """The same index `meta` asks for, short of its last lines: built for this schema, zone,
+        recipients and day, and opened or not as now, at a seq before `meta`'s. What a reader finds
+        between a writer's `logbook.json` and its index (SPEC §3's order): a prefix of the record,
+        every line of it whole. Anything else that does not match is not behind, only stale."""
+        try:
+            stored = dict(self.db.execute("SELECT key, value FROM meta"))
+            stored.pop(INDEX_KEY, None)
+            wanted = self._meta_of(meta, opened=bool(self.lb.identities))
+            rest = {k: v for k, v in stored.items() if k not in ("head", "seq")}
+            return rest == {k: v for k, v in wanted.items() if k not in ("head", "seq")} and int(
+                stored["seq"]
+            ) < int(meta["seq"])
+        except (sqlite3.DatabaseError, KeyError, ValueError):
+            return False
+
     @staticmethod
     def _meta_of(meta: dict[str, Any], opened: bool | None = None) -> dict[str, str]:
         """What the index records about the record it was built from. `opened` is whether the
@@ -662,6 +690,33 @@ class Index:
             for seq, id_, at, kind, tier, file, offset in found
         ]
 
+    def window_tally(self, since: str, until: str) -> tuple[list[tuple[int, str, int]], list[Place]]:
+        """`window`, counted: (tier, kind, lines) of the lines whose stamp is a UTC one (`...Z`) and
+        whose seconds lie strictly between those of `since` and `until`, which are inside whatever their
+        fraction, in one statement; and, as `window` gives them, the rest the cut holds (the lines at
+        either edge, and a stamp with an offset), for the caller to hold against the exact instants."""
+        inside = (
+            "substr(at, 1, 19) > ? AND substr(at, 1, 19) < ?"
+            f" AND (at GLOB '{UTC_SECONDS}Z' OR (at GLOB '{UTC_SECONDS}.[0-9]*Z'"
+            " AND substr(at, 21, length(at) - 21) NOT GLOB '*[^0-9]*'))"
+        )
+        bounds = (since[:19], until[:19])
+        counted = self.db.execute(
+            f"SELECT tier, kind, count(*) FROM lines WHERE {inside} GROUP BY tier, kind", bounds
+        ).fetchall()
+        rest = self.db.execute(
+            "SELECT seq, id, at, kind, tier, file, offset FROM lines"
+            f" WHERE substr(at, 1, 19) BETWEEN ? AND ? AND NOT ({inside}) ORDER BY seq",
+            (*bounds, *bounds),
+        ).fetchall()
+        return (
+            [(int(tier), str(kind), int(n)) for tier, kind, n in counted],
+            [
+                Place(int(seq), str(id_), str(at), str(kind), int(tier), str(file), int(offset))
+                for seq, id_, at, kind, tier, file, offset in rest
+            ],
+        )
+
     def read(self, places: Iterable[tuple[str, int]], opened: bool = True) -> list[Line]:
         """The lines at these (file, offset) places, in the order given; `opened` False gives a
         sealed line as the file holds it (for a crossing package, which reseals it)."""
@@ -735,22 +790,41 @@ class Index:
         ).fetchall()
         return self._read(found)
 
-    def stream(self, kind: str, first_day: str | None = None, last_day: str | None = None) -> Iterator[Line]:
+    def stream(
+        self,
+        kind: str,
+        first_day: str | None = None,
+        last_day: str | None = None,
+        after_seq: int | None = None,
+        through_seq: int | None = None,
+    ) -> Iterator[Line]:
         """`by_kind`, a thousand lines at a time: the same lines in the same chain order, read from the
         files as they are asked for, so a reader that keeps a few of a kind's million lines (an agent's
         chat among the messages, a promise among the words) never holds them all, nor where they all
         are: their seqs are read first, in one statement, so no read of the index stays open while the
         caller works; the lines are read through `read`, so an index that gates what it reads back
-        gates these too."""
+        gates these too. With `after_seq` and `through_seq`, only the lines appended in between (a
+        reading kept between heads, brought forward), found by the primary key's range."""
+        args: tuple[object, ...]
+        if after_seq is None:  # the kind's lines through the (kind, day_local) index
+            statement, args = (
+                "SELECT seq FROM lines WHERE kind = ? AND day_local >= ? AND day_local <= ? AND seq <= ?"
+                " ORDER BY seq",
+                (
+                    kind,
+                    first_day or "",
+                    last_day or "9999-12-31",
+                    through_seq if through_seq is not None else 2**62,
+                ),
+            )
+        else:  # the seq range first: `+` keeps the planner off the kind's index for a few new lines
+            statement, args = (
+                "SELECT seq FROM lines WHERE seq > ? AND seq <= ? AND +kind = ? AND +day_local >= ?"
+                " AND +day_local <= ? ORDER BY seq",
+                (after_seq or 0, through_seq or 2**62, kind, first_day or "", last_day or "9999-12-31"),
+            )
         seqs = array(
-            "q",
-            (
-                int(seq)
-                for (seq,) in self.db.execute(
-                    "SELECT seq FROM lines WHERE kind = ? AND day_local >= ? AND day_local <= ? ORDER BY seq",
-                    (kind, first_day or "", last_day or "9999-12-31"),
-                )
-            ),
+            "q", (int(seq) for (seq,) in self.db.execute(statement, args))
         )  # eight bytes a line; where each is, a thousand at a time by the primary key
         for n in range(0, len(seqs), STREAM_EVERY):
             chunk = seqs[n : n + STREAM_EVERY].tolist()
@@ -776,15 +850,35 @@ class Index:
         rows: list[LocationRow] = cursor.fetchall()
         return rows
 
-    def evidence(self, kinds: Sequence[str], first_day: str, last_day: str) -> list[EvidenceRow]:
+    def location_rows(
+        self, first_day: str, last_day: str, tiers: Sequence[int] | None = None
+    ) -> list[tuple[int, str, str, float | None, float | None, str | None, bool]]:
+        """(seq, id, at, lat, lon, subject, retracted) of every location line whose local day is in
+        [first_day, last_day], of every subject (None the owner), in file order; with `tiers`, those of
+        them alone. A line without a point has no `lat` and `lon`. Served from the index's own columns."""
+        gate = "" if tiers is None else f" AND tier IN ({', '.join('?' * len(tiers))})"
+        found = self.db.execute(
+            f"SELECT seq, id, at, lat, lon, subject, id IN ({RETRACTED}) FROM lines"
+            f" WHERE kind = 'location' AND day_local BETWEEN ? AND ?{gate} ORDER BY file, offset",
+            (first_day, last_day, *(int(t) for t in tiers or ())),
+        ).fetchall()
+        return [
+            (int(seq), str(i), str(at), lat, lon, None if subject is None else str(subject), bool(gone))
+            for seq, i, at, lat, lon, subject, gone in found
+        ]
+
+    def evidence(
+        self, kinds: Sequence[str], first_day: str, last_day: str, tiers: Sequence[int] | None = None
+    ) -> list[EvidenceRow]:
         """Every standing line of one of `kinds` whose local day is in [first_day, last_day], with
-        its `end`, ordered by `at` then seq; a retracted line is left out. Served from the index's
-        own columns; nothing is read from the files."""
+        its `end`, ordered by `at` then seq; a retracted line is left out; with `tiers`, those of
+        them alone. Served from the index's own columns; nothing is read from the files."""
+        gate = "" if tiers is None else f" AND tier IN ({', '.join('?' * len(tiers))})"
         cursor = self.db.execute(
             "SELECT kind, at, end FROM lines"
             f" WHERE kind IN ({', '.join('?' * len(kinds))}) AND day_local BETWEEN ? AND ?"
-            f" AND id NOT IN ({RETRACTED}) ORDER BY at, seq",
-            (*kinds, first_day, last_day),
+            f" AND id NOT IN ({RETRACTED}){gate} ORDER BY at, seq",
+            (*kinds, first_day, last_day, *(int(t) for t in tiers or ())),
         )
         rows: list[EvidenceRow] = cursor.fetchall()
         return rows
@@ -840,18 +934,34 @@ class Index:
         first_day: str | None = None,
         last_day: str | None = None,
         source: str | None = None,
+        after_seq: int | None = None,
+        files: tuple[str | None, str | None] = (None, None),
     ) -> Iterator[Line]:
         """Every line of one kind, streamed in file order (one sequential sweep of the files, each
         opened once), so a kind with a million lines never sits in memory at once; with
         `first_day` or `last_day`, only the lines whose local day is inside the bounds (the
         (kind, day_local) index serves the cut), so a reader of one year never opens the others'
-        files; with `source`, only that source's."""
+        files; with `source`, only that source's; with `after_seq`, only the lines appended after
+        that one (a reading brought forward from where it stopped, `people.read_whole`); with `files`,
+        only the month files from the first (inclusive) to the second (exclusive), by the path's
+        order, which is the months' (`people_drift.real_contacts`)."""
         from .store import read_line_at
 
         found = self.db.execute(
             "SELECT file, offset FROM lines WHERE kind = ? AND day_local >= ? AND day_local <= ?"
-            " AND (? IS NULL OR source = ?) ORDER BY file, offset",
-            (kind, first_day or "", last_day or "9999-12-31", source, source),
+            " AND (? IS NULL OR source = ?) AND seq > ? AND file >= ? AND (? IS NULL OR file < ?)"
+            " ORDER BY file, offset",
+            (
+                kind,
+                first_day or "",
+                last_day or "9999-12-31",
+                source,
+                source,
+                after_seq or 0,
+                files[0] or "",
+                files[1],
+                files[1],
+            ),
         ).fetchall()
         handle: Any = None
         current: str | None = None
@@ -865,6 +975,36 @@ class Index:
         finally:
             if handle is not None:
                 handle.close()
+
+    def appended(self, seq: int) -> dict[str, tuple[str, int, int]]:
+        """What was appended after `seq`, by kind: the earliest local day, how many lines, and how
+        many of them supersede another line. What a reading kept between heads asks before it
+        brings itself forward (`people.read_whole`); nothing read from the files."""
+        rows = self.db.execute(
+            "SELECT kind, min(day_local), count(*), sum(supersedes IS NOT NULL) FROM lines WHERE seq > ?"
+            " GROUP BY kind",
+            (seq,),
+        ).fetchall()
+        return {str(kind): (str(day), int(n), int(sup or 0)) for kind, day, n, sup in rows}
+
+    def appended_files(self, seq: int) -> dict[str, tuple[str, int]]:
+        """What was appended after `seq`, by kind: the first month file (by the path's order, which is
+        the months') a line of it went to, and how many of them supersede another line. What a reading
+        kept in file order asks before it reads on from where it stopped (`entity_review`)."""
+        rows = self.db.execute(
+            "SELECT kind, min(file), sum(supersedes IS NOT NULL) FROM lines WHERE seq > ? GROUP BY kind",
+            (seq,),
+        ).fetchall()
+        return {str(kind): (str(file), int(sup or 0)) for kind, file, sup in rows}
+
+    def last_file(self, kind: str) -> str:
+        """The last month file (by the path's order) a line of `kind` is in; empty for none. A line's
+        month file is its stamp's (`Logbook._path_for`), so it is the file of the latest stamp: one
+        step down the (kind, at) index."""
+        found = self.db.execute(
+            "SELECT file FROM lines WHERE kind = ? ORDER BY at DESC LIMIT 1", (kind,)
+        ).fetchone()
+        return "" if found is None else str(found[0])
 
     def by_ids(self, ids: Iterable[str]) -> dict[str, Line]:
         """id → line for these line ids, read from the files; an id the record has no line for is
@@ -902,12 +1042,13 @@ class Index:
     def span(self, kind: str | None = None) -> tuple[str, str] | None:
         """The first and last local day with a line of `kind` (any kind when None); None when
         there is none. Nothing is read from the files."""
-        found = self.db.execute(
-            "SELECT min(day_local), max(day_local) FROM lines WHERE kind = coalesce(?, kind)", (kind,)
-        ).fetchone()
-        if found is None or found[0] is None:
+        where, args = ("", ()) if kind is None else (" WHERE kind = ?", (kind,))
+        # one aggregate a statement: each is a single step down the (kind, day_local) or day_local index
+        (first,) = self.db.execute(f"SELECT min(day_local) FROM lines{where}", args).fetchone()
+        (last,) = self.db.execute(f"SELECT max(day_local) FROM lines{where}", args).fetchone()
+        if first is None:
             return None
-        return str(found[0]), str(found[1])
+        return str(first), str(last)
 
     def source_days(
         self, first: str, last: str, tiers: Sequence[int] | None = None
@@ -957,6 +1098,18 @@ class Index:
         """(lines, first `at`, last `at`); the stamps are None on an empty record."""
         n, first, last = self.db.execute("SELECT count(*), min(at), max(at) FROM lines").fetchone()
         return int(n), first, last
+
+    def kind_names(self) -> list[str]:
+        """The kinds the record has a line of, in order: one step down the (kind, day_local) index a
+        kind, never a pass over the lines (`kinds` counts them)."""
+        found: list[str] = []
+        while (
+            row := self.db.execute(
+                "SELECT kind FROM lines WHERE kind > ? ORDER BY kind LIMIT 1", (found[-1] if found else "",)
+            ).fetchone()
+        ) is not None:
+            found.append(str(row[0]))
+        return found
 
     def kinds(self) -> list[dict[str, Any]]:
         """Per kind, most lines first: lines, first and last local day, distinct sources."""
@@ -1023,10 +1176,10 @@ class Index:
     def activity(self, first_day: str, last_day: str) -> list[dict[str, Any]]:
         """Per source, most lines first, over the lines whose local day is in [first_day, last_day]
         (`sources --gaps`): lines, first and last `at`, the local days with a line, and the longest
-        stretch between two consecutive lines as its (from, to) stamps, None for a source with one
-        line. Three SELECTs over the columns, nothing read from the files; the stretch is one window
-        query (LAG over each source's lines in `at` order), and SQLite's rule that bare columns
-        beside max() come from the row holding the maximum picks the pair."""
+        stretch between two consecutive lines as its (from, to) stamps, the first of equals (to the
+        millisecond, `GAP_MS`), None for a source with one line. Three SELECTs over the columns,
+        nothing read from the files; the stretch is one window query (LAG over each source's lines in
+        `at` order), ranked."""
         cut = (first_day, last_day)
         totals = self.db.execute(
             "SELECT source, count(*), min(at), max(at) FROM lines WHERE day_local BETWEEN ? AND ?"
@@ -1042,10 +1195,11 @@ class Index:
             days.setdefault(str(source), []).append(str(day))
         stretches = {
             str(source): (str(start), str(end))
-            for source, start, end, _days in self.db.execute(
-                "SELECT source, prev, at, max(julianday(at) - julianday(prev)) FROM ("
+            for source, start, end in self.db.execute(
+                "SELECT source, prev, at FROM (SELECT source, prev, at, row_number() OVER"
+                f" (PARTITION BY source ORDER BY {GAP_MS} DESC, at) AS n FROM ("
                 " SELECT source, at, lag(at) OVER (PARTITION BY source ORDER BY at) AS prev"
-                " FROM lines WHERE day_local BETWEEN ? AND ?) WHERE prev IS NOT NULL GROUP BY source",
+                " FROM lines WHERE day_local BETWEEN ? AND ?) WHERE prev IS NOT NULL) WHERE n = 1",
                 cut,
             )
         }

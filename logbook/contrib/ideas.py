@@ -147,7 +147,7 @@ def _read(lb: Logbook, idx: Index, gate: tuple[int, ...] | None, today: str | No
         {i: found for (kind, i), found in folded.items() if kind == IDEA and i in ideas},
         history,
         retracted,
-        _touches(idx, ctx, tree, bound, gate) if ideas else [],
+        _touches(lb, idx, ctx, tree, bound, gate) if ideas else [],
         tree,
         names,
         ctx.settings,
@@ -180,6 +180,7 @@ def _named(
 
 
 def _touches(
+    lb: Logbook,
     idx: Index,
     ctx: entity_review.Context,
     tree: entity_review.NotionTree,
@@ -191,8 +192,8 @@ def _touches(
     not `Idea` is still read here when the owner bound it: the type keeps a row out of the queue, never
     out of an idea the owner named."""
     found: list[Touch] = []
-    for kind in entity_review.IDEA_KINDS:
-        for line in ctx.standing(idx, kind):
+    for kind, lines in entity_review.idea_lines(lb, idx, ctx, tree).items():
+        for line in lines:
             if not _reads(gate, line):
                 continue
             hits: dict[str, entity_review.IdeaSighting] = {}

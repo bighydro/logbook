@@ -130,3 +130,51 @@ def test_init_prints_the_record_under_a_tilde_never_the_home_directory(
     assert str(home) not in out
     cli.main(["init", str(tmp_path / "elsewhere"), "--timezone", "Europe/Oslo"])
     assert f"created {tmp_path / 'elsewhere'}" in capsys.readouterr().out
+
+
+def test_init_on_a_record_says_so_in_one_sentence_and_exits_2(nothing_detectable, tmp_path, capsys):
+    """#334: a second `init` on a folder that holds a record printed a FileExistsError traceback."""
+    cli.main(["init", str(tmp_path / "lb"), "--timezone", "Europe/Oslo"])
+    capsys.readouterr()
+    with pytest.raises(SystemExit) as e:
+        cli.main(["init", str(tmp_path / "lb"), "--timezone", "Europe/Oslo"])
+    assert e.value.code == 2
+    err = capsys.readouterr().err
+    assert "Traceback" not in err
+    assert err.count("\n") == 1
+    assert "is already a logbook" in err and "logbook setup" in err
+
+
+def test_init_without_a_path_makes_the_record_where_logbook_home_points(
+    nothing_detectable, monkeypatch, tmp_path, capsys
+):
+    """#334: `init` with LOGBOOK_HOME set acted on ~/Logbook; every other command finds the record there."""
+    home = tmp_path / "home"
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: home))
+    monkeypatch.setenv("LOGBOOK_HOME", str(tmp_path / "Fresh" / "Logbook"))
+    cli.main(["init", "--timezone", "Europe/Oslo"])
+    assert (tmp_path / "Fresh" / "Logbook" / "logbook.json").is_file()
+    assert not (home / "Logbook").exists()
+
+
+def test_init_without_a_path_or_logbook_home_makes_logbook_in_the_home_directory(
+    nothing_detectable, monkeypatch, tmp_path, capsys
+):
+    home = tmp_path / "home"
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: home))
+    monkeypatch.delenv("LOGBOOK_HOME")
+    cli.main(["init", "--timezone", "Europe/Oslo"])
+    assert (home / "Logbook" / "logbook.json").is_file()
+    assert f"created {PurePath('~') / 'Logbook'}" in capsys.readouterr().out
+
+
+def test_init_on_the_demo_never_sends_you_to_setup_with_it(nothing_detectable, tmp_path, capsys):
+    """`setup` never adopts the demo, so `init` on one names it and asks for another folder."""
+    from logbook.contrib import demo
+
+    demo.generate(tmp_path / "Demo", days=1)
+    with pytest.raises(SystemExit) as e:
+        cli.main(["init", str(tmp_path / "Demo")])
+    assert e.value.code == 2
+    err = capsys.readouterr().err
+    assert "the demo" in err and "name another folder" in err and "logbook setup" not in err

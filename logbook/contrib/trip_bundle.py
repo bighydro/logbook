@@ -36,7 +36,7 @@ import hashlib
 import json
 from collections import Counter
 from collections.abc import Callable, Iterable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -110,6 +110,7 @@ def prepare(
     that id), hold the request against the policy (`crossing.request`: `CrossingError` above the
     ceiling or for a destination the file does not name), and select what crosses. Reads only."""
     rd, trip = trip_page.locate(lb, trip_page.parse_ref(ref_text), airports)
+    rd = replace(rd, voice_tiers=tuple(tiers))  # read whole, sent line by line; a voice's name too
     since, until = window_of(rd, trip)
     req = crossing.request(
         lb, destination, since, until, tiers, KINDS, signed_only=False
@@ -146,7 +147,7 @@ def people_of(rd: Reading, trip: trips.Trip) -> list[dict[str, Any]]:
     evidence = [
         p
         for stay in away
-        for p in present.present(stay, rd.lines, rd.identities, rd.places, rd.owner)
+        for p in present.present(stay, rd.lines, rd.identities, rd.places, rd.owner, rd.voice_gate)
         if p.status == present.CONFIRMED
     ]
     rows = []

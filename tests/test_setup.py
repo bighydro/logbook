@@ -143,6 +143,81 @@ def test_an_existing_record_is_kept_and_setup_continues_in_it(run: Callable[...,
     assert _state(lb.root)["folder"] == "done"
 
 
+def _demo_record(tmp_path: Path, *, marked: bool = True) -> Path:
+    """A one-day demo record; `marked=False` takes away the mark, as a demo 0.7.0 wrote it."""
+    from logbook.contrib import demo
+
+    root = demo.generate(tmp_path / "Demo" / "Logbook", days=1).root
+    if not marked:
+        meta = _read(root / "logbook.json")
+        del meta[demo.MARK]
+        (root / "logbook.json").write_text(json.dumps(meta, indent=2) + "\n", encoding="utf-8")
+    return root
+
+
+@pytest.mark.parametrize("marked", [True, False], ids=["marked", "a 0.7.0 demo"])
+def test_setup_never_adopts_the_demo_record(
+    home: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    marked: bool,
+) -> None:
+    """#334: with LOGBOOK_HOME still on the demo (the README's order), setup kept it as yours, and Enter
+    at step 2 rewrote its timezone. It says what the demo is, how to make your own, and writes nothing."""
+    root = _demo_record(tmp_path, marked=marked)
+    before = (root / "logbook.json").read_bytes()
+    monkeypatch.setenv("LOGBOOK_HOME", str(root))
+    monkeypatch.setattr("sys.stdin", io.StringIO("\n" * 20))
+    with pytest.raises(SystemExit) as e:
+        cli.main(["setup"])
+    assert e.value.code == 2
+    captured = capsys.readouterr()
+    assert "Found your record" not in captured.out
+    assert "is the demo record" in captured.err
+    assert "unset LOGBOOK_HOME" in captured.err and "logbook setup" in captured.err
+    assert (root / "logbook.json").read_bytes() == before
+    assert not (root / "state" / "setup.json").exists()
+
+
+def test_the_demo_found_by_the_working_folder_says_to_leave_it(
+    home: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The advice follows how the demo was found: from inside its folder, `unset LOGBOOK_HOME` cannot help."""
+    root = _demo_record(tmp_path)
+    monkeypatch.chdir(root)
+    with pytest.raises(SystemExit) as e:
+        cli.main(["setup"])
+    assert e.value.code == 2
+    err = capsys.readouterr().err
+    assert "is the demo record" in err and "`cd ~`" in err and "LOGBOOK_HOME" not in err
+
+
+def test_the_demo_in_the_home_folder_says_to_move_it(
+    home: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from logbook.contrib import demo
+
+    root = demo.generate(home / "Logbook", days=1).root
+    with pytest.raises(SystemExit) as e:
+        cli.main(["setup"])
+    assert e.value.code == 2
+    err = capsys.readouterr().err
+    assert "is the demo record" in err and "move it" in err and "LOGBOOK_HOME" not in err
+    assert (root / "logbook.json").is_file(), "never removed for you"
+
+
+def test_setup_refuses_the_demo_when_its_folder_is_typed(
+    run: Callable[..., str], home: Path, tmp_path: Path
+) -> None:
+    root = _demo_record(tmp_path)
+    before = (root / "logbook.json").read_bytes()
+    out = run(answers=f"{root}\n\n" + "\n" * 20)
+    assert "is the demo record" in out
+    assert (home / "Logbook" / "logbook.json").is_file(), "Enter then takes the default folder"
+    assert (root / "logbook.json").read_bytes() == before
+
+
 # -- the timezone ------------------------------------------------------------------------------------------
 
 
@@ -151,6 +226,36 @@ def test_timezone_is_validated_and_written(run: Callable[..., str], home: Path) 
     assert "Mars/Olympus" in out and "not a zone this machine knows" in out
     assert _read(home / "Logbook" / "logbook.json")["timezone"] == "Europe/Oslo"
     assert _state(home / "Logbook")["timezone"] == "done"
+
+
+def test_the_timezone_prompt_says_in_words_which_zone_enter_takes(
+    run: Callable[..., str], home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """#334: "[Etc/UTC] (Europe/Oslo)" read as two settings; the second was only an example. The words say
+    which zone Enter takes and where it comes from, and the example is plainly one."""
+    from logbook.commands import record
+
+    monkeypatch.setattr(record, "_detect_timezone", lambda: "Etc/UTC")
+    Logbook.init(home / "Logbook", "Europe/Oslo")
+    out = run("--step", "timezone", answers="\n")
+    (prompt,) = [line for line in out.split("\n") if line.startswith("Your timezone")]
+    assert "[Etc/UTC]" in prompt
+    assert "this machine's zone, which Enter takes" in prompt
+    assert "the record's is Europe/Oslo now" in prompt
+    assert "such as" in prompt, "the example is said to be one"
+
+
+def test_the_timezone_prompt_when_the_record_already_has_this_machines_zone(
+    run: Callable[..., str], home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from logbook.commands import record
+
+    monkeypatch.setattr(record, "_detect_timezone", lambda: "Europe/Oslo")
+    Logbook.init(home / "Logbook", "Europe/Oslo")
+    out = run("--step", "timezone", answers="\n")
+    (prompt,) = [line for line in out.split("\n") if line.startswith("Your timezone")]
+    assert "[Europe/Oslo]" in prompt and "the record's zone now, which Enter keeps" in prompt
+    assert "such as America/New_York" in prompt, "never the zone in brackets as the example"
 
 
 # -- who you are -------------------------------------------------------------------------------------------

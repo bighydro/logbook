@@ -299,3 +299,52 @@ def test_a_day_with_a_dinner_names_the_guest_only_at_tier_2(tmp_path: Path, monk
     _policy(lb, 2)
     text = json.dumps(_call(lb, "day", {"date": "2026-06-17"}))
     assert "Supper" in text and "Kari Nordmann" in text
+
+
+# -- the person's commitments, as `show person` counts them ------------------------------------------
+
+
+def test_person_counts_the_open_promises_as_show_person_does_and_never_their_words(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+):
+    """From the 20 October review of #338: the door still answered the placeholder about RFC 0007 while
+    `show person` counted the open promises. It gives the same counts and the command that lists them,
+    read through the ceiling as the `promises` tool reads; a promise's words stay with that tool."""
+    from logbook.contrib import demo
+
+    root = tmp_path / "Demo"
+    cli.main(["demo", "--days", "30", "--seed", "7", "--out", str(root)])
+    monkeypatch.setenv("LOGBOOK_HOME", str(root))
+    lb = Logbook(root)
+    capsys.readouterr()
+    _policy(lb, 2)
+    for who, command in ((demo.OLA, "logbook promises"), (demo.LIV, "logbook promises --all")):
+        cli.main(["show", "person", who.name, "--json"])
+        shown = json.loads(capsys.readouterr().out)["commitments"]
+        answer = _call(lb, "person", {"name": who.name})["data"]
+        assert answer["commitments"] == {
+            "open": len(shown["open"]),
+            "you_owe": shown["you_owe"],
+            "they_owe": shown["they_owe"],
+            "command": command,
+        }
+        assert answer["commitments"]["open"] > 0, "the demo promises Ola and Liv something"
+        words = [p["quote"] for p in shown["open"]]
+        assert not any(w in json.dumps(answer, ensure_ascii=False) for w in words)
+        assert "RFC" not in json.dumps(answer)
+    kari = _call(lb, "person", {"name": demo.KARI.name})["data"]["commitments"]
+    assert kari == {"open": 0, "you_owe": 0, "they_owe": 0, "command": None}
+
+    # a promise to Ola on a tier-3 line: `show person` reads the whole record and counts it, the door at
+    # 2 does not, and at 1, where no resolution line crosses, Ola is nobody
+    before = _call(lb, "person", {"name": demo.OLA.name})["data"]["commitments"]
+    chat = {"id": "447700900001@s.whatsapp.net", "name": "Ola", "type": "direct"}
+    text = "Then I'll bring the charts."
+    payload = {"schema": "message/v1", "chat": chat, "from_me": True, "raw_id": "tier3-ola", "text": text}
+    lb.append("2026-06-03T09:00:00Z", "whatsapp", "message", 3, payload)
+    cli.main(["show", "person", demo.OLA.name, "--json"])
+    assert json.loads(capsys.readouterr().out)["commitments"]["you_owe"] == before["you_owe"] + 1
+    after = _call(lb, "person", {"name": demo.OLA.name})["data"]
+    assert after["commitments"] == before and "charts" not in json.dumps(after)
+    _policy(lb, 1)
+    assert "nobody" in _call(lb, "person", {"name": demo.OLA.name})["error"]

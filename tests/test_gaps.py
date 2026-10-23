@@ -275,3 +275,20 @@ def test_sources_without_gaps_is_unchanged(lb: Logbook, capsys):
     cli.main(["doctor", "sources"])
     out = capsys.readouterr().out
     assert "adapters," in out and "sim-phone" not in out
+
+
+def test_the_library_s_gaps_read_the_site_s_clock_not_the_wall_s(
+    lb: Logbook, monkeypatch: pytest.MonkeyPatch
+):
+    """`/gaps` counts each silence to the Site's own now, as every other page reads it: a wall clock
+    that moves between two readings of the same page changes nothing on it (1dd86c2: the 100k perf
+    test read `/gaps` twice and got "3d 4h" then "3d 5h" on a slow Windows runner)."""
+    from logbook.contrib import serve
+
+    site = serve.Site(lb, now=lambda: NOW)
+    monkeypatch.setattr(gaps, "now", lambda: datetime(2026, 9, 30, 12, 0, tzinfo=UTC))
+    first = site.respond("/gaps", "").body
+    monkeypatch.setattr(gaps, "now", lambda: datetime(2026, 10, 9, 23, 59, tzinfo=UTC))
+    assert site.respond("/gaps", "").body == first
+    assert b"today 2026-09-30" in first
+    assert gaps.report(lb, instant=NOW)["today"] == "2026-09-30"

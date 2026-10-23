@@ -1,17 +1,19 @@
 # The site
 
-`logbook export site <folder> [--tier 1|1,2]` renders the readers as a folder of static HTML: one Year
-page per year, a Day page for each of its twelve picks, every Trip page, a Days index per year, the places
-and the people, written as plain files with relative links, one inline stylesheet each, no script, no
-image, nothing fetched. It is [`logbook serve`](serve.md) written down — the same renderers, the same
-text — so the folder reads the same from a file manager, under any prefix on any web server, or in twenty
-years. It is an export, not a reader: it is tier-gated exactly like the vault (tier 1 by default, the
-shape of the record and no text of any note or message), and every run appends one `crossing/v1` line to
-the chain so the record shows it left. Re-running rewrites only the files whose content changed.
+`logbook export site <folder> [--tier 1|1,2] [--with-drafts]` renders the readers as a folder of static
+HTML: one Year page per year, a Day page for each of its twelve picks, every Trip page, a Days index per
+year, the places and the people, written as plain files with relative links, one inline stylesheet each,
+no script, no image, nothing fetched. It is [`logbook serve`](serve.md) written down — the same renderers,
+the same text — so the folder reads the same from a file manager, under any prefix on any web server, or
+in twenty years. It is an export, not a reader: it is tier-gated exactly like the vault (tier 1 by
+default, the shape of the record and no text of any note or message), and every run appends one
+`crossing/v1` line to the chain so the record shows it left. Re-running rewrites only the files whose
+content changed.
 
 ```bash
 logbook export site ~/Site                 # every year the record has a line in, tier 1
 logbook export site ~/Site --tier 1,2      # notes, transcripts and mail cross too; needs the policy below
+logbook export site ~/Site --with-drafts   # a model's drafts on the Day pages too, each headed with its model
 open ~/Site/index.html                     # or serve the folder with anything that serves files
 ```
 
@@ -82,6 +84,17 @@ static page; the row's date is its anchor, and a pick's date links its Day.
 confirms present — days, nights, the years, the last contact, the trips — and each person's page lists
 the years together with the places shared, and the trips.
 
+## A model's drafts (pencil)
+
+What a model drafted — a day's draft, its week's, a call's synthesis (`logbook dream`, RFC 0036) — is
+pencil, never the owner's ink, and a site leaves it out: no Day page and no Year pick carries a draft, its
+words, the line that points to its week, or the model among the day's sources. `--with-drafts` puts them
+in, each headed as the Day page heads it, `draft · model:qwen2.5-7b-instruct · read at …`, so a reader
+sees it is a model's text and which model wrote it; the footer of the Day, Days and Places pages says so
+too. A draft is held to the site's `--tier` and to the `dream` entry of `policy/crossing.json` either way,
+as on the Day page. The owner's own reflection (`day reflect`, tier 2) is not a draft: it is on its day
+whenever tier 2 crosses, flag or not. The crossing line records which, under `extra.site.drafts`.
+
 ## The gate (ADR 0016)
 
 A line is in the site when its tier is in `--tier`, and nowhere otherwise: the readers read the record
@@ -97,8 +110,10 @@ The resolution lines — the record's name overlay, a `ref` to an entity — are
 tier, as the vault reads them: the gate is on the line that puts someone somewhere (a calendar entry, a
 transcript, a note), never on the line that names them. The MCP server's gate is stricter and holds the
 overlay back too; an agent reading a private record and a page the owner publishes are not the same
-crossing, and the site follows the export. Health and money are tier 3 and never go to a site;
-`--tier 1,2,3` is refused.
+crossing, and the site follows the export. A voice is the one exception (RFC 0038): its name keeps the
+highest tier of the lines that give it, so a person whose name only a tier-3 line gives is `a named voice`
+on a tier-1,2 site, the voice still theirs, and their name is not in its company either. Health and money
+are tier 3 and never go to a site; `--tier 1,2,3` is refused.
 
 How far the gate opens is a setting in the record, not in the code: `policy/crossing.json` maps a
 destination to its ceiling, and the site's destination is `site`. A file that does not name it allows
@@ -118,8 +133,9 @@ day's local midnight to the midnight after the last), the tiers, the counts (how
 logged, how many crossed, how many were held back, by tier and by kind), the ceiling in force, the head
 before the line, and `package_sha256`: the digest of the folder as written, one line per file —
 `<sha256 of its bytes>  <path>` in path order — hashed, as the vault's. Under `extra.site` are the years,
-the pages per kind and how many files were written and how many were unchanged. Nothing else is written
-to the record, and that one write goes through `Logbook.append`.
+whether a model's drafts were included (`drafts`), the pages per kind and how many files were written and
+how many were unchanged. Nothing else is written to the record, and that one write goes through
+`Logbook.append`.
 
 ## Re-running
 

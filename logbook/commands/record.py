@@ -69,14 +69,30 @@ def _tz_default() -> str:
 
 def init_arguments(sub: Subparsers) -> None:
     """`logbook init`."""
-    s = sub.add_parser("init", help="create a logbook (default ~/Logbook)")
-    s.add_argument("path", nargs="?")
-    s.add_argument("--timezone")
+    s = sub.add_parser(
+        "init",
+        help="create a logbook ($LOGBOOK_HOME, else ~/Logbook)",
+        description="create an empty record: logbook.json, its policy/ and inbox/ folders, no lines yet."
+        " `logbook setup` does this too, one question at a time, and asks the rest",
+    )
+    s.add_argument(
+        "path",
+        nargs="?",
+        help="the folder to create (default: where LOGBOOK_HOME points, else ~/Logbook)",
+    )
+    s.add_argument(
+        "--timezone",
+        metavar="ZONE",
+        help="the zone the days are cut in, as the zone database names it, such as Europe/Oslo"
+        " (default: this machine's, else UTC)",
+    )
     s.set_defaults(fn=cmd_init)
 
 
 def cmd_init(a: argparse.Namespace) -> None:
-    root = Path(a.path or Path.home() / "Logbook").expanduser()
+    # where every other command looks first, read as `Logbook.find` reads it, so they find the record there
+    home = os.environ.get("LOGBOOK_HOME")
+    root = Path(a.path).expanduser() if a.path else Path(home) if home else Path.home() / "Logbook"
     timezone_name, hint = a.timezone, ""
     if not timezone_name:
         timezone_name = _detect_timezone()
@@ -87,6 +103,17 @@ def cmd_init(a: argparse.Namespace) -> None:
         lb = Logbook.init(root, timezone_name)
     except CodeCheckoutError as e:
         print(f"refusing to init: {e}", file=sys.stderr)
+        sys.exit(2)
+    except FileExistsError as e:  # a record there already, or a file where a folder goes
+        if (root / "logbook.json").exists():
+            # setup never adopts the demo (it is not the owner's), so it is offered only for a real record
+            if demo.is_demo_at(root):
+                then = ", the demo `logbook demo` wrote; name another folder"
+            else:
+                then = "; `logbook setup` carries on with it, or name another folder"
+            print(f"init: {_under_home(root)} is already a logbook{then}", file=sys.stderr)
+        else:
+            print(f"init: {e}", file=sys.stderr)
         sys.exit(2)
     print(
         f"created {_under_home(lb.root)}\ntimezone: {timezone_name}{hint}\n"
@@ -472,6 +499,16 @@ def cmd_demo(a: argparse.Namespace) -> None:
     if a.days is not None and a.days < 1:
         print("demo: --days must be at least 1", file=sys.stderr)
         sys.exit(2)
+    if (root / "logbook.json").exists():
+        where = _under_home(root)
+        # a demo may be thrown away and written again; a real record is never offered for removal
+        again = demo.is_demo_at(root)
+        remove = f", or remove {where} (an earlier demo) and run this again" if again else ""
+        print(
+            f"demo: {where} is already a logbook; pick another --out, such as --out ~/Demo2{remove}",
+            file=sys.stderr,
+        )
+        sys.exit(2)
     try:
         if a.years is not None:
             lb = demo_life.generate(root, a.years, a.seed)  # the life is labs, built on the month
@@ -628,14 +665,16 @@ SETUP_STEPS = ("folder", "timezone", "owner", "home", "sources", "doctor")
 
 
 def setup_arguments(sub: Subparsers) -> None:
-    """`logbook setup [places|assets|questions|day_start|speakers]`: the guided first run, and the
+    """`logbook setup [places|assets|questions|day_start|speakers|phone]`: the guided first run, and the
     settings of the record that it asks about or that live beside its policy — the named places
     (`places.json`), the assets it tracks (`assets.json`), the digest's questions
-    (`policy/questions.json`), where the day starts — and the diarizer's models (RFC 0038). Each is
-    declared beside the code that reads it."""
+    (`policy/questions.json`), where the day starts, whether the owner's phone writes through the
+    Library — and the diarizer's models (RFC 0038). Each is declared beside the code that reads it."""
     from .day import questions_arguments
     from .derive import speakers_arguments
+    from .maps import setup_map_arguments
     from .places import places_arguments
+    from .serve import phone_arguments
     from .sync import assets_arguments
 
     s = sub.add_parser(
@@ -644,7 +683,7 @@ def setup_arguments(sub: Subparsers) -> None:
         description="the guided first run: where the record lives, your timezone, who you are, your home,"
         " what is"
         " on this machine to import; one question at a time, resumable; --yes takes every default."
-        " The record's settings: places, assets, questions, day_start",
+        " The record's settings: places, assets, questions, day_start, phone",
     )
     s.add_argument("--yes", action="store_true", help="take every default, ask nothing (tests, scripts)")
     s.add_argument("--step", metavar="NAME", help="run one step again: " + ", ".join(SETUP_STEPS))
@@ -656,6 +695,8 @@ def setup_arguments(sub: Subparsers) -> None:
     questions_arguments(settings)
     day_start_arguments(settings)
     speakers_arguments(settings)
+    setup_map_arguments(settings)
+    phone_arguments(settings)
 
 
 def cmd_setup(a: argparse.Namespace) -> None:

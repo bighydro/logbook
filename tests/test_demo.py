@@ -156,7 +156,58 @@ def test_refuses_an_existing_record(tmp_path: Path, capsys: pytest.CaptureFixtur
     with pytest.raises(SystemExit) as e:
         cli.main(["demo", "--days", "1", "--out", str(tmp_path / "Demo")])
     assert e.value.code == 2
-    assert "already a logbook" in capsys.readouterr().err
+    err = capsys.readouterr().err
+    assert "already a logbook" in err
+    assert "--out" in err, "#334: it says which --out to pick"
+    assert "remove" in err, "a demo folder may be removed and written again"
+
+
+def test_refuses_a_real_record_and_never_suggests_removing_it(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    Logbook.init(tmp_path / "Logbook", "Europe/Oslo")
+    with pytest.raises(SystemExit) as e:
+        cli.main(["demo", "--days", "1", "--out", str(tmp_path / "Logbook")])
+    assert e.value.code == 2
+    err = capsys.readouterr().err
+    assert "already a logbook" in err and "--out" in err
+    assert "remove" not in err
+
+
+def test_the_demo_is_marked_and_known_by_its_owner_when_unmarked(tmp_path: Path) -> None:
+    lb = demo.generate(tmp_path / "Demo", days=1, seed=1)
+    assert lb.meta[demo.MARK]
+    assert demo.is_demo(lb.meta)
+    old = {k: v for k, v in lb.meta.items() if k != demo.MARK}
+    assert demo.is_demo(old), "a demo 0.7.0 wrote carries no mark: its owner id and email tell it"
+
+
+def test_a_record_of_the_personas_own_is_not_a_demo(tmp_path: Path) -> None:
+    """Fixtures give a real `init` the persona's email; `init`'s owner id is never the demo's."""
+    lb = Logbook.init(tmp_path / "Logbook", "Europe/Oslo")
+    lb.set_owner_emails([demo.OWNER.email])
+    assert not demo.is_demo(lb.meta)
+
+
+def test_show_person_counts_the_open_promises_with_them(
+    lb: Logbook, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """#334: `show person` printed developer text about RFC 0007 while `promises` read 8 open with Ola. The
+    line counts what `promises` reads open with the person, and where to read them; none is `none open`."""
+    found = _json(capsys, "promises")["proposals"]
+    with_ola = [p for p in found if p["status"] == "open" and p["counterpart"] == demo.OLA.name]
+    assert with_ola, "the demo promises Ola something"
+    text = _run(capsys, "show", "person", demo.OLA.name)
+    (line,) = [row for row in text.split("\n") if row.strip().startswith("commitments")]
+    assert line.strip().startswith(f"commitments  {len(with_ola)} open")
+    assert "`logbook promises`" in line and "RFC" not in line
+    page = _json(capsys, "show", "person", demo.OLA.name)
+    assert len(page["commitments"]["open"]) == len(with_ola)
+    assert "(8 you owe, 0 they owe): `logbook promises` lists them" in line, "seed 7 has Ola's eight"
+    theirs = _run(capsys, "show", "person", demo.LIV.name)
+    assert "(0 you owe, 2 they owe): `logbook promises --all` lists them" in theirs, "theirs only with --all"
+    nobody = _run(capsys, "show", "person", demo.KARI.name)
+    assert "  commitments  none open\n" in nobody
 
 
 # -- the readers -----------------------------------------------------------------------------------------
@@ -236,7 +287,11 @@ def test_places_propose_ranks_the_unnamed_stays(lb: Logbook, capsys: pytest.Capt
     assert proposals[0]["hours"] >= proposals[-1]["hours"]
     assert any(p["aboard"] == demo.BOAT for p in proposals), "the anchorages are aboard"
     text = _run(capsys, "setup", "places", "propose", "--top", "3")
-    assert "unnamed place" in text
+    header = text.split("\n")[0]
+    assert f": {len(proposals)} unnamed places, by hours; the first 3 shown" in header, (
+        "#334: the header said `--top`'s number as if it were the total"
+    )
+    assert re.findall(r"^  (\d+)\. ", text, re.M) == ["1", "2", "3"]
 
 
 def test_places_propose_reads_the_same_from_the_index_as_it_did_from_the_files(

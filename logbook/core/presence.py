@@ -152,20 +152,26 @@ def text_of(label: str) -> str:
 
 
 def state(
-    lb: Logbook, day: str, names: Sequence[str], at: str | None = None, now: datetime | None = None
+    lb: Logbook,
+    day: str,
+    names: Sequence[str],
+    at: str | None = None,
+    now: datetime | None = None,
+    report: people.Report | None = None,
 ) -> list[Stated]:
     """State the people `names` present on `day`: one `note/v1` line per canonical person, at
     `moment`, through `notes.write`, under the writer lock with the head read again before the first
     append. A person already stated on the day (at that moment, given `at`) is listed with no line.
-    `WithError` for a name, a day or a clock the record refuses; nothing is written then."""
+    `WithError` for a name, a day or a clock the record refuses; nothing is written then. `report` is
+    the people directory when the caller read it already, under the same hold of the lock (a stretch,
+    `who_was_there.with_days`)."""
     day = parse_day(day).isoformat()
     clock = now if now is not None else datetime.now(UTC)
     with lb.writer():
         meta = lb.meta
         days = day_start.of(meta)
         stamp = moment(day, at, days, clock)
-        report = people.directory(lb)
-        persons = resolve(names, report)
+        persons = resolve(names, report if report is not None else people.directory(lb))
         with lb.index() as idx:
             retracted = retractions(idx.retractions())
             earlier = stated(idx.day(day), retracted)

@@ -38,11 +38,11 @@ from __future__ import annotations
 import hashlib
 import re
 from collections.abc import Callable, Collection, Iterable, Iterator, Mapping, Sequence
-from dataclasses import dataclass, replace
+from dataclasses import asdict, dataclass, replace
 from datetime import date, timedelta
 from typing import Any, Protocol
 
-from ..core import attribution, day_start, machine, policy, present, signing
+from ..core import attribution, day_start, kept, machine, policy, present, signing
 from ..core.chain import Line
 from ..core.resolve import Identity, Ref, identities_from
 from ..core.store import Logbook, retractions
@@ -696,7 +696,25 @@ def extract(
     through the index, or only the kinds `sources` names; closed ones carry the task line that
     closed them. `admit`, when given, is a gate every resolution line and every line read for a
     proposal must pass (a crossing's tier and signed days: `export notion`), so no proposal and no
-    speaker or counterpart rests on a line it refuses. Nothing is written."""
+    speaker or counterpart rests on a line it refuses. Nothing is written. The whole record by the
+    rules, ungated (every argument its default), is a reading kept between heads (`_kept`)."""
+    if since is None and until is None and admit is None and extractor is RULES and sources is None:
+        return _kept(lb)
+    return _extract(lb, since, extractor, sources, until, admit)[0]
+
+
+def _extract(
+    lb: Logbook,
+    since: str | None = None,
+    extractor: Extractor = RULES,
+    sources: Iterable[str] | None = None,
+    until: str | None = None,
+    admit: Callable[[Line], bool] | None = None,
+    after_seq: int | None = None,
+    through_seq: int | None = None,
+) -> tuple[Report, dict[str, dict[str, int]]]:
+    """`extract`, and what it skipped by kind; with `after_seq` and `through_seq`, only the lines
+    appended between those seqs."""
     kinds = tuple(k for k in SOURCES if sources is None or k in set(sources))
     days = day_start.of(lb.meta)  # a proposal's day, which "tomorrow" counts from (RFC 0036)
     with lb.index() as idx:
@@ -715,8 +733,8 @@ def extract(
     )
     owner_label = _owner_label(owner, identities)
     voices = attribution.Voices(identities, owner.entities, owner.id)
-    lines = _words(lb, kinds, since, until, frozenset(retracted) | superseded, admit)
-    skipped: dict[str, int] = {}
+    lines = _words(lb, kinds, since, until, frozenset(retracted) | superseded, admit, after_seq, through_seq)
+    skipped_by: dict[str, dict[str, int]] = {kind: {} for kind in kinds}
     proposals: list[Proposal] = []
     seen: set[str] = set()
     for line in lines:
@@ -735,6 +753,7 @@ def extract(
             # (`Claude: …`) is the agent's, as one under the participant's label is
             participants = [*participants, {"name": agent["name"], machine.MACHINE: True}]
         humans = [p for p in participants if not machine.is_machine_participant(p)]  # an agent is nobody
+        skipped = skipped_by[kind]
         known = _known(participants, identities, owner)
         counterpart: str | None = None
         with_names: tuple[str, ...] = ()
@@ -854,7 +873,8 @@ def extract(
                 )
             at_sentence += len(own)
     proposals.sort(key=lambda p: (p.day, p.at, p.seq))
-    return Report(proposals, skipped, describe(extractor), since, owner_label, kinds)
+    skipped = {key: n for kind in kinds for key, n in skipped_by[kind].items()}  # as the lines came
+    return Report(proposals, skipped, describe(extractor), since, owner_label, kinds), skipped_by
 
 
 def _words(
@@ -864,13 +884,15 @@ def _words(
     until: str | None,
     out: Collection[str],
     admit: Callable[[Line], bool] | None,
+    after: int | None = None,
+    through: int | None = None,
 ) -> Iterator[Line]:
     """The standing lines of `kinds` in the days asked, kind after kind, each in chain order, less the
     ids in `out` (the retracted and the superseded) and what `admit` refuses: streamed, so the record's
-    messages are never all in memory at once."""
+    messages are never all in memory at once; with `after` and `through`, those appended in between."""
     with lb.index() as idx:
         for kind in kinds:
-            for line in idx.stream(kind, since, until):
+            for line in idx.stream(kind, since, until, after, through):
                 if str(line["id"]) not in out and (admit is None or admit(line)):
                     yield line
 
@@ -1419,3 +1441,115 @@ def disposition_text(d: signing.Disposition) -> str:
 
 def _plural(n: int, noun: str) -> str:
     return f"{n:,} {noun if n == 1 else noun + 's'}"
+
+
+# -- the whole record, kept between readings ------------------------------------------------------------
+
+KEPT_VERSION = 1
+KEPT_FILE = "promises-whole.json"  # beside the index (`kept`)
+OVERLAY = ("retraction", "resolution")  # one appended: someone else said it, read the whole record again
+
+
+def _kept(lb: Logbook) -> Report:
+    """`extract` of the whole record by the rules, kept beside the index (`kept`, `KEPT_FILE`) and
+    brought forward: a proposal is a function of its own line and of who is who, so when nothing was
+    appended since but lines (no resolution or retraction, none correcting a line of `SOURCES`) only
+    the lines appended are read, a backfilled day's among them. The proposals are kept without what
+    closed them; the task lines and the signed days that close them are read again every time. The
+    result is `extract`'s, proposal for proposal (`tests/test_promises_kept.py`)."""
+    at = kept.path(lb, KEPT_FILE)
+    stamp = kept.stamp(lb, str(KEPT_VERSION), kept.code_digest(__file__))
+    held = kept.load(at)
+    with lb.index() as idx:
+        seq, head = idx.indexed()
+        usable = (
+            held is not None
+            and held.get("version") == KEPT_VERSION
+            and held.get("stamp") == stamp
+            and int(held.get("seq", -1)) <= seq
+        )
+        if usable and held is not None:
+            since = int(held["seq"])
+            line = idx.by_seq(since) if since else None
+            appended = idx.appended(since)
+            usable = (
+                (not since or (line is not None and str(line.get("hash")) == str(held.get("head"))))
+                and not any(kind in appended for kind in OVERLAY)
+                and not any(appended.get(kind, ("", 0, 0))[2] for kind in SOURCES)
+            )
+        marks = idx.retractions()
+        retracted = retractions(marks)
+        closed = closes(idx.by_kind(TASK), retracted)
+        disposed = signing.disposed_lines(idx, str(lb.meta.get("owner_id") or "") or None)
+    if usable and held is not None:
+        report, skipped_by = _extract(lb, after_seq=int(held["seq"]), through_seq=seq)
+        proposals = [*(_proposal_from(p) for p in held["proposals"]), *report.proposals]
+        for kind, counts in held["skipped"].items():
+            merged = dict(counts)
+            for key, n in skipped_by.get(kind, {}).items():
+                merged[key] = merged.get(key, 0) + n
+            skipped_by[kind] = merged
+    else:
+        report, skipped_by = _extract(lb, through_seq=seq)
+        proposals = report.proposals
+    kept.save(
+        at,
+        {
+            "version": KEPT_VERSION,
+            "stamp": stamp,
+            "seq": seq,
+            "head": head,
+            "proposals": [_proposal_json(p) for p in proposals],
+            "skipped": skipped_by,
+        },
+    )
+    proposals = [replace(p, closed_by=closed.get(p.id), disposition=disposed.get(p.line)) for p in proposals]
+    proposals.sort(key=lambda p: (p.day, p.at, p.seq))
+    skipped = {key: n for kind in SOURCES for key, n in skipped_by.get(kind, {}).items()}
+    return Report(proposals, skipped, describe(RULES), None, report.owner, SOURCES)
+
+
+def _proposal_json(p: Proposal) -> dict[str, Any]:
+    """A proposal as kept: what its line and who is who made of it, never what closed it."""
+    return {
+        "id": p.id,
+        "day": p.day,
+        "at": p.at,
+        "line": p.line,
+        "seq": p.seq,
+        "kind": p.kind,
+        "source": p.source,
+        "title": p.title,
+        "speaker": None if p.speaker is None else asdict(p.speaker),
+        "direction": p.direction,
+        "match": asdict(p.match),
+        "due": p.due,
+        "before": [asdict(s) for s in p.before],
+        "after": [asdict(s) for s in p.after],
+        "names": list(p.names),
+        "role": p.role,
+        "counterpart": p.counterpart,
+    }
+
+
+def _proposal_from(d: Mapping[str, Any]) -> Proposal:
+    return Proposal(
+        d["id"],
+        d["day"],
+        d["at"],
+        d["line"],
+        int(d["seq"]),
+        d["kind"],
+        d["source"],
+        d["title"],
+        None if d["speaker"] is None else Speaker(**d["speaker"]),
+        d["direction"],
+        Match(**d["match"]),
+        d["due"],
+        None,
+        tuple(Said(**s) for s in d["before"]),
+        tuple(Said(**s) for s in d["after"]),
+        tuple(d["names"]),
+        role=d["role"],
+        counterpart=d["counterpart"],
+    )

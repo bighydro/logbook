@@ -2,6 +2,12 @@
 
 Status: draft · 2026-10-19 · comment period: two weeks · written during the v1 freeze: it proposes, and builds nothing but one reader change already in this pull request (`draft/v1` forward compatibility, §13.1) · builds on RFC 0027 (reflection), RFC 0034 (the signed day), RFC 0036 (goals, reviews, drafts and chapters), RFC 0037 (entities), RFC 0041 (star) and RFC 0042 (Hold) · proposes amendments to RFC 0027, RFC 0034, `draft/v1` and the dream's prompt, each as text in §13, none adopted by this RFC
 
+Amended 2026-10-22 after the task tool's agent read it: a task's day is its `Planned` date, else its `Due`
+date (§9); *let go* is a status of its own and *tomorrow* moves the planned day, never the due date (§9);
+the week page's 90 days count only the owner's own edits, from the row's first line (§9); the agent
+carries out a verb only on the row as the line saw it (§9); an agent's meeting proposal under *with*
+(§4.9); a crossing carries the lines its signature disposes of (§13.5).
+
 The Day page already holds the day: the timeline, the people, the photos, the track, the draft a model
 wrote, everything the day held, folded, and at its foot Reflect and Sign. What it does not hold is the
 day's **intention**: what the day was meant for. A reflection that sees only what happened can describe a
@@ -133,8 +139,11 @@ Then the ink, folded: people, photos and track, everything the day held, looking
 ### 3.4 Signed
 
 What the owner kept, in ink, first: the notes kept at the close, the dispositions given, the signature and
-its note. The pencil is folded at the foot, under its head, as the draft is today. A signed day whose page
-has changed since says so in the header [main] and offers *Sign again* [main].
+its note. The pencil is folded at the foot, under its head [proposed]. On `main` the Day prints the
+standing draft in full above the timeline, under the heading *Draft* and its head, signed day or not
+[main] (`docs/serve.md`, *The footer*; `docs/day.md`, item 7, for the CLI's `draft` row); a week's or a
+journey's draft is the one folded. A signed day whose page has changed since says so in the header
+[main] and offers *Sign again* [main].
 
 ### 3.5 The close
 
@@ -189,8 +198,11 @@ work.
 
 Three kinds, computed, never pencil:
 
-- **promises both ways**: the open promises of `logbook promises` (I promised, I was asked; and what was
-  promised to the owner) [main, the reader];
+- **promises both ways**: the open promises of `logbook promises`, I promised and I was asked [main, the
+  reader's two sections]; what was promised to the owner, which `logbook promises` lists only under
+  `--all`, in its third section with the candidates nobody resolves [main] (`people drift`,
+  `docs/people.md`, and the person page, `docs/serve.md`, already read promises both ways [main]), is a
+  loose end here [proposed];
 - **replies owed**: a message or mail in a direct conversation, from a person the record names, the last
   word in the conversation not the owner's for more than a day [proposed];
 - **decisions** with a revisit date due (§4.8) [proposed].
@@ -235,7 +247,10 @@ them here, under the call's name, not twice.
 
 ### 4.9 People [proposed but for the parts marked]
 
-- **with**: the day's company [main] and the owner's word, marked *(you said)* [main].
+- **with**: the day's company [main] and the owner's word, marked *(you said)* [main]. An agent's meeting
+  proposal (the task tool's agent, or a note-taker, saying the owner met someone) shows here as a
+  proposal, in grey with its source, and is confirmed only as the owner's own `with` note [main, `logbook
+  with`], never by being shown: §11's *who was there*, named here too.
 - **who showed up**: everyone the day confirms, by name, in the order they first appear, with no count
   beside a name.
 - **birthdays**: today's, by name.
@@ -284,7 +299,8 @@ One form at the foot of the evening page, one POST, one hold of the writer lock,
 Every item is checked before the first line is written; any refusal writes nothing. The lock is held from
 the reading to the last append; a moved head is `HeadMoved` and nothing is written [main, the rule].
 
-**CLI parity**, so every click has a command that writes the same lines byte for byte:
+**CLI parity** [proposed], so every click has a command that writes the same lines byte for byte. `day
+sign` and `day reflect --text … --sign --accept` are [main]; `--keep` is not, and `main` refuses it:
 
 ```
 logbook day sign 2026-10-19 --keep 2,5
@@ -295,8 +311,10 @@ logbook day reflect 2026-10-19 --text "…" --sign --keep 2,5 --accept 1
 `--keep` and the existing `--kept` (a disposition) are one letter apart; §16 q6 asks whether the name
 stays.
 
-The Library's *What it is not* (`docs/serve.md`) says the pages write no note but the reflection. Keep and
-sign writes kept notes from the page, so that sentence is amended with this slice (§13.6).
+The Library's *What it is not* (`docs/serve.md`) names the reflection as the only note the pages write, but
+Sign already writes more on `main`: the ticked delegations, each a `note/v1` line labelled `delegation`,
+through `reflect.close` (`docs/serve.md`, *Sign*) [main]. Keep and sign writes kept notes from the page as
+well, so that sentence is amended with this slice (§13.6).
 
 ## 6. The rules of the evening dream
 
@@ -367,8 +385,11 @@ The owner keeps tasks in a task tool, and `sync notion` already writes its rows 
 and `checkbox` values by name, its relations, never its body. The page reads the plan from those lines and
 from nothing else; it fetches nothing and writes nothing to the task tool.
 
-- **Today's dated tasks**: rows whose `date` is today, five at most, the rest as a count, each linked to
-  its line (`/line/ID`).
+- **Today's dated tasks**: a row's day is its `Planned` date when the row has one, else its `Due` date,
+  both read by name from the row's latest `sync notion` line that holds its properties
+  (`extra.properties`); a row with neither is not dated. The rows whose day is today, five at most, the
+  rest as a count, each linked to its line (`/line/ID`). The page, the task tool's calendar view and its
+  week view then put a task on the same day.
 - **The next trip** as a countdown: *Lofoten in 12 days*.
 - **What the plan holds for this city**: the rows that name the city the day's stays are in, three at most.
 - **A queued reading note** whose link appears in the day's browse, watch or listen lines.
@@ -376,9 +397,21 @@ from nothing else; it fetches nothing and writes nothing to the task tool.
 Today's tasks join the loose ends with the verbs **done** / **tomorrow** / **let go**, written as the
 signature's dispositions by the task line's id (`kept`, `carried`, `dropped`). The signed day crosses under
 its policy entry with its dispositions (RFC 0034, *the gate on the crossing* [main]); the downstream agent
-that runs the task tool reads them and applies them there: done, rolled to tomorrow, archived. Never
-deleted. An unsigned day changes nothing. The task lines are edits of earlier days, so this needs the same
-RFC 0034 amendment as §4.5 (§13.5).
+that runs the task tool reads them and carries them out there:
+
+- **done** closes the row as done;
+- **tomorrow** moves the planned day: `Planned` becomes the next day, set on a row that had none, and the
+  `Due` date is never touched;
+- **let go** closes the row with a status of its own, *Let go*, beside *Done*. It is never the task
+  tool's archive or trash, which empties itself: a row let go stays in the task tool, closed, as its line
+  stays in the record. Never deleted.
+
+The agent carries out a verb only while the row is as the line saw it: its status, its `Planned` and its
+`Due` as the line the disposition names holds them. A later change by the owner in the task tool wins:
+the row stays as the owner left it, and the verb is not carried out. The verb that counts is the latest
+standing signature's that gives the row a disposition (RFC 0034 amendment 5, §13.5), as `promises` reads
+a commitment's. An unsigned day changes nothing. The task lines are edits of earlier days, so this needs
+the same RFC 0034 amendment as §4.5 (§13.5).
 
 **One message per time of day across both systems**: when the task tool's agent also sends a morning
 message, one of the two is configured off; the record never sends two at one hour.
@@ -390,7 +423,13 @@ RFC.
 
 The week page adds **time by project** (the plan's projects against the lived hours), **the sprint's
 outcomes** (the rows the week moved to done), and one fold of **tasks untouched for 90 days**, let go
-together in one decision.
+together in one decision. *Untouched* counts only the owner's own edits: a line of the row whose actor is
+the owner (`extra.actor.role` `owner`). An edit by an agent (a sprint sweep, sizing, a rollover, a
+replan) does not reset it, and neither does the agent carrying out *tomorrow*. The 90 days count from the
+row's first line in the record, or from the owner's latest edit when there is one: a row the record has
+known for less than 90 days is never in the fold, whatever the task tool says it was created. With no
+owner known to `sync notion` (`LOGBOOK_NOTION_OWNER_ID`), no edit is the owner's, and the days run from the
+row's first line.
 
 ## 10. The day boundary [proposed, but for `day_start`]
 
@@ -412,7 +451,11 @@ link (no script). A **moment** is a stay, drawn as a card:
 - **photos**, the owner's own camera first;
 - **paid**, at tier 3;
 - what passed **during** the window: messages, calls, Claude and agent conversations, mail from people;
-- **what was said**, only when recorded with consent (`transcript/v1`'s consent, [main] as a field);
+- **what was said**, only when recorded with consent [proposed]. `transcript/v1` has no consent field on
+  `main`; consent is stated per voice, as `consent` (`yes`, `no`, `unknown`; absent reads as `unknown`) on
+  the voice's `resolution/v1` line (RFC 0038 §3.2, `review speakers --consent`), and the Day prints
+  `recorded with consent: unknown` (or `no`) on a recording's row when a guest's voice was not stated as
+  consenting [main];
 - **notes**, **gifts**.
 
 **The map**: one offline OpenStreetMap PMTiles file on the home machine, named by `map_file` in
@@ -512,6 +555,9 @@ Found by this RFC's reading of `main` (§14 items 1–2):
 >
 > `confirmed` never names a `draft` line.
 
+Built with this amendment: a crossing that carries a signature also carries, at its own tier, each line
+that signature gives a disposition to, so the downstream agent can find it.
+
 ### 13.6 The Library's *What it is not* [proposed, with slice C]
 
 > Not an editor: the pages write nothing but the namings, the reviews, an org's or an idea's status, the
@@ -540,7 +586,8 @@ on `main`, 19 October 2026. Each finding, and how this RFC answers it:
    the evening question. → §13.2 lands with the digest's skip.
 8. **A day is in the record's zone.** SPEC §3.2 and RFC 0036 group by the record's zone; the page digest
    names it. "The day where it began" is a spec change. → §12, its own RFC with a version bump.
-9. **The Library writes no note but the reflection.** → §13.6.
+9. **The Library's *What it is not* names no note but the reflection**, while Sign already writes the
+   ticked delegations as `note/v1` lines [main] (`docs/serve.md`, *Sign*). → §13.6.
 10. **The Library refuses Sign with no reflection** (`docs/serve.md`, *Reflect and Sign*), while freedom says
     the question may be ignored forever. → Keep and sign takes no reflection; `day sign` already signs
     without one [main].

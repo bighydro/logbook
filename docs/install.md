@@ -326,6 +326,21 @@ Removing the command never touches your record. The folder `logbook setup` made 
 unless you chose otherwise) stays where it is, readable as plain files, and a later install finds
 it again.
 
+### Following stable
+
+A machine that updates itself from the repository rather than from a release follows the tag
+`stable`, never `main`. CI moves `stable` to a commit on `main` only after every check of that commit
+passed on Linux, macOS and Windows (the tests with the slow tier, Nix, Homebrew, Docker and the second
+implementation), and never moves it backwards. A commit that turns `main` red is never installed.
+
+```bash
+uv tool install --force "openlogbook @ git+https://github.com/bighydro/logbook@stable"
+```
+
+Run that from whatever updates the machine (a launchd agent, a cron line, a script you run), in place
+of an install from `main`. `logbook --version` says what is installed, and `git ls-remote --tags
+https://github.com/bighydro/logbook stable` which commit `stable` names.
+
 ## Optional extras
 
 Some features need an extra library: reading an encrypted iPhone backup and sharing a signed page
@@ -337,15 +352,20 @@ beside `transcribe`; it brings torch, with CUDA on Linux: the two took six and a
 anywhere else they install nothing).
 Logbook tells you when a command needs one; `logbook doctor` lists five of them (`ais`, `crypto`,
 `sealed`, `speakers`, `transcribe`) with a `pass` or `warn` each ([the doctor](doctor.md#the-extras)).
-You add one by installing the package with the extra's name in brackets:
+You add one by installing the package with the extra's name in brackets, into the Logbook you have.
+`logbook doctor` prints that line for your install when it can prove it keeps everything else as it
+is; when it prints none, it is one of these, with the version `logbook --version` prints:
 
 ```bash
-pipx install --force "openlogbook[crypto]"
-uv tool install "openlogbook[crypto]"
+pipx runpip openlogbook install "openlogbook[crypto]==0.7.0"
+uv tool install --force --python 3.12 "openlogbook[crypto,mcp]==0.7.0"
 ```
 
-Several at once are a comma-separated list: `"openlogbook[transcribe,speakers]"`. The quotes matter;
-the brackets mean something else to the terminal without them. The Homebrew formula installs the
+`pipx runpip` adds the extra to the environment pipx made, on its Python. `uv tool install --force`
+makes the tool again with exactly the extras it names, so name every one you already have, on the
+Python `--python` names: the one it runs on now (`uv tool list --show-python` shows it). Several
+at once are a comma-separated list: `"openlogbook[transcribe,speakers]"`. The quotes matter; the
+brackets mean something else to the terminal without them. The Homebrew formula installs the
 base package only: a Mac that needs an extra uses `pipx` or `uv` for Logbook instead, which is a
 `brew uninstall logbook` followed by one of the two lines above. Your record is untouched either way.
 

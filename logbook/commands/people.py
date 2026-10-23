@@ -1,5 +1,7 @@
 """The people: `people`, `people --priority`, `people NAME` (the command `person` until 0.6), `people merge`,
-`people review`, `people drift`, `people nearby`, and the experimental `people ingest` and `people ask`."""
+`people review`, `people drift`, `people nearby`, `people mail` (`mail.py`), `people gifts`, and the
+experimental `people ingest` and `people ask`; and who was there's forms, `people not-with`, `lives-with`,
+`lives-in` and `city` (`who.py`, RFC 0043)."""
 
 from __future__ import annotations
 
@@ -11,9 +13,10 @@ from collections.abc import Iterable, Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from ..core import people, policy, reading, stays
+from ..core import gifts, people, policy, reading, stays
 from ..core.store import Logbook
 from .common import Subparsers, _plural
+from .mail import cmd_people_mail
 from .review import Queue
 
 if TYPE_CHECKING:
@@ -24,48 +27,66 @@ MERGE = "merge"  # `people merge`: never a person's name
 REVIEW = "review"  # `people review`: nor this
 DRIFT = "drift"  # `people drift`
 NEARBY = "nearby"  # `people nearby`
+MAIL = "mail"  # `people mail`: which mail is a person's (RFC 0045)
 INGEST = "ingest"  # `people ingest NAME --window FROM TO`: the relationship reader, experimental
 ASK = "ask"  # `people ask NAME QUESTION`: the same
+GIFTS = "gifts"  # `people gifts [NAME]`: the gifts `add gift` writes (RFC 0043)
 MERGE_FLAGS = ("propose", "apply", "export_review", "apply_review")
 REVIEW_FLAGS = ("accept", "reject", "all_above", "from_google")
 DRIFT_FLAGS = ("min_days", "quiet_days", "show")
 NEARBY_FLAGS = ("journey", "days", "radius")
+MAIL_FLAGS = ("since", "until")
 
 
 def people_arguments(sub: Subparsers) -> None:
-    """`logbook people [NAME|merge|review|drift|nearby|ingest|ask]`."""
+    """`logbook people [NAME|merge|review|drift|nearby|mail|gifts|ingest|ask|not-with|lives-with|lives-in|
+    city]`."""
     s = sub.add_parser(
         "people",
-        help="everyone the record names; NAME, merge, review, drift, nearby",
+        help="who the record names; NAME, merge, review, drift, nearby, mail",
         description="everyone the record names, never the owner: channels, days together, last real contact;"
         " --priority: ranked by a plain score; NAME: one person's page; merge: the same person named twice;"
         " review: who the sources saw that the record has not placed, proposed against the people it names;"
         " drift: who you used to see and have drifted from; nearby PLACE: who has been seen where you go;"
+        " mail: which mail is a person's (someone the record names sent it to you, or you sent it to one)"
+        " and which is other mail, counted, never an address or a name (RFC 0045);"
+        " gifts [NAME]: the gifts you gave and were given, `add gift` writes them;"
         " ingest NAME, ask NAME QUESTION: the relationship reader, experimental: a question answered by the"
         " model of LOGBOOK_DREAM_ENDPOINT under the `relationship` entry of policy/crossing.json, from the"
-        " person's lines at or under its max_tier on signed days, every claim citing them or unsupported",
+        " person's lines at or under its max_tier on signed days, every claim citing them or unsupported;"
+        " not-with NAME --from D1 --to D2, lives-with NAME --from D [--until D], lives-in NAME CITY: your"
+        " word on who was there, one note each; city CITY [--trip ID]: your people in a city, seen or"
+        " not yet on a journey (RFC 0043)",
     )
     s.add_argument(
         "name",
         nargs="?",
-        metavar="NAME|merge|review|drift|nearby|ingest|ask",
+        metavar="NAME|merge|review|drift|nearby|mail|gifts|ingest|ask|not-with|lives-with|lives-in|city",
         help="one person's page: a name, an entity id, an email address, a phone number or kind:value;"
         " `merge`: the same person named twice or more, proposals with the evidence, merged only when told;"
         " `review`: the observed people not yet placed, proposed against the canonical ones, numbered,"
         " accepted or rejected only when told; `drift`: many days together in a year, no real contact"
-        " for long; `nearby PLACE`: the people seen at or near a place; `ingest NAME`: one person's"
+        " for long; `nearby PLACE`: the people seen at or near a place; `mail`: the window's mail, a"
+        " person's or other mail, counted; `gifts [NAME]`: the gifts given and received, in the day's"
+        " order, or one person's; `ingest NAME`: one person's"
         " lines read into the relationship reader's store; `ask NAME QUESTION`: a question answered"
         " from it by the model, every claim citing lines of it or listed as unsupported, nothing written"
-        " (experimental)",
+        " (experimental); `not-with`, `lives-with`, `lives-in NAME CITY`, `city CITY`: who was there",
     )
     s.add_argument(
         "place",
         nargs="?",
         metavar="PLACE",
         help="nearby: lat,lon, a name of places.json, a city of the airports table, or an airport code;"
-        " ingest, ask: the person, as `people NAME` finds them",
+        " gifts, ingest, ask, not-with, lives-with, lives-in: the person, as `people NAME` finds them;"
+        " city: the city",
     )
-    s.add_argument("question", nargs="?", metavar="QUESTION", help="ask: the question about the person")
+    s.add_argument(
+        "question",
+        nargs="?",
+        metavar="QUESTION",
+        help="ask: the question about the person; lives-in: the city",
+    )
     s.add_argument(
         "--show-prompt", action="store_true", help="ask: print the prompt and the lines sent to the model"
     )
@@ -96,7 +117,17 @@ def people_arguments(sub: Subparsers) -> None:
     s.add_argument(
         "--show", action="store_true", help="drift: the days together of each, with where; never a word"
     )
-    s.add_argument("--journey", metavar="ID", help="nearby: where this journey or flight line goes")
+    s.add_argument(
+        "--journey",
+        metavar="ID",
+        help="nearby: where this journey or flight line goes",
+    )
+    s.add_argument(
+        "--since",
+        metavar="YYYY-MM-DD",
+        help="mail: the first local day (default: the 30 days ending --until, which who was there's"
+        " options carry)",
+    )
     s.add_argument(
         "--days",
         nargs=2,
@@ -137,6 +168,9 @@ def people_arguments(sub: Subparsers) -> None:
         " contacts that share an address or a number; never a line of them; kept 24 h in"
         " state/google-contacts.json; give it with --accept and --reject too",
     )
+    from .who import people_arguments as who_arguments
+
+    who_arguments(s)
     g = s.add_mutually_exclusive_group()
     g.add_argument(
         "--priority",
@@ -170,12 +204,33 @@ def cmd_people(a: argparse.Namespace) -> None:
     the index (`logbook.core.people`). The window is the whole record, or one year, clipped to the days
     the record has a line on. Nothing is written. `people NAME` is one person's page (`cmd_person`);
     `people merge` the duplicates (`_people_merge`)."""
+    from . import who
+
+    if a.name in who.PEOPLE_FORMS:
+        who.people_form(a)
+        return
+    if a.name == MAIL:  # its window's last day is who was there's --until, so before that refusal
+        if a.from_ is not None or a.to is not None:
+            print("people mail: --from and --to are not its window; --since and --until are", file=sys.stderr)
+            sys.exit(2)
+        if a.trip is not None:  # who was there's, refused here as on every other form
+            print("people mail: --trip goes with `people city`", file=sys.stderr)
+            sys.exit(2)
+        cmd_people_mail(a)
+        return
+    who.refuse_people_flags(a)
     if a.name in (INGEST, ASK):
         _relationship(Logbook.find(), a)
         return
     if a.question is not None or a.window is not None:
         print("people: QUESTION goes with `people ask`, --window with `people ingest`", file=sys.stderr)
         sys.exit(2)
+    if any(getattr(a, flag) is not None for flag in MAIL_FLAGS):
+        print("people: --since and --until go with `people mail`", file=sys.stderr)
+        sys.exit(2)
+    if a.name == GIFTS:
+        _people_gifts(Logbook.find(), a)
+        return
     if a.place is not None and a.name != NEARBY:
         print(f"people: {a.place!r}: a second word goes with `people nearby PLACE` only", file=sys.stderr)
         sys.exit(2)
@@ -588,3 +643,34 @@ def _people_window(lb: Logbook, year: str | None) -> tuple[str, str] | None:
 
 def _no_days(year: str | None) -> str:
     return "the record has no lines" if year is None else f"the record has no days in {year}"
+
+
+def _people_gifts(lb: Logbook, a: argparse.Namespace) -> None:
+    """`people gifts [NAME] [--json]`: `gifts.gifts`, both ways, in the day's order (RFC 0043); a name
+    the record cannot place is one sentence on stderr, exit 2. No number stands beside a name."""
+    try:
+        person = gifts.whose(lb, a.place) if a.place is not None else None
+        found = gifts.gifts(lb, person=person)
+    except gifts.GiftError as e:
+        print(f"people: {e}", file=sys.stderr)
+        sys.exit(2)
+    if a.json:
+        given = sum(1 for g in found if g.direction == gifts.GIVEN)
+        data = {
+            "person": person.entity if person else None,
+            "name": person.name if person else None,
+            "given": given,
+            "received": len(found) - given,
+            "gifts": [g.to_json() for g in found],
+        }
+        print(json.dumps(data, indent=2, ensure_ascii=False))
+        return
+    if not found:
+        whose = f" with {person.name}" if person else " in the record"
+        print(f"no gifts{whose}; `logbook add gift DAY NAME WHAT` writes one")
+        return
+    if person:
+        print(f"gifts with {person.name}")
+    print(gifts.counts(found))
+    for g in found:
+        print(f"{g.day}  {gifts.said(g)}  #{g.line['seq']}")

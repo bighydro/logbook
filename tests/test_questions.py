@@ -492,3 +492,83 @@ def test_questions_list_on_a_record_with_an_edited_bank_prints_it_as_is(
     [line] = _run(capsys, "setup", "questions", "list").splitlines()
     assert line.startswith("  one ") and line.endswith("  One two?")
     assert line.split()[:5] == ["one", "gratitude", "3", "travelled", "!photos"]
+
+
+# -- lenses: `"ask": "day"` (RFC 0027 amendment, 2026-10-21; RFC 0043 §4.4) --------------------------------
+
+
+def test_ask_day_is_a_lens_the_digest_never_draws(lb: Logbook) -> None:
+    """A question with `"ask": "day"` is a lens: the dream answers it every evening, and the digest's
+    draw never picks it, even when it is the only question whose conditions hold."""
+    _bank(
+        lb.root,
+        {"id": "lens-boat", "text": "What did the boat teach you?", "ask": "day"},
+        {"id": "lens-money", "text": "Where did the money go?", "ask": "day", "when": ["logged"]},
+        {"id": "asked", "text": "Anything to add?", "ask": "owner", "when": ["!logged"]},
+    )
+    bank = questions.read(lb.root)
+    assert [q.ask for q in bank] == ["day", "day", "owner"]
+    assert questions.choose(bank, _facts(logged=True), set(), "2026-06-14") is None
+    assert questions.pick(lb.root, _facts(logged=True), "2026-06-14")["id"] is None
+    assert [(q.id, q.text) for q in questions.lenses(lb.root)] == [
+        ("lens-boat", "What did the boat teach you?"),
+        ("lens-money", "Where did the money go?"),
+    ]
+    assert questions.choose(bank, _facts(), set(), "2026-06-14").id == "asked"
+
+
+def test_lenses_read_nothing_and_write_nothing_without_the_file(lb: Logbook) -> None:
+    """The dream reads the lenses from the bank as the owner wrote it; with no bank there is none,
+    and the dream never writes the default bank on the owner's behalf."""
+    path = questions.questions_path(lb.root)
+    assert not path.exists()
+    assert questions.lenses(lb.root) == []
+    assert not path.exists()
+
+
+def test_a_disabled_lens_is_not_answered(lb: Logbook) -> None:
+    _bank(
+        lb.root, {"id": "lens-boat", "text": "What did the boat teach you?", "ask": "day", "enabled": False}
+    )
+    assert questions.lenses(lb.root) == []
+
+
+@pytest.mark.parametrize(
+    ("entry", "said"),
+    [
+        ({"id": "x", "text": "x?", "ask": "evening"}, "ask 'evening'; it must be owner or day"),
+        ({"id": "x", "text": "x?", "ask": 1}, "ask 1; it must be owner or day"),
+        ({"id": "x", "text": "Was {proposed} with you?", "ask": "day"}, "a lens fills no placeholder"),
+    ],
+)
+def test_an_ask_outside_owner_and_day_and_a_lens_with_a_placeholder_are_refused_naming_the_file(
+    lb: Logbook, entry: dict[str, Any], said: str
+) -> None:
+    path = _bank(lb.root, entry)
+    with pytest.raises(PolicyError) as e:
+        questions.read(lb.root)
+    assert str(path) in str(e.value) and said in str(e.value)
+
+
+def test_a_sixth_lens_is_refused_naming_the_file(lb: Logbook) -> None:
+    """At most five lenses: the evening's pencil answers each, and more is a page nobody reads."""
+    lenses = [{"id": f"lens-{n}", "text": f"Lens {n}?", "ask": "day"} for n in range(1, 7)]
+    path = _bank(lb.root, *lenses)
+    with pytest.raises(PolicyError) as e:
+        questions.read(lb.root)
+    assert str(path) in str(e.value) and "6 lenses" in str(e.value) and "at most 5" in str(e.value)
+    _bank(lb.root, *lenses[:5], {**lenses[5], "enabled": False})
+    assert len(questions.lenses(lb.root)) == 5
+
+
+def test_the_default_bank_and_a_question_without_ask_are_unchanged_by_the_field(lb: Logbook) -> None:
+    """`ask` absent is `owner`, and a question that is the owner's is written without the key, so the
+    default bank, and every bank written before the amendment, reads and writes as it did."""
+    bank = questions.read(lb.root)
+    assert all(q.ask == "owner" for q in bank)
+    data = json.loads(questions.questions_path(lb.root).read_text(encoding="utf-8"))
+    assert all("ask" not in entry for entry in data["questions"])
+    lens = questions.Question(id="lens-boat", text="What did the boat teach you?", kind="open", ask="day")
+    assert lens.to_json()["ask"] == "day"
+    questions.add(lb.root, lens)
+    assert [q.id for q in questions.lenses(lb.root)] == ["lens-boat"]

@@ -15,6 +15,14 @@ demo record: 30 days, 2026-06-01 to 2026-06-30, seed 1; nothing in it is real
 wrote 12,772 lines to ~/Demo/Logbook, head 3ee025e7a9fb…
 ```
 
+## Open it in a browser
+
+```bash
+logbook serve
+```
+
+Then open http://127.0.0.1:8765/day/2026-06-17: one day of a person who does not exist, a week aboard. The page is computed on this machine from the lines you just made. Press Ctrl-C in the terminal to stop it.
+
 ## Who
 
 Ines Nordmann lives in Oslo with Ola. She has a sister, Kari; colleagues, Per and Liv; a crew for
@@ -151,9 +159,9 @@ logbook show trips
 ```
 trips 2026-06-01 – 2026-06-30: 4 trips
   2026-06-06 – 2026-06-06  1 night · route Cabin · places Cabin · with Ola Nordmann · trip:2026-06-06:2026-06-06
-  2026-06-08 – 2026-06-10  3 nights · route 47.3769,8.5417 (Zurich) · in XY 561 OSL → ZRH · out XY 562 ZRH → OSL · with Marta Keller, Jonas Weber · trip:2026-06-08:2026-06-10
+  2026-06-08 – 2026-06-10  3 nights · route Zurich · in XY 561 OSL → ZRH · out XY 562 ZRH → OSL · with Marta Keller, Jonas Weber · trip:2026-06-08:2026-06-10
   2026-06-15 – 2026-06-20  6 nights aboard Nordlys · route aboard Nordlys · places Marina · with Anders Vik, Ola Nordmann · trip:2026-06-15:2026-06-20
-  2026-06-25 – 2026-06-26  2 nights · route 55.6850,12.5500 (Copenhagen) · in XY 571 OSL → CPH · out XY 572 CPH → OSL · places Office · with Freja Lund, Liv Berg, Per Hansen · trip:2026-06-25:2026-06-26
+  2026-06-25 – 2026-06-26  2 nights · route Copenhagen · in XY 571 OSL → CPH · out XY 572 CPH → OSL · places Office · with Freja Lund, Liv Berg, Per Hansen · trip:2026-06-25:2026-06-26
 ```
 
 A trip is a run of nights away from every place of kind `home`, with the flights in and out and

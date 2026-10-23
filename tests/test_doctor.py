@@ -4,9 +4,15 @@ exist, and every value an environment variable holds is a sentinel the output mu
 
 from __future__ import annotations
 
+import ast
+import dataclasses
 import json
 import os
+import re
+import shlex
 import shutil
+import sys
+from collections.abc import Iterator
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
@@ -152,7 +158,7 @@ def test_the_index_is_current_missing_or_stale(lb: Logbook) -> None:
     (lb.index_path).unlink()
     missing = _run(lb)["index"]
     assert missing.status == "warn"
-    assert "logbook index" in missing.detail
+    assert "logbook repair index" in missing.detail
     lb.index_rebuild()
     meta = lb.meta
     lb.append("2026-06-08T09:00:00Z", "manual", "note", 2, {"schema": "note/v1", "text": "latest"})
@@ -170,7 +176,7 @@ def test_an_unreadable_index_is_a_warning_not_a_traceback(lb: Logbook) -> None:
     (lb.index_path).write_bytes(b"not a database")
     check = _run(lb)["index"]
     assert check.status == "warn"
-    assert "logbook index" in check.detail
+    assert "logbook repair index" in check.detail
 
 
 # -- the settings files ---------------------------------------------------------------------------------
@@ -221,20 +227,726 @@ def test_assets_json_valid_absent_and_broken(lb: Logbook) -> None:
 # -- the extras -----------------------------------------------------------------------------------------
 
 
+#: what doctor knows of the process it runs in, for the tests: a tool environment uv made on 3.12, with
+#: openlogbook 0.7.0 from an index, pip importable, and two companions at the versions installed
+VERSION = "0.7.0"
+PYTHON = "/home/ines/.local/share/uv/tools/openlogbook/bin/python"
+VENV_PYTHON = "/home/ines/venv/bin/python"
+PIPX_HOME = "/home/ines/.local/share/pipx"
+COMMIT = "4f1c0d2e9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d"  # synthetic: the commit a git install installed
+HERE = doctor.Here(
+    executable=PYTHON,
+    base="/usr/bin/python3.12",
+    python=(3, 12, 3),
+    version=VERSION,
+    pip=True,
+    venv=True,
+    version_of={"ijson": "3.5.1", "uvicorn": "0.38.0", "pytest": "9.1.1", "ruff": "0.14.0"}.get,
+)
+GIT = json.dumps(
+    {
+        "url": "https://example.org/ines/logbook.git",
+        "vcs_info": {"vcs": "git", "commit_id": COMMIT, "requested_revision": "v0.7.0"},
+    }
+)
+PIP = doctor.Install("pip", requirement=f"=={VERSION}", python=VENV_PYTHON)
+
+
+def _here(**changes: object) -> doctor.Here:
+    return dataclasses.replace(HERE, **changes)  # type: ignore[arg-type]
+
+
 def test_a_missing_extra_names_its_install_line(lb: Logbook) -> None:
+    """Since the third review: this interpreter's pip, at the version installed now, so the line can
+    neither land on another Python nor move Logbook to a newer version."""
     checks = {
         c.name: c
-        for c in doctor.run(lb, {}, installed=lambda m: m == "cryptography", usage=_usage(200 * GIB))
+        for c in doctor.run(
+            lb, {}, installed=lambda m: m == "cryptography", usage=_usage(200 * GIB), install=PIP
+        )
     }
     assert checks["extra:crypto"].status == "pass"
     assert checks["extra:ais"].status == "warn"
-    assert 'pip install "openlogbook[ais]"' in checks["extra:ais"].detail
+    assert checks["extra:ais"].detail == (
+        f'websockets not installed: {VENV_PYTHON} -m pip install "openlogbook[ais]==0.7.0"'
+    ), "pip adds and removes nothing else, so the line names the extra alone (third review, 7)"
     assert checks["extra:transcribe"].status == "warn"
-    assert 'pip install "openlogbook[transcribe]"' in checks["extra:transcribe"].detail
+    assert checks["extra:transcribe"].detail.endswith(
+        f'{VENV_PYTHON} -m pip install "openlogbook[transcribe]==0.7.0"'
+    )
     assert checks["extra:speakers"].status == "warn"
     assert checks["extra:speakers"].detail == (
-        'pyannote.audio not installed: pip install "openlogbook[speakers]"'
+        f'pyannote.audio not installed: {VENV_PYTHON} -m pip install "openlogbook[speakers]==0.7.0"'
     )
+
+
+def test_under_pipx_the_hint_is_pipx_and_keeps_every_extra_already_there(lb: Logbook) -> None:
+    """#334: on the pipx install the README gives, `pip install "openlogbook[ais]"` put a second Logbook in
+    the system Python, and the extras pipx had added (sealed, speakers, transcribe) were gone from the
+    command. The line names how this one was installed, and every extra it has: following it removes none.
+    `judge` is in pipx's own spec but installs nothing on Linux, so only the spec says it is there. Since
+    the third review it runs pip in pipx's venv, never `pipx install --force`, which made the venv again
+    on pipx's own Python."""
+    pipx = doctor.Install(
+        "pipx", frozenset({"sealed", "judge"}), f"=={VERSION}", home=PIPX_HOME, venv="openlogbook"
+    )
+    checks = {
+        c.name: c
+        for c in doctor.run(
+            lb,
+            {},
+            installed=lambda m: m in ("cryptography", "pyrage", "ijson"),
+            usage=_usage(200 * GIB),
+            install=pipx,
+        )
+    }
+    assert checks["extra:ais"].detail == (
+        f"websockets not installed: PIPX_HOME={PIPX_HOME} pipx runpip openlogbook install"
+        ' "openlogbook[ais,judge,sealed]==0.7.0"'
+    ), "what pipx's receipt names, which pipx writes back, and the extra; a module found is not named"
+
+
+INSTALLS: dict[str, doctor.Install] = {
+    "pipx": doctor.Install("pipx", requirement=f"=={VERSION}", home=PIPX_HOME, venv="openlogbook"),
+    "uv-tool": doctor.Install("uv-tool", requirement=f"=={VERSION}", python=PYTHON),
+    "checkout": doctor.Install("checkout", folder="openlogbook", python=VENV_PYTHON),
+    "pip": PIP,
+    "homebrew": doctor.Install("homebrew", why=doctor.HOMEBREW),
+}
+
+
+@pytest.mark.parametrize(
+    ("how", "line"),
+    [
+        ("pipx", f'PIPX_HOME={PIPX_HOME} pipx runpip openlogbook install "openlogbook[ais,crypto]==0.7.0"'),
+        ("uv-tool", f'uv tool install --force --python {PYTHON} "openlogbook[ais,crypto]==0.7.0"'),
+        (
+            "checkout",
+            f"uv sync --project openlogbook --python {VENV_PYTHON} --inexact --no-default-groups"
+            " --extra ais --extra crypto",
+        ),
+        ("pip", f'{VENV_PYTHON} -m pip install "openlogbook[ais,crypto]==0.7.0"'),
+        ("homebrew", None),
+    ],
+)
+def test_the_install_line_for_each_way_of_installing(how: str, line: str | None) -> None:
+    assert doctor.install_line(INSTALLS[how], {"crypto", "ais"}) == line
+
+
+def test_how_this_logbook_was_installed_is_read_from_its_prefix(tmp_path: Path) -> None:
+    """From the files the installer left in `sys.prefix`, the package's `direct_url.json` and version;
+    never a command run."""
+    pipx = tmp_path / "pipx" / "venvs" / "openlogbook"
+    pipx.mkdir(parents=True)
+    (pipx / "pipx_metadata.json").write_text(
+        json.dumps(
+            {"main_package": {"package": "openlogbook", "package_or_url": "openlogbook[sealed,crypto]"}}
+        ),
+        encoding="utf-8",
+    )
+    assert doctor.install_of(pipx, HERE) == doctor.Install(
+        "pipx", frozenset({"sealed", "crypto"}), "==0.7.0", home=str(tmp_path / "pipx"), venv="openlogbook"
+    )
+
+    uv = tmp_path / "uv" / "tools" / "openlogbook"
+    uv.mkdir(parents=True)
+    (uv / "uv-receipt.toml").write_text(
+        '[tool]\nrequirements = [{ name = "openlogbook", extras = ["mcp"] }]\n', encoding="utf-8"
+    )
+    assert doctor.install_of(uv, HERE) == doctor.Install(
+        "uv-tool", frozenset({"mcp"}), "==0.7.0", python=PYTHON
+    )
+
+    checkout = tmp_path / "src" / "logbook"
+    (checkout / ".venv").mkdir(parents=True)
+    (checkout / "pyproject.toml").write_text("[project]\nname = 'openlogbook'\n", encoding="utf-8")
+    editable = _here(direct_url=json.dumps({"url": checkout.as_uri(), "dir_info": {"editable": True}}))
+    assert doctor.install_of(checkout / ".venv", editable) == doctor.Install(
+        "checkout", folder=str(checkout), python=PYTHON
+    )
+    elsewhere = doctor.install_of(tmp_path / "venv", editable)
+    assert elsewhere.how == "pip" and "folder" in elsewhere.why, "pip install -e: no line, the why said"
+    assert doctor.install_line(elsewhere, {"ais"}) is None
+
+    wheel = _here(direct_url=json.dumps({"url": "https://example.org/openlogbook.whl", "archive_info": {}}))
+    assert doctor.install_of(tmp_path / "venv", wheel) == doctor.Install(
+        "pip", why="it was installed from a folder, a URL or a wheel, which may have changed since"
+    )
+    assert doctor.install_of(tmp_path / "venv", HERE) == doctor.Install(
+        "pip", requirement="==0.7.0", python=PYTHON
+    )
+
+
+def test_an_editable_or_pinned_install_keeps_where_it_came_from(tmp_path: Path) -> None:
+    """From review: `pipx install -e ./logbook` or `uv tool install -e .` must not be told a line that
+    reinstalls from PyPI and drops the checkout; a pinned version stays pinned, and since the third review
+    an unpinned or loosely pinned one is pinned to the version installed now, never moved past it."""
+    for checkout in (tmp_path / "RUNNER~1" / "logbook", tmp_path / "ines@example.org" / "logbook"):
+        # a Windows short name, and an `@` in a folder: neither is a version operator, neither splits it
+        venv = tmp_path / "pipx" / "venvs" / "openlogbook"
+        venv.mkdir(parents=True, exist_ok=True)
+        (venv / "pipx_metadata.json").write_text(
+            json.dumps(
+                {"main_package": {"package_or_url": f"{checkout}[crypto]", "pip_args": ["--editable"]}}
+            ),
+            encoding="utf-8",
+        )
+        editable = _here(direct_url=json.dumps({"url": checkout.as_uri(), "dir_info": {"editable": True}}))
+        pipx = doctor.install_of(venv, editable)
+        assert pipx == doctor.Install(
+            "pipx",
+            frozenset({"crypto"}),
+            folder=str(checkout),
+            home=str(tmp_path / "pipx"),
+            venv="openlogbook",
+        )
+        assert doctor.install_line(pipx, {"ais", "crypto"}) == (
+            f"PIPX_HOME={doctor._arg(str(tmp_path / 'pipx'))} pipx runpip openlogbook install"
+            f' --editable "{checkout}[ais,crypto]"'
+        )
+
+    for spec, installed in (
+        ("openlogbook==0.7.0", "0.7.0"),
+        ("openlogbook~=0.7", "0.7.0"),
+        ("openlogbook", "0.7.1"),
+    ):
+        (venv / "pipx_metadata.json").write_text(
+            json.dumps({"main_package": {"package_or_url": spec}}), encoding="utf-8"
+        )
+        pinned = doctor.install_of(venv, _here(version=installed))
+        assert doctor.install_line(pinned, {"ais"}) == (
+            f"PIPX_HOME={doctor._arg(str(tmp_path / 'pipx'))} pipx runpip openlogbook install"
+            f' "openlogbook[ais]=={installed}"'
+        ), spec
+
+    checkout = tmp_path / "RUNNER~1" / "logbook"
+    (tmp_path / "uv-receipt.toml").write_text(
+        f'[tool]\nrequirements = [{{ name = "openlogbook", editable = {json.dumps(str(checkout))} }}]\n',
+        encoding="utf-8",
+    )
+    editable = _here(direct_url=json.dumps({"url": checkout.as_uri(), "dir_info": {"editable": True}}))
+    uv = doctor.install_of(tmp_path, editable)
+    assert uv == doctor.Install("uv-tool", folder=str(checkout), python=PYTHON)
+    assert doctor.install_line(uv, {"ais"}) == (
+        f'uv tool install --force --python {PYTHON} --editable "{checkout}[ais]"'
+    )
+    assert doctor.install_line(doctor.install_of(tmp_path, HERE), {"ais"}) is None, (
+        "receipt and package differ"
+    )
+
+    checkout_line = doctor.install_line(
+        doctor.Install("checkout", folder=str(checkout), python=VENV_PYTHON), {"ais"}
+    )
+    project = f"--project {doctor._arg(str(checkout))} --python {VENV_PYTHON}"
+    assert checkout_line == f"uv sync {project} --inexact --no-default-groups --extra ais"
+
+
+def test_a_broken_receipt_is_still_the_installer_with_no_extras_named(tmp_path: Path) -> None:
+    """And, since 20 October's review, no line: a receipt that will not read is named, never guessed at."""
+    receipt = tmp_path / "pipx_metadata.json"
+    receipt.write_text("not json", encoding="utf-8")
+    assert doctor.install_of(tmp_path, HERE) == doctor.Install(
+        "pipx", why=f"its receipt, {receipt}, is in a shape doctor does not read"
+    )
+    receipt.unlink()
+    receipt = tmp_path / "uv-receipt.toml"
+    receipt.write_text("[tool\n", encoding="utf-8")
+    assert doctor.install_of(tmp_path, HERE) == doctor.Install(
+        "uv-tool", why=f"its receipt, {receipt}, is in a shape doctor does not read"
+    )
+    assert doctor.install_line(doctor.install_of(tmp_path, HERE), {"ais"}) is None
+
+
+# The receipts uv and pipx wrote for real installs, trimmed and moved under /home/ines
+# (tests/fixtures/doctor/receipts/README.md). From the 20 October reviews of #338: the line doctor prints
+# adds the extra to exactly what is installed (Python, venv options, source, version, suffix, companions),
+# or doctor prints no line and says why.
+RECEIPTS = Path(__file__).parent / "fixtures" / "doctor" / "receipts"
+
+
+def _receipt(tmp_path: Path, fixture: str, here: doctor.Here = HERE) -> doctor.Install:
+    """The install a fixture's receipt describes: uv's in the prefix, pipx's in a venv of a pipx home's
+    `venvs` folder, named as pipx names it (`openlogbook`, with the suffix)."""
+    if fixture.startswith("uv-"):
+        shutil.copyfile(RECEIPTS / fixture, tmp_path / "uv-receipt.toml")
+        return doctor.install_of(tmp_path, here)
+    venv = tmp_path / "pipx" / "venvs" / ("openlogbook-ola" if "suffix" in fixture else "openlogbook")
+    venv.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(RECEIPTS / fixture, venv / "pipx_metadata.json")
+    return doctor.install_of(venv, here)
+
+
+def _runpip(tmp_path: Path, venv: str = "openlogbook") -> str:
+    """How a line for a pipx venv `_receipt` made begins."""
+    return f"PIPX_HOME={doctor._arg(str(tmp_path / 'pipx'))} pipx runpip {venv} install "
+
+
+def _hint(install: doctor.Install, extra: str = "ais") -> str:
+    """The `extra:<extra>` line doctor prints under `install` when that extra alone is missing."""
+    checks = {c.name: c for c in doctor.extras_checks(lambda m: False, install)}
+    assert checks[f"extra:{extra}"].status == "warn"
+    return checks[f"extra:{extra}"].detail
+
+
+def test_a_uv_pin_stays_pinned_on_its_python_and_index(tmp_path: Path) -> None:
+    """The review's first finding: `specifier = "==0.7.0"` was dropped, and with it the Python the tool
+    was made with (uv's `--force` alone rebuilt it on another) and the index it was installed from. Since
+    the third review the line names the interpreter running now, which the receipt's `3.12` must be."""
+    uv = _receipt(tmp_path, "uv-pinned.toml")
+    assert uv.extras == {"mcp"}
+    assert doctor.install_line(uv, {"ais", "mcp"}) == (
+        f"uv tool install --force --python {PYTHON} --no-index --find-links file:///home/ines/src/dist"
+        ' "openlogbook[ais,mcp]==0.7.0"'
+    )
+
+
+def test_a_uv_install_from_git_stays_on_its_repository_and_revision(tmp_path: Path) -> None:
+    """Since the third review: on the commit installed, read from the package's `direct_url.json`, never
+    the receipt's tag or branch, which may have moved; and only when the receipt says git too."""
+    uv = _receipt(tmp_path, "uv-git.toml", _here(direct_url=GIT))
+    assert doctor.install_line(uv, {"ais", "mcp"}) == (
+        f"uv tool install --force --python {PYTHON}"
+        f' "openlogbook[ais,mcp] @ git+https://example.org/ines/logbook.git@{COMMIT}"'
+    )
+    assert doctor.install_line(_receipt(tmp_path, "uv-git.toml"), {"ais"}) is None, "installed from an index"
+
+
+def test_a_uv_install_from_a_url_stays_on_that_url(tmp_path: Path) -> None:
+    """Since the third review, no line: uv keeps no hash of what the URL gave (`archive_info` is empty),
+    so a line could install whatever is there now. Doctor says why and where to read."""
+    url = _here(
+        direct_url=json.dumps(
+            {"url": "https://example.org/ines/openlogbook-0.7.0-py3-none-any.whl", "archive_info": {}}
+        )
+    )
+    uv = _receipt(tmp_path, "uv-url.toml", url)
+    assert doctor.install_line(uv, {"ais", "mcp"}) is None
+    assert "may have changed since" in _hint(uv) and "install --force" not in _hint(uv)
+
+
+def test_a_uv_install_from_a_wheel_stays_on_that_wheel(tmp_path: Path) -> None:
+    """The same for a wheel's path: the file may have been replaced since, and uv kept no hash of it."""
+    wheel = "file:///home/ines/src/dist/openlogbook-0.7.0-py3-none-any.whl"
+    uv = _receipt(tmp_path, "uv-path.toml", _here(direct_url=json.dumps({"url": wheel, "archive_info": {}})))
+    assert uv.extras == frozenset()
+    assert doctor.install_line(uv, {"ais"}) is None
+    assert "may have changed since" in _hint(uv)
+
+
+def test_a_uv_companion_installed_with_with_stays(tmp_path: Path) -> None:
+    """At the version installed now: `--with ijson` alone moved it to a newer one (third review)."""
+    uv = _receipt(tmp_path, "uv-with.toml")
+    assert doctor.install_line(uv, {"ais", "mcp"}) == (
+        f'uv tool install --force --python {PYTHON} --with ijson==3.5.1 "openlogbook[ais,mcp]==0.7.0"'
+    )
+    unknown = _receipt(tmp_path, "uv-with.toml", _here(version_of=lambda name: None))
+    assert doctor.install_line(unknown, {"ais"}) is None and "ijson" in unknown.why
+
+
+def test_a_uv_receipt_in_a_shape_doctor_does_not_know_prints_no_line_and_names_it(tmp_path: Path) -> None:
+    """Constraints came from a file no line can name; a source key uv may add later is not guessed at."""
+    uv = _receipt(tmp_path, "uv-constraints.toml")
+    receipt = str(tmp_path / "uv-receipt.toml")
+    assert uv == doctor.Install("uv-tool", why=f"its receipt, {receipt}, is in a shape doctor does not read")
+    assert doctor.install_line(uv, {"ais"}) is None
+    detail = _hint(uv)
+    assert receipt in detail and 'docs/install.md, "Optional extras", says how to add ais' in detail
+    assert "install --force" not in detail and "pip install" not in detail
+    (tmp_path / "uv-receipt.toml").write_text(
+        '[tool]\nrequirements = [{ name = "openlogbook", workspace = true }]\n', encoding="utf-8"
+    )
+    assert doctor.install_line(doctor.install_of(tmp_path, HERE), {"ais"}) is None
+
+
+def test_a_pipx_install_from_a_bare_git_url_becomes_a_requirement_with_the_extras(tmp_path: Path) -> None:
+    """`"git+https://…[ais]"` is not a requirement; `"openlogbook[ais] @ git+https://…@<commit>"` is, on the
+    commit installed (third review: the bare URL moved to whatever the branch had become)."""
+    pipx = _receipt(tmp_path, "pipx-git.json", _here(direct_url=GIT))
+    line = f'{_runpip(tmp_path)}"openlogbook[ais] @ git+https://example.org/ines/logbook.git@{COMMIT}"'
+    assert doctor.install_line(pipx, {"ais"}) == line
+    receipt = json.loads((RECEIPTS / "pipx-git.json").read_text(encoding="utf-8"))
+    receipt["main_package"]["package_or_url"] += "@v0.7.0"
+    (tmp_path / "pipx" / "venvs" / "openlogbook" / "pipx_metadata.json").write_text(
+        json.dumps(receipt), encoding="utf-8"
+    )
+    tagged = doctor.install_of(tmp_path / "pipx" / "venvs" / "openlogbook", _here(direct_url=GIT))
+    assert doctor.install_line(tagged, {"ais"}) == line, "the commit installed, never the tag"
+
+
+def test_a_pipx_suffix_and_pip_args_stay(tmp_path: Path) -> None:
+    """Without the suffix the line would reach another venv; the index pip was given goes with it, as pip's
+    own options. pipx's own `--force-reinstall` is not pip's to carry."""
+    pipx = _receipt(tmp_path, "pipx-suffix.json")
+    assert doctor.install_line(pipx, {"ais", "mcp"}) == (
+        f"{_runpip(tmp_path, 'openlogbook-ola')}--no-index --find-links /home/ines/src/dist"
+        ' "openlogbook[ais,mcp]==0.7.0"'
+    )
+    receipt = json.loads((RECEIPTS / "pipx-suffix.json").read_text(encoding="utf-8"))
+    receipt["main_package"]["pip_args"] = ["--pre"]
+    (tmp_path / "pipx" / "venvs" / "openlogbook-ola" / "pipx_metadata.json").write_text(
+        json.dumps(receipt), encoding="utf-8"
+    )
+    other = doctor.install_of(tmp_path / "pipx" / "venvs" / "openlogbook-ola", HERE)
+    assert doctor.install_line(other, {"ais"}) is None and "--pre" in other.why, (
+        "only index options are carried"
+    )
+
+
+def test_a_pipx_injected_package_is_named_never_lost(tmp_path: Path) -> None:
+    """Since the third review the line adds to the venv pipx made and removes nothing from it, so an
+    injected package stays where it is; no `--force` makes the venv again."""
+    pipx = _receipt(tmp_path, "pipx-injected.json")
+    assert pipx.extras == {"mcp"}
+    assert _hint(pipx) == f'websockets not installed: {_runpip(tmp_path)}"openlogbook[ais,mcp]==0.7.0"'
+    assert "--force" not in _hint(pipx) and "ijson" not in _hint(pipx)
+
+
+def test_a_pipx_venv_keeps_its_python_and_options(tmp_path: Path) -> None:
+    """The third review's first finding: `pipx install --force` made a 3.12 venv again on pipx's own 3.14
+    and dropped `--system-site-packages`, and pipx ignores `--python` under `--force`. `pipx runpip` runs
+    pip in the venv as it is; the line names no Python and no venv option, and needs none."""
+    pipx = _receipt(tmp_path, "pipx-system-site.json")
+    line = doctor.install_line(pipx, {"ais"})
+    assert line == f'{_runpip(tmp_path)}--no-index --find-links /home/ines/src/dist "openlogbook[ais]==0.7.0"'
+    assert "--python" not in line and "--force" not in line and "--system-site-packages" not in line
+
+
+def test_a_pipx_line_in_powershell_sets_the_home_first(tmp_path: Path) -> None:
+    """PowerShell (what Windows Terminal opens) has no `NAME=value command`; the home is set first, in
+    quotes, since the right side of an assignment there is an expression (third review, 2)."""
+    pipx = _receipt(tmp_path, "pipx-injected.json", _here(windows=True))
+    assert doctor.install_line(pipx, {"ais", "mcp"}) == (
+        f'$env:PIPX_HOME = "{tmp_path / "pipx"}"; pipx runpip openlogbook install'
+        ' "openlogbook[ais,mcp]==0.7.0"'
+    )
+
+
+def test_under_homebrew_doctor_says_it_cannot_and_where_to_read_never_a_pip_line(tmp_path: Path) -> None:
+    """#334's own fault: `pip install` under Homebrew installs into another Python. The formula installs the
+    base package only (homebrew/README.md), so doctor says so and points to docs/install.md."""
+    keg = tmp_path / "opt" / "homebrew" / "Cellar" / "logbook" / "0.7.0"
+    (keg / "libexec").mkdir(parents=True)
+    shutil.copyfile(RECEIPTS / "homebrew-INSTALL_RECEIPT.json", keg / "INSTALL_RECEIPT.json")
+    built = json.dumps({"url": (tmp_path / "build" / "openlogbook-0.7.0").as_uri(), "dir_info": {}})
+    brew = doctor.install_of(keg / "libexec", _here(direct_url=built))
+    assert brew == doctor.Install("homebrew", why=doctor.HOMEBREW)
+    assert doctor.install_line(brew, {"ais"}) is None
+    assert _hint(brew) == (
+        "websockets not installed: Homebrew installed this Logbook and its formula installs the base package"
+        ' only; docs/install.md, "Optional extras", says how to add ais'
+    )
+
+
+def test_a_pip_line_names_the_python_this_logbook_runs_in(tmp_path: Path) -> None:
+    """A bare `pip` is whichever comes first on PATH, often another Python's; the line names this one."""
+    python = str(tmp_path / "venv" / "bin" / "python")
+    pip = doctor.install_of(tmp_path / "venv", _here(executable=python))
+    assert pip == doctor.Install("pip", requirement="==0.7.0", python=python)
+    line = doctor.install_line(pip, {"ais"})
+    assert line is not None and line.endswith(' -m pip install "openlogbook[ais]==0.7.0"')
+    first = line.removesuffix(' -m pip install "openlogbook[ais]==0.7.0"')
+    assert first in (python, f'"{python}"'), "the path itself, quoted only when it must be"
+    assert doctor.detect_install().how != "pip" or doctor.detect_install().python == sys.executable
+    for odd in ("/home/ines/My Tools/venv/bin/python", "/home/ines/o'brien/bin/python"):
+        assert doctor._command(odd, windows=True) == f'& "{odd}"'
+        assert doctor._command(odd, windows=False) == f'"{odd}"'
+
+
+def test_no_interpreter_named_is_no_line_never_a_bare_pip(tmp_path: Path) -> None:
+    """The third review's minor finding: an empty `sys.executable` fell back to a bare `pip install`."""
+    pip = doctor.install_of(tmp_path / "venv", _here(executable=""))
+    assert pip == doctor.Install("pip", why="the interpreter it runs in cannot be named")
+    assert "pip install" not in _hint(pip) and "says how to add ais" in _hint(pip)
+    uv = _receipt(tmp_path, "uv-with.toml", _here(executable=""))
+    assert doctor.install_line(uv, {"ais"}) is None and uv.why == "the interpreter it runs in cannot be named"
+    nopip = doctor.install_of(tmp_path / "venv", _here(pip=False, installer="pip\n"))
+    assert (
+        doctor.install_line(nopip, {"ais"}) is None and nopip.why == "the interpreter it runs in has no pip"
+    )
+
+
+def test_a_uv_receipt_on_another_python_than_the_one_running_is_no_line(tmp_path: Path) -> None:
+    """The third review: a line naming the interpreter running now would move a tool the receipt says
+    is on 3.12 to another; when the two disagree there is no line. A path in the receipt agrees only
+    when it is the running interpreter, or the one its venv was made from."""
+    assert (
+        doctor.install_line(_receipt(tmp_path, "uv-pinned.toml", _here(python=(3, 13, 1))), {"ais"}) is None
+    )
+    assert "another Python" in _receipt(tmp_path, "uv-pinned.toml", _here(python=(3, 13, 1))).why
+    assert doctor.install_line(_receipt(tmp_path, "uv-pinned.toml", _here(cpython=False)), {"ais"}) is None
+    base, other = tmp_path / "python3.12", tmp_path / "python3.13"
+    base.write_bytes(b"")
+    other.write_bytes(b"")
+    receipt = (RECEIPTS / "uv-pinned.toml").read_text(encoding="utf-8")
+    for request, agrees in ((base, True), (other, False)):
+        text = receipt.replace('python = "3.12"', f"python = {json.dumps(str(request))}")
+        (tmp_path / "uv-receipt.toml").write_text(text, encoding="utf-8")
+        found = doctor.install_of(tmp_path, _here(base=str(base)))
+        assert (doctor.install_line(found, {"ais"}) is not None) is agrees, request
+    for request in (">=3.12", "pypy3.12", "3.13t"):
+        text = receipt.replace('python = "3.12"', f"python = {json.dumps(request)}")
+        (tmp_path / "uv-receipt.toml").write_text(text, encoding="utf-8")
+        assert doctor.install_line(doctor.install_of(tmp_path, HERE), {"ais"}) is None, request
+
+
+def test_a_checkout_keeps_its_groups_as_they_are(tmp_path: Path) -> None:
+    """The third review: `uv sync` installs the dev group unless told not to, follows the folder's
+    `.python-version` over the venv's Python (by hand, a 3.13 `.venv` became 3.12), and removes what it is
+    not given. The line names the interpreter running now, removes nothing (`--inexact`) and installs no
+    group (`--no-default-groups`), so a group installed stays and one not installed stays out; and none
+    when `UV_PROJECT_ENVIRONMENT` points `uv sync` at another environment."""
+    checkout = tmp_path / "src" / "logbook"
+    (checkout / ".venv").mkdir(parents=True)
+    (checkout / "pyproject.toml").write_text(
+        "[project]\nname = 'openlogbook'\n\n[dependency-groups]\n"
+        "dev = ['pytest>=8', 'openlogbook[crypto]']\n",
+        encoding="utf-8",
+    )
+    here = _here(direct_url=json.dumps({"url": checkout.as_uri(), "dir_info": {"editable": True}}))
+    found = doctor.install_of(checkout / ".venv", here)
+    assert found == doctor.Install("checkout", folder=str(checkout), python=PYTHON)
+    assert doctor.install_line(found, {"ais"}) == (
+        f"uv sync --project {doctor._arg(str(checkout))} --python {PYTHON} --inexact --no-default-groups"
+        " --extra ais"
+    )
+    elsewhere = doctor.install_of(
+        checkout / ".venv", dataclasses.replace(here, env={"UV_PROJECT_ENVIRONMENT": "/home/ines/env"})
+    )
+    assert doctor.install_line(elsewhere, {"ais"}) is None and "UV_PROJECT_ENVIRONMENT" in elsewhere.why
+    nameless = doctor.install_of(checkout / ".venv", dataclasses.replace(here, executable=""))
+    assert nameless == doctor.Install("checkout", why="the interpreter it runs in cannot be named")
+
+
+def test_openlogbook_beside_another_tool_or_app_is_no_line(tmp_path: Path) -> None:
+    """The third review, 1: `uv tool install --with-executables-from openlogbook pip` makes the tool `pip`;
+    a line that installs `openlogbook` as a tool makes a second one and moves the executables. pipx's
+    venv of another app with openlogbook injected is likewise not openlogbook's."""
+    (tmp_path / "uv-receipt.toml").write_text(
+        '[tool]\nrequirements = [{ name = "pip" }, { name = "openlogbook" }]\nentrypoints = [\n'
+        '    { name = "logbook", install-path = "/home/ines/.local/bin/logbook",'
+        ' from = "openlogbook" },\n]\n',
+        encoding="utf-8",
+    )
+    found = doctor.install_of(tmp_path, HERE)
+    assert doctor.install_line(found, {"ais"}) is None and "another tool" in found.why
+    receipt = json.loads((RECEIPTS / "pipx-injected.json").read_text(encoding="utf-8"))
+    receipt["main_package"]["package"] = "pycowsay"
+    venv = tmp_path / "pipx" / "venvs" / "pycowsay"
+    venv.mkdir(parents=True)
+    (venv / "pipx_metadata.json").write_text(json.dumps(receipt), encoding="utf-8")
+    assert doctor.install_line(doctor.install_of(venv, HERE), {"ais"}) is None
+    (tmp_path / "uv-receipt.toml").write_text(
+        '[tool]\nrequirements = [{ name = "openlogbook", extras = "mcp" }]\n', encoding="utf-8"
+    )
+    assert doctor.install_line(doctor.install_of(tmp_path, HERE), {"ais"}) is None, (
+        "extras as a string: no line"
+    )
+
+
+def test_uvs_cache_and_a_python_that_is_no_venv_have_no_line(tmp_path: Path) -> None:
+    """The third review, 3 and 6: under `uvx` or `uv run --with` the environment is uv's cache, which a
+    line would change for nothing; outside a venv pip installs beside (`--user`) or refuses (PEP 668)."""
+    for prefix in (tmp_path / "cache" / "archive-v0" / "Xy12", tmp_path / "cache" / "builds-v0" / ".tmpAb"):
+        found = doctor.install_of(prefix, HERE)
+        assert doctor.install_line(found, {"ais"}) is None and "uv's cache" in found.why
+    relocatable = tmp_path / "env"
+    relocatable.mkdir()
+    (relocatable / "pyvenv.cfg").write_text("home = /usr/bin\nrelocatable = true\n", encoding="utf-8")
+    assert doctor.install_line(doctor.install_of(relocatable, HERE), {"ais"}) is None
+    system = doctor.install_of(tmp_path / "usr", _here(venv=False))
+    assert doctor.install_line(system, {"ais"}) is None and "not a venv" in system.why
+
+
+def test_what_cannot_be_read_is_no_line_never_a_traceback(tmp_path: Path) -> None:
+    """The third review, 4: a receipt nested past Python's recursion limit raised, and a `direct_url.json`
+    that does not decode must never read as "installed from an index"."""
+    deep = "[" * 100_000 + "]" * 100_000
+    (tmp_path / "pipx_metadata.json").write_text(
+        f'{{"note": {deep}, "main_package": {{}}}}', encoding="utf-8"
+    )
+    assert doctor.install_line(doctor.install_of(tmp_path, HERE), {"ais"}) is None
+    (tmp_path / "pipx_metadata.json").unlink()
+    (tmp_path / "uv-receipt.toml").write_text(
+        "[tool]\nx = " + "[" * 2000 + "]" * 2000 + "\n", encoding="utf-8"
+    )
+    assert doctor.install_line(doctor.install_of(tmp_path, HERE), {"ais"}) is None
+    found = doctor.install_of(tmp_path / "venv", _here(direct_url="unreadable"))
+    assert found.why == "its direct_url.json does not read"
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="a backslash is a path separator there")
+def test_a_backslash_off_windows_is_no_line(tmp_path: Path) -> None:
+    """The third review, 5: bash drops a bare backslash and may read one in quotes as an escape."""
+    found = doctor.install_of(tmp_path / "venv", _here(executable="/home/ines/odd\\dir/venv/bin/python"))
+    assert doctor.install_line(found, {"ais"}) is None
+
+
+def test_an_editable_folder_on_another_machine_is_no_line(tmp_path: Path) -> None:
+    """The third review, 11: `file://server/share/x` would lose the server."""
+    venv = tmp_path / "pipx" / "venvs" / "openlogbook"
+    venv.mkdir(parents=True)
+    shutil.copyfile(RECEIPTS / "pipx-injected.json", venv / "pipx_metadata.json")
+    unc = json.dumps({"url": "file://fileserver/share/logbook", "dir_info": {"editable": True}})
+    assert doctor.install_line(doctor.install_of(venv, _here(direct_url=unc)), {"ais"}) is None
+
+
+def test_a_path_no_quotes_keep_literal_is_no_line(tmp_path: Path) -> None:
+    """A `$` or a backtick in a path is expanded inside double quotes by every shell doctor's reader has,
+    so the line would name another folder."""
+    pipx = tmp_path / "$HOME" / "pipx" / "venvs" / "openlogbook"
+    pipx.mkdir(parents=True)
+    shutil.copyfile(RECEIPTS / "pipx-injected.json", pipx / "pipx_metadata.json")
+    found = doctor.install_of(pipx, HERE)
+    assert doctor.install_line(found, {"ais"}) is None and "quotes" in found.why
+    with pytest.raises(doctor.NoLine):
+        doctor._arg("/home/ines/`date`/python")
+
+
+def test_a_pip_install_from_a_folder_or_a_repository_is_no_line(tmp_path: Path) -> None:
+    """Rule 1 of the third review: pip's line is for an install from an index alone."""
+    folder = json.dumps({"url": (tmp_path / "logbook").as_uri(), "dir_info": {"editable": True}})
+    for here in (_here(direct_url=folder), _here(direct_url=GIT)):
+        found = doctor.install_of(tmp_path / "venv", here)
+        assert found.how == "pip" and doctor.install_line(found, {"ais"}) is None
+    assert doctor.install_line(doctor.install_of(tmp_path / "venv", _here(version="")), {"ais"}) is None
+
+
+def test_a_uv_companion_whose_executables_were_installed_keeps_them(tmp_path: Path) -> None:
+    """From the second review: `--with-executables-from` leaves only an entrypoint `from` the companion,
+    and a plain `--with` in its place removes those executables."""
+    uv = _receipt(tmp_path, "uv-with-executables.toml")
+    assert doctor.install_line(uv, {"ais", "mcp"}) == (
+        f"uv tool install --force --python {PYTHON} --with-executables-from uvicorn==0.38.0"
+        ' "openlogbook[ais,mcp]==0.7.0"'
+    )
+    receipt = (RECEIPTS / "uv-with-executables.toml").read_text(encoding="utf-8")
+    (tmp_path / "uv-receipt.toml").write_text(receipt.replace('from = "uvicorn"', 'from = "other"'), "utf-8")
+    assert doctor.install_line(doctor.install_of(tmp_path, HERE), {"ais"}) is None, "from what it names not"
+
+
+def test_under_uv_each_line_says_it_installs_exactly_its_extras(tmp_path: Path) -> None:
+    """From the second review: `uv tool install --force` and `uv sync` install exactly the extras named,
+    so running the speakers line and then the transcribe line removes speakers again; each says so."""
+    uv = _receipt(tmp_path, "uv-with.toml")
+    checks = {c.name: c for c in doctor.extras_checks(lambda m: m == "websockets", uv)}
+    assert checks["extra:speakers"].detail == (
+        "pyannote.audio not installed; the line installs exactly the extras it names, so add any other one"
+        f" wanted to it: uv tool install --force --python {PYTHON} --with ijson==3.5.1"
+        ' "openlogbook[ais,mcp,speakers]==0.7.0"'
+    )
+    alone = {c.name: c for c in doctor.extras_checks(lambda m: m != "pyannote.audio", uv)}
+    assert alone["extra:speakers"].detail.startswith("pyannote.audio not installed: uv tool install")
+
+
+@pytest.mark.parametrize(
+    ("name", "text"),
+    [
+        ("pipx_metadata.json", json.dumps({"main_package": {"package_or_url": "git+https://[bad/x"}})),
+        ("pipx_metadata.json", json.dumps({"main_package": {"package_or_url": 5}})),
+        ("pipx_metadata.json", json.dumps({"main_package": None})),
+        ("pipx_metadata.json", "[]"),
+        ("uv-receipt.toml", '[tool]\nrequirements = [{ name = "openlogbook", git = "https://[x/y" }]\n'),
+        ("uv-receipt.toml", '[tool]\nrequirements = [{ name = "openlogbook" }, "ijson"]\n'),
+        ("uv-receipt.toml", '[tool]\nrequirements = [{ name = "openlogbook" }, 5]\n'),
+        ("uv-receipt.toml", '[tool]\nrequirements = [{ name = "openlogbook" }]\nentrypoints = ["logbook"]\n'),
+        ("uv-receipt.toml", "tool = 5\n"),
+    ],
+)
+def test_a_receipt_malformed_in_any_part_is_no_line_never_a_traceback(
+    tmp_path: Path, name: str, text: str
+) -> None:
+    """From the second review: `detect_install` runs on every doctor, setup's doctor step and the end of
+    `sync --scheduled`, so a receipt that raised took all three down."""
+    (tmp_path / name).write_text(text, encoding="utf-8")
+    install = doctor.install_of(tmp_path, HERE)
+    assert str(tmp_path / name) in install.why, "the receipt is named"
+    assert doctor.install_line(install, {"ais"}) is None
+
+
+def test_a_pipx_file_url_becomes_a_requirement_too(tmp_path: Path) -> None:
+    """A git repository on disk is installed at its commit; a folder installed whole may have changed
+    since it was installed, so since the third review it has no line."""
+    receipt = json.loads((RECEIPTS / "pipx-git.json").read_text(encoding="utf-8"))
+    venv = tmp_path / "pipx" / "venvs" / "openlogbook"
+    venv.mkdir(parents=True)
+    for url, origin, line in (
+        (
+            "git+file:///home/ines/src/logbook",
+            {"url": "file:///home/ines/src/logbook", "vcs_info": {"vcs": "git", "commit_id": COMMIT}},
+            f'{_runpip(tmp_path)}"openlogbook[ais] @ git+file:///home/ines/src/logbook@{COMMIT}"',
+        ),
+        ("file:///home/ines/src/logbook", {"url": "file:///home/ines/src/logbook", "dir_info": {}}, None),
+    ):
+        receipt["main_package"]["package_or_url"] = url
+        (venv / "pipx_metadata.json").write_text(json.dumps(receipt), encoding="utf-8")
+        assert (
+            doctor.install_line(doctor.install_of(venv, _here(direct_url=json.dumps(origin))), {"ais"})
+            == line
+        )
+
+
+def test_a_receipt_with_a_password_or_token_prints_no_line(tmp_path: Path) -> None:
+    """From the second review: the line is printed and the first warn of a scheduled run is kept in
+    `state/last-run.json`, so an index or a git address with a token in it is named, never printed."""
+    token = "__token__:s3cret"
+    receipt = json.loads((RECEIPTS / "pipx-suffix.json").read_text(encoding="utf-8"))
+    receipt["main_package"]["pip_args"] = ["--index-url", f"https://{token}@example.org/simple"]
+    venv = tmp_path / "pipx" / "venvs" / "openlogbook-ola"
+    venv.mkdir(parents=True)
+    (venv / "pipx_metadata.json").write_text(json.dumps(receipt), encoding="utf-8")
+    pipx = doctor.install_of(venv, HERE)
+    assert pipx.how == "pipx" and str(venv / "pipx_metadata.json") in pipx.why
+    assert "s3cret" not in _hint(pipx) and "password or token" in _hint(pipx)
+    for git in (
+        f"https://{token}@example.org/ines/logbook.git",
+        "https://ghp_x@example.org/ines/logbook.git",
+    ):
+        (tmp_path / "uv-receipt.toml").write_text(
+            f'[tool]\nrequirements = [{{ name = "openlogbook", git = "{git}" }}]\n', encoding="utf-8"
+        )
+        assert "password or token" in doctor.install_of(tmp_path, HERE).why
+        origin = json.dumps({"url": git, "vcs_info": {"vcs": "git", "commit_id": COMMIT}})
+        found = doctor.install_of(tmp_path / "venv", _here(direct_url=origin))
+        assert "password or token" in found.why and "s3cret" not in _hint(found), "nor from the package's own"
+    ssh = "ssh://git@example.org/ines/logbook.git"  # a user name in an ssh address is no secret
+    (tmp_path / "uv-receipt.toml").write_text(
+        f'[tool]\nrequirements = [{{ name = "openlogbook", git = "{ssh}" }}]\n', encoding="utf-8"
+    )
+    origin = json.dumps({"url": ssh, "vcs_info": {"vcs": "git", "commit_id": COMMIT}})
+    assert doctor.install_line(doctor.install_of(tmp_path, _here(direct_url=origin)), {"ais"}) == (
+        f'uv tool install --force --python {PYTHON} "openlogbook[ais] @ git+{ssh}@{COMMIT}"'
+    )
+
+
+def test_a_global_pipx_install_is_reinstalled_globally(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """From the second review: without `--global` the line built a second, per-user Logbook. Since the
+    third it adds to the global venv itself, named by its home, whatever this shell's pipx would pick."""
+    home = tmp_path / "opt" / "pipx"
+    venv = home / "venvs" / "openlogbook"
+    venv.mkdir(parents=True)
+    shutil.copyfile(RECEIPTS / "pipx-injected.json", venv / "pipx_metadata.json")
+    line = f'PIPX_HOME={doctor._arg(str(home))} pipx runpip openlogbook install "openlogbook[ais,mcp]==0.7.0"'
+    monkeypatch.setenv("PIPX_GLOBAL_HOME", str(home))
+    assert doctor.install_line(doctor.install_of(venv, HERE), {"ais", "mcp"}) == line
+    monkeypatch.delenv("PIPX_GLOBAL_HOME")
+    monkeypatch.setenv("PIPX_HOME", str(tmp_path / "elsewhere"))
+    assert doctor.install_line(doctor.install_of(venv, HERE), {"ais", "mcp"}) == line
+    outside = tmp_path / "loose" / "openlogbook"  # a venv in no pipx home's `venvs`: pipx cannot name it
+    outside.mkdir(parents=True)
+    shutil.copyfile(RECEIPTS / "pipx-injected.json", outside / "pipx_metadata.json")
+    assert doctor.install_line(doctor.install_of(outside, HERE), {"ais"}) is None
+
+
+def test_every_extra_pyproject_names_is_one_doctor_knows() -> None:
+    """From the second review: `uv sync` and `uv tool install --force` install exactly the extras named,
+    so an extra doctor did not know would be dropped from every line."""
+    import tomllib
+
+    pyproject = Path(__file__).parent.parent / "pyproject.toml"
+    declared = set(tomllib.loads(pyproject.read_text(encoding="utf-8"))["project"]["optional-dependencies"])
+    assert declared == {extra for extra, _ in (*doctor.EXTRAS, *doctor.UNCHECKED_EXTRAS)}
 
 
 def test_transcribe_is_satisfied_by_either_engine() -> None:
@@ -805,3 +1517,65 @@ def test_a_policy_that_is_not_the_shape_fails_naming_the_file(lb: Logbook, today
     assert _run(lb)["crossing"].status == "fail"
     path.write_text("[", encoding="utf-8")
     assert _run(lb)["crossing"].status == "fail"
+
+
+# -- the commands the hints name ------------------------------------------------------------------------
+
+HINT_SOURCES = ("doctor.py", "first_run.py", "synthesis.py")  # doctor's lines carry the text of all three
+HINT = re.compile(r"`logbook ([^`]+)`")
+
+
+def _strings(source: str) -> Iterator[str]:
+    """Every string literal in `source`, an f-string with `{x}` where each value goes (implicit
+    concatenation is one literal to the parser already)."""
+    for node in ast.walk(ast.parse(source)):
+        if isinstance(node, ast.JoinedStr):
+            yield "".join(
+                v.value if isinstance(v, ast.Constant) and isinstance(v.value, str) else "{x}"
+                for v in node.values
+            )
+        elif isinstance(node, ast.Constant) and isinstance(node.value, str):
+            yield node.value
+
+
+def _words(hint: str) -> list[str]:
+    """A hint's words as a command line: a placeholder (`LAT`, `<seq>`, `{x}`, `…`) stands as `1`."""
+    text = hint.split("|")[0].replace("[", " ").replace("]", " ")
+    try:
+        words = shlex.split(text)
+    except ValueError:
+        words = text.split()
+    return [
+        "1" if w.startswith(("<", "{")) or w in ("…", "...") or (w.isupper() and w.isalpha()) else w
+        for w in words
+    ]
+
+
+def test_every_command_a_hint_names_is_a_current_command(capsys: pytest.CaptureFixture[str]) -> None:
+    """#334: doctor told a newcomer to run `logbook index` and `logbook places add`, names the 22-command
+    rename (#215) retired; an old name still runs, but says "is now" first. Every `logbook …` a hint names
+    is a command and options today's parser has (a placeholder's type is not checked), never an old name."""
+    from logbook.commands.aliases import ALIASES
+    from logbook.commands.parser import build_parser
+
+    contrib = Path(doctor.__file__).parent
+    hints = {
+        h
+        for name in HINT_SOURCES
+        for text in _strings((contrib / name).read_text(encoding="utf-8"))
+        for h in HINT.findall(text)
+    }
+    assert any(h.startswith("repair index") for h in hints), "the hints are read"
+    stale: list[str] = []
+    for hint in sorted(hints):
+        words = _words(hint)
+        if not words or words[0] in ALIASES:
+            stale.append(hint)
+            continue
+        try:
+            build_parser().parse_args(words)
+        except SystemExit:
+            err = capsys.readouterr().err
+            if "invalid choice" in err or "unrecognized arguments" in err:
+                stale.append(hint)
+    assert stale == []

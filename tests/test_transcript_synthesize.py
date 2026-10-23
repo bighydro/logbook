@@ -583,7 +583,7 @@ def _either(material: dict[str, Any]) -> dict[str, Any]:
                 {"text": "A week with a call.", "evidence": re.findall(r'"(L\d+)"', json.dumps(material))[:1]}
             ]
         }
-    return {"day": [{"text": "A call about the yard.", "evidence": material["unplaced"][0]["ref"]}]}
+    return {"story": [{"text": "A call about the yard.", "evidence": material["unplaced"][0]["ref"]}]}
 
 
 def test_dream_catch_up_synthesizes_the_transcripts_that_have_no_draft(
@@ -934,7 +934,7 @@ def _on_the_note(material: dict[str, Any]) -> dict[str, Any]:
     """The answer to a call, or to a day whose one line under the ceiling is the owner's note."""
     if "utterances" in material:
         return _answer(material)
-    return {"day": [{"text": "A note about the yard.", "evidence": [material["notes"][0]["ref"]]}]}
+    return {"story": [{"text": "A note about the yard.", "evidence": [material["notes"][0]["ref"]]}]}
 
 
 def test_a_calls_synthesis_leaves_the_days_draft_as_it_was(

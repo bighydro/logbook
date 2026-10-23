@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, Any
 from zoneinfo import ZoneInfo
 
 from ..contrib import attach, inbox, ios_backup, ios_backup_crypto, stream
-from ..core import assets, attachments, flights, keepers, places, stays, story
+from ..core import assets, attachments, flights, gifts, keepers, places, stays, story
 from ..core.export import parse_day
 from ..core.resolve import Ref, identities_from, labels
 from ..core.store import Logbook, dedupe_key, now_utc
@@ -447,6 +447,7 @@ def looks_like_path(arg: str) -> bool:
 # source of truth and is imported only when the command runs, so `--help` loads no adapter; a test
 # holds these copies to it.
 SCREENTIME_MAC_STORE = "knowledgeC.db"
+GIFT = "gift"  # `add gift DAY NAME WHAT`: a DAY after it, else the words are a sentence
 SCREENTIME_PHONE_STORE = "RMAdminStore-Local.sqlite"
 SCREENTIME_MAC_DEFAULT = Path("~/Library/Application Support/Knowledge") / SCREENTIME_MAC_STORE
 
@@ -456,15 +457,18 @@ def add_arguments(sub: Subparsers) -> None:
     s = sub.add_parser(
         "add",
         help="a sentence in your words, an export file, a folder, or a flight",
-        description='a sentence in your words, an export file, a folder of them, or `flight "LX 561 NCE ZRH'
-        ' …"`',
+        description='a sentence in your words, an export file, a folder of them, `flight "LX 561 NCE ZRH'
+        ' …"`, or `gift DAY NAME WHAT [--received]`: what you gave someone or were given, one note/v1'
+        " labelled gift, the person under extra.recipient or extra.giver (RFC 0043)",
     )
     s.add_argument(
         "what",
         nargs="+",
-        help='the words, the path(s), `<adapter> <file|folder>`, or `flight "<designator> …"`',
+        help='the words, the path(s), `<adapter> <file|folder>`, `flight "<designator> …"`, or'
+        ' `gift DAY NAME WHAT`: NAME a person the record names ("Per Hansen"), WHAT the gift in your words',
     )
     s.add_argument("--at", help="RFC3339 UTC, default now; for a transcript file, its start")
+    s.add_argument("--received", action="store_true", help="gift: NAME gave it to you")
     s.add_argument("--source", help="transcript: the provider, e.g. granola, zoom (default manual)")
     s.add_argument(
         "--tier",
@@ -592,6 +596,12 @@ def _add(a: argparse.Namespace) -> None:
     if a.trip is not None:
         _add_name(lb, a)
         return
+    if a.what[0] == GIFT and len(a.what) > 1 and _is_day(a.what[1]):
+        _add_gift(lb, a)
+        return
+    if a.received:
+        print("add: --received goes with `add gift DAY NAME WHAT`", file=sys.stderr)
+        sys.exit(2)
     if a.what[0] == "flight" and len(a.what) > 1 and flights.starts_with_designator(" ".join(a.what[1:])):
         if a.dry_run:
             print("add: --dry-run goes with a file or folder, not a declared flight", file=sys.stderr)
@@ -750,6 +760,36 @@ def _add_named(
     backup under any name), with `--source`, `--tier` and `--at` when it takes them."""
     for p in paths:
         _append_with(lb, adapter, p, given, dry_run=dry_run)
+
+
+def _is_day(text: str) -> bool:
+    try:
+        parse_day(text)
+    except ValueError:
+        return False
+    return True
+
+
+def _add_gift(lb: Logbook, a: argparse.Namespace) -> None:
+    """`add gift DAY NAME WHAT [--received]`: `gifts.give` (RFC 0043), what you gave someone or were
+    given, one note/v1 line labelled gift; a refusal is one sentence on stderr, exit 2."""
+    if len(a.what) != 4 or a.dry_run:
+        print(
+            'add: a gift is `add gift DAY NAME "WHAT" [--received]`, the name and the gift quoted',
+            file=sys.stderr,
+        )
+        sys.exit(2)
+    _gift, day, name, what = a.what
+    try:
+        found = gifts.give(lb, day, name, what, received=a.received)
+    except (gifts.GiftError, ValueError) as e:
+        print(f"add: {e}", file=sys.stderr)
+        sys.exit(2)
+    said = gifts.said(found)
+    if not found.written:
+        print(f"#{found.line['seq']} {said}: said on {found.day} already; nothing written")
+        return
+    print(f"#{found.line['seq']} {said}")
 
 
 def _add_flight(lb: Logbook, sentence: str, airports: flights.Airports) -> None:

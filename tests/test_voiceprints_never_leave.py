@@ -447,7 +447,7 @@ def _fake_model(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:
         material = json.loads(body["messages"][1]["content"])
         refs = [r for entry in material["timeline"] for r in entry["ref"]]
         answer = {
-            "day": [{"text": "Dinner at home; Kari came.", "evidence": refs[:1]}],
+            "story": [{"text": "Dinner at home; Kari came.", "evidence": refs[:1]}],
             "threads": [],
             "people": [],
             "promises": [],

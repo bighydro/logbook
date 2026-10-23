@@ -107,9 +107,16 @@ any road that wrote them (a Takeout, `sync mail`, `sync gmail`). No connection i
   `bcc`) or sent a message in one of its threads (joined on `thread`, never the subject). The report
   keeps both: `written_to` and `threads_answered`.
 - **By count**, **by last seen**, **never answered** and **newsletters** are the report's sections.
-- **Newsletters** by the `List-Unsubscribe` header, when the line holds it (under `extra`, or a
-  `headers` object). `mail/v1` keeps no such field and the mail adapters do not write it today, so
-  on most records the section says newsletters are unknown, not that there are none.
+- **Newsletters** by the `List-Unsubscribe` header, when the line holds it: `extra.list.unsubscribe`,
+  which every mail road writes since 20 October 2026 (RFC 0015, amendment of that day), or an older
+  producer's key under `extra` or a `headers` object. Lines written before that day hold none, and a
+  re-import does not rewrite them, so on a record of older mail the section may say newsletters are
+  unknown, not that there are none.
+- **Lists and tabs**, per sender: how many of its mails carry `extra.list.unsubscribe`, and how many
+  sit in Gmail's Promotions, Social or Updates tab (`extra.gmail_category`, written by a Takeout import
+  and `sync gmail`; never by `sync mail`, since IMAP does not say the tab). In the report as a section
+  and in the JSON as `list_unsubscribe` and `tabs` on each sender, with the totals under
+  `lists_and_tabs`; the summary on the terminal says the totals only, never an address.
 
 ## Drive
 

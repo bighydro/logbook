@@ -36,6 +36,7 @@ nav:
   - Home: index.md
   - Install: install.md
   - Try it: try-it.md
+  - First questions: faq.md
   - The first hour: first-hour.md
   - The tour: tour.md
   - The commands: commands.md
@@ -77,6 +78,8 @@ nav:
       - "0021 journey/v1 is the written form": adr/0021-journey-is-the-written-form.md
       - "0022 The record's home": adr/0022-the-records-home.md
       - "0023 Digital events do not make a stay": adr/0023-digital-events-do-not-make-a-stay.md
+      - "0024 The owner's phone writes through the Library": adr/0024-the-owners-phone-writes-through-the-library.md
+      - "0025 Derived tables": adr/0025-derived-tables.md
   - RFCs:
       # The RFCs live in the repository under rfcs/, not under docs/; the site links there.
       - About RFCs: https://github.com/bighydro/logbook/blob/main/rfcs/README.md
@@ -95,8 +98,10 @@ nav:
       - "0038 Speakers: who spoke, and who they are (draft)": rfcs/0038-speakers.md
       - "0040 Videos: a recording file, its scenes, the owner's attribution (draft)": rfcs/0040-videos.md
   - Letters:
+      - "Why I built it (2026-10-12)": letters/2026-10-12-why-i-built-it.md
       - "The freeze (2026-10-04)": letters/2026-10-04-the-freeze.md
   - The Day: day.md
+  - The plan: plan.md
   - The signed day: signed-day.md
   - The dream: dream.md
   - Goals, reviews and chapters: goals.md
@@ -108,22 +113,29 @@ nav:
   - In a browser: serve.md
   - "The shelves: promises, goals, agents": shelves.md
   - The acts: acts.md
+  - Gifts: gifts.md
+  - The companies a day touched: companies.md
   - The rollups: rollups.md
   - The lab: labs.md
   - The ledger: ledger.md
+  - Receipts as payments: receipts.md
   - Shared trips: trips-shared.md
   - The Year: year.md
   - On paper: print.md
   - The vault (Obsidian, Logseq): vault.md
   - The site (static HTML): site.md
   - The world (a globe you can scrub): world.md
+  - The map (offline, drawn as SVG): map.md
   - The crossing: crossing.md
   - Export for Notion: export-notion.md
+  - The letter: letter.md
   - Promises: promises.md
   - Tasks: tasks.md
   - Describing keepers: describe.md
   - The digest: digest.md
   - People: people.md
+  - Who was there: who-was-there.md
+  - People's mail: mail-people.md
   - Places: places.md
   - Review: review.md
   - Entities (the profiles): entities.md

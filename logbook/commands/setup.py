@@ -40,7 +40,7 @@ from dataclasses import dataclass, field
 from pathlib import Path, PurePath
 from typing import Any
 
-from ..contrib import adapters, doctor, ios_backup
+from ..contrib import adapters, demo, doctor, ios_backup
 from ..contrib.adapters import imessage_live
 from ..core import places, policy
 from ..core.store import CodeCheckoutError, Logbook, now_utc
@@ -383,6 +383,26 @@ def _default_detect_timezone() -> str | None:
     return record._detect_timezone()
 
 
+EXAMPLE_ZONES = ("Europe/Oslo", "America/New_York", "Asia/Tokyo")  # the prompt's example: one not in use
+DEMO_REFUSAL = (
+    "{where} is the demo record `logbook demo` wrote, not yours, so setup leaves it alone;"
+    " to make your own, {how}, then `logbook setup`."
+)
+
+
+def demo_refusal(root: Path, env: Mapping[str, str]) -> str:
+    """Why setup leaves the demo at `root` alone, and how to make your own, by how it was found
+    (`Logbook.find`: LOGBOOK_HOME, else the working folder or one above it, else ~/Logbook)."""
+    pointed = env.get("LOGBOOK_HOME")
+    if pointed and Path(pointed).resolve() == root.resolve():
+        how = "`unset LOGBOOK_HOME`"
+    elif root.resolve() == Path.home().joinpath(*DEFAULT_FOLDER).resolve():
+        how = f"move it out of {under_home(root)} (`logbook demo --out` writes it again anywhere)"
+    else:
+        how = "`cd ~`"
+    return DEMO_REFUSAL.format(where=under_home(root), how=how)
+
+
 class Wizard:
     """The steps, run in order from the first not yet answered; `run` returns the exit status."""
 
@@ -413,6 +433,10 @@ class Wizard:
             self.lb = Logbook.find()
         except FileNotFoundError:
             self.lb = None
+        if self.lb is not None and demo.is_demo_at(self.lb.root):
+            # LOGBOOK_HOME still on the demo (the README sets it to try the commands): never adopt it
+            print(f"setup: {demo_refusal(self.lb.root, self.env)}", file=sys.stderr)
+            return 2
         if self.lb is not None and not again:
             self.steps = read_state(self.lb.root)
         pending = [only] if only is not None else [step for step in STEPS if step not in self.steps]
@@ -498,6 +522,11 @@ class Wizard:
         while True:
             answer = c.ask("Where should the record live?", under_home(default))
             root = Path(answer or under_home(default)).expanduser()
+            if (root / "logbook.json").is_file() and demo.is_demo_at(root):
+                where = under_home(root)
+                c.say(f"{where} is the demo record `logbook demo` wrote, not yours; pick another folder.")
+                default = Path.home().joinpath(*DEFAULT_FOLDER)
+                continue
             if (root / "logbook.json").is_file():
                 self.lb = Logbook(root)
                 self.steps = read_state(root)
@@ -530,8 +559,15 @@ class Wizard:
         )
         detected = self.detect_timezone()
         default = detected or current
+        # in words: which zone the brackets hold and where it comes from, and that the other is an example
+        example = next(z for z in EXAMPLE_ZONES if z not in (default, current))
+        if detected and detected != current:
+            said = f"this machine's zone, which Enter takes; the record's is {current} now"
+        else:
+            said = "the record's zone now, which Enter keeps"
+        hint = f" ({said}; or type another, such as {example})"
         while True:
-            answer = c.ask("Your timezone, as the zone database names it", default, hint=" (Europe/Oslo)")
+            answer = c.ask("Your timezone, as the zone database names it", default, hint=hint)
             assert answer is not None  # there is always a default
             try:
                 zoneinfo.ZoneInfo(answer)

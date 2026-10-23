@@ -1,7 +1,7 @@
 """The pages: `logbook show person|asset|place <name>`, read from the whole record.
 
 A person page is the arc of a relationship: first and last contact, days together per year, the
-places shared, the open commitments (a placeholder until `commitment/v1` lines are read) and the
+places shared, the open commitments (a placeholder here; `show person` fills it from `promises`) and the
 last ten stays shared. An asset page: the trips aboard, the nights aboard, the people aboard, and
 the summary of the asset's own track (its AIS or ADS-B positions as stays and moves) when the
 record holds one. A place page: visits, hours, first and last, per year, the people met there,
@@ -72,10 +72,14 @@ def person(reading: Reading, name: str) -> dict[str, Any]:
     for stay in reading.owner_stays:
         proposed += sum(
             1
-            for p in present.present(stay, reading.lines, reading.identities, reading.places, reading.owner)
+            for p in present.present(
+                stay, reading.lines, reading.identities, reading.places, reading.owner, reading.voice_gate
+            )
             if p.person == who.entity and p.status == present.PROPOSED
         )
-        for c in present.company(stay, reading.lines, reading.identities, reading.places, reading.owner):
+        for c in present.company(
+            stay, reading.lines, reading.identities, reading.places, reading.owner, reading.voice_gate
+        ):
             if c.person != who.entity:
                 continue
             evidence_days = {days_of.get(id_, _day(stay, reading)) for id_ in c.lines}
@@ -246,7 +250,9 @@ def _people(visits: Sequence[stays.Segment], reading: Reading) -> list[dict[str,
     days_of = _days_of_lines(reading)
     found: dict[tuple[str | None, str], dict[str, Any]] = {}
     for stay in visits:
-        for c in present.company(stay, reading.lines, reading.identities, reading.places, reading.owner):
+        for c in present.company(
+            stay, reading.lines, reading.identities, reading.places, reading.owner, reading.voice_gate
+        ):
             if c.status != present.CONFIRMED:
                 continue
             entry = found.setdefault(
@@ -281,7 +287,14 @@ def _person_rows(p: dict[str, Any]) -> Iterator[str]:
         yield f"  {year}  {_plural(n, 'day')} together"
     if p["places"]:
         yield f"  places  {', '.join(p['places'])}"
-    yield f"  commitments  none open ({p['commitments']['note']})"
+    owed = p["commitments"]
+    if owed["open"]:
+        mine, theirs = owed.get("you_owe", 0), owed.get("they_owe", 0)
+        listing = "`logbook promises --all`" if theirs else "`logbook promises`"  # theirs only with --all
+        counts = f"{len(owed['open'])} open ({mine} you owe, {theirs} they owe)"
+        yield f"  commitments  {counts}: {listing} lists them"
+    else:
+        yield "  commitments  none open"
     if p["shared_stays"]:
         yield f"  last {_plural(len(p['shared_stays']), 'shared stay')}"
         for s in p["shared_stays"]:
