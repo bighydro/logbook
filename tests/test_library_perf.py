@@ -90,7 +90,13 @@ def _record(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, lines: int) -> tupl
 
 
 def _routes(built: dict[str, Any], day: str) -> list[str]:
-    fill = {"day": day, "person": built["busiest_person"], "org": built["org"], "idea": built["idea"]}
+    fill = {
+        "day": day,
+        "week": bench.week_of(day),
+        "person": built["busiest_person"],
+        "org": built["org"],
+        "idea": built["idea"],
+    }
     return [r.format(**fill) for r in bench.ROUTES if "{journey}" not in r]
 
 

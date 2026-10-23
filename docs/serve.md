@@ -31,6 +31,7 @@ aboard the yacht Nordlys. Nothing in it is real.*
 | Page | What it is | The command it renders |
 |---|---|---|
 | `/day/YYYY-MM-DD` | the Day as a timeline: the nights either side, the country, the signature (or `unsigned`) with the page digest, the all-day entries, the `with` row (the day's company, your word marked, and the *with…* field); your reflection; one row per stay, stop, move, flight or run aboard an asset, in time order, with the clock, the kind and what it was; each row's attachments (events, transcripts with their voices when the line has them, as the Day names them ([speakers](speakers.md)), notes, mail threads, calls, keepers named; messages by conversation, each folded; photos counted and named) and company (confirmed, then proposed) under a toggle; a star on every row that is a line; what is unplaced; the health line; the sources and when each last spoke; *Everything this day held*, every line of the day, folded ([below](#the-day--everything-it-held)); at its foot, *Reflect and sign* ([below](#reflect-and-sign)) | `logbook day`, and `logbook day reflect`, `logbook star`, `logbook with` |
+| `/week/YYYY-Www` | the week, read-only: seven ribbons, one a day, each a link to its Day; where the week went (the week draft's numbers, each with its lines); each goal with what the week shows for it and the command that gives a verdict; the one proposal for next week, in pencil; the stale question; the people who moved, names only; the sprint and the next trip; Hold's census, counts only ([the week](week.md)) | `logbook dream week`, `goal review`, `show plan`, `lab hold census` |
 | `/days?from=&to=` | one row per day of the window, the day a link to its Day: the night, the kilometres moved, the flights, the stays and what attached, the people confirmed, the health triple, the usual sources with no line that day; then *Starred*, the window's stars, each linked to its row. Without a window, the record's last fortnight; a form and *earlier* / *later* links move it | `logbook show days` |
 | `/trips?year=` | the trips of the year: first and last day (a link to those days), nights, route, flights in and out, places, people. Without a year, the record's last; every year the record covers is a link | `logbook show trips --year` |
 | `/journeys?year=` | the journeys that began in the year, the latest first: the name or the dates (a link to the journey), the nights away, the return day, the route, the photos, the places, the people the record names, the draft folded, the evidence folded ([Journeys](#journeys)). Without a year, the record's last | `logbook show trips --year`, grown |
@@ -669,7 +670,8 @@ nothing fetched:
 - **The week.** On a Sunday whose ISO week has a draft (`dream week`, [the dream](dream.md#journeys-and-weeks)),
   the week's draft, folded under its head, with its numbers and a link to the line; on the six days
   before it, a line linking to it (`/day/SUNDAY#week`). Through the page's gate, as every draft: a
-  draft above it is not there, and neither is the link.
+  draft above it is not there, and neither is the link. Every Day's pager, and the Sunday's draft,
+  link the week's own page, `/week/YYYY-Www` ([the week](week.md)).
 - **The track**, above the timeline: the day's stays as numbered dots on a plain drawing from their
   own coordinates, a move a line between two of them, dashed across a gap or a flight, with a scale
   bar. An inline SVG drawn by the server, as the Places page's spots are: no map tile, no image, no
