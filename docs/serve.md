@@ -601,7 +601,7 @@ The Day carries the two acts on lines the record already holds ([the acts](acts.
   model's draft is never starred: not the dream's sentences, not a proposal you have not confirmed,
   not a call's synthesis, and not the row of a draft the policy withholds (*superseded by policy*);
   a draft is a proposal, not yours to keep as a memory ([the acts](acts.md#star-a-line-worth-keeping)),
-  and a star posted for one is a `400`. A starred photo is the press's pick
+  and a star posted for one is a `400`. A starred photo is the Volume's pick
   ([On paper](print.md)). The form posts to `/star`, which runs `stars.star` or `stars.unstar`, the
   functions of `logbook star` and `logbook unstar`: the line is theirs, byte for byte but for the
   clock. A line starred already is left as it is; an unstar of a line no longer starred (the page
@@ -658,7 +658,7 @@ nothing fetched:
   (its star and its link name the first). `sync drive` writes a line per file, hour and activity; the
   fold is the page's, and `logbook day` lists each line.
 - **Photo review**, above Reflect and sign: the day's photos with no star, a thumbnail or the name
-  each, and two buttons. *Star* stars it, as the star on its row does (a `memory` keeper, the press's
+  each, and two buttons. *Star* stars it, as the star on its row does (a `memory` keeper, the Volume's
   pick). *Not a keeper* stops the review asking about it and writes no line: RFC 0024 has no "not a
   keeper" and RFC 0041 has no "not starred", so the no is the review's own bookkeeping,
   `state/photo-review.json`, and the photo stays on the Day. Both post to `/star`, so another command

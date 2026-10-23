@@ -1,7 +1,7 @@
 # On paper
 
-`logbook year YYYY --html PATH --print` and `logbook trip ID --html PATH --print` write the paper
-edition of a Year or a Trip: one HTML document designed for A4 and US Letter, laid out with CSS
+`logbook year YYYY --html PATH --print` and `logbook trip ID --html PATH --print` write a Year or a
+Trip as a Volume: one HTML document designed for A4 and US Letter, laid out with CSS
 paged media, that a browser turns into a PDF or sends to a printer. It is a reader (ADR 0013): a
 function of the record at its head, derived every time, never written back.
 
@@ -42,7 +42,7 @@ Page numbers come from the page counter and sit in the bottom margin; the cover 
 
 ## The photos are the ones you starred
 
-The press picks no picture of its own. A span's photo page is its **keepers** (RFC 0024): the photos
+A Volume picks no picture of its own. A span's photo page is its **keepers** (RFC 0024): the photos
 your library marked favourites (`logbook derive keepers` reads them in) and the photos you starred,
 `logbook star PHOTO-LINE [--note TEXT]` or the star beside a photo on the Day page of `serve`
 ([the acts](acts.md)). A photo star is a keeper of lane `memory`; its note is printed under the photo
@@ -100,7 +100,7 @@ Every typographic constant — the margins, the text block, the six-column grid,
 major third from 10 pt), the faces (the system's: a document that fetches nothing carries no
 webfont), the ink, the map's box, the photo heights per layout — is in one module,
 [`logbook/contrib/print_layout.py`](https://github.com/bighydro/logbook/blob/main/logbook/print_layout.py),
-whose `stylesheet()` builds the one stylesheet from them. A designer retheming the paper edition
+whose `stylesheet()` builds the one stylesheet from them. A designer retheming Volumes
 changes that file and touches no logic: the renderer (`logbook/contrib/print_page.py`) names classes and
 never a length.
 

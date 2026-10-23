@@ -1091,7 +1091,7 @@ logbook show trips --year 2026                # runs of nights away: route, plac
 logbook rollup ledger --month 2026-06         # the transactions at the stay and in the trip, per day; shares per person
 logbook show year 2026 --html ~/2026.html     # the year read back: the rollups, the trips, one day a month; a page that prints
 logbook show trip trip:2026-06-15:2026-06-20  # one trip: the route as stays with a map, days, flights, people, keepers, health, spend
-logbook show year 2026 --html ~/2026.html --print   # the paper edition: a cover, contents, a spread a month with the keepers as hero photos; A4 or Letter
+logbook show year 2026 --html ~/2026.html --print   # a Volume: a cover, contents, a spread a month with the keepers as hero photos; A4 or Letter
 logbook show trip trip:2026-06-15:2026-06-20 --html ~/week.html --print   # the same for one trip, a spread a day; docs/print.md says how to make the PDF
 logbook export trip-bundle trip:2026-06-15:2026-06-20 --to kari --tier 1,2   # that trip for a member of the circle; `import trip-bundle` takes one in
 logbook show person "Kari Nordmann"           # first and last contact, days together, places, the last shared stays

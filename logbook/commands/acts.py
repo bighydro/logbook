@@ -20,10 +20,10 @@ def star_arguments(sub: Subparsers) -> None:
     """`logbook star LINE [--note TEXT]`."""
     s = sub.add_parser(
         "star",
-        help="mark a line worth keeping; a photo's star is the press's pick",
+        help="mark a line worth keeping; a photo's star is the Volume's pick",
         description="mark a line worth keeping (RFC 0041): one star/v1 line at the line's own time and"
         " tier, so it travels where the line does; a photo's star is a memory keeper (RFC 0024), the"
-        " Day's hero photo and the photo the press picks",
+        " Day's hero photo and the Volume's pick",
     )
     s.add_argument("line", metavar="LINE", help="the line's id, or #SEQ")
     s.add_argument("--note", help="your words on the star, one line; it travels with the star")

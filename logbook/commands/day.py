@@ -130,7 +130,7 @@ def show_arguments(sub: Subparsers) -> None:
     s.add_argument(
         "--print",
         action="store_true",
-        help="year, trip, with --html: the paper edition — a cover, contents, one spread per month (year)"
+        help="year, trip, with --html: a Volume — a cover, contents, one spread per month (year)"
         " or per day (trip), for A4 and US Letter",
     )
     s.add_argument(
@@ -1300,7 +1300,7 @@ def cmd_year(a: argparse.Namespace) -> None:
     to the record."""
     lb = Logbook.find()
     if a.poster and a.print:
-        print("year: --poster is one sheet and --print the paper edition; give one", file=sys.stderr)
+        print("year: --poster is one sheet and --print a Volume; give one", file=sys.stderr)
         sys.exit(2)
     if a.sheet and not a.poster:
         print("year: --sheet is the poster's; give --poster too", file=sys.stderr)

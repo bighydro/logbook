@@ -166,9 +166,7 @@ def _print_target(a: argparse.Namespace, command: str) -> Path:
     Letter) to `--html PATH`: the path, its folder made; exit 2 without `--html`, before anything
     is read."""
     if not a.html:
-        print(
-            f"{command}: --print writes the paper edition where --html PATH says; give both", file=sys.stderr
-        )
+        print(f"{command}: --print writes a Volume where --html PATH says; give both", file=sys.stderr)
         sys.exit(2)
     out = Path(a.html)
     out.parent.mkdir(parents=True, exist_ok=True)
