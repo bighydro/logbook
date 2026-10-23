@@ -244,8 +244,10 @@ def test_a_reader_shows_the_owner_only_from_from_me_and_every_other_voice_by_its
             {"label": "S4", "turns": 0},
         ]
     }
-    assert speakers.row_text(payload) == "you 3 min · Ola Nordmann 3 min · S3 42 s · S4"
-    assert speakers.row_text({"speakers": [{"label": "S1", "seconds": 1862.4, "turns": 212}]}) == "S1 31 min"
+    assert speakers.row_text(payload) == "you · Ola Nordmann · S3 · S4"  # who spoke most first, no minutes
+    assert (
+        speakers.row_text({"speakers": [{"label": "S1", "seconds": 1862.4, "turns": 212}]}) == "S1"
+    )  # a voice not yet named is a person too
 
 
 def test_the_json_of_a_voice_is_shaped_for_the_attributions_to_come():

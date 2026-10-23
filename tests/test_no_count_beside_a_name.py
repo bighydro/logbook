@@ -226,7 +226,12 @@ def test_no_reader_of_the_week_prints_a_number_beside_a_name(
         assert code == 0, err
         days[day] = out
         assert beside(out) == [], (day, beside(out))
-        assert beside(run_cli("show", day)[1]) == [], day
+        # `show`'s call row, `← who, 7 min, cellular`, is the conformance fixture's own
+        # (conformance/profiles/call/show.txt): the only one left, and only a call's
+        pinned = [
+            row for row in beside(run_cli("show", day)[1]) if " call " not in row or "ios-calls" not in row
+        ]
+        assert pinned == [], day
     assert "19 min ← Kari Nordmann" in days[CALL_DAY]
     assert "you · Kari Nordmann" in days[RECORDING_DAY]
     sunday = days[SUNDAY]

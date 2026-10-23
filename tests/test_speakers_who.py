@@ -227,7 +227,7 @@ def test_the_day_names_who_spoke_and_says_the_consent(
     _named(lb)
     cli.main(["day", DINNER_DAY])
     text = capsys.readouterr().out
-    assert "Middag · you 31 min · Kari Nordmann 14 min · 1 unnamed · recorded with consent: unknown" in text
+    assert "Middag · you · Kari Nordmann and 1 unnamed · recorded with consent: unknown" in text  # no minutes
     with_row = next(row for row in text.splitlines() if row.lstrip().startswith("with "))
     assert with_row.split(None, 1)[1] == "Kari Nordmann (calendar, transcript) · 1 unnamed"
     cli.main(["day", DINNER_DAY, "--json"])
@@ -241,9 +241,7 @@ def test_the_day_names_who_spoke_and_says_the_consent(
         dict(zip(voice, ("S3", None, None, 41.5, "voice", "unknown", False), strict=True)),
     ]
     cli.main(["day", CALL_DAY])
-    assert (
-        "Samtale · you 3 min · Ola Nordmann 3 min · recorded with consent: unknown" in capsys.readouterr().out
-    )
+    assert "Samtale · you · Ola Nordmann · recorded with consent: unknown" in capsys.readouterr().out
 
 
 def test_every_guest_consenting_shows_no_consent(lb: Logbook, capsys: pytest.CaptureFixture[str]) -> None:
@@ -253,7 +251,7 @@ def test_every_guest_consenting_shows_no_consent(lb: Logbook, capsys: pytest.Cap
     )
     cli.main(["day", CALL_DAY])
     out = capsys.readouterr().out
-    assert "Samtale · you 3 min · Ola Nordmann 3 min" in out and "consent" not in out
+    assert "Samtale · you · Ola Nordmann\n" in out and "consent" not in out
 
 
 # -- promises ----------------------------------------------------------------------------------------------
