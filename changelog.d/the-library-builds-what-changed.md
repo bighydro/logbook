@@ -12,3 +12,5 @@
 - The Manifest and each org's page read the org sightings and touches kept beside the index and the
   lines appended since, instead of every mail, meeting and chat.
 - `serve --build` names the five pages that took longest to build.
+- The agents' shelf keeps which lines are a session's beside the index and streams only the messages
+  appended since, instead of every message of the record.
