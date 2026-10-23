@@ -2,10 +2,12 @@
 
 `logbook serve` has a page for every ISO week, `/week/2026-W25`: the Sunday's week draft
 ([`dream week`](dream.md#journeys-and-weeks)) grown into a page, beside the seven days it covers. Every
-Day links to the week it is in (the pager under its date), and so does the Sunday's week draft. The page is
-read-only: nothing on it writes, and it carries no form and no script. Closing the week is the second
-part of [RFC 0043](https://github.com/bighydro/logbook/blob/main/rfcs/0043-the-day-page.md) §8 and is not
-built yet.
+Day links to the week it is in (the pager under its date), and so does the Sunday's week draft. The
+week's own pager links the week before and after while they hold a day of the record (or today); past
+its first and last week they are named, not linked. The page is read-only: nothing on it writes, and it
+carries no form and no script. Closing the week is the second part of
+[RFC 0043](https://github.com/bighydro/logbook/blob/main/rfcs/0043-the-day-page.md) §8 and is not built
+yet.
 
 ```
 The week 2026-W25          15–21 June 2026 · nothing read above tier 2

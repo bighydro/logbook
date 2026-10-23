@@ -93,6 +93,7 @@ ol.week{list-style:none;padding:0;margin:0}
 ol.week>li{padding:4px 0;border-bottom:1px solid var(--line)}ol.week>li:last-child{border-bottom:0}
 ol.week p.day{margin:0;font-size:13.5px}
 p.line,li.line{overflow-wrap:anywhere}
+p.ids{margin:0;font-size:11.5px;color:var(--mute);overflow-wrap:anywhere}div.paper p.ids{line-height:28px}
 code.cmd{font-family:var(--mono);font-size:12.5px;overflow-wrap:anywhere;white-space:normal}
 ul.plain{list-style:none;padding:0;margin:0 0 6px}ul.plain>li{padding:2px 0;overflow-wrap:anywhere}
 p.later{color:var(--mute);font-size:12.5px;margin:18px 0 6px}
@@ -249,11 +250,12 @@ def page_week(site: Site, week: str, expanded: bool = False) -> str:
 
     before = week_paper.week_of((date.fromisoformat(monday) - timedelta(days=7)).isoformat())
     after = week_paper.week_of((date.fromisoformat(monday) + timedelta(days=7)).isoformat())
+    span = _span(site, today)
     head = [
         f"<h1>The week {escape(week)} {site.tier_small(span_text(monday, sunday), tier or None)}</h1>\n",
-        f'<p class="pager">{site.link(f"← {before}", week_path(before))}{DOT}'
+        f'<p class="pager">{_week_link(site, f"← {before}", before, span)}{DOT}'
         f"{site.link(escape(f'its Sunday, {sunday}'), f'/day/{sunday}')}{DOT}"
-        f"{site.link(f'{after} →', week_path(after))}</p>\n",
+        f"{_week_link(site, f'{after} →', after, span)}</p>\n",
     ]
     if not site.with_drafts:
         head.append(f'<p class="mute">{escape(NO_DRAFTS)}</p>\n')
@@ -286,7 +288,9 @@ def page_week(site: Site, week: str, expanded: bool = False) -> str:
 
 
 def _lines(site: Site, ids: Sequence[str]) -> str:
-    """The lines a figure rests on: the first `ID_SHOWN` linked to each as written, the rest counted."""
+    """The lines a figure rests on: the first `ID_SHOWN` linked to each as written, the rest counted, as
+    a block of their own (`p.ids`): an id may begin with a digit, and a block's end, never a bracket,
+    is what stands between it and a name the row above may carry."""
     shown = []
     for line_id in ids[:ID_SHOWN]:
         href = site.href(f"/line/{quote(str(line_id), safe='')}")
@@ -295,7 +299,7 @@ def _lines(site: Site, ids: Sequence[str]) -> str:
     rest = len(ids) - ID_SHOWN
     if rest > 0:
         shown.append(f"{rest} more")
-    return f' <small class="mute">[{", ".join(shown)}]</small>' if shown else ""
+    return f'<p class="ids">[{", ".join(shown)}]</p>' if shown else ""
 
 
 def _seven(
@@ -345,7 +349,7 @@ def _went(site: Site, draft: Mapping[str, Any], names: Sequence[str]) -> tuple[s
                 f'<li class="line mute">{escape(WITHHELD_BESIDE)}{_lines(site, _ids(t.get("lines")))}</li>\n'
             )
             continue
-        bits = [escape(title), escape(str(t.get("kind") or ""))]
+        bits = [escape(title), *([escape(str(t["kind"]))] if t.get("kind") else [])]
         named = t.get("kind") == "chat" or any(n and n in title for n in names)
         if not named:  # a person is never beside a count: a chat is its counterpart, a title may name one
             figure = _plural(_n(t.get("count")), "line")
@@ -482,7 +486,7 @@ def proposal_html(site: Site, draft: Mapping[str, Any], names: Sequence[str]) ->
         written = f' <a href="{escape(href)}">the draft as written</a>' if href is not None else ""
         said = f'<p class="mute">{escape(WITHHELD_BESIDE)}{written}</p>\n'
     elif segment.get("supported"):
-        said = f"<p>{escape(text)}{_lines(site, _ids(segment.get('evidence')))}</p>\n"
+        said = f"<p>{escape(text)}</p>\n{_lines(site, _ids(segment.get('evidence')))}"
     else:
         why = f": {escape(str(segment['why']))}" if segment.get("why") else ""
         said = (
@@ -663,6 +667,23 @@ def _hold(site: Site) -> tuple[str, str, int]:
         ' <code class="cmd">drive</code>.</p>\n',
         shown,
     )
+
+
+def _span(site: Site, today: str) -> tuple[str, str] | None:
+    """The days the pager may reach: the record's first to its last (`Site._record_days`, the owner's
+    track else any line), or today when that is later. None for an empty record: no week is linked."""
+    whole = site._record_days()
+    return None if whole is None else (whole[0], max(whole[1], today))
+
+
+def _week_link(site: Site, text: str, week: str, span: tuple[str, str] | None) -> str:
+    """`text` as a link to `week`'s page while that week holds a day of `span`, else as plain words: so a
+    crawl that follows the pager (the golden crawl, the open-ends walk) ends at the record's edges
+    instead of walking every week of the calendar."""
+    _week, monday, sunday = week_paper.parse_week(week)
+    if span is None or sunday < span[0] or monday > span[1]:
+        return escape(text)
+    return site.link(escape(text), week_path(week))
 
 
 def link_html(site: Site, day: str) -> str:

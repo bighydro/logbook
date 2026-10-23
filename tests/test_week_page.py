@@ -16,9 +16,11 @@ import html
 import json
 import re
 import shutil
-from datetime import UTC, date, datetime
+import time
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
+from unittest import mock
 from zoneinfo import ZoneInfo
 
 import phone_width
@@ -41,7 +43,7 @@ from test_day_rhythm import _seen, beside
 from test_dream_week_question import MAP, SAUNA
 from test_dream_week_question import name as name_entity
 
-from logbook.contrib import dream, entities, serve, week_page
+from logbook.contrib import demo, dream, entities, serve, week_page, week_paper
 from logbook.core import goals, people, policy
 from logbook.core.store import Logbook
 from logbook.labs import hold
@@ -470,6 +472,123 @@ def test_a_question_whose_entity_is_not_an_object_is_never_a_traceback(lb: Logbo
 @pytest.mark.parametrize("week", ["0001-W01", "0001-W02", "9999-W52"])
 def test_a_week_at_the_calendar_s_edge_is_a_400_never_a_traceback(lb: Logbook, week: str) -> None:
     assert _site(lb).respond(f"/week/{week}", "").status == 400
+
+
+# -- open ends: a span with one end unknown (#379's shapes, built here) -----------------------------------
+
+
+def _open_ends(drafts: list[dict[str, Any]]) -> None:
+    """The demo's lines with every span left open (SPEC §2: an `end` unknown is null): each `end` gone,
+    a passage left open (RFC 0020 rule 6), every flight without its arrival and every other one without
+    its departure too, and the owner's track silent from the first flight's departure to the end of its
+    day."""
+    flights = sorted((d for d in drafts if d["kind"] == "flight"), key=lambda d: str(d["at"]))
+    for n, f in enumerate(flights):
+        for key in (
+            "actual_arrival",
+            "scheduled_arrival",
+            *(("actual_departure", "scheduled_departure") * (n % 2)),
+        ):
+            f["payload"].pop(key, None)
+    for d in drafts:
+        if d.get("end") is not None:
+            d["end"] = None
+            if d["payload"].get("mode") == "passage":
+                d["payload"].setdefault("extra", {})["open"] = True
+    if flights:
+        gone = str(flights[0]["at"])
+        day = _local(gone)
+        drafts[:] = [
+            d
+            for d in drafts
+            if not (d["kind"] == "location" and str(d["at"]) >= gone and _local(str(d["at"])) == day)
+        ]
+
+
+def _local(stamp: str) -> str:
+    """The demo's local day of an RFC 3339 stamp."""
+    return datetime.fromisoformat(stamp).astimezone(ZoneInfo(demo.TZ)).date().isoformat()
+
+
+@pytest.fixture(scope="module")
+def open_ends(tmp_path_factory: pytest.TempPathFactory) -> Logbook:
+    original = demo.story_of
+
+    def reshaped(days: int, seed: int, recorded_at: str) -> Any:
+        story = original(days, seed, recorded_at)
+        _open_ends(story.drafts)
+        return story
+
+    with mock.patch.object(demo, "story_of", reshaped):
+        return demo.generate(tmp_path_factory.mktemp("week-open-ends") / "Demo", days=30, seed=1)
+
+
+def test_a_week_of_open_ends_renders_in_bounded_time(open_ends: Logbook) -> None:
+    """A flight with no arrival, an open passage, a stay with no end: the week they are in is drawn in
+    seconds, at every tier and through a gate of tier 1, folded and open."""
+    flights = sorted(str(line["at"]) for line in open_ends.lines() if line["kind"] == "flight")
+    assert flights and all(line["end"] is None for line in open_ends.lines())
+    week = week_paper.week_of(flights[0][:10])
+    now = datetime.fromisoformat(flights[0]).astimezone(UTC)
+    for tiers in (None, (1,)):
+        site = serve.Site(open_ends, tiers=tiers, now=lambda: now)
+        for query in ("", "open=1"):
+            began = time.monotonic()
+            response = site.respond(f"/week/{week}", query)
+            took = time.monotonic() - began
+            assert response.status == 200, response.body[:300]
+            assert took < 10, f"/week/{week}?{query} through {tiers}: {took:.1f} s"
+
+
+def test_the_pager_never_leaves_the_record_so_a_crawl_of_weeks_ends(open_ends: Logbook) -> None:
+    """The week before and after are links only while they hold days of the record (or today): a walk
+    that follows every week page's links reaches the record's weeks and stops, as #379's walk of every
+    page does."""
+    flights = sorted(str(line["at"]) for line in open_ends.lines() if line["kind"] == "flight")
+    now = datetime.fromisoformat(flights[0]).astimezone(UTC)
+    site = serve.Site(open_ends, now=lambda: now)
+    first, last = site._record_days() or ("", "")
+    weeks = {week_paper.week_of(d) for d in (first, last, flights[0][:10])}
+    queue, seen = [week_paper.week_of(flights[0][:10])], set()
+    while queue and len(seen) < 60:
+        week = queue.pop()
+        if week in seen:
+            continue
+        seen.add(week)
+        body = site.respond(f"/week/{week}", "").body.decode("utf-8")
+        queue += re.findall(r'href="/week/(\d{4}-W\d{2})"', body)
+    span = {week_paper.week_of(d.isoformat()) for d in _days_between(first, last)}
+    assert seen == span, sorted(seen ^ span)
+    assert weeks <= seen
+
+
+def _days_between(first: str, last: str) -> list[date]:
+    a, b = date.fromisoformat(first), date.fromisoformat(last)
+    return [a + timedelta(days=n) for n in range((b - a).days + 1)]
+
+
+def test_the_fortnight_s_pager_links_its_weeks_and_today_s_and_no_other(lb: Logbook) -> None:
+    site = _site(lb)  # 10:00 on Monday 22 June: today is in 2026-W26, after the track's last day
+    w24, w25, w26 = (_page(site, w) for w in (W24, W25, "2026-W26"))
+    assert 'href="/week/2026-W23"' not in w24 and "← 2026-W23" in w24, "named, not linked"
+    assert f'href="/week/{W25}"' in w24 and f'href="/week/{W24}"' in w25 and 'href="/week/2026-W26"' in w25
+    assert 'href="/week/2026-W27"' not in w26, "nothing after today's week"
+
+
+def test_a_figure_s_lines_are_a_block_of_their_own_never_beside_a_name(lb: Logbook) -> None:
+    """A thread named as a person, of no kind, whose first line id begins with a digit: the ids are their
+    own block, so nothing but a block's end stands between the name and them."""
+    thread = {
+        "thread": "Kari Nordmann",
+        "kind": "",
+        "count": 3,
+        "lines": ["3019cadd-0000-7000-8000-000000000003"],
+    }
+    draft = {"line": "x", "model": MODEL, "segments": [], "numbers": {"threads": [thread]}}
+    _summary, body = week_page._went(_site(lb), draft, ["Kari Nordmann"])
+    seen = _seen(body)
+    assert "Kari Nordmann" in seen and beside(seen, ["Kari Nordmann"]) == []
+    assert not re.search(r"Kari Nordmann[^\u00b6]*\d", seen), seen
 
 
 def test_a_week_that_is_not_one_is_a_400(lb: Logbook) -> None:
