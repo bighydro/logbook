@@ -334,18 +334,22 @@ def test_the_body_shape(lb: Logbook, tmp_path: Path):
         {"kind": "phone", "value": OLA["phone"]},
     ]
     facts = ola["facts"]
-    assert set(facts) == {"last_contact", "days_together", "promises"}
+    assert set(facts) == {"last_contact", "days_together", "appears", "promises"}
     assert facts["last_contact"] == {"date": "2026-09-12", "kind": "message"}
     assert facts["days_together"] == 1
+    assert facts["appears"] == {"first": "2026-09-02", "last": "2026-09-12"}
     owed_by, owed_to = facts["promises"]["owed_by_owner"], facts["promises"]["owed_to_owner"]
     assert [p["sentence"] for p in owed_by] == [CALL]
     assert [p["sentence"] for p in owed_to] == [DRAWINGS], "the one naming money is left out"
     assert all(
-        set(p) == {"sentence", "date", "line"} and p["date"] == "2026-09-12" for p in owed_by + owed_to
+        set(p) == {"sentence", "date", "line", "status", "kept"} and p["date"] == "2026-09-12"
+        for p in owed_by + owed_to
     )
+    assert all(p["status"] == "open" and p["kept"] is None for p in owed_by + owed_to)
     assert all(isinstance(text, str) for text in ola["page"])
     page = "\n".join(ola["page"])
-    assert "Letzter Kontakt: 12.09.2026 (Nachricht)" in page and "Tage zusammen" in page
+    assert "Letzter Kontakt: 12.09.2026 (Nachricht)" in page
+    assert "Tage zusammen: 1 (im Logbuch vom 02.09.2026 bis 12.09.2026)" in page
     assert f"„{CALL}“" in page and f"„{DRAWINGS}“" in page, "the sentence quoted as written"
 
     [kiosk] = _read(out, "ideas.json")["ideas"]

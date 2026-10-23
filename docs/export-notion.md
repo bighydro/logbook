@@ -92,14 +92,36 @@ the resolution lines hold them) and `facts`:
 
 - `last_contact`: its `date` and `kind` (`together`, `call`, `message`, `transcript`, `event`, `mail` or
   `photo`; a day together names the day when it falls on the last one);
-- `days_together` in the window;
-- `promises`, open both ways ([promises](promises.md)): `owed_by_owner` and `owed_to_owner`, each
-  `{sentence, date, line}`: the sentence as `logbook promises` quotes it (one sentence, its case kept,
-  its whitespace collapsed), the day it was said, the line it was read in. A promise said before the
-  window is not in it; the person's speaker and counterpart are resolved through the same gate.
+- `days_together`: the distinct days you and they were together in the window ([people](people.md):
+  they were at one of your stays), and `appears`, `{first, last}`: the first and last day they appear in
+  the record in the window, by any contact or a day together;
+- `promises` ([promises](promises.md)): `owed_by_owner` and `owed_to_owner`, each `{sentence, date, line,
+  status, kept}`: the sentence as `logbook promises` quotes it (one sentence, its case kept, its
+  whitespace collapsed), the day it was said, the line it was read in, `open` or `kept`, and the day it
+  was kept (the day of the task line `promises done` wrote, or the day you signed it kept; none while
+  open). A promise here is one `promises` reads as yours (owed by you) or theirs (owed to you), never a
+  request; from a message, a mail you wrote, a call or a note, never a mail someone else wrote; one
+  sentence, never a line quoted in a reply (`> …`), a chat line pasted with its stamp (`[12.09.26,
+  15:10] Ola: …`) or a run of more than 40 words with no full stop, which is a whole chat message. It is
+  open, or was kept in the 365 days before the export; one cancelled, dropped or missed is not here. A
+  promise said before the window is not in it; the person's speaker and counterpart, and the line that
+  kept it, are resolved through the same gate.
 
 And `page`: those facts as the lines of a page, in German, whole. The program that writes Notion replaces
-a person's page with it and never merges.
+a person's page with it and never merges. The days together are one line, on the page of someone you
+were together with and no other; the promises list each side's five newest, each with its day, then
+how many more there are:
+
+```
+Stand: 15.10.2026, aus dem Logbuch
+Letzter Kontakt: 12.09.2026 (Nachricht)
+Tage zusammen: 1 (im Logbuch vom 02.09.2026 bis 12.09.2026)
+Versprechen von mir:
+– „I will call the yard tomorrow.“ (12.09.2026, offen)
+– „I'll bring the fenders on Saturday.“ (12.09.2026, gehalten am 14.09.2026)
+… und 3 weitere
+Versprechen an mich: keine
+```
 
 **Ideas.** Every idea whose entity has a Notion page ref: `page` (`notion:<id>`), `status` (the current
 status as the gate lets it be read, whatever its day, tier 2, with the day it took effect and its line;
@@ -156,5 +178,6 @@ the read to the append, so the line follows the head the folder reflects. A dry 
 ## The dry run
 
 `--dry-run` reads the record through the same gate and prints the counts per section, what was left out
-for want of a key or for naming money, and how many lines the gate held back above the tier or on
-unsigned days. It writes nothing: no folder, no line.
+for want of a key or for naming money, how many lines the persons' days together and promises take on
+their pages (and how many promises are past the five a side), and how many lines the gate held back
+above the tier or on unsigned days. It writes nothing: no folder, no line.
