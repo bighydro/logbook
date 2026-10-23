@@ -753,7 +753,7 @@ class Site:
     def still_reading(self, path: str, query: str, limit_s: float) -> Response:
         """The page a reading over the limit is answered with (503): what happened and when the page
         will be there, in one sentence each, never a spinner. With the build, the page is being
-        built in the background; without it (`--live`), the reading was stopped."""
+        built in the background; without it (live, the default), the reading was stopped."""
         target = path + (f"?{query}" if query else "")
         again = f'<a href="{escape(target)}">this page again</a>'
         if self.library is not None:
@@ -765,8 +765,8 @@ class Site:
         else:
             said = (
                 f"This page took longer than {limit_s:g} s to read, so the reading was stopped and this"
-                " machine is free for the other pages. Without `--live`, `logbook serve` builds every"
-                f" page ahead and answers it at once. Try {again}, or the front page."
+                " machine is free for the other pages; `logbook serve` without `--limit` reads every page"
+                f" to its end. Try {again}, or the front page."
             )
         body = f'<h1>Still reading</h1>\n<p class="busy">{said}</p>\n<p><a href="/">The front page</a></p>\n'
         return Response(503, self.document("still reading", body).encode("utf-8"))
@@ -5345,8 +5345,9 @@ def make_server(
 ) -> Server:
     """The server, bound and ready to `serve_forever`. `HostError` for any host but 127.0.0.1,
     before a socket is opened; OSError when the port is taken. `voice`: how a Day hears a recording.
-    `built`: answer from the pages built ahead (`library_build`; `logbook serve` does by default),
-    rebuilt in the background after every act; False renders every page as it is asked for."""
+    `built`: answer from the pages built ahead (`library_build`; `logbook serve --built`, labs),
+    rebuilt in the background after every act; False, the default, renders every page as it is asked
+    for. `limit_s`: a page read longer is stopped and said so; `math.inf` reads every page to its end."""
     if host != HOST:
         raise HostError(
             f"serve binds {HOST} only, never {host!r}: the record is read from this machine, "
@@ -5371,11 +5372,12 @@ def serve(
     airports: Airports | None = None,
     announce: Callable[[str], None] = print,
     voice: Voice | None = None,
-    built: bool = True,
+    built: bool = False,
     limit_s: float = LIMIT_S,
 ) -> None:
-    """Serve the record until Ctrl-C, from the pages built ahead unless `built` is False (`--live`),
-    a page read longer than `limit_s` stopped and said so. `HostError` and OSError as `make_server`."""
+    """Serve the record until Ctrl-C, every page rendered as it is asked for, or with `built`
+    (`--built`, labs) from the pages built ahead; a page read longer than `limit_s` stopped and said so
+    (`math.inf`: none). `HostError` and OSError as `make_server`."""
     server = make_server(lb, host, port, airports, voice, built=built, say=announce, limit_s=limit_s)
     if sys.platform != "win32":  # `kill -USR1 <pid>`: every stack to the log, the server running on
         with contextlib.suppress(AttributeError, ValueError, OSError):  # a stderr with no file under it
