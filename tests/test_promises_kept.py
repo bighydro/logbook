@@ -166,3 +166,15 @@ def test_what_changes_who_said_what_reads_the_whole_record_again(
     count = Count(monkeypatch)
     _same(lb)
     assert count.whole == 2, change.__name__
+
+
+def test_the_shelf_of_every_tier_is_the_kept_reading(record: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+    from logbook.contrib import shelf_promises
+
+    lb, rest = record(1)
+    shelf_promises.read(lb)
+    lb.append_many(rest[0])
+    count = Count(monkeypatch)
+    every = shelf_promises.read(lb)
+    assert count.whole == 0, "the shelf of every tier brought the kept reading forward"
+    assert every.rows == shelf_promises.read(lb, (1, 2, 3)).rows

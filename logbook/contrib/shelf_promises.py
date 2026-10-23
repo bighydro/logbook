@@ -151,7 +151,8 @@ def read(lb: Logbook, tiers: Sequence[int] | None = None) -> Shelf:
     def admit(line: Line) -> bool:
         return allowed is None or int(line.get("tier") or 0) in allowed
 
-    report = promises.with_judgements(promises.extract(lb, admit=admit), read_judgements(lb.root))
+    found = promises.extract(lb) if allowed is None else promises.extract(lb, admit=admit)  # every tier: kept
+    report = promises.with_judgements(found, read_judgements(lb.root))
     named = {p.line for p in report.proposals}
     named |= {p.closed_by for p in report.proposals if p.closed_by}
     named |= {p.disposition.line for p in report.proposals if p.disposition is not None}
