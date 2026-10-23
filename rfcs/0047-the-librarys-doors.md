@@ -12,13 +12,10 @@ days, journeys, people, manifest, ideas, promises, goals, agents, places, assets
 is a good page. Together they are a filing cabinet. To answer "when did I last see Ola, and where?" you
 open People, then a person, then a Day, then the World, and each of those pages is slow on its own.
 
-Measured on the owner's record on 22 October 2026 (about 4.9 million lines, about 1,100 new a day):
-
-| what | how long |
-|---|--:|
-| `/people` | 86.5 s |
-| journeys, places, trips, world, gaps, ideas, promises, agents, manifest | over 30 s each |
-| the whole menu opened at once | 3 of about 13 pages load |
+On a record of millions of lines, a page can wait minutes: several of today's pages read the whole
+record each time they are asked for. On the scale harness's synthetic record (`tests/perf`, two
+million lines over ten years), the slowest doors take one to three minutes each, cold, and opening
+every door at once takes about twenty.
 
 So this RFC proposes fewer doors, each one fast. Four doors, one field and one gear, named in the
 words of a life rather than the words of a database. Every page that exists today keeps a home and
@@ -97,7 +94,7 @@ One timeline of the owner's life, zoomable, with the current chapter and the yea
   year's goals, each with its last review. In ink, or in pencil when a model drafted them.
 - **Below:** one zoomable timeline. The zoom levels are **day, week, trip, year and life**. The
   timeline runs from the owner's birth to a bounded future. The bounds are a record setting,
-  `life` in `logbook.json` (for the persona: `{"from": "1986-04-02", "to": "2035-12-31"}`). Without
+  `life` in `logbook.json` (for the persona: `{"from": "1986-07-01", "to": "2035-12-31"}`). Without
   the setting, the timeline runs from the record's first day to the end of next year. It never runs
   to the last line the record holds: a calendar entry in 2055 is not a reason to draw thirty years of
   nothing (the World's slider did exactly that; #379 fixes it).
@@ -212,8 +209,10 @@ rules from it shape the design:
 
 - **No door may need a whole-record computation at request time.** If a door needs one, it is
   computed in the build, by delta (ADR 0025), never in the request.
-- **A door that is not built yet says so in one sentence** and serves the last build, with its time.
-  It never spins.
+- **A page no build wrote is rendered once and kept.** A Day a year ago or a `/days` window the
+  owner chose is rendered on the first request and saved beside the built pages, so the next visit
+  is a file and the next build builds it again. Between builds a page is as of its build. This is
+  what phase 4 (#382) does.
 
 ## 9. Every page today, and its new home
 
@@ -320,3 +319,9 @@ phone width, light and dark, and an independent review of the screenshots alone 
    homes move again)? The proposal: 302 for one release, then 301.
 9. **Volumes.** One volume per calendar year, or one per chapter when a chapter spans years?
 10. **Holdings' place.** Between Places and Ask, as proposed, or inside the gear until it is built?
+11. **Built pages on a sealed record.** A built page holds what the Library shows, and on a sealed
+    record (RFC 0029) that includes tier 2–3 lines, in plain text on this disk (`0600`, in the cache
+    folder, never in the record's folder). RFC 0029 §8 refused to keep a plaintext index for exactly
+    that reason: it blinds `raw_id` and rejected a decrypted index on disk. Are built pages of tier 2–3
+    lines allowed on disk in plain text, or does a sealed record build tier 1 only unless the owner
+    opts in?
