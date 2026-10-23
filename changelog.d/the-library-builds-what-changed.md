@@ -15,3 +15,5 @@
 - The agents' shelf keeps which lines are a session's beside the index and streams only the messages
   appended since, instead of every message of the record.
 - A year's trips are built again only when a line lands in that year.
+- The People page's year so far is brought forward with the record, and a closed year's ranking is
+  kept until a line lands on its days.

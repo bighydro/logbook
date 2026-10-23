@@ -838,6 +838,7 @@ def _plural(n: int, noun: str, plural: str | None = None) -> str:
 
 MEMO_VERSION = 1
 MEMO_FILE = "people-whole.json"  # beside the index, in the cache folder: never in the record
+MEMO_SINCE_FILE = "people-to-end.json"  # a window from a later day to the record's last (`read_to_end`)
 MARGIN_DAYS = 3  # the last days read, whose stays and nights a later point may still lengthen
 LOOKBACK_DAYS = 32  # the owner's track read before those days when they are read again
 LOOKBACK_MOST = 512  # a stay longer than this before them: the whole record is read again
@@ -859,8 +860,27 @@ def read_whole(lb: Logbook, airports: Airports | None = None) -> Report | None:
     whole = reading.record_days(lb)
     if whole is None:
         return None
+    return _kept_reading(lb, whole, MEMO_FILE, airports)
+
+
+def read_to_end(lb: Logbook, first: str, airports: Airports | None = None) -> Report | None:
+    """`read` from `first` to the record's last day (the year so far, the People door's), kept beside
+    the index as `read_whole` keeps the whole window, in a file of its own (`MEMO_SINCE_FILE`, one
+    such window at a time); `read_whole` when `first` is the record's first day. None when the record
+    has no days, or none from `first`."""
+    whole = reading.record_days(lb)
+    if whole is None or first > whole[1]:
+        return None
+    if first <= whole[0]:
+        return read_whole(lb, airports) if first == whole[0] else read(lb, first, whole[1], airports)
+    return _kept_reading(lb, (first, whole[1]), MEMO_SINCE_FILE, airports)
+
+
+def _kept_reading(lb: Logbook, whole: tuple[str, str], name: str, airports: Airports | None) -> Report:
+    """`read` of the window `whole`, which runs to the record's last day, kept beside the index as
+    `name` and brought forward (`read_whole`)."""
     airports = airports or Airports.load()
-    path = kept.path(lb, MEMO_FILE)
+    path = kept.path(lb, name)
     stamp = _stamp(lb, airports)
     held = kept.load(path)
     found = None if held is None else _forward(lb, held, whole, stamp, airports)
@@ -984,7 +1004,7 @@ def _forward(
         them.tier = max(them.tier, int(before["tier"]))
         if before["real"] is not None:
             them.contact(before["real"][0], MEETING, before["real"][1])
-    track = _track_back(lb, cut, last, airports)
+    track = _track_back(lb, first, cut, last, airports)
     if track is None:
         return None
     with lb.index() as idx:
@@ -1010,15 +1030,16 @@ def _forward(
     return _report(first, last, days, known, owner, identities, gather), memo
 
 
-def _track_back(lb: Logbook, cut: str, last: str, airports: Airports) -> reading.OwnerTrack | None:
+def _track_back(
+    lb: Logbook, first: str, cut: str, last: str, airports: Airports
+) -> reading.OwnerTrack | None:
     """The owner's track from far enough before `cut` that every stay reaching it is the stay the
     whole record's track has: one that is not the first stay of the track read (a stay begun before
     the track would be cut short). Read back `LOOKBACK_DAYS`, then twice as far, up to
     `LOOKBACK_MOST`; None past that."""
     back = LOOKBACK_DAYS
     days = day_start.of(lb.meta)
-    first_day = reading.record_days(lb)
-    floor = first_day[0] if first_day is not None else cut
+    floor = first  # the window's first day: the whole reading's track begins there
     while True:
         start = max(floor, (date.fromisoformat(cut) - timedelta(days=back)).isoformat())
         track = reading.owner_track(lb, start, last, airports)

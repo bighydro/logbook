@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Iterator
+from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
 from unittest import mock
@@ -47,11 +48,12 @@ def record(tmp_path: Path) -> Iterator[Any]:
     yield make
 
 
-def _same(lb: Logbook, found: people.Report | None) -> None:
-    """`found` is `people.read` of the whole window, every field the readers read."""
+def _same(lb: Logbook, found: people.Report | None, first: str | None = None) -> None:
+    """`found` is `people.read` of the whole window (from `first`, when given), every field the readers
+    read."""
     whole = reading.record_days(lb)
     assert whole is not None and found is not None
-    full = people.read(lb, *whole)
+    full = people.read(lb, first or whole[0], whole[1])
     assert json.dumps(found.to_json(), sort_keys=True) == json.dumps(full.to_json(), sort_keys=True)
     assert list(found.known) == list(full.known)
     for entity, person in full.known.items():
@@ -267,3 +269,28 @@ def test_a_day_that_arrives_after_the_next_one_is_still_the_whole_reading(
         lb.append_many(late)
         _same(lb, people.read_whole(lb))
     assert count.whole == 1
+
+
+@pytest.mark.parametrize("seed", (1, 2))
+def test_a_window_to_the_record_s_end_is_kept_beside_the_whole_one(
+    record: Any, seed: int, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The year so far (`people.read_to_end`, the People door's), from a day after the record's first."""
+    from logbook.contrib import people_drift
+
+    lb, rest = record(seed)
+    whole = reading.record_days(lb)
+    assert whole is not None
+    first = (date.fromisoformat(whole[0]) + timedelta(days=3)).isoformat()
+    count = Count(monkeypatch)
+    _same(lb, people.read_whole(lb))
+    _same(lb, people.read_to_end(lb, first), first)
+    assert count.whole == 2
+    for day in rest[:8]:
+        lb.append_many(day)
+        _same(lb, people.read_whole(lb))
+        report = people.read_to_end(lb, first)
+        _same(lb, report, first)
+        assert report is not None
+        assert people_drift.real_contacts(lb, report) == people_drift._read(lb, report)
+    assert count.whole == 2, "both windows brought forward, each in its own file"

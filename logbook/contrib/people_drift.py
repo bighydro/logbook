@@ -80,11 +80,12 @@ class Contact:
 def real_contacts(lb: Logbook, report: people.Report) -> dict[str, Contact]:
     """The last real contact of every canonical person of `report`, by entity id, over its window:
     its days together, and the standing message, call, event and transcript lines of the window,
-    streamed one kind at a time through the index. Writes nothing to the record. Over the record's
-    whole window (`people.read_whole`'s report), the reading is kept between heads (`_kept`)."""
+    streamed one kind at a time through the index. Writes nothing to the record. Over a window to the
+    record's last day (`people.read_whole`'s, `people.read_to_end`'s), the reading is kept between heads
+    (`_kept`), each such window in a file of its own."""
     whole = reading.record_days(lb)
-    if whole is not None and (report.first, report.last) == tuple(whole):
-        return _kept(lb, report)
+    if whole is not None and report.last == whole[1] and report.first >= whole[0]:
+        return _kept(lb, report, KEPT_FILE if report.first == whole[0] else KEPT_SINCE_FILE)
     return _read(lb, report)
 
 
@@ -171,10 +172,11 @@ class _Fold:
 
 KEPT_VERSION = 1
 KEPT_FILE = "contacts-whole.json"  # beside the index (`kept`)
+KEPT_SINCE_FILE = "contacts-to-end.json"  # a window from a later day to the record's last
 OVERLAY = ("retraction", "resolution")
 
 
-def _kept(lb: Logbook, report: people.Report) -> dict[str, Contact]:
+def _kept(lb: Logbook, report: people.Report, name: str = KEPT_FILE) -> dict[str, Contact]:
     """`real_contacts` over the whole record, kept beside the index (`kept`, `KEPT_FILE`): for each
     kind, the contact to name of each person over the month files before the current one, and the
     direct chats as they stood there; then those files are not read again, the current month and
@@ -183,7 +185,7 @@ def _kept(lb: Logbook, report: people.Report) -> dict[str, Contact]:
     part, put where the part was, names the same one; the chats keep the order the reading met them.
     A resolution or retraction appended, a line correcting one of `KINDS`, or a line in a month file
     before the current one (a backfill): the whole record again. `tests/test_contacts_kept.py`."""
-    at = kept.path(lb, KEPT_FILE)
+    at = kept.path(lb, name)
     stamp = kept.stamp(lb, str(KEPT_VERSION), kept.code_digest(__file__), report.first)
     held = kept.load(at)
     with lb.index() as idx:

@@ -116,3 +116,20 @@ def read_on(idx: Index, held: Mapping[str, Any], files: Mapping[str, str], overl
         if kind in appended and (appended[kind][0] < last or appended[kind][1]):
             return False
     return True
+
+
+def unchanged(idx: Index, held: Mapping[str, Any], first: str, last: str, overlay: Iterable[str]) -> bool:
+    """Whether a kept reading of the local days `[first, last]` (`held`: the `seq` and `head` it read
+    through) reads the same now: the chain is the one it read, and since then nothing of `overlay` was
+    appended, no line that supersedes another (it may name a line of those days), and no line of them."""
+    seq, _head = idx.indexed()
+    since = int(held.get("seq") or 0)
+    if since > seq:
+        return False
+    if since and ((line := idx.by_seq(since)) is None or str(line.get("hash")) != str(held.get("head"))):
+        return False
+    rows = idx.db.execute(
+        "SELECT DISTINCT kind, day_local, supersedes IS NOT NULL FROM lines WHERE seq > ?", (since,)
+    ).fetchall()
+    shut = set(overlay)
+    return not any(str(kind) in shut or sup or first <= str(day) <= last for kind, day, sup in rows)
