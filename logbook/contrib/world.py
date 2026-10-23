@@ -59,7 +59,7 @@ from bisect import bisect_left, bisect_right
 from collections import Counter
 from collections.abc import Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
-from datetime import date, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from functools import cache
 from html import escape
@@ -156,12 +156,18 @@ def parse_tiers(text: str) -> tuple[int, ...]:
 
 
 def request(
-    lb: Logbook, first: str | None = None, last: str | None = None, tiers: tuple[int, ...] | None = None
+    lb: Logbook,
+    first: str | None = None,
+    last: str | None = None,
+    tiers: tuple[int, ...] | None = None,
+    today: str | None = None,
 ) -> Request | None:
     """The page asked for, held against the policy: `tiers` (default 1 and 2, as far as the ceiling
     goes) under the ceiling for `world`, which is refused naming the file; `first` and `last` (local
     days, default the record's first and last day with a line that observes one, `reading.record_span`)
-    checked. None when the record has no such day."""
+    checked. The default `last` is never after `today` (the owner's day, the wall clock's when not
+    given): a calendar entry in 2055 is a plan, and the slider runs to today, not to it. None when
+    the record has no such day."""
     try:
         max_tier = policy.world_ceiling(lb.root)
     except policy.PolicyError as e:
@@ -189,7 +195,10 @@ def request(
     whole = reading.record_span(lb)
     if whole is None:
         return None
-    since, until = first or whole[0], last or whole[1]
+    if today is None:
+        today = day_start.of(lb.meta).today(datetime.now(UTC)).isoformat()
+    since = first or whole[0]
+    until = last or max(min(whole[1], today), since)
     if since > until:
         raise WorldError(f"--from {since} is after --to {until}")
     return Request(since, until, tuple(tiers), max_tier)
@@ -1347,12 +1356,12 @@ def console(built: Build, result: Result) -> Iterator[str]:
 
 
 def library_page(
-    lb: Logbook, first: str | None, last: str | None, nav: str, airports: Airports
+    lb: Logbook, first: str | None, last: str | None, nav: str, airports: Airports, today: str | None = None
 ) -> str | None:
     """The Library's `/world`: the page the export writes by default (the same request, the same
     JSON), with the Library's navigation and the policy left to the header; None for a record with
     no day."""
-    req = request(lb, first, last)
+    req = request(lb, first, last, today=today)
     if req is None:
         return None
     built = build(lb, req, airports)

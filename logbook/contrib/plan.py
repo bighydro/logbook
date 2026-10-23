@@ -5,8 +5,9 @@ writes what happens there into the record: one `event/v1` line per page, local d
 with a database row's `status`, `select`, `multi_select`, `date` and `checkbox` values by name and its
 relations as page ids, never its body (`logbook/contrib/adapters/notion.py`). This reader reads those
 lines and nothing else: no other line of the record (never the day's stays or its browsing) and
-nothing of Notion. It is tier 1 alone: every row, every field and every line id it prints is a tier-1
-`sync notion` line's. It fetches nothing, writes nothing to the record or to Notion, and never ranks,
+nothing of Notion, but the owner's own answers at the day's close (`answered`), read to mark a task
+answered, never their text. It is tier 1 alone: every row, every field and every line id it prints is a
+tier-1 `sync notion` line's. It fetches nothing, writes nothing to the record or to Notion, and never ranks,
 reschedules or creates a task.
 
 **The mapping.** Which databases are which is the owner's, in `policy/notion.json` under `plan`, each
@@ -17,8 +18,10 @@ by id or by the link Notion copies:
 
 Every key is optional; a part whose database is not named is empty. `status` names the property that says
 a row is done (default `Status`): a status or select whose option is one `done` names (default `Done`,
-case aside), or a checkbox, ticked; and `date` the date property of every database (default: a row's
-first date property by name, since the line keeps a property's value and not its type). No file, or a
+case aside), or a checkbox, ticked; and `date` the date property of every database, or a list of them
+tried in order (default: for a task, `Planned`, else `Due`, and a task with neither is not dated, RFC
+0043 §9 as amended by #369; for a sprint or a trip, its first date property by name, since the line
+keeps a property's value and not its type). No file, or a
 file with no `plan` entry, is no mapping: the reader says so in one sentence (`NO_MAPPING`) and answers
 nothing. A `plan` entry that is not this shape is a `PlanError` naming the file and the key. Nothing here
 writes it. The cities, the people, the places and the queue (`cities`, `people`, `places`, `queue`)
@@ -42,7 +45,10 @@ and its id; its line is the one that holds its properties, else its latest.
   none overdue when a sprints database is mapped (the owner's rule, said in one line, `NO_SPRINT`,
   and as the tasks' `said`), every overdue open row when none is. Ordered by
   Notion's own date, then title; five at most, the rest counted, with how many of them are in the
-  sprint (`and 4 more in Sprint 24`, `and 5 more, 3 of them in Sprint 24`);
+  sprint (`and 4 more in Sprint 24`, `and 5 more, 3 of them in Sprint 24`). The rows shown are
+  numbered from 1, the numbers `day sign --done`, `--tomorrow` and `--let-go` take (`logbook.contrib.
+  keep`); a task answered at the day's close is marked with its answer (`answered`: the owner's own
+  `task` notes of the day, read through the index's source cut and for the mark alone) and has none;
 - **the next trip**: the trips row whose date starts soonest on or after the day, with the days to it;
 **Coverage** (RFC 0043 §9): the record knows a row only from a line `sync notion` wrote of it. A
 first run by hand reads every page; a first scheduled run reads its last 14 days, and
@@ -64,7 +70,7 @@ from datetime import UTC, date, datetime
 from pathlib import Path, PurePosixPath
 from typing import Any
 
-from ..core import day_start, stays
+from ..core import day_start, notes, stays
 from ..core.chain import Line
 from ..core.store import Logbook, retractions
 
@@ -74,6 +80,12 @@ SOURCE, KIND, TIER = "notion", "event", 1  # what `sync notion` writes
 ROLES = ("tasks", "sprints", "trips")
 LATER = ("cities", "people", "places", "queue")  # RFC 0043 §9's other parts: they read tier-2 lines
 STATUS, DONE = "Status", ("Done",)  # Notion's own defaults for a task database
+PLANNED_DUE = ("Planned", "Due")  # without a `date` mapping, a row's day is its Planned date, else its Due
+TASK = "task"  # the label of the note that answers a task at the close (`day sign --done`, RFC 0043 §9)
+DONE_TODAY, TOMORROW, LET_GO = "done", "tomorrow", "let-go"  # `extra.outcome` of that note
+OUTCOMES = (DONE_TODAY, TOMORROW, LET_GO)
+ANSWER_SOURCE = "reflect"  # the `source` of the notes the close writes (`reflect.SOURCE`), answers among them
+ANSWERED = {DONE_TODAY: "done today", TOMORROW: "tomorrow", LET_GO: "let go"}  # as `show plan` marks a task
 TASKS_SHOWN = 5
 NOTION_URL = "https://www.notion.so/"
 UNTITLED = "Untitled"  # as Notion shows a page with no title
@@ -99,7 +111,15 @@ class PlanMap:
     databases: Mapping[str, str]
     status: str = STATUS
     done: frozenset[str] = frozenset(d.casefold() for d in DONE)
-    date: str | None = None
+    date: tuple[str, ...] | None = None
+
+    def dates(self, role: str) -> tuple[str, ...] | None:
+        """The date properties a row of `role` is dated by, in order: the mapping's `date`; else, for a
+        task, `Planned` then `Due` and no other (RFC 0043 §9 as amended by #369: a task with neither is
+        not dated); else None, a row's first date property by name."""
+        if self.date is not None:
+            return self.date
+        return PLANNED_DUE if role == "tasks" else None
 
     def role_of(self, database: str | None) -> str | None:
         for role, found in self.databases.items():
@@ -163,13 +183,17 @@ def read_mapping(root: Path) -> PlanMap | None:
     status = entry.get("status", STATUS)
     date_name = entry.get("date")
     done = entry.get("done", list(DONE))
+    names = [date_name] if isinstance(date_name, str) else date_name
     if not isinstance(status, str) or not status.strip():
         raise PlanError(f"{path}: {KEY}.status must name the property whose option says a row is done")
-    if date_name is not None and (not isinstance(date_name, str) or not date_name.strip()):
-        raise PlanError(f"{path}: {KEY}.date must name a date property")
+    if names is not None and (
+        not isinstance(names, list) or not names or not all(isinstance(n, str) and n.strip() for n in names)
+    ):
+        raise PlanError(f"{path}: {KEY}.date must name a date property, or a list of them tried in order")
     if not isinstance(done, list) or not done or not all(isinstance(d, str) and d.strip() for d in done):
         raise PlanError(f"{path}: {KEY}.done must be a list of the options that mean done")
-    return PlanMap(databases, status, frozenset(d.strip().casefold() for d in done), date_name)
+    dates = None if names is None else tuple(n.strip() for n in names)
+    return PlanMap(databases, status, frozenset(d.strip().casefold() for d in done), dates)
 
 
 # -- the rows ---------------------------------------------------------------------------------------------
@@ -196,10 +220,10 @@ class Row:
     def related(self) -> set[str]:
         return {i for ids in self.relations.values() for i in ids}
 
-    def date(self, name: str | None) -> dict[str, Any] | None:
-        """The row's date property: the one named, else its first by name (`{start, end}`)."""
-        names = [name] if name is not None else sorted(self.properties)
-        for n in names:
+    def date(self, names: Sequence[str] | None) -> dict[str, Any] | None:
+        """The row's date property (`{start, end}`): the first of `names` that holds a date; without
+        names, its first date property by name (`PlanMap.dates` says which a role is dated by)."""
+        for n in names if names is not None else sorted(self.properties):
             value = self.properties.get(n)
             if isinstance(value, dict) and isinstance(value.get("start"), str):
                 return {"start": value["start"], "end": value.get("end")}
@@ -293,8 +317,8 @@ def local_day(text: object, days: day_start.DayStart) -> str | None:
     return days.day(when).isoformat()
 
 
-def _span(row: Row, mapping: PlanMap, days: day_start.DayStart) -> tuple[str, str] | None:
-    when = row.date(mapping.date)
+def _span(row: Row, mapping: PlanMap, days: day_start.DayStart, role: str) -> tuple[str, str] | None:
+    when = row.date(mapping.dates(role))
     if when is None:
         return None
     first = local_day(when["start"], days)
@@ -331,9 +355,9 @@ class Plan:
         return out
 
 
-def _ref(row: Row, mapping: PlanMap) -> dict[str, Any]:
+def _ref(row: Row, mapping: PlanMap, role: str) -> dict[str, Any]:
     out: dict[str, Any] = {"id": row.id, "title": row.title, "url": row.url, "line": row.line}
-    when = row.date(mapping.date)
+    when = row.date(mapping.dates(role))
     if when is not None:
         out["date"] = when
     return out
@@ -355,21 +379,52 @@ def read(lb: Logbook, day: str) -> Plan:
             by_role[role].append(row)
     sprint = _sprint(by_role["sprints"], mapping, days, day)
     tasks = _tasks(by_role["tasks"], sprint, mapping, days, day)
+    if tasks is not None:  # numbered as listed; a task answered at the day's close is marked, never numbered
+        marks = answered(lb, day)
+        for n, ref in enumerate(tasks["rows"], 1):
+            ref["answered"] = marks.get(ref["id"])
+            ref["number"] = None if ref["answered"] else n
     trip = _trip(by_role["trips"], mapping, days, day)
     return Plan(
         day,
         True,
         tasks=tasks,
-        sprint=None if sprint is None else _ref(sprint, mapping),
+        sprint=None if sprint is None else _ref(sprint, mapping, "sprints"),
         trip=trip,
     )
+
+
+def answered(lb: Logbook, day: str) -> dict[str, dict[str, Any]]:
+    """The tasks the owner answered at the close of `day` (`day sign --done`, `--tomorrow`, `--let-go`;
+    RFC 0043 §9): Notion row id → `{outcome, line, seq}` of the standing note of the day labelled
+    `task` that answers it, the latest when two do. The owner's own notes, read for the mark alone,
+    never their text."""
+    with lb.index() as idx:  # the close's notes of the day, through the source cut: no other line
+        lines = idx.of_source(notes.KIND, ANSWER_SOURCE, day, day)
+        retracted = retractions(idx.retractions())
+    found: dict[str, dict[str, Any]] = {}
+    for line in notes.standing(lines, TASK, retracted):
+        extra = (line.get("payload") or {}).get("extra")
+        if (
+            isinstance(extra, dict)
+            and isinstance(extra.get("task"), str)
+            and extra.get("outcome") in OUTCOMES
+        ):
+            found[extra["task"]] = {
+                "outcome": extra["outcome"],
+                "line": str(line["id"]),
+                "seq": int(line["seq"]),
+            }
+    return found
 
 
 def _sprint(rows: Sequence[Row], mapping: PlanMap, days: day_start.DayStart, day: str) -> Row | None:
     holding = [
         (span[0], row.title or "", row)
         for row in rows
-        if not row.archived and (span := _span(row, mapping, days)) is not None and span[0] <= day <= span[1]
+        if not row.archived
+        and (span := _span(row, mapping, days, "sprints")) is not None
+        and span[0] <= day <= span[1]
     ]
     if not holding:
         return None
@@ -384,7 +439,7 @@ def _tasks(
     in_sprint = sprint.related() if sprint is not None else set()
     chosen: list[tuple[str, str, Row]] = []
     for row in rows:
-        span = _span(row, mapping, days)
+        span = _span(row, mapping, days, "tasks")
         if span is None or span[0] > day or not row.open(mapping):
             continue
         overdue = span[1] < day
@@ -394,14 +449,14 @@ def _tasks(
             and (sprint is None or (sprint.id not in row.related() and row.id not in in_sprint))
         ):
             continue
-        chosen.append((str((row.date(mapping.date) or {}).get("start")), row.title or "", row))
+        chosen.append((str((row.date(mapping.dates("tasks")) or {}).get("start")), row.title or "", row))
     chosen.sort(key=lambda found: (found[0], found[1].casefold(), found[1], found[2].id))
     shown = []
     for _start, _title, row in chosen[:TASKS_SHOWN]:
-        ref = _ref(row, mapping)
+        ref = _ref(row, mapping, "tasks")
         status = row.properties.get(mapping.status)
         ref["status"] = status if isinstance(status, str) else None
-        span = _span(row, mapping, days)
+        span = _span(row, mapping, days, "tasks")
         ref["overdue"] = span is not None and span[1] < day  # past its last day: a range holds today
         shown.append(ref)
     rest = [row for _start, _title, row in chosen[TASKS_SHOWN:]]
@@ -420,12 +475,12 @@ def _trip(rows: Sequence[Row], mapping: PlanMap, days: day_start.DayStart, day: 
     ahead = [
         (span[0], row.title or "", row)
         for row in rows
-        if not row.archived and (span := _span(row, mapping, days)) is not None and span[0] >= day
+        if not row.archived and (span := _span(row, mapping, days, "trips")) is not None and span[0] >= day
     ]
     if not ahead:
         return None
     first, _title, row = min(ahead, key=lambda found: (found[0], found[1].casefold(), found[2].id))
-    ref = _ref(row, mapping)
+    ref = _ref(row, mapping, "trips")
     ref["days"] = (date.fromisoformat(first) - date.fromisoformat(day)).days
     return ref
 
@@ -507,7 +562,10 @@ def rows(plan: Plan) -> list[str]:
             label = "today" if n == 0 else ""
             late = f"{DOT}overdue" if t["overdue"] else ""
             status = f"{DOT}{t['status']}" if t.get("status") else ""
-            out.append(f"  {label:<10} {_date_text(t.get('date'))}  {_title(t)}{status}{late}  {t['url']}")
+            said = f"{DOT}{ANSWERED[t['answered']['outcome']]}" if t.get("answered") else ""
+            number = f"{t['number']:>2}" if t.get("number") else "  "
+            when = _date_text(t.get("date"))
+            out.append(f"  {label:<10} {number}  {when}  {_title(t)}{status}{late}{said}  {t['url']}")
         if tasks["more"]:
             out.append(f"  {'':<10} and {tasks['more']} more{_in_sprint(tasks)}")
     elif tasks is not None:

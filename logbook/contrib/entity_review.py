@@ -928,6 +928,9 @@ class Proposal:
     score: int | None  # None for a new entity
     evidence: tuple[str, ...]
     call: dict[str, Any] | None = None  # an idea a call's synthesis proposed (`call_ideas`)
+    extra: Mapping[str, Any] | None = (
+        None  # what the line adds to its `extra`: a kept link's `from`, `proposal`
+    )
 
     @property
     def tier(self) -> int:
@@ -1201,6 +1204,14 @@ def write_entity(lb: Logbook, payload: dict[str, Any], at: str | None = None) ->
     """One `entity/v1` line through `Logbook.append`, after its checks: the profile (`entities.
     validate_entity`) and the tier rules against the tiers of the lines it cites, read through
     the index (decision 8: never a tier-3 line). `entities.EntityError` names the first problem."""
+    check_entity(lb, payload)
+    return lb.append(
+        at=at or now_utc(), source=entities.SOURCE, kind=entities.ENTITY, tier=entities.TIER, payload=payload
+    )
+
+
+def check_entity(lb: Logbook, payload: Mapping[str, Any]) -> None:
+    """`write_entity`'s checks without the write, for a caller that checks before its first line."""
     problems = entities.validate_entity(payload)
     with lb.index() as idx:
         cited = {
@@ -1210,16 +1221,16 @@ def write_entity(lb: Logbook, payload: dict[str, Any], at: str | None = None) ->
     problems += entities.tier_problems(entities.ENTITY_SCHEMA, entities.TIER, cited)
     if problems:
         raise entities.EntityError(problems[0])
-    return lb.append(
-        at=at or now_utc(), source=entities.SOURCE, kind=entities.ENTITY, tier=entities.TIER, payload=payload
-    )
 
 
-def accept(lb: Logbook, report: Report, chosen: Sequence[tuple[Proposal, str | None]]) -> list[Written]:
+def accept(
+    lb: Logbook, report: Report, chosen: Sequence[tuple[Proposal, str | None]], at: str | None = None
+) -> list[Written]:
     """The proposals accepted, each with the owner's name when given: one `entity/v1` line binding
     the observed identifiers to the canonical entity, or to a new one (its id the dedupe key's when
-    the key already resolves, else a new UUIDv7; a new asset registered in `assets.json` first).
-    Every proposal is checked before the first line is written."""
+    the key already resolves, else a new UUIDv7; a new asset registered in `assets.json` first),
+    at `at` (Keep and sign puts a kept link on the day it signs), else now. Every proposal is checked
+    before the first line is written."""
     plans: list[tuple[Proposal, str, str, list[Ref], assets.Asset | None]] = []
     keys: dict[Ref, Proposal] = {}
     calls: dict[tuple[Ref, str | None], Proposal] = {}
@@ -1265,7 +1276,7 @@ def accept(lb: Logbook, report: Report, chosen: Sequence[tuple[Proposal, str | N
             entity_id = uuid7() if key is None else minted.setdefault(key, uuid7())
         plans.append((p, entity_id, label, refs, asset))
     written = []
-    at = now_utc()
+    at = at or now_utc()
     for p, entity_id, label, refs, asset in plans:
         o = p.observed
         if p.call is not None:
@@ -1277,20 +1288,88 @@ def accept(lb: Logbook, report: Report, chosen: Sequence[tuple[Proposal, str | N
             continue
         if asset is not None:
             assets.add(lb.root, asset)
-        payload = entities.entity_payload(
-            o.kind,
-            entity_id,
-            label,
-            refs=refs,
-            key=entities.key_of(
-                o.kind, [*(p.canonical.entity.refs if p.canonical else []), *refs], entity_id, label
-            ),
-            evidence=[i for i, t in o.samples if t < entities.MONEY_TIER],
-            head=report.head,
-            extra={"review": p.id, "score": p.score, "matched": list(p.evidence)},
-        )
+        payload = _accepted(p, entity_id, label, refs, report)
         written.append(Written(p, "accepted", label, [write_entity(lb, payload, at)]))
     return written
+
+
+def _accepted(p: Proposal, entity_id: str, label: str, refs: Sequence[Ref], report: Report) -> dict[str, Any]:
+    """The `entity/v1` payload `accept` writes for an observed thing placed with `entity_id`."""
+    o = p.observed
+    return entities.entity_payload(
+        o.kind,
+        entity_id,
+        label,
+        refs=refs,
+        key=entities.key_of(
+            o.kind, [*(p.canonical.entity.refs if p.canonical else []), *refs], entity_id, label
+        ),
+        evidence=[i for i, t in o.samples if t < entities.MONEY_TIER],
+        head=report.head,
+        extra={"review": p.id, "score": p.score, "matched": list(p.evidence), **(p.extra or {})},
+    )
+
+
+DRAFTED = "draft"  # what a link kept from the dream's draft was matched by: the owner kept it
+
+
+def drafted(
+    lb: Logbook, entity: str, evidence: Sequence[str], number: int, extra: Mapping[str, Any]
+) -> tuple[Report, Proposal]:
+    """A link the dream proposed (`draft/v1` amendment 2: the lines `evidence` belong to the canonical
+    org or idea `entity`) as the proposal `accept` writes, so that keeping it is the review's own
+    `entity/v1` line (RFC 0043 §4.6): the observed thing of the entity's kind seen on those lines,
+    placed with the entity, `extra` added to the line's. Read only. `ReviewError`, in one sentence
+    naming the link by `number`, when the record knows no such entity, when the lines show nothing
+    of its kind, or when what they show is placed already."""
+    report: Report | None = None
+    for kind in (ORG, IDEA):
+        found = read(lb, kind)
+        if entity in found.canonicals:
+            report = found
+            break
+    if report is None:
+        raise ReviewError(f"link {number} names {entity}, which the record knows as no org or idea")
+    kind, canonical = report.kind, report.canonicals[entity]
+    with lb.index() as idx:
+        ctx = context(lb, idx)
+        tree = notion_tree(idx, ctx) if kind == IDEA else None
+        lines = idx.by_ids(list(evidence))
+    keys: set[Ref] = set()
+    for line in lines.values():
+        line_kind = str(line.get("kind"))
+        if kind == ORG:
+            keys.update(s.key for s in org_sightings(line_kind, line, ctx))
+        elif tree is not None:
+            keys.update(s.key for s in idea_sightings(line_kind, line, ctx, tree))
+    seen = [o for o in observed(lb, kind) if o.key in keys]
+    if not seen:
+        raise ReviewError(
+            f"link {number}: its lines show no {NOUNS[kind][0]} the record observes, so there is nothing to"
+            f" bind to {canonical.label}; `logbook review {kind}` lists what is"
+        )
+    if len({o.key for o in seen}) > 1:
+        raise ReviewError(
+            f"link {number}: its lines show {len(seen)} {NOUNS[kind][1]} and the link does not say which is"
+            f" {canonical.label}'s; `logbook review {kind}` places the one you mean"
+        )
+    o = seen[0]
+    if o.entity == entity:
+        raise ReviewError(f"link {number}: {o.name} is {canonical.label}'s already; nothing to keep")
+    if o.entity is not None:
+        raise ReviewError(
+            f"link {number}: {o.name} is placed with another {NOUNS[kind][0]} already; `logbook review"
+            f" {kind}` is where it moves"
+        )
+    proposal = Proposal(number, proposal_id(o, entity), o, canonical, None, (DRAFTED,), extra=extra)
+    refs = [ref for ref in o.writable if ref not in canonical.entity.refs]
+    if not refs:
+        raise ReviewError(f"link {number}: {canonical.label} holds every identifier already; nothing to keep")
+    try:  # what `accept` and `write_entity` would refuse, refused before any line of the close is written
+        check_entity(lb, _accepted(proposal, entity, canonical.label, refs, report))
+    except entities.EntityError as e:
+        raise ReviewError(f"link {number}: {e}") from None
+    return report, proposal
 
 
 def _new_asset(p: Proposal, label: str, report: Report) -> assets.Asset:
