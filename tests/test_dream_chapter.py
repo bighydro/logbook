@@ -27,7 +27,7 @@ from dream_fortnight import (
 )
 from test_dream_month import chapter_answer, dreamed_days, fake_arcs, june, today_is
 
-from logbook.contrib import dream_chapter, dream_month
+from logbook.contrib import dream, dream_chapter, dream_month
 from logbook.core import chapter, drafts, goals
 from logbook.core.store import Logbook
 
@@ -225,7 +225,8 @@ def test_a_figure_beside_a_name_is_marked_in_a_chapter_too(
     assert code == 0, out + err
     payload = chapters(lb)[0]["payload"]
     assert payload["extra"]["marked"] == {dream_month.BESIDE_A_NAME: 1}
-    assert [s["text"] for s in payload["segments"] if s.get("unsupported")] == ["15 days with Kari Nordmann."]
+    assert [s["text"] for s in payload["segments"] if s.get("unsupported")] == [dream.HELD]
+    assert "days with Kari Nordmann" not in json.dumps(payload)
 
 
 def test_a_chapter_above_the_ceiling_is_refused_before_anything_is_sent(

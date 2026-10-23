@@ -398,6 +398,10 @@ ORG_READERS: tuple[tuple[str, ...], ...] = (
     ("show", "org", "verft"),
     ("show", "org", "Nordmann Tidevann", "--json"),
     ("show", "org", "havbris", "--money"),
+    ("lab", "companies", "2026-09-15"),
+    ("lab", "companies", "2026-09-15", "--json"),
+    ("people", "gifts"),
+    ("people", "gifts", "Per Hansen", "--json"),
 )
 ORG = "/org/ID"  # Nordmann Verft's page, by the entity id the Manifest links
 ORG_PAGES = ("/manifest", "/manifest/people", ORG, f"{ORG}?money=1")

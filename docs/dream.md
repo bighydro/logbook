@@ -338,7 +338,9 @@ RFC 0043 slice B ([the Day page and its rhythm](https://github.com/bighydro/logb
 Beside them, `events` as before and `links` (`draft/v1` amendment 2): a line of the day that belongs
 to an idea or an org of `named`, `{kind: link, entity, text, evidence, note?}`, four at most; one that
 names an id the material did not give, has no text or no evidence of the day is dropped and counted
-under `extra.dropped_links`. A link is numbered after the events among the draft's `proposals`, so an
+under `extra.dropped_links`. An event whose title, or a link whose text or note, puts a number beside a
+canonical person's name is dropped too, never kept, and counted as `a number beside a person` under
+`extra.dropped` (an event) or `extra.dropped_links` (a link). A link is numbered after the events among the draft's `proposals`, so an
 event's number, and the `raw_id` it is accepted under, is what it would be without it. Keeping a link,
 a sentence or the photo of the day (as a star with its note) is RFC 0043 slice C: this slice writes
 none of them.
@@ -347,9 +349,16 @@ Every rule of the evidence rule holds, and the 30 % refusal is counted over what
 rule of the journey and the week now holds for a day too (`dream.hold_numbers`): a figure a sentence
 writes that the items it cites do not give marks it unsupported, counted under `extra.marked` (a
 note's and a promise's own figures count, as a stay's do). And, as for a month and a chapter, no number
-stands beside a person (`dream.hold_names`): a sentence that names a canonical person (the full name, or
-the first name) and writes a figure is marked unsupported whatever its evidence, counted under
-`extra.marked` as `a number beside a person`. The draft's tier is the highest among every line it read:
+stands beside a person, pencil included (`dream.hold_names`): a sentence that names a canonical person
+(the full name, or the first name) and writes a figure, whatever its evidence and whether or not the
+number rule marked it already, is **held**: its words are dropped before the line is written, its slot
+stays as an unsupported segment whose text is the reason, `held: a number beside a name`, the evidence
+it cited, when it cited any, is kept under `extra.held` (`{segment, evidence}`, the segment's place from
+1), and it is counted under `extra.marked` as `a number beside a person` (a sentence the number rule
+marked first is counted under both keys; the 30 % refusal counts it once). A model's sentence that
+reads as the reason itself is held the same way, never kept as prose. No reader prints the model's
+words, since the line does not hold them: `day`, the Day page and `export site --with-drafts` show `~ held: a number
+beside a name  unsupported` in their place. The draft's tier is the highest among every line it read:
 the day's, and the chapter, goal and entity lines it was given, so a tier-3 goal makes a tier-3 draft
 (when the entry lets tier 3 cross at all). The prompt carries RFC 0043 §7's voice rules word for word (without the RFC's `[main]` mark), and
 `--show-prompt` prints it.
@@ -516,8 +525,9 @@ It writes:
   when the month has no stay at all), and the people **in the order of the time spent together** (the
   days the with module puts them at your stays, then their contacts): **names only**. No count is given
   beside a person, none is kept in the line, a day draft's sentence that puts one beside a name is not
-  passed on, and a sentence of the month that writes a figure where it names a person is marked
-  unsupported (`a number beside a person` under `extra.marked`), whatever it cites;
+  passed on, and a sentence of the month that writes a figure where it names a person is held, whatever
+  it cites: its words are dropped and its slot reads `held: a number beside a name`, unsupported
+  (`a number beside a person` under `extra.marked`);
 - `goals`: for each goal open on the month's last day or reviewed in it, what the month shows, from
   what the code computed: your reviews dated in the month, the standing verdict on the last day, and the
   days a line of the month **touched** the goal, as dates and never a count (a goal's words may name a
@@ -574,7 +584,7 @@ and after. It writes:
   and its own close.
 
 The same rules hold: every sentence cited or marked, more than 30 % unsupported refused, no figure the
-items do not give, no figure beside a person. A chapter is a tier-2 line, so under a ceiling of 1 it
+items do not give, no figure beside a person (the sentence held, its words dropped). A chapter is a tier-2 line, so under a ceiling of 1 it
 is refused before anything is read. Its `subject` is the ids of its lines, the standing one first, so
 `dream chapter --json` and a later page find the draft by any of them; closing a chapter writes a new
 line, which is a change, so the chapter is dreamed again. A chapter no month or week draft says anything

@@ -277,7 +277,8 @@ def test_a_figure_beside_a_name_is_marked_and_a_second_proposal_and_question_dro
     assert code == 0, out + err
     payload = months(lb)[0]["payload"]
     marked = [s for s in payload["segments"] if s.get("unsupported")]
-    assert len(marked) == 1 and "days with" in marked[0]["text"]
+    assert marked == [{"text": dream.HELD, "unsupported": True}], "the words are dropped, the slot held"
+    assert "days with" not in json.dumps(payload)
     assert payload["extra"]["marked"] == {dream_month.BESIDE_A_NAME: 1}
     assert payload["extra"]["dropped"] == {dream_month.MORE_THAN_ONE: 1, dream_month.MORE_QUESTIONS: 1}
     assert (
