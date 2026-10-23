@@ -60,13 +60,19 @@ def stamp(lb: Logbook, *extra: str) -> str:
     return hashlib.sha256("\n".join(parts).encode("utf-8")).hexdigest()
 
 
-def path(lb: Logbook, name: str) -> Path:
-    """Where the kept reading `name` lives: beside the index."""
+def path(lb: Logbook, name: str) -> Path | None:
+    """Where the kept reading `name` lives: beside the index; None for a record whose index is not the
+    plain one (the MCP server's `GatedLogbook`, which serves only what its gate lets through): it keeps
+    nothing and reads every line each time, so a reading never crosses from one to the other."""
+    if type(lb).index is not Logbook.index:
+        return None
     return lb.index_path.parent / name
 
 
-def load(at: Path) -> dict[str, Any] | None:
+def load(at: Path | None) -> dict[str, Any] | None:
     """The kept reading at `at`, or None when there is none or it does not read."""
+    if at is None:
+        return None
     try:
         data = json.loads(at.read_bytes())
     except (OSError, ValueError):
@@ -74,9 +80,11 @@ def load(at: Path) -> dict[str, Any] | None:
     return data if isinstance(data, dict) else None
 
 
-def save(at: Path, data: Mapping[str, Any]) -> None:
+def save(at: Path | None, data: Mapping[str, Any]) -> None:
     """`data` at `at`, 0600 from its first byte, moved into place whole; nothing when the cache folder
-    cannot be written (the next reading reads the whole record)."""
+    cannot be written (the next reading reads the whole record), or for no path (`path`)."""
+    if at is None:
+        return
     tmp = at.with_name(f".{at.name}.{os.getpid()}.tmp")
     try:
         fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | getattr(os, "O_BINARY", 0), 0o600)
