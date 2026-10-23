@@ -197,6 +197,13 @@ BUILT_IN = (  # generated from pyproject.toml by scripts/adapter_registry.py; ne
 )
 
 
+# Built-in adapters that `pyproject.toml`'s table does not list yet, loaded after `BUILT_IN`: `heard`
+# (RFC 0046), a live source of the record's own listens and watches, which therefore comes after every
+# registered source in `sync --all`. The release moves each into the table (`tests/test_adapter_registry.py`
+# names them as deliberately unregistered until then).
+UNLISTED = ("heard",)
+
+
 class Unreadable(ValueError):
     """The input is not what the adapter reads, or cannot be read: one sentence naming it, which
     `add` says before exiting 2 (`github`: a folder that is no clone and no account export)."""
@@ -254,7 +261,7 @@ def all_adapters() -> list[Adapter | LiveAdapter]:
     live adapter per NAME (the first registered of each kind wins), so a source can be both read from
     an export and pulled live. This package's own entry points are the built-ins, loaded once above."""
     found: list[Adapter | LiveAdapter] = []
-    for name in BUILT_IN:
+    for name in (*BUILT_IN, *UNLISTED):
         found.append(import_module(f"{__name__}.{name}"))
     for ep in entry_points(group=ENTRY_POINT_GROUP):
         if is_built_in(ep):

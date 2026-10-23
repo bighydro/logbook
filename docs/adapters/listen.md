@@ -125,10 +125,10 @@ is skipped and counted (rule 5). The store is opened read-only and immutable, ne
 
 **Transcripts are recorded, never fetched.** `extra.transcript_url` is the URL and nothing more:
 the adapter, like every reader, never touches the network. Apple's own transcript identifiers,
-which are not public URLs, are never recorded. Fetching the transcripts the record points at —
-an explicit, separate `logbook fetch transcripts` that would read each URL once and keep the text
-as a `transcript/v1` line with the listen as its provenance, in the manner of `logbook transcribe
-voice-memos` — is the follow-up, not part of this adapter, and not written yet.
+which are not public URLs, are never recorded. Fetching the transcripts the record points at is
+`sync heard` (RFC 0046, [What you heard](../heard.md)): each URL read once, the text kept as it
+came beside one `heard/v1` line that names the listen, never a `transcript/v1` line (a podcast is
+someone else's published words, not a conversation the owner had).
 
 ## The rollup: `logbook rollup listen`
 
