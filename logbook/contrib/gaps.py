@@ -48,14 +48,18 @@ def report(
     since: str | None = None,
     expect: Sequence[str] | None = None,
     activity: Callable[[str, str], list[dict[str, Any]]] | None = None,
+    instant: datetime | None = None,
 ) -> dict[str, Any]:
     """The JSON-ready report: `since`, `today`, `timezone`, `expect` (the names asked for, or
     None), `sources` (most lines first, or in `expect` order), `flagged` (the expected sources
     flagged, in that order; empty without `expect`). Raises ValueError for a `since` that is not a
     day or is after today. `activity(first, last)` is `Index.activity` of the record as it stands,
-    when a caller keeps it (the Library, per head: three passes over the index); read here else."""
+    when a caller keeps it (the Library, per head: three passes over the index); read here else.
+    `instant` is the caller's clock (the Library's `Site.now`, so a page reads one now throughout);
+    the wall clock else."""
     days = day_start.of(lb.meta)  # DayStartError for a boundary this reader cannot parse
-    instant = now()
+    if instant is None:
+        instant = now()
     today = days.today(instant)
     start: date | None = None
     if since is not None:

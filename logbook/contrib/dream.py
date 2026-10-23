@@ -34,8 +34,9 @@ have, or none, is marked unsupported; a segment without text is dropped. Each pa
 then drops what breaks it and counts it under `extra.dropped_segments` (`day_segments`): six sentences
 of story at most, one segment per lens and none without evidence, one question, an idea only by an id
 the material named, one photo resting on one photo of the day; a figure the cited items do not give
-marks the sentence (`hold_numbers`). When more than `UNSUPPORTED_SHARE` of the segments are
-unsupported the answer is refused and nothing is written.
+marks the sentence (`hold_numbers`), and one that writes a figure beside a person's name is held, its
+words dropped and its slot kept with the reason (`hold_names`). When more than `UNSUPPORTED_SHARE` of
+the segments are unsupported the answer is refused and nothing is written.
 The draft's tier is the highest tier among the lines it read, not the lines it cited (RFC 0036);
 `read_count` is how many it read; `read_head` the record's head at that moment. The whole dream,
 reading, the model's turn and the write, runs inside the record's writer lock (`Logbook.writer`,
@@ -151,6 +152,7 @@ DROP_LINK_SHAPE = "not a link"
 DROP_LINK_ENTITY = "an entity the material did not name"
 DROP_LINK_TEXT = "no text"
 DROP_LINK_MANY = "beyond four links"
+DROP_BESIDE_A_NAME = "a number beside a person"  # an event or a link dropped for a figure beside a name
 # a line the close writes, which never makes the day be dreamed again (RFC 0043 §6 rule 4): a line whose
 # `extra.from` names a draft of the day, and the reflection and its delegations
 KEPT_LABELS = (notes.REFLECTION, notes.DELEGATION)
@@ -183,6 +185,7 @@ WORD = re.compile(r"[^\W\d_]+", re.UNICODE)
 # -- the number rule (`hold_numbers`): a figure a sentence writes is one the code computed from lines --
 UNBACKED = "a number the lines do not give"  # the key of `extra.marked`: a segment marked for a figure
 BESIDE_A_NAME = "a number beside a person"  # the key of `extra.marked` for a figure beside a name
+HELD = "held: a number beside a name"  # a held segment's text: the model's words are dropped, the slot kept
 # a figure: digits, a decimal point or comma and more digits, glued to a unit or not (`45min`, `7,5t`),
 # never a piece of an id (`L12`, `6bc0`)
 NUMBER = re.compile(r"(?<![\w.,])\d+(?:[.,]\d+)?(?![.,]?\d)(?!\w*\d)")
@@ -996,13 +999,15 @@ def day_parts(made: Material) -> tuple[str, ...]:
 @dataclass(frozen=True)
 class DayAnswer:
     """A day's answer as dream-day/4 keeps it: the segments, the part of each, the idea each `ideas`
-    segment names (`{segment, entity}`, the segment's place from 1), and what was dropped, by why."""
+    segment names (`{segment, entity}`, the segment's place from 1), what was dropped and marked, by
+    why, and the evidence of each slot held for a number beside a name (`{segment, evidence}`)."""
 
     segments: list[dict[str, Any]]
     parts: list[str]
     ideas: list[dict[str, Any]]
     dropped: dict[str, int]
     marked: dict[str, int]
+    held: list[dict[str, Any]]
 
 
 def day_segments(found: Mapping[str, Any], made: Material) -> DayAnswer:
@@ -1011,8 +1016,8 @@ def day_segments(found: Mapping[str, Any], made: Material) -> DayAnswer:
     most `STORY_SENTENCES`; one segment per lens, and a lens answered without evidence dropped (the
     reader says the day does not answer it, never the model); one question; an `ideas` segment only
     when its `entity` is an idea the material named; one `photo`, resting on exactly one photo of the
-    day. Then the number rule (`hold_numbers`), no number beside a person (`hold_names`), and the
-    evidence rule's share (`share_of`)."""
+    day. Then the number rule (`hold_numbers`), no number beside a person (`hold_names`, each held
+    slot's evidence kept in `held`), and the evidence rule's share (`share_of`)."""
     segments: list[dict[str, Any]] = []
     named: list[str] = []
     ideas: list[dict[str, Any]] = []
@@ -1036,14 +1041,20 @@ def day_segments(found: Mapping[str, Any], made: Material) -> DayAnswer:
             if part == drafts.IDEAS:
                 ideas.append({"segment": len(segments), "entity": str(item["entity"]).strip()})
     marked: dict[str, int] = {}
+    cited = [list(s.get("evidence") or []) for s in segments]  # `hold_numbers` drops what it marks
     unbacked = hold_numbers(segments, made.data, made, own_words(made))
     if unbacked:
         marked[UNBACKED] = unbacked
     beside = hold_names(segments, made)  # no number beside a person, whatever the lines give
     if beside:
         marked[BESIDE_A_NAME] = beside
+    held = [
+        {"segment": n, "evidence": cited[n - 1]}
+        for n, s in enumerate(segments, 1)
+        if s["text"] == HELD and cited[n - 1]
+    ]
     share_of(segments, made.unit)
-    return DayAnswer(segments, named, ideas, dict(dropped), marked)
+    return DayAnswer(segments, named, ideas, dict(dropped), marked, held)
 
 
 def _drop(part: str, item: object, segment: Mapping[str, Any], kept_here: int, made: Material) -> str | None:
@@ -1074,8 +1085,9 @@ def links_of(found: Mapping[str, Any], made: Material) -> tuple[list[dict[str, A
     """The answer's proposed links that hold (draft/v1 amendment 2), each `{kind: link, entity, text,
     evidence, note?}` with the references turned into line ids, at most `LINKS_KEPT`; and how many were
     dropped, by why. A link is dropped, never marked, when it is not an object, names an entity the
-    material did not give (`named`: an idea or an org, by id), has no text, or rests on a reference the
-    day does not have, or on none."""
+    material did not give (`named`: an idea or an org, by id), has no text, puts a number beside a
+    person's name in its text or note (`beside_a_name`), or rests on a reference the day does not
+    have, or on none."""
     items = found.get(LINKS)
     kept_links: list[dict[str, Any]] = []
     dropped: Counter[str] = Counter()
@@ -1089,6 +1101,9 @@ def links_of(found: Mapping[str, Any], made: Material) -> tuple[list[dict[str, A
             continue
         if not isinstance(text, str) or not text.strip():
             dropped[DROP_LINK_TEXT] += 1
+            continue
+        if any(isinstance(t, str) and beside_a_name(t, made) for t in (text, note)):
+            dropped[DROP_BESIDE_A_NAME] += 1
             continue
         evidence = item.get("evidence")
         ids: list[str] = []
@@ -1134,7 +1149,8 @@ def proposals_of(found: Mapping[str, Any], made: Material) -> tuple[list[dict[st
     dropped, by why. A proposal is dropped, never marked: when it is not an object, has no title,
     starts off the day or does not run forward (or runs longer than `LONGEST_EVENT`), names a place
     the material did not give, a person who is not one of the day's canonical people, or rests on a
-    reference the day does not have, or on none."""
+    reference the day does not have, or on none; and when its title puts a number beside a person's
+    name (`beside_a_name`)."""
     items = found.get(EVENTS)
     kept: list[dict[str, Any]] = []
     dropped: Counter[str] = Counter()
@@ -1153,6 +1169,8 @@ def _proposal(item: object, made: Material) -> tuple[dict[str, Any] | None, str]
     title = item.get("title")
     if not isinstance(title, str) or not title.strip():
         return None, DROP_TITLE
+    if beside_a_name(title, made):
+        return None, DROP_BESIDE_A_NAME
     start, end = _moment(item.get("start"), made), _moment(item.get("end"), made)
     if start is None or end is None or made.span is None:
         return None, DROP_TIME
@@ -1316,6 +1334,8 @@ def dream(
             extra["lenses"] = list(made.lenses)
         if told.ideas:
             extra["ideas"] = told.ideas
+        if told.held:
+            extra["held"] = told.held
         if evening:
             extra["evening"] = True
             extra["read_until"] = read_until
@@ -1682,12 +1702,17 @@ def beside_a_name(text: str, made: Material) -> bool:
 
 
 def hold_names(segments: list[dict[str, Any]], made: Material) -> int:
-    """No number beside a person, in place: a supported segment that writes one (`beside_a_name`) is
-    marked unsupported, whatever its evidence; returns how many were marked. A day's, a month's and a
-    chapter's dream hold it."""
+    """No number beside a person, in place, pencil included (RFC 0043): a segment that writes one
+    (`beside_a_name`), supported or already marked, is held: its words are dropped and its slot is
+    `{text: HELD, unsupported: true}`, whatever its evidence, so no reader can print them (a model's
+    sentence that reads as the reason itself is held too, never prose); returns
+    how many were held. A day's, a month's and a chapter's dream hold it; the day keeps the evidence
+    of each held slot under `extra.held`."""
     marked = 0
     for i, segment in enumerate(segments):
-        if "evidence" in segment and beside_a_name(str(segment["text"]), made):
-            segments[i] = {"text": str(segment["text"]), "unsupported": True}
+        if segment == {"text": HELD, "unsupported": True}:
+            continue
+        if segment["text"] == HELD or beside_a_name(str(segment["text"]), made):
+            segments[i] = {"text": HELD, "unsupported": True}
             marked += 1
     return marked

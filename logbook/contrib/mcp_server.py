@@ -1074,6 +1074,7 @@ def tool_sign_day(lb: GatedLogbook, a: Arguments) -> dict[str, Any]:
     entries = None if confirm is None else [confirm] if isinstance(confirm, str) else _entries(a, "confirm")
     disposed = {value: _entries(a, value) for value in signing.DISPOSITIONS if a.get(value) is not None}
     record = Logbook(lb.root)
+    reflect.no_draft(record, day, [*(entries or []), *(e for found in disposed.values() for e in found)])
     chosen, keep = sign_again.confirmation(entries, bool(disposed))
     args = sign_again.again(record, day, chosen, keep, disposed, _string(a, "note"))  # under `call`'s hold
     hidden: set[str] = set()
@@ -1084,7 +1085,7 @@ def tool_sign_day(lb: GatedLogbook, a: Arguments) -> dict[str, Any]:
     line = signing.sign(
         record,
         day,
-        confirm=args.confirm,
+        confirm=reflect.ink(record, day, args.confirm),  # never a draft line (RFC 0043 §6 rule 3)
         note=args.note,
         at=_string(a, "at"),
         dispositions=args.dispositions,
@@ -1111,9 +1112,11 @@ def _shown_on_page(lb: GatedLogbook, record: Logbook, day: str) -> tuple[list[st
     0034 amendment 4, 18 and 19 October 2026): the ids of the page's lines the gate lets the agent
     see, in the page's order, and the ids of those it does not, which stay unconfirmed unless given a
     disposition. The page is read from the record itself, as `signing.sign` reads it; the caller says
-    nothing of a line above the gate but how many there are."""
+    nothing of a line above the gate but how many there are. A draft line is neither: a signature never
+    confirms one (RFC 0043 §6 rule 3)."""
     lines, retracted = reflect.day_lines(record, day)
-    page = reflect.on_page(lines, retracted)
+    drafted = {str(line["id"]) for line in lines if line.get("kind") == drafts.KIND}
+    page = reflect.on_page(lines, retracted) - drafted
     shown = [str(line["id"]) for line in lines if str(line["id"]) in page and lb.gate.shows(line)]
     return shown, set(page) - set(shown)
 

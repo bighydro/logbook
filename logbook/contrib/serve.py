@@ -252,7 +252,8 @@ LINE_PATH = re.compile(r"^/line/([^/]+)$")  # one line as written, read-only, th
 PHOTO_PATH = re.compile(r"^/photo/([^/]+)$")  # a photo line's pixels from the attachment store, likewise
 CLOSE = "close"  # the Day page's anchor of Reflect and sign, where a write sends the owner back
 # pages the record's today moves too (this year, anniversaries, drift, the stale orgs and ideas): in the tag
-CLOCK_PAGES = ("/people", "/manifest", "/org/", "/ideas", "/idea/", "/goals")  # /goals: a goal goes past
+# /goals: a goal goes past; /world: its window ends on today, whatever the calendar holds after it
+CLOCK_PAGES = ("/people", "/manifest", "/org/", "/ideas", "/idea/", "/goals", "/world")
 TRIP_KINDS: tuple[str, ...] | None = (
     trips.READ_KINDS
 )  # the lines a year's trips parse; the rest from the index
@@ -4121,7 +4122,7 @@ class Site:
         """`logbook export world`'s page, read as the export reads it by default (the `world` ceiling of
         the policy, the record's days or `from` and `to`): the same JSON, the same script, the
         Library's navigation above it and the policy in the header, not in the page."""
-        found = world.library_page(self.lb, first, last, self.nav, self.airports)
+        found = world.library_page(self.lb, first, last, self.nav, self.airports, self._today_of())
         if found is None:
             return self.document(
                 "world", "<h1>The world</h1>\n<p>the record has no day yet: nothing to draw</p>\n"
@@ -4135,7 +4136,7 @@ class Site:
         return self.shared(("activity", first, last), lambda: gaps.activity_of(self.lb, first, last))
 
     def page_gaps(self, since: str | None) -> str:
-        data = gaps.report(self.lb, since=since, activity=self._activity)
+        data = gaps.report(self.lb, since=since, activity=self._activity, instant=self.now())
         tz = ZoneInfo(data["timezone"])
         body = (
             "<h1>Gaps <small>where each source went quiet</small></h1>\n"
