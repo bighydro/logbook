@@ -882,13 +882,22 @@ def _kept_reading(lb: Logbook, whole: tuple[str, str], name: str, airports: Airp
     airports = airports or Airports.load()
     path = kept.path(lb, name)
     stamp = _stamp(lb, airports)
+    with lb.index() as idx:
+        at = (str(path), stamp, whole, *idx.indexed())
+    if path is not None and (mine := _HELD.get(name)) is not None and mine[0] == at:
+        return mine[1]  # read already in this process, at this head: the readers only read it
     held = kept.load(path)
     found = None if held is None else _forward(lb, held, whole, stamp, airports)
     if found is None:
         found = _whole(lb, whole, stamp, airports)
     report, memo = found
     kept.save(path, memo)  # one that cannot be written: the whole record is read next time
+    if path is not None:
+        _HELD[name] = (at, report)
     return report
+
+
+_HELD: dict[str, tuple[tuple[Any, ...], Report]] = {}  # each kept reading's last report in this process
 
 
 def _stamp(lb: Logbook, airports: Airports) -> str:

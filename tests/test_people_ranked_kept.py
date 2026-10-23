@@ -52,7 +52,7 @@ def _same(lb: Logbook, year: str, reads: Reads | None = None) -> list[tuple[str,
         reads.take()
     found = person_page.ranked(lb, year, NOW)
     read = reads.take() if reads is not None else []
-    with mock.patch.object(kept, "load", return_value=None):
+    with mock.patch.object(kept, "load", return_value=None), mock.patch.dict(people._HELD, clear=True):
         assert found == person_page.ranked(lb, year, NOW)
     return read
 

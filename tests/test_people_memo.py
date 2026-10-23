@@ -294,3 +294,19 @@ def test_a_window_to_the_record_s_end_is_kept_beside_the_whole_one(
         assert report is not None
         assert people_drift.real_contacts(lb, report) == people_drift._read(lb, report)
     assert count.whole == 2, "both windows brought forward, each in its own file"
+
+
+def test_a_second_reading_at_the_same_head_is_the_first_one(
+    record: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from logbook.core import kept
+
+    lb, rest = record(1)
+    first = people.read_whole(lb)
+    loads = mock.MagicMock(side_effect=kept.load)
+    monkeypatch.setattr(kept, "load", loads)
+    assert people.read_whole(lb) is first, "read in this process at this head"
+    assert loads.call_count == 0
+    lb.append_many(rest[0])
+    _same(lb, people.read_whole(lb))
+    assert loads.call_count == 1, "a new head: the kept reading brought forward"

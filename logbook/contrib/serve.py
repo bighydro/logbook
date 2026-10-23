@@ -2632,7 +2632,10 @@ class Site:
         if last < first:
             parts.append(f"<p>no days in {year}: the record runs {whole[0]} {EN_DASH} {whole[1]}</p>\n")
             return self.document(f"trips {year}", "".join(parts), style=TABLES_STYLE)
-        rd = reading.read(self.lb, first, last, self.airports, self.tiers, TRIP_KINDS)
+        rd = self.shared(  # the door and its year's page are one reading
+            ("trips", first, last),
+            lambda: reading.read(self.lb, first, last, self.airports, self.tiers, TRIP_KINDS),
+        )
         self.reads(first, (date.fromisoformat(last) + timedelta(days=SPILL_DAYS)).isoformat())
         found, warning = trips.trips(rd)
         if warning:
@@ -2797,7 +2800,11 @@ class Site:
         """The journeys that began in the year (default the record's last), the latest first, each
         a row: its name or dates linking its page, the bounds, the nights away, the places, the
         canonical people, the photos, the draft folded, and the evidence folded."""
-        shelf = journeys.shelf(self.lb, year, self.airports, self.tiers)
+        located = reading.record_days(self.lb, "location")
+        this = year or (located[1][:4] if located is not None else None)  # the door is its year's page
+        shelf = self.shared(
+            ("journeys", this), lambda: journeys.shelf(self.lb, this, self.airports, self.tiers)
+        )
         if shelf.reads is not None:  # its days, and a draft of any day may name one of its journeys
             self.reads(*shelf.reads, kinds=(drafts.KIND,))
         if shelf.year is None:
