@@ -96,6 +96,7 @@ TABLE_VERSION = "3"  # 2: transcripts, `sync github` acts, service hosts, the gi
 SAMPLES = 3  # line ids kept per observed thing, as evidence
 ORGS_KEPT, ORGS_KEPT_VERSION = "orgs-observed.json", 1  # each kind's orgs, kept beside the index
 ORG_OVERLAY = (RETRACTION, "resolution")  # what changes who is who: every line read again
+IDEA_LINES_KEPT, IDEA_LINES_VERSION = "idea-lines.json", 1  # which lines name an idea, by their place
 NOTION = "notion"  # the source `sync notion` writes
 RELATIONS = "relations"  # the action of a `sync notion --relations-backfill` line: it links, never touches
 BOT = "bot"  # an actor `sync notion` types `bot` and `sync github` `Bot`: an integration, an app
@@ -900,12 +901,67 @@ def idea_people(kind: str, line: Line, ctx: Context) -> set[str]:
     return found
 
 
+def idea_lines(lb: Logbook, idx: Index, ctx: Context, tree: NotionTree) -> dict[str, list[Line]]:
+    """The standing lines of each of `IDEA_KINDS` that name an idea (`idea_sightings` gives one), in
+    file order: what the readers of ideas walk, since a line that names none adds nothing. Whether a
+    line names one is the line's alone and the settings', never the Notion tree's (a page's line names
+    its root, whichever it is) or who is who, so their places in the files are kept beside the index
+    (`IDEA_LINES_KEPT`) and only the lines appended since are read to add to them, each where it
+    stands; what stands, a retraction or a correction since among it, is read from the lines each
+    time. A chain written again under them, other code or other settings reads every line."""
+    path = kept.path(lb, IDEA_LINES_KEPT)
+    stamp = kept.stamp(lb, str(IDEA_LINES_VERSION), kept.code_digest(__file__, entities.__file__))
+    seq, head = idx.indexed()
+    held = kept.load(path)
+    places: dict[str, list[tuple[str, int]]] = {kind: [] for kind in IDEA_KINDS}
+    since = 0
+    ours = held is not None and held.get("version") == IDEA_LINES_VERSION and held.get("stamp") == stamp
+    if held is not None and ours and kept.read_on(idx, held, {}, ()):
+        try:
+            places = {kind: [(str(f), int(o)) for f, o in held["places"][kind]] for kind in IDEA_KINDS}
+            since = int(held["seq"])
+        except (KeyError, TypeError, ValueError):
+            places, since = {kind: [] for kind in IDEA_KINDS}, 0
+    for kind in IDEA_KINDS:
+        new = [
+            (str(f), int(o))
+            for f, o in idx.db.execute(
+                "SELECT file, offset FROM lines WHERE kind = ? AND seq > ? AND seq <= ?"
+                " ORDER BY file, offset",
+                (kind, since, seq),
+            )
+        ]
+        # where a line is, through no gate: what the readers are handed is read through it, below
+        lines = Index.read(idx, new)
+        named = [at for at, line in zip(new, lines, strict=True) if idea_sightings(kind, line, ctx, tree)]
+        places[kind] = sorted({*places[kind], *named})
+    kept.save(
+        path,
+        {
+            "version": IDEA_LINES_VERSION,
+            "stamp": stamp,
+            "seq": seq,
+            "head": head,
+            "places": {kind: [list(at) for at in found] for kind, found in places.items()},
+        },
+    )
+    out: dict[str, list[Line]] = {}
+    for kind in IDEA_KINDS:
+        superseded = idx.superseded(kind)
+        out[kind] = [
+            line
+            for line in idx.read(places[kind])
+            if str(line.get("id")) not in ctx.retracted and str(line.get("id")) not in superseded
+        ]
+    return out
+
+
 def _ideas(lb: Logbook, idx: Index, ctx: Context) -> list[Observed]:
     tree = notion_tree(idx, ctx)
     found: dict[Ref, Observed] = {}
     titles: dict[Ref, Observed] = {}
-    for kind in IDEA_KINDS:
-        for line in ctx.standing(idx, kind):
+    for kind, lines in idea_lines(lb, idx, ctx, tree).items():
+        for line in lines:
             day = ctx.day(line)
             sightings = idea_sightings(kind, line, ctx, tree) if day is not None else []
             if day is None or not sightings:

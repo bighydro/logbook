@@ -30,3 +30,5 @@
   track from a month before it, and the names of the lines appended, rather than the whole record.
 - The People page's review queue keeps each kind's observed people beside the index and reads only
   the lines appended since.
+- The ideas keep which lines name an idea beside the index, and read those and the lines appended
+  since rather than every event, page, task and call.
