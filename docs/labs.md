@@ -12,7 +12,13 @@ deleted.
 logbook lab introductions              # per person: first day confirmed present with you, and who else was there
 logbook lab chapters                   # the record cut into chapters: home changes, gaps in the track, long trips
 logbook lab chapters --json            # the same with every number's line ids
+logbook lab companies 2026-09-15       # the orgs one day touched: updates, meetings, documents
 ```
+
+`lab companies DAY` reads one day, not a window: the orgs the Manifest names that the day's lines
+touched, grouped by portfolio, for the Day page's Companies row (RFC 0043); its reader lives in
+`logbook/contrib/companies.py` beside the orgs readers it shares a definition with. See
+[the companies a day touched](companies.md).
 
 Both take the window of the rollups: `--year YYYY`, or `--since` and `--until`, clipped to the days
 the owner's track covers (the first to the last day with a location line); without either, the whole
