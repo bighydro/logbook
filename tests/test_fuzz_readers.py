@@ -557,12 +557,15 @@ def windowed_readers(
         ["people", "mail", "--since", since, "--until", until, "--json"],
         ["setup", "assets", "status"],
         ["setup", "assets", "status", "--json"],
+        ["show", "heard", "--since", since, "--until", until],
+        ["show", "heard", "--day", day, "--json"],
         ["doctor"],
     ]
 
 
 WHOLE_RECORD_READERS: list[list[str]] = [
     ["show"],
+    ["show", "heard", "--since", "2000-01-01"],
     ["show", "days"],
     ["show", "days", "--json"],
     ["show", "trips"],
