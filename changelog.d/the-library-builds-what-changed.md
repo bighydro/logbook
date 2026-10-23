@@ -26,3 +26,5 @@
   transcripts, notes and photos) and the stays from the index: the same pages, read faster.
 - A build of a large record renders its pages on several processes, the doors first, side by side
   (`LOGBOOK_BUILD_WORKERS` sets how many).
+- Places keeps the owner's stays and what the lines name beside the index: a day reads the owner's
+  track from a month before it, and the names of the lines appended, rather than the whole record.
