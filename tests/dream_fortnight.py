@@ -321,7 +321,7 @@ def _with_synthesis(lb: Logbook) -> None:
 def day_answer(material: dict[str, Any]) -> dict[str, Any]:
     """A day's answer: one sentence on the first reference the material gives."""
     refs = re.findall(r'"(L\d+)"', json.dumps(material))
-    return {"day": [{"text": "A day.", "evidence": refs[:1]}], "threads": [], "questions": [], "people": []}
+    return {"story": [{"text": "A day.", "evidence": refs[:1]}], "threads": [], "questions": [], "people": []}
 
 
 def journey_answer(material: dict[str, Any]) -> dict[str, Any]:

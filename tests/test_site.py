@@ -13,6 +13,7 @@ import re
 import subprocess
 import sys
 from pathlib import Path
+from typing import Any
 
 import phone_width
 import pytest
@@ -20,6 +21,7 @@ from persona import persona_record
 
 from logbook import cli
 from logbook.contrib import site
+from logbook.core import drafts
 from logbook.core.store import Logbook
 
 SATURDAY_TRIP = "trip-2026-06-13-2026-06-13"  # the night aboard Solvind: Ola is there by a tier-2 note only
@@ -405,3 +407,108 @@ def test_forty_years_export_whole_every_link_resolves_and_the_folder_passes_the_
     assert "2 photos" in readme_day and "Cabin" in readme_day
     assert phone_width.problems(readme_day) == []
     assert phone_width.problems(_read(folder, "index.html")) == []
+
+
+# -- a model's drafts (pencil): left out unless asked for ---------------------------------------------------
+
+MODEL = "model:local-7b"
+DRAFT_TEXT = "A quiet day ashore, by the marina."
+WEEK_TEXT = "A week of the boat and the office."
+REFLECTION_TEXT = "Glad to be back on the water."
+
+
+def _draft(unit: str, subject: object, evidence: str, text: str) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "schema": drafts.SCHEMA,
+        "unit": unit,
+        "subject": subject,
+        "read_head": "0" * 64,
+        "read_count": 1,
+        "language": "en",
+        "segments": [{"text": text, "evidence": [evidence]}],
+        "extra": {"prompt": "test/1", "parts": [unit], "policy_version": "0" * 64, "entry": "dream"},
+    }
+    assert drafts.validate(payload) == []
+    return {
+        "at": f"{TIER_1_PICK}T20:00:00Z",
+        "source": MODEL,
+        "kind": drafts.KIND,
+        "tier": 1,
+        "payload": payload,
+    }
+
+
+def _pencil(lb: Logbook) -> None:
+    """A local model's draft of the tier-1 pick and of its week, both tier 1, under a `dream` entry
+    that allows tier 2: what `dream` writes, as the Day page shows it."""
+    path = lb.root / "policy" / "crossing.json"
+    path.parent.mkdir(exist_ok=True)
+    data = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+    data["dream"] = {"max_tier": 2}
+    path.write_text(json.dumps(data), encoding="utf-8")
+    with lb.index() as idx:
+        evidence = next(str(line["id"]) for line in idx.day(TIER_1_PICK) if line["kind"] == "location")
+    lb.append_many(
+        [
+            _draft(drafts.UNIT_DAY, TIER_1_PICK, evidence, DRAFT_TEXT),
+            _draft(drafts.UNIT_WEEK, "2026-W24", evidence, WEEK_TEXT),
+        ]
+    )
+
+
+def _site_extra(lb: Logbook) -> dict[str, Any]:
+    line = [line for line in lb.lines() if line["kind"] == "crossing"][-1]
+    return dict(line["payload"]["extra"]["site"])
+
+
+def test_a_site_leaves_a_models_drafts_out_unless_asked(lb: Logbook, tmp_path: Path) -> None:
+    """The Day page the site writes is the server's, but a draft is a model's pencil, never the
+    owner's ink: by default no page carries the day's draft, the week's, or a word of either, and
+    the crossing line says the drafts were left out."""
+    _pencil(lb)
+    folder = tmp_path / "Site"
+    _run(str(folder))
+    day = _read(folder, "days", f"{TIER_1_PICK}.html")
+    assert "<h2>Draft</h2>" not in day and "has a draft" not in day
+    for rel, raw in _tree(folder).items():
+        text = raw.decode("utf-8")
+        assert MODEL not in text and DRAFT_TEXT not in text and WEEK_TEXT not in text, rel
+    assert _site_extra(lb)["drafts"] is False
+
+
+def test_with_drafts_a_day_page_shows_the_draft_headed_as_a_models_with_its_name(
+    lb: Logbook, tmp_path: Path
+) -> None:
+    """`--with-drafts`: the day's draft and the line to its week's, each as the Day page heads
+    them, `draft · model:<name> · read at …`; the footer and the crossing line say so."""
+    _pencil(lb)
+    folder = tmp_path / "Site"
+    _run(str(folder), "--with-drafts")
+    day = _read(folder, "days", f"{TIER_1_PICK}.html")
+    assert "<h2>Draft</h2>" in day and f"draft{site.DOT}{MODEL}{site.DOT}read at" in day
+    assert DRAFT_TEXT in day
+    assert "The week 2026-W24 has a draft" in day
+    assert "a model's drafts included, each headed with its model" in day
+    assert _site_extra(lb)["drafts"] is True
+
+
+def test_with_drafts_is_for_the_site_alone(lb: Logbook, tmp_path: Path) -> None:
+    with pytest.raises(SystemExit) as e:
+        cli.main(["export", "vault", str(tmp_path / "Vault"), "--with-drafts"])
+    assert e.value.code == 2
+
+
+def test_the_owners_reflection_follows_its_own_tier_with_or_without_drafts(
+    lb: Logbook, tmp_path: Path
+) -> None:
+    """A reflection is the owner's words (tier 2, `day reflect`), not a draft: a tier-1,2 site
+    shows it on its day with no flag; a tier-1 site shows it nowhere, drafts or not."""
+    _policy(lb, 2)
+    cli.main(["day", "reflect", TIER_2_PICK, "--text", REFLECTION_TEXT])
+    wide = tmp_path / "Wide"
+    _run(str(wide), "--tier", "1,2")
+    assert REFLECTION_TEXT in _read(wide, "days", f"{TIER_2_PICK}.html")
+    for flags in ((), ("--with-drafts",)):
+        narrow = tmp_path / ("Narrow" + "".join(flags))
+        _run(str(narrow), *flags)
+        assert not any(REFLECTION_TEXT in raw.decode("utf-8") for raw in _tree(narrow).values())

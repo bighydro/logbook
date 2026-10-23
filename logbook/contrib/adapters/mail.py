@@ -37,6 +37,12 @@ the SPEC §1.1 store (the store callback is called just before the line is yield
 keeps messages carrying any of the labels, `--skip-labels` drops messages carrying any (both
 case-insensitive, counted `skipped_label`); `since` cuts on `at`.
 
+Two facts more under `extra` (RFC 0015, amendment of 2026-10-20), never in the payload's own fields:
+Gmail's inbox tab, `extra.gmail_category` (`gmail_category`: the `Category …` label of `X-Gmail-Labels`,
+which stays in `labels`), and the list headers, `extra.list` (`_list`: `unsubscribe`, `one_click`, `id`),
+never the unsubscribe links or addresses, which carry a token naming the reader; a list header whose
+value does not parse is kept by its name and counted (`BAD_LIST`).
+
 Built for a 20 GB export: the file is read in chunks and scanned for separators, one message is in
 memory at a time, the headers are parsed by hand, the MIME tree is walked by offsets, and no
 attachment is ever decoded or copied. `parse_message` is the one parser, which `logbook sync mail`
@@ -81,6 +87,7 @@ LABELS_HEADER = "x-gmail-labels"
 THREAD_HEADER = "x-gm-thrid"
 NO_DATE = "skipped_no_date"
 BY_LABEL = "skipped_label"
+BAD_LIST = "skipped_list_header"  # a list header kept as present by its name, its value not readable
 HELD = "already_in_record_from:"  # a count per holder, `<HELD>mail (<mailbox>)`, said on a line of its own
 
 CHUNK = 8 * 1024 * 1024  # bytes read at a time
@@ -98,6 +105,23 @@ MESSAGE_ID = re.compile(r"<([^<>]+)>")
 ASCII_LOWER = str.maketrans(string.ascii_uppercase, string.ascii_lowercase)  # a Message-ID's domain part
 PARAM = re.compile(r';\s*([^=;\s]+)\s*=\s*(?:"((?:[^"\\]|\\.)*)"|([^;]*))')
 PARAM_KEY = re.compile(r"^(.*?)(?:\*(\d+))?(\*)?$")
+# Gmail's inbox tabs (`extra.gmail_category`) by the label that names one: Takeout's `X-Gmail-Labels`
+# spelling (`Category Promotions`; the Primary tab is `Category Personal`) and the API's label id
+# (`CATEGORY_PROMOTIONS`) alike, case and underscores folded (`gmail_category`)
+TABS = {
+    "category personal": "primary",
+    "category social": "social",
+    "category promotions": "promotions",
+    "category updates": "updates",
+    "category forums": "forums",
+}
+LIST_URI = re.compile(r"<\s*[A-Za-z][A-Za-z0-9+.-]*:[^<>]*>")  # RFC 2369: a URI in angle brackets
+LIST_ID_BRACKETS = re.compile(r"<([^<>]*)>")  # RFC 2919: the list-id stands in angle brackets
+# ... and is a dot-atom, a label and its namespace (`letters.example.org`); kept narrower than RFC 5322's
+# atext, so no phrase, link, address, query or path (`/`, `:`, `@`, `?`, `=`, `%`, whitespace) passes
+LIST_ID = re.compile(r"[A-Za-z0-9_+-]+(?:\.[A-Za-z0-9_+-]+)+")
+LIST_ID_MAX = 255  # characters; a longer one is no id
+ONE_CLICK = "list-unsubscribe=one-click"  # RFC 8058: the one value List-Unsubscribe-Post may hold
 SIMPLE_ADDRESS = re.compile(
     r'^(?:"([^"\\]*)"|([^"<>,]*?))\s*(?:<([^<>\s",]+@[^<>\s",]+)>|([^<>\s",]+@[^<>\s",]+))$'
 )
@@ -597,6 +621,12 @@ def parse_message(
     if labels:
         payload["labels"] = labels
     extra: dict[str, Any] = {}
+    tab = gmail_category(labels)
+    if tab is not None:
+        extra["gmail_category"] = tab
+    listed = _list(headers, counts)
+    if listed:
+        extra["list"] = listed
     parts = list(leaves(raw, headers, body_lo, len(raw)))
     body, body_from, trouble, truncated = _body(raw, parts)
     if body is not None:
@@ -643,11 +673,21 @@ def _count(counts: dict[str, int], key: str, n: int = 1) -> None:
     counts[key] = counts.get(key, 0) + n
 
 
-def gmail_fields(payload: dict[str, Any], labels: list[str] | None, thread_id: str | None) -> None:
-    """Gmail's labels and thread id as a live source observes them now (`mail_imap` from X-GM-LABELS and
-    X-GM-THRID, `gmail` from the API), in the fields this parser fills from Takeout's headers: `labels`
-    (None: the source cannot say, the line keeps what the headers gave) and `extra.gmail_thread_id`, in
-    decimal. One function, so the two live sources write the same line for the same message."""
+def gmail_fields(
+    payload: dict[str, Any], labels: list[str] | None, thread_id: str | None, tab: str | None = None
+) -> None:
+    """Gmail's labels, thread id and inbox tab as a live source observes them now (`mail_imap` from
+    X-GM-LABELS and X-GM-THRID, `gmail` from the API), in the fields this parser fills from Takeout's
+    headers: `labels` (None: the source cannot say, the line keeps what the headers gave),
+    `extra.gmail_thread_id`, in decimal, and `extra.gmail_category` (`gmail_category` of the API's label
+    ids; None: the source cannot say, as IMAP never can). A tab the message's own bytes gave (a Takeout
+    header in a message uploaded from an export) is dropped first: it is not the mailbox's tab now. One
+    function, so the two live sources write the same line for the same message but for the tab."""
+    extra = payload.get("extra")
+    if isinstance(extra, dict) and extra.pop("gmail_category", None) is not None and not extra:
+        del payload["extra"]
+    if tab is not None:
+        payload.setdefault("extra", {})["gmail_category"] = tab
     if labels is not None:
         if labels:
             payload["labels"] = labels
@@ -806,6 +846,68 @@ def _labels(value: str | None) -> list[str]:
     if not value:
         return []
     return [label.strip() for label in decode_words(value).split(",") if label.strip()]
+
+
+def gmail_category(labels: Iterable[str]) -> str | None:
+    """Gmail's inbox tab — `primary`, `social`, `promotions`, `updates` or `forums` — from the first
+    label that names one, as Takeout spells it (`Category Promotions`) or the API (`CATEGORY_PROMOTIONS`),
+    case and underscores aside; None when no label does. The labels themselves are left as they are."""
+    for label in labels:
+        tab = TABS.get(" ".join(label.replace("_", " ").casefold().split()))
+        if tab is not None:
+            return tab
+    return None
+
+
+def _list(headers: Headers, counts: dict[str, int]) -> dict[str, Any] | None:
+    """That the message came from a mailing list, never how to leave it: `unsubscribe` when it has a
+    `List-Unsubscribe` header, `one_click` when it also has `List-Unsubscribe-Post` (RFC 8058), `id` the
+    list-id of `List-Id` alone (`list_id`); None when it has none of them. The unsubscribe URLs and
+    mailto addresses are never read out: they carry tokens that name the reader; nor is a `List-Id`'s
+    phrase, nor one that is a link or an address. Header names are matched case-insensitively
+    (`Headers`); a header whose value does not parse is still recorded by its name (a `List-Id` gives no
+    `id` then), and counted once per message (`BAD_LIST`)."""
+    found: dict[str, Any] = {}
+    unreadable = False
+    unsubscribe, post = headers.all("list-unsubscribe"), headers.all("list-unsubscribe-post")
+    if unsubscribe:
+        found["unsubscribe"] = True
+        unreadable = not all(LIST_URI.search(value) for value in unsubscribe)
+        if post:
+            found["one_click"] = True
+            unreadable = unreadable or not all(" ".join(v.split()).casefold() == ONE_CLICK for v in post)
+    elif post:
+        unreadable = True  # a one-click post with no address to post to
+    if headers.all("list-id"):
+        found_id = list_id(headers.get("list-id"))
+        if found_id is not None:
+            found["id"] = found_id
+        unreadable = unreadable or found_id is None
+    if unreadable:
+        _count(counts, BAD_LIST)
+    return found or None
+
+
+def list_id(value: str | None) -> str | None:
+    """The list-id of a `List-Id` header (RFC 2919), the dot-atom alone: the one inside its angle
+    brackets (`Ines's letters <letters.example.org>` → `letters.example.org`), or the whole value when it
+    has none and is one (`letters.example.org`). None for anything else — a phrase alone, a link, a
+    mailto, an address, two ids, an empty value — so nothing but the id is ever kept."""
+    if value is None:
+        return None
+    text = " ".join(value.split())
+    inside = LIST_ID_BRACKETS.findall(text)
+    if inside:
+        if len(inside) != 1 or text.count("<") != 1 or text.count(">") != 1:
+            return None
+        candidate = str(inside[0]).strip()
+    elif "<" in text or ">" in text:
+        return None
+    else:
+        candidate = text
+    if len(candidate) > LIST_ID_MAX or LIST_ID.fullmatch(candidate) is None:
+        return None
+    return candidate
 
 
 def _when(header: str | None, fallback: datetime | None) -> tuple[str | None, str | None]:

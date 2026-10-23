@@ -111,7 +111,9 @@ def _appearances(reading: Reading) -> dict[tuple[Key, str], _Seen]:
     seen: dict[tuple[Key, str], _Seen] = {}
     for stay in sorted(reading.owner_stays, key=lambda s: s.start):
         stay_day = reading.day_start.day(stay.start).isoformat()
-        found = present.present(stay, evidence.near(stay), reading.identities, reading.places, reading.owner)
+        found = present.present(
+            stay, evidence.near(stay), reading.identities, reading.places, reading.owner, reading.voice_gate
+        )
         for p in found:
             if p.status != present.CONFIRMED:
                 continue

@@ -227,13 +227,14 @@ def test_pull_writes_one_mail_line_per_message_keyed_by_account_and_message_id(o
 
 def test_the_line_is_the_one_the_imap_source_writes_for_the_same_message(offline: Fake) -> None:
     """The same bytes through the same parser, the server's date as the fallback, the attachments
-    digested and never stored, Gmail's labels and thread id where the IMAP source puts them."""
+    digested and never stored, Gmail's labels and thread id where the IMAP source puts them, and the
+    tab its CATEGORY_UPDATES label names, which IMAP cannot say (RFC 0015, amendment of 2026-10-20)."""
     raw = _raw("m3@mail.example.org", T0 + timedelta(hours=24), subject="Berth", attachment=JPEG)
     expected, _blobs = mail.parse_message(
         raw, T0, {}, "Europe/Oslo", None, {USER}, USER, digest_attachments=True, fallback_name="internaldate"
     )
     assert expected is not None
-    mail.gmail_fields(expected["payload"], ["Inbox", "Important"], str(0x18E0_0000_0000_0003))
+    mail.gmail_fields(expected["payload"], ["Inbox", "Important"], str(0x18E0_0000_0000_0003), "updates")
     drafts, _counts = _pull()
     line = _by_id(drafts)["m3@mail.example.org"]
     assert json.dumps(line, ensure_ascii=False) == json.dumps(expected, ensure_ascii=False)
@@ -539,9 +540,15 @@ def test_a_mailbox_synced_by_imap_then_by_gmail_is_written_once(
     raw_asked = [q for _m, _p, q in fake.requests if q.get("format") == "raw"]
     assert raw_asked == [], "no body the record holds was fetched"
     drafts, _counts = _pull()
+    tabs = {}
     for draft in drafts:
         line = by_imap[draft["payload"]["raw_id"]]
+        assert "gmail_category" not in line["payload"].get("extra", {}), "IMAP cannot say the tab"
+        tabs[draft["payload"]["message_id"]] = draft["payload"]["extra"].pop("gmail_category", None)
         assert {k: line[k] for k in draft} == draft, draft["payload"]["raw_id"]
+    assert tabs == {f"m{i}@mail.example.org": "updates" if i == 3 else None for i in (1, 2, 3, 4)}, (
+        "the tab is the one difference, and only where a CATEGORY_* label names it"
+    )
 
 
 def test_sync_all_runs_gmail_after_mail() -> None:

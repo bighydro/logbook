@@ -4,23 +4,32 @@
 [`logbook/contrib/dream-prompt.md`](https://github.com/bighydro/logbook/blob/main/logbook/contrib/dream-prompt.md)
 in the package with the day and the language filled in, and the day's material as JSON. This page
 explains the prompt; `logbook dream day DAY --show-prompt` prints both as they go. The prompt's name,
-`dream-day/3`, is kept in every draft's `extra.prompt`, so a draft says which wording wrote it; a
+`dream-day/4`, is kept in every draft's `extra.prompt`, so a draft says which wording wrote it; a
 change to the prompt that changes what a draft holds bumps the number (`dream-day/2` added the proposed
-events, so a `dream-day/1` draft has none; `dream-day/3` added rule 5, agents).
+events, so a `dream-day/1` draft has none; `dream-day/3` added rule 5, agents; `dream-day/4` the
+goodnight story in the `day` paragraph's place, the lenses, learned, decided, the ideas, the photo of
+the day, the links, one question where there were two, rules 6 and 7, and RFC 0043 §7's voice, [the
+dream](dream.md#the-dream-learns-dream-day4)).
 
 ## What it asks for
 
-One JSON object with six keys, the first five each a list of segments, in the order the Day prints
-them, and the sixth the proposed events:
+One JSON object, every key but the last two a list of segments, in the order the Day prints them, and
+the last two the proposed events and links:
 
 | Key | What | How many |
 |---|---|---|
-| `day` | the day in one paragraph: where the owner was, who was there, what was done | two to five sentences |
+| `story` | the goodnight story: second person, past tense, calm, concrete, in the order it happened, ending where the day ended; never a line about tomorrow, which the reader computes | five or six sentences |
+| `lens:<id>` | one per lens of the material's `lenses`: the lens's answer from the day; an empty list when the day gives nothing for it, never a sentence saying so | one |
 | `threads` | the threads the day moved: a conversation continued, a plan made, a trip under way, a promise given or kept | at most four |
-| `questions` | questions for the owner's reflection, each resting on something the day holds | exactly two |
+| `learned` | what the day shows was learned | one sentence each |
+| `decision` | what the day shows was decided | one sentence each |
+| `ideas` | an idea of the material's `named` the day moved, each segment with `entity`, the idea's id | one sentence each |
+| `questions` | a question for the owner's reflection, resting on something the day holds | exactly one |
 | `people` | the people the model thinks were there, one sentence each, with the items that show it | as many as the material names |
 | `promises` | the promises it thinks were made or kept that day, in the words the material gives | as many as the material shows |
+| `photo` | the photo of the day from the material's `photos` (own camera first, starred first): a one-line reason, its evidence that photo's one reference | one, or none |
 | `events` | the events it thinks the day held that the calendar does not have: `{title, start, end, place, people, evidence}`, the place a stay's `place`, the people ids from the material's `people`, never a name | at most four |
+| `links` | lines of the day that belong to an idea or an org of `named`: `{entity, text, evidence, note?}`, `entity` an id the material gave | at most four |
 
 A segment is `{"text": "...", "evidence": ["L1", "L2"]}` or `{"text": "...", "unsupported": true}`.
 The references are the ones the material carries; the record turns them into line ids before the
@@ -41,6 +50,15 @@ dropped and counted ([the dream](dream.md#proposed-events)).
    bot, a coding assistant) and a text marked `machine` is what it wrote ([your own
    agents](adapters/agents.md)): never one of the `people`, and its words never the owner's or anyone's
    promise. The owner's own words to it are the owner's.
+6. **Ids from the material.** An idea, an org or a goal by an `id` of `named` or `for.goals`, a person by
+   one of `people`, a photo by a reference of `photos`; never a made-up id, never a name in its place.
+7. **Intention is not a verdict.** `for`, the chapter and the goals, is what the day was meant for; one is
+   named only where a line touches it, and the draft never says the day was good, on track or well
+   spent.
+
+Then the voice of RFC 0043 §7, word for word: never moralise and never flatter; every number one the
+material gave; an inference says so, in the sentence; at most one proposal of change beside the
+proposals to confirm; one question; the day's language; the story calm, concrete, short.
 
 The prompt also says the day (`$day`, `$weekday`, `$tz`) and the language to write in (`$language`,
 a BCP 47 tag, and `$language_name`): the language most of the day's own text is in, as the dream
@@ -56,7 +74,9 @@ each with references and, for a canonical person, the `person` id; a stay or sto
 named place's name or `place:<lat>,<lon>`), `unplaced`, `messages` (by counterpart: the count, the
 references, the texts and the counterpart's `person` id when the record resolves one; `agent` on a
 counterpart that is one of the owner's agents, `machine` on a text it wrote), `notes` (in full),
-`commitments`, `people` (every canonical person the material names, `id` and `name`; never the owner),
+`commitments`, `photos` (own camera first, then starred, each `ref`, `at`, `provenance`, `starred`),
+`people` (every canonical person the material names, `id` and `name`; never the owner), `for`
+(`chapter` and `goals`), `named` (the ideas and orgs the owner named, `id`, `kind`, `name`) and `lenses` (`id`, `text`),
 `health` (only when tier 3 is under the ceiling) and `signed` (when and the note you wrote on
 signing). Every item carries `ref`, a reference such as `L12`; a
 reference stands for one line id of the day, and only lines of the day get one, so the model cannot
@@ -67,7 +87,7 @@ cite a line from the night before even though the material describes that night.
 So that the words a model is given are versioned with the code that checks its answer, readable
 without running anything, and the same on every machine: an orchestrator that rebuilds a Day from the
 record and a second implementation that writes drafts can read the same prompt and know what a
-`dream-day/3` draft was asked for.
+`dream-day/4` draft was asked for.
 
 ## The journey's and the week's
 

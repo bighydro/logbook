@@ -42,7 +42,7 @@ from datetime import date, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from . import attribution, day_start, machine, policy, present, reading, resolve, speakers, stays, trips
+from . import attribution, day_start, kept, machine, policy, present, reading, resolve, speakers, stays, trips
 from . import places as named_places
 from .chain import Line
 from .day_start import DayStart
@@ -348,11 +348,13 @@ def _standing(
     last: str,
     retracted: frozenset[str],
     admit: Callable[[Line], bool] | None = None,
+    after: int | None = None,
 ) -> Iterator[Line]:
     """The lines of `kind` in the window that stand: not retracted, not superseded by a line of
-    the same kind (a calendar entry edited since is one entry), and through `admit` when given."""
+    the same kind (a calendar entry edited since is one entry), and through `admit` when given;
+    with `after`, only those appended after that seq."""
     superseded = idx.superseded(kind)
-    for line in idx.of_kind(kind, first, last):
+    for line in idx.of_kind(kind, first, last, after_seq=after):
         id_ = str(line.get("id"))
         if id_ in retracted or id_ in superseded or (admit is not None and not admit(line)):
             continue
@@ -830,3 +832,366 @@ def _span(first: str, last: str) -> str:
 
 def _plural(n: int, noun: str, plural: str | None = None) -> str:
     return f"{n} {noun}" if n == 1 else f"{n} {plural or noun + 's'}"
+
+
+# -- the whole record, kept between readings ---------------------------------------------------------------
+
+MEMO_VERSION = 1
+MEMO_FILE = "people-whole.json"  # beside the index, in the cache folder: never in the record
+MEMO_SINCE_FILE = "people-to-end.json"  # a window from a later day to the record's last (`read_to_end`)
+MARGIN_DAYS = 3  # the last days read, whose stays and nights a later point may still lengthen
+LOOKBACK_DAYS = 32  # the owner's track read before those days when they are read again
+LOOKBACK_MOST = 512  # a stay longer than this before them: the whole record is read again
+TRACKED = ("message", "call", "mail", "event", "transcript", "photo", "note", "location", "flight")
+OVERLAY = ("retraction", "resolution")  # one of these appended: everyone is someone else, read again
+EVIDENCE_KINDS = ("event", "transcript", "photo", "note")  # the kinds the days together read
+
+
+def read_whole(lb: Logbook, airports: Airports | None = None) -> Report | None:
+    """`read` over the record's whole window (`reading.record_days`): every person, every day; None
+    for a record with no days. The reading is kept beside the index (`MEMO_FILE`) and brought
+    forward from where it stopped when all that was appended since is that: lines of later days,
+    none of them correcting another (`supersedes`) or retracting one, no resolution, no setting
+    changed (`_stamp`). Then only the appended lines are read, and the days together from
+    `MARGIN_DAYS` before the last day read are read again, with the owner's track from
+    `LOOKBACK_DAYS` before them (`_forward`). Anything else, and a kept reading that cannot be read,
+    reads the whole record again (`_whole`). The result is `read`'s for the same window, field for
+    field (`tests/test_people_memo.py`)."""
+    whole = reading.record_days(lb)
+    if whole is None:
+        return None
+    return _kept_reading(lb, whole, MEMO_FILE, airports)
+
+
+def read_to_end(lb: Logbook, first: str, airports: Airports | None = None) -> Report | None:
+    """`read` from `first` to the record's last day (the year so far, the People door's), kept beside
+    the index as `read_whole` keeps the whole window, in a file of its own (`MEMO_SINCE_FILE`, one
+    such window at a time); `read_whole` when `first` is the record's first day. None when the record
+    has no days, or none from `first`."""
+    whole = reading.record_days(lb)
+    if whole is None or first > whole[1]:
+        return None
+    if first <= whole[0]:
+        return read_whole(lb, airports) if first == whole[0] else read(lb, first, whole[1], airports)
+    return _kept_reading(lb, (first, whole[1]), MEMO_SINCE_FILE, airports)
+
+
+def _kept_reading(lb: Logbook, whole: tuple[str, str], name: str, airports: Airports | None) -> Report:
+    """`read` of the window `whole`, which runs to the record's last day, kept beside the index as
+    `name` and brought forward (`read_whole`)."""
+    airports = airports or Airports.load()
+    path = kept.path(lb, name)
+    stamp = _stamp(lb, airports)
+    with lb.index() as idx:
+        at = (str(path), stamp, whole, *idx.indexed())
+    if path is not None and (mine := _HELD.get(name)) is not None and mine[0] == at:
+        return mine[1]  # read already in this process, at this head: the readers only read it
+    held = kept.load(path)
+    found = None if held is None else _forward(lb, held, whole, stamp, airports)
+    if found is None:
+        found = _whole(lb, whole, stamp, airports)
+    report, memo = found
+    kept.save(path, memo)  # one that cannot be written: the whole record is read next time
+    if path is not None:
+        _HELD[name] = (at, report)
+    return report
+
+
+_HELD: dict[str, tuple[tuple[Any, ...], Report]] = {}  # each kept reading's last report in this process
+
+
+def _stamp(lb: Logbook, airports: Airports) -> str:
+    """What a kept reading was read under besides the lines (`kept.stamp`): this version, the code,
+    the settings, and the airports table."""
+    return kept.stamp(lb, str(MEMO_VERSION), kept.code_digest(), airports.fingerprint())
+
+
+def _context(
+    lb: Logbook, idx: Index
+) -> tuple[list[Line], frozenset[str], dict[Ref, Identity], present.Owner, dict[str, Person]]:
+    """The overlay `read` reads first: the retractions and resolutions, who is who, the owner, and
+    every person the resolutions name."""
+    marks = idx.retractions()
+    resolutions = idx.resolutions()
+    retracted = frozenset(retractions(marks))
+    identities = resolve.identities_from([*marks, *resolutions])
+    owner = present.owner_of(
+        str(lb.meta.get("owner_id") or ""),
+        [str(e) for e in lb.meta.get("owner_emails") or [] if isinstance(e, str)],
+        policy.owner_aliases(lb.root),
+        identities,
+    )
+    known = _people_of(identities, resolve.standing([*marks, *resolutions]), owner)
+    return marks, retracted, identities, owner, known
+
+
+def _through(lines: Iterable[Line], seq: int) -> Iterator[Line]:
+    """The lines up to `seq`: a reading names the line it read through, and reads no later one."""
+    return (line for line in lines if int(line.get("seq") or 0) <= seq)
+
+
+def _whole(
+    lb: Logbook, whole: tuple[str, str], stamp: str, airports: Airports
+) -> tuple[Report, dict[str, Any]]:
+    """`read` over the whole window, and what it keeps: the channels before the owner's own direct
+    messages are given out (`_Gather.finish_messages`), and the days together before the last
+    `MARGIN_DAYS`."""
+    first, last = whole
+    days = day_start.of(lb.meta)
+    spill = (date.fromisoformat(last) + timedelta(days=1)).isoformat()
+    with lb.index() as idx:
+        seq, head = idx.indexed()
+        _marks, retracted, identities, owner, known = _context(lb, idx)
+        gather = _Gather(known, identities, owner, days, first, last)
+        evidence: list[Line] = []
+        for channel in CHANNELS:
+            lines = _standing(idx, KIND_OF[channel], first, spill, retracted)
+            evidence.extend(gather.stream(channel, _through(lines, seq)))
+        evidence.extend(
+            gather.stream("notes", _through(_standing(idx, "note", first, spill, retracted), seq))
+        )
+    kept = _gathered(gather)
+    gather.finish_messages()
+    track = reading.owner_track(lb, first, last, airports)
+    _together(known, evidence, track, identities, owner, days.zone, first, last, airports)
+    cut = max(first, (date.fromisoformat(last) - timedelta(days=MARGIN_DAYS)).isoformat())
+    memo = {
+        "version": MEMO_VERSION,
+        "stamp": stamp,
+        "first": first,
+        "last": last,
+        "cut": cut,
+        "seq": seq,
+        "head": head,
+        **kept,
+        "before": _before(known, cut),
+    }
+    return _report(first, last, days, known, owner, identities, gather), memo
+
+
+def _forward(
+    lb: Logbook, memo: dict[str, Any], whole: tuple[str, str], stamp: str, airports: Airports
+) -> tuple[Report, dict[str, Any]] | None:
+    """The kept reading brought to the record as it stands, or None when it cannot be (`read_whole`)."""
+    first, last = whole
+    if memo.get("version") != MEMO_VERSION or memo.get("stamp") != stamp or memo.get("first") != first:
+        return None
+    since, cut = int(memo["seq"]), str(memo["cut"])
+    days = day_start.of(lb.meta)
+    spill = (date.fromisoformat(last) + timedelta(days=1)).isoformat()
+    with lb.index() as idx:
+        seq, head = idx.indexed()
+        if seq < since:
+            return None
+        if since and (line := idx.by_seq(since)) is not None and str(line.get("hash")) != str(memo["head"]):
+            return None  # the chain was written again under the kept reading (SPEC §3.1): every line anew
+        appended = idx.appended(since)
+        if any(kind in appended for kind in OVERLAY):
+            return None
+        for kind in TRACKED:
+            earliest, _n, superseding = appended.get(kind, ("9999-12-31", 0, 0))
+            if superseding or earliest < cut:
+                return None  # a correction of a line read, or a line of a day already read whole
+        _marks, retracted, identities, owner, _named = _context(lb, idx)
+        known = _people_from(memo["people"])
+        gather = _Gather(known, identities, owner, days, first, last)
+        gather.chats = _chats_from(memo["chats"])
+        gather.unnamed = set(memo["unnamed"])
+        gather.not_yet_named = int(memo["not_yet_named"])
+        for channel in CHANNELS:
+            lines = _standing(idx, KIND_OF[channel], cut, spill, retracted, after=since)
+            gather.stream(channel, _through(lines, seq))
+        for person in known.values():  # in the order the whole reading meets them (`_whole`)
+            person.channels = {name: person.channels[name] for name in CHANNELS if name in person.channels}
+    kept = _gathered(gather)
+    gather.finish_messages()
+    for entity, before in memo["before"].items():
+        if (them := known.get(entity)) is None:
+            continue
+        for s in before["shared"]:
+            them.shared[(s["day"], s["stay"])] = _shared_from(s)
+        them.tier = max(them.tier, int(before["tier"]))
+        if before["real"] is not None:
+            them.contact(before["real"][0], MEETING, before["real"][1])
+    track = _track_back(lb, first, cut, last, airports)
+    if track is None:
+        return None
+    with lb.index() as idx:
+        evidence = [
+            line
+            for kind in EVIDENCE_KINDS
+            for line in _through(_standing(idx, kind, track.first, spill, retracted), seq)
+            if _names_someone(line)
+        ]
+    _together(known, evidence, track, identities, owner, days.zone, cut, last, airports)
+    new_cut = max(cut, (date.fromisoformat(last) - timedelta(days=MARGIN_DAYS)).isoformat())
+    memo = {
+        "version": MEMO_VERSION,
+        "stamp": stamp,
+        "first": first,
+        "last": last,
+        "cut": new_cut,
+        "seq": seq,
+        "head": head,
+        **kept,
+        "before": _before(known, new_cut),
+    }
+    return _report(first, last, days, known, owner, identities, gather), memo
+
+
+def _track_back(
+    lb: Logbook, first: str, cut: str, last: str, airports: Airports
+) -> reading.OwnerTrack | None:
+    """The owner's track from far enough before `cut` that every stay reaching it is the stay the
+    whole record's track has: one that is not the first stay of the track read (a stay begun before
+    the track would be cut short). Read back `LOOKBACK_DAYS`, then twice as far, up to
+    `LOOKBACK_MOST`; None past that."""
+    back = LOOKBACK_DAYS
+    days = day_start.of(lb.meta)
+    floor = first  # the window's first day: the whole reading's track begins there
+    while True:
+        start = max(floor, (date.fromisoformat(cut) - timedelta(days=back)).isoformat())
+        track = reading.owner_track(lb, start, last, airports)
+        begins = days.span(cut)[0]
+        reaching = [s for s in track.stays if s.end > begins]
+        if start == floor or not reaching or reaching[0] is not track.stays[0]:
+            return track
+        if back >= LOOKBACK_MOST:
+            return None
+        back *= 2
+
+
+def _report(
+    first: str,
+    last: str,
+    days: DayStart,
+    known: dict[str, Person],
+    owner: present.Owner,
+    identities: dict[Ref, Identity],
+    gather: _Gather,
+) -> Report:
+    heard = sorted(
+        (p for p in known.values() if p.heard),
+        key=lambda p: (-len(p.days), _desc(p.last_contact), p.name.casefold()),
+    )
+    return Report(
+        first,
+        last,
+        days.zone,
+        heard,
+        known,
+        owner,
+        identities,
+        days,
+        unnamed=len(gather.unnamed),
+        not_yet_named=gather.not_yet_named,
+    )
+
+
+# -- what a reading keeps, as JSON ---------------------------------------------------------------------------
+
+
+def _gathered(gather: _Gather) -> dict[str, Any]:
+    """The counting as it stands before the owner's own direct messages are given out: every person
+    with their channels, tier and last real contact so far, the direct chats, the voices."""
+    return {
+        "people": {
+            entity: {
+                "name": p.name,
+                "refs": [list(r) for r in p.refs],
+                "birthday": p.birthday,
+                "tier": p.tier,
+                "real": None if p.real is None else list(p.real),
+                "channels": {
+                    name: {
+                        "lines": c.lines,
+                        "first": c.first,
+                        "last": c.last,
+                        "tier": c.tier,
+                        "last_line": c.last_line,
+                        "ids": list(c.ids),
+                        "spoke_s": c.spoke_s,
+                        "last_at": c._last_at,
+                    }
+                    for name, c in p.channels.items()
+                },
+            }
+            for entity, p in gather.people.items()
+        },
+        "chats": {
+            k: {"senders": sorted(c.senders, key=lambda s: s or ""), "mine": c.mine}
+            for k, c in gather.chats.items()
+        },
+        "unnamed": sorted(gather.unnamed),
+        "not_yet_named": gather.not_yet_named,
+    }
+
+
+def _people_from(data: Mapping[str, Any]) -> dict[str, Person]:
+    found: dict[str, Person] = {}
+    for entity, p in data.items():
+        person = Person(
+            entity, p["name"], tuple((r[0], r[1]) for r in p["refs"]), p["birthday"], int(p["tier"])
+        )
+        person.real = None if p["real"] is None else (p["real"][0], p["real"][1], p["real"][2])
+        for name, c in p["channels"].items():
+            channel = Channel(
+                c["lines"], c["first"], c["last"], c["tier"], c["last_line"], list(c["ids"]), c["spoke_s"]
+            )
+            channel._last_at = c["last_at"]
+            person.channels[name] = channel
+        found[entity] = person
+    return found
+
+
+def _chats_from(data: Mapping[str, Any]) -> dict[str, _Chat]:
+    return {
+        k: _Chat(set(c["senders"]), [(m[0], m[1], m[2], int(m[3])) for m in c["mine"]])
+        for k, c in data.items()
+    }
+
+
+def _shared_from(s: Mapping[str, Any]) -> SharedDay:
+    return SharedDay(
+        s["day"],
+        s["stay"],
+        s["where"],
+        list(s["sources"]),
+        list(s["reasons"]),
+        list(s["lines"]),
+        int(s["tier"]),
+        s["night"],
+    )
+
+
+def _before(known: Mapping[str, Person], cut: str) -> dict[str, Any]:
+    """Each person's days together before `cut`, as they stand (in the order the reading met them),
+    their highest tier, and the first of the latest of them, which the days after never undo: the
+    last real contact the days together gave before the cut."""
+    found: dict[str, Any] = {}
+    for entity, person in known.items():
+        kept = [s for s in person.shared.values() if s.day < cut]
+        if not kept:
+            continue
+        best: tuple[str, str] | None = None
+        for s in kept:
+            if s.lines and (best is None or s.day > best[0]):
+                best = (s.day, s.lines[0])
+        found[entity] = {
+            "shared": [
+                {
+                    "day": s.day,
+                    "stay": s.stay,
+                    "where": s.where,
+                    "sources": s.sources,
+                    "reasons": s.reasons,
+                    "lines": s.lines,
+                    "tier": s.tier,
+                    "night": s.night,
+                }
+                for s in kept
+            ],
+            "tier": max(s.tier for s in kept),
+            "real": None if best is None else list(best),
+        }
+    return found

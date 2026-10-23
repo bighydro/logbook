@@ -53,6 +53,8 @@ READERS: tuple[tuple[str, ...], ...] = (
         "days",
     ),
     ("show", "days", "--from", "2026-06-06", "--to", "2026-06-12", "--json"),
+    ("people", "mail", "--since", "2026-06-06", "--until", "2026-06-12"),
+    ("people", "mail", "--since", "2026-06-06", "--until", "2026-06-12", "--json"),
     ("show", "2026-06-08"),
     ("show", "2026-06-08", "--raw"),
     (
@@ -150,8 +152,14 @@ READERS: tuple[tuple[str, ...], ...] = (
     ("people", "nearby", "Marina"),
     ("people", "nearby", "Cabin"),
     ("people", "nearby", "--days", "2026-06-08", "2026-06-10"),
+    ("people", "city", "Bergen"),  # RFC 0043 §12: your people in a city, from the lives-in notes
+    ("people", "city", "Oslo", "--trip", "2026-06-09", "--json"),
+    ("review", "with", "--week", "2026-W24"),  # RFC 0043 §11: the review-with queue, nothing written
+    ("review", "with", "--journey", "2026-06-09", "--json"),
     ("review", "speakers"),  # RFC 0038 §4: the queue reads the record and opens nothing
     ("review", "speakers", "--json"),
+    ("review", "receipts"),  # RFC 0043 §12: the mails read by rules, nothing looked up
+    ("review", "receipts", "--since", "2026-01-01", "--json"),
     ("show", "ideas", "--json"),
     ("setup", "assets", "status"),
     ("setup", "assets", "status", "--json"),
@@ -218,6 +226,13 @@ READERS: tuple[tuple[str, ...], ...] = (
     ("videos", "infer", "--dry-run"),
     ("review", "video"),  # the queue reads the record and the registries alone
     ("review", "video", "--json"),
+    (
+        "show",
+        "plan",
+        "2026-06-08",
+    ),  # RFC 0043 §9: no mapping here; `tests/test_plan.py` guards the mapped plan
+    ("show", "plan", "2026-06-08", "--json"),
+    ("show", "plan", "--coverage"),
 )
 
 
@@ -383,6 +398,10 @@ ORG_READERS: tuple[tuple[str, ...], ...] = (
     ("show", "org", "verft"),
     ("show", "org", "Nordmann Tidevann", "--json"),
     ("show", "org", "havbris", "--money"),
+    ("lab", "companies", "2026-09-15"),
+    ("lab", "companies", "2026-09-15", "--json"),
+    ("people", "gifts"),
+    ("people", "gifts", "Per Hansen", "--json"),
 )
 ORG = "/org/ID"  # Nordmann Verft's page, by the entity id the Manifest links
 ORG_PAGES = ("/manifest", "/manifest/people", ORG, f"{ORG}?money=1")
@@ -522,4 +541,45 @@ def test_the_relationship_reader_without_its_entry_sends_nothing(
     with pytest.raises(SystemExit) as e:
         cli.main(list(argv))
     assert e.value.code == 2 and "names no 'relationship' entry" in capsys.readouterr().err
+    assert no_network == [], f"logbook {' '.join(argv)} tried to connect: {no_network}"
+
+
+def test_the_map_is_named_drawn_and_asked_with_no_connection(
+    lb: Logbook, tmp_path: Path, no_network: list[str], capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The map (RFC 0043 §11, docs/map.md), from the synthetic coast of `tests/oslo_map.py`: `setup map`
+    reads the file's header, `lab map render` draws a day's track over it and the nearest named thing
+    is read from its tiles; the file is this machine's, and nothing is fetched."""
+    import oslo_map
+
+    from logbook.contrib.map import KEY, nearest
+
+    coast = oslo_map.write_coast(tmp_path / "coast.pmtiles")
+    try:
+        cli.main(["setup", "map", str(coast), "--yes"])
+        cli.main(["lab", "map", "render", "--track", "2026-06-08", "--out", str(tmp_path / "day.svg")])
+        lon, lat = oslo_map.CAFE
+        assert nearest.nearest_named(coast, lat, lon) is not None
+    finally:
+        cli.main(["setup", "map", "--off", "--yes"])
+    assert KEY not in lb.meta and (tmp_path / "day.svg").is_file()
+    assert no_network == [], f"the map tried to connect: {no_network}"
+
+
+@pytest.mark.parametrize("argv", [("dream", "month", "2026-06"), ("dream", "chapter")], ids=" ".join)
+def test_a_month_or_a_chapter_without_the_dream_entry_sends_nothing(
+    argv: tuple[str, ...],
+    lb: Logbook,
+    no_network: list[str],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """The demo record's policy names no `dream` entry; with an endpoint set, `dream month` and `dream
+    chapter` refuse in one sentence before anything is read and open no connection."""
+    monkeypatch.setenv("LOGBOOK_DREAM_ENDPOINT", "https://api.example.org/v1")
+    monkeypatch.setenv("LOGBOOK_DREAM_MODEL", "xy-chat-1")
+    capsys.readouterr()
+    with pytest.raises(SystemExit) as e:
+        cli.main(list(argv))
+    assert e.value.code == 2 and "names no 'dream' entry" in capsys.readouterr().err
     assert no_network == [], f"logbook {' '.join(argv)} tried to connect: {no_network}"

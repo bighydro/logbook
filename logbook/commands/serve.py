@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import sys
 from pathlib import Path
 
-from ..contrib import schedule, serve, service
+from ..contrib import phone, schedule, serve, service
 from ..core import sealing
+from ..core.flights import Airports
 from ..core.store import Logbook
 from .common import Subparsers, _airports
 
@@ -45,6 +47,31 @@ def serve_arguments(sub: Subparsers) -> None:
         " that install or remove it printed, never run",
     )
     s.add_argument(
+        "--build",
+        action="store_true",
+        help="build the Library's pages now and exit: what the server answers from (the 06:00 close and"
+        " every act on a page build them too)",
+    )
+    s.add_argument(
+        "--full",
+        action="store_true",
+        help="with --build: every page again, whatever the last build left (never needed in normal use: a"
+        " build renders what the lines since the last one touched)",
+    )
+    s.add_argument(
+        "--limit",
+        type=float,
+        default=serve.LIMIT_S,
+        metavar="SECONDS",
+        help=f"stop reading a page after this long and say so (default {serve.LIMIT_S:g}); with the pages"
+        " built ahead, it is built in the background instead",
+    )
+    s.add_argument(
+        "--live",
+        action="store_true",
+        help="render every page as it is asked for, never from the pages built ahead",
+    )
+    s.add_argument(
         "--status",
         action="store_true",
         help="whether a serve service is installed and answers; exit 0 answering, 1 installed and not"
@@ -73,17 +100,149 @@ def cmd_serve(a: argparse.Namespace) -> None:
     if a.install_service or a.uninstall_service or a.status or a.system:
         _service(a)
         return
+    if a.build:
+        _build(Logbook.find(), _airports(a.airports), a.full)
+        return
     from .day import voice  # whether a Day can hear a recording: asked once, now (labs, so here)
 
     lb = Logbook.find()
     try:
-        serve.serve(lb, host=a.host, port=a.port, airports=_airports(a.airports), voice=voice())
+        serve.serve(
+            lb,
+            host=a.host,
+            port=a.port,
+            airports=_airports(a.airports),
+            voice=voice(),
+            built=not a.live,
+            limit_s=max(1.0, a.limit),
+        )
     except serve.HostError as e:
         print(f"serve: {e}", file=sys.stderr)
         sys.exit(2)
     except OSError as e:
         print(f"serve: cannot listen on {a.host}:{a.port}: {e}", file=sys.stderr)
         sys.exit(2)
+
+
+def _build(lb: Logbook, airports: Airports | None, full: bool = False) -> None:
+    """`serve --build [--full]`: the Library's pages built now (`library_build.build`: what the lines
+    since the last build touched, or with `full` every page), said in one line; exit 1 when a page
+    failed (named), 75 when another process is building."""
+    from ..contrib import library_build
+
+    try:
+        result = library_build.build(
+            lb,
+            serve.Site(lb, airports),
+            say=lambda text: print(text, file=sys.stderr),
+            full=full,
+            workers=library_build.workers_default(lb),
+        )
+    except library_build.Busy as e:
+        print(f"serve: {e}; try again when it is done", file=sys.stderr)
+        sys.exit(75)
+    which = "every page" if library_build.Library(lb).built().get("full") else "what changed since the last"
+    print(
+        f"library: {result.pages:,} pages, {result.written:,} written, {result.removed:,} removed,"
+        f" in {result.seconds} s ({which}; {library_build.folder_of(lb)})"
+    )
+    if result.slowest:
+        print("  slowest: " + ", ".join(f"{target} {seconds:g} s" for target, seconds in result.slowest))
+    for target, why in sorted(result.failed.items()):
+        print(f"  failed: {target}: {why}", file=sys.stderr)
+    if result.failed:
+        sys.exit(1)
+
+
+def phone_arguments(sub: Subparsers) -> None:
+    """`logbook setup phone [--origin URL --login LOGIN | --off]`: whether the owner's own phone may
+    write through the Library, through Tailscale Serve (`logbook/contrib/phone.py`, docs/serve.md)."""
+    s = sub.add_parser(
+        "phone",
+        help="let your own phone write through the Library, through Tailscale Serve (off by default)",
+        description="let your own phone write through the Library (Reflect, With, Star, Sign and the"
+        " shelves' forms) when `tailscale serve --bg 8765` puts it on your tailnet: --origin names the"
+        " address the phone opens (https://<machine>.<tailnet>.ts.net), --login your tailnet login as"
+        " `tailscale status` names it; written to logbook.json `phone` after your yes, typed at a"
+        " terminal. --off removes it. Without a flag, says what is set",
+    )
+    s.add_argument(
+        "--origin", metavar="URL", help="https://<machine>.<tailnet>.ts.net, as the phone opens it"
+    )
+    s.add_argument("--login", metavar="LOGIN", help="your tailnet login, e.g. ines@example.org")
+    s.add_argument("--off", action="store_true", help="remove the setting: this machine only, as by default")
+    s.set_defaults(fn=cmd_phone)
+
+
+def cmd_phone(a: argparse.Namespace) -> None:
+    """`setup phone`: what is set. `--origin URL --login LOGIN`: the setting printed as it will be
+    written, then written to `logbook.json` under the writer lock after a yes typed at a terminal
+    (never piped: the owner's word, not a script's or an agent's); every other key kept. `--off`:
+    the key removed, every other kept. A setting, not a line: nothing is appended and no hash changes."""
+    if a.off and (a.origin is not None or a.login is not None):
+        print("setup phone: --off takes no --origin or --login; nothing changed", file=sys.stderr)
+        sys.exit(2)
+    if (a.origin is None) != (a.login is None):
+        print(
+            "setup phone: --origin and --login go together, the address the phone opens and your tailnet"
+            " login; nothing changed",
+            file=sys.stderr,
+        )
+        sys.exit(2)
+    lb = Logbook.find()
+    current = lb.meta.get(phone.KEY)
+    if a.off:
+        if current is None:
+            print("no phone in logbook.json: the Library is written from this machine only; nothing changed")
+            return
+        with lb.writer():
+            meta = lb.meta
+            meta.pop(phone.KEY, None)
+            lb._save_meta(meta)
+        print("phone: removed from logbook.json; the Library is written from this machine only again")
+        return
+    if a.origin is None:
+        problem = phone.problem(lb.meta)
+        if current is None:
+            print(
+                "the Library is written from this machine only (no phone in logbook.json); `logbook setup"
+                " phone --origin URL --login LOGIN` lets your phone write through Tailscale Serve"
+            )
+        elif problem is not None:
+            print(f"logbook.json phone lets nothing in: {problem}; `logbook setup phone` writes it again")
+        else:
+            print(f"your phone may write from {current['origin']} as {current['login']} (logbook.json phone)")
+        return
+    try:
+        setting = {"origin": phone.origin_of(a.origin), "login": phone.login_of(a.login)}
+    except phone.PhoneError as e:
+        print(f"setup phone: {e}", file=sys.stderr)
+        sys.exit(2)
+    if current == setting:
+        print(f"your phone may already write from {setting['origin']} as {setting['login']}; nothing changed")
+        return
+    if not sys.stdin.isatty():
+        print("setup phone: asks for your yes, typed at a terminal; nothing changed", file=sys.stderr)
+        sys.exit(2)
+    print(f"setup phone will write to {lb.meta_path.name}:")
+    print(f"  {json.dumps({phone.KEY: setting}).strip('{}')}")
+    print(
+        f"The Library then answers a form posted from {setting['origin']}, through Tailscale Serve on this"
+        f" machine and by {setting['login']}, as it answers this machine's own pages."
+    )
+    try:
+        answer = input("Write it? [y/N]: ").strip().casefold()
+    except EOFError:
+        answer = ""
+    if answer not in ("y", "yes"):
+        print("nothing changed")
+        return
+    with lb.writer():
+        lb.set_meta(**{phone.KEY: setting})
+    print(
+        f"phone: {setting['origin']} as {setting['login']} in logbook.json;"
+        " `logbook setup phone --off` removes it"
+    )
 
 
 def _service(a: argparse.Namespace) -> None:
@@ -214,8 +373,16 @@ def _service_status(platform: str, home: Path, config_home: Path | None, port: i
         address = f"http://{serve.HOST}:{item.port}/"
         if service.answering(item.port):
             print(f"answering at {address}")
+            continue
+        silent = True
+        if service.probe(item.port) == service.NOT_ANSWERING:
+            restart = service.restart_command(item) or service.restart_by_hand(item)
+            print(
+                f"not answering at {address}: it takes the connection and says nothing in"
+                f" {service.PROBE_TIMEOUT_S:g} s; `{restart.text}` restarts it (the scheduled run does);"
+                f" its output: {item.log}"
+            )
         else:
-            silent = True
             print(f"nothing answers at {address}; its output: {item.log}")
     if silent:
         sys.exit(1)

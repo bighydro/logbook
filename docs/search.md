@@ -1,7 +1,7 @@
 # Search
 
 `logbook search TEXT [--since YYYY-MM-DD] [--until YYYY-MM-DD] [--kinds note,transcript,message,mail,event]
-[--tier 1|2|3] [--limit N] [--json]` is full-text search over the record: the words of every line
+[--tier 1|2|3] [--limit N] [--standing] [--json]` is full-text search over the record: the words of every line
 that carries any, found through the index and read back from the files, grouped by day with the
 row `show` prints and a snippet of the matching words. It is a reader (ADR 0013): it derives from
 the record at its head and writes nothing.
@@ -83,8 +83,15 @@ found and the snippet says who said it. A transcript whose file is not in the st
 its title and participants alone.
 
 The window is local days, inclusive, in the record's zone (`--since`, `--until`; the whole record
-without them). A **retracted** line is never a hit, and neither is a retraction; a line another line
-`supersedes` still is, as `show` prints both.
+without them). A **retracted** line is never a hit, and neither is a retraction. A line that is not
+**standing** because a later line of its own kind `supersedes` it (SPEC §3) is still a hit, marked:
+its row ends `· superseded by #N`, the line that took its place, in the words `show` uses for the
+kinds it marks (search marks every kind), and in `--json` every hit carries `standing` (true or
+false) and `superseded_by` (the id of that line, else `null`). A superseder that is itself
+retracted supersedes nothing, and a line of another kind naming it does not count, as every reader
+has it. `--standing` leaves the superseded hits out and lets the next by rank take their place, so
+`--limit` still counts standing hits; nothing is left out without it. The mark is read from the
+index's `lines_kind_supersedes` lookup, not from the search table, so no rebuild is needed for it.
 
 ## Tiers
 

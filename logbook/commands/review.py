@@ -16,6 +16,11 @@ or a date for (RFC 0040), `logbook.contrib.video_review`'s (`VideoQueue`, declar
 writes the scene's no (`scene-review/v1`, never an `entity-review/v1` line), and its own answers
 (`VIDEO_FLAGS`) are refused for every other kind as a place's options are.
 
+`review with` is no kind either and no sitting: who the record puts with the owner over a journey, a
+week or a stretch, asked once (RFC 0043 §11, `logbook.contrib.review_with`, its command line in
+`who.py`); `--accept` takes the queue's numbers there as here, and `review` alone does not list it,
+since it needs a stretch.
+
 A goal joins the sitting (RFC 0036 amendment 1, RFC 0037 §12): `review goal` asks each standing goal
 open today once a week, while its chain has no `review/v1` line dated this ISO week
 (`entity_review.goal_read`), and the owner answers with a verdict, `--say N DISPOSITION` (one of
@@ -37,8 +42,8 @@ from ..core.store import Logbook
 from .common import Subparsers
 
 # video: RFC 0040, `commands.videos`; speakers: RFC 0038 §4, `commands.speakers`, listed last
-# goal: RFC 0036 amendment 1, `GoalQueue` here
-KINDS = ("person", "org", "idea", "asset", "place", "video", "goal", "speakers")
+# goal: RFC 0036 amendment 1, `GoalQueue` here; receipts: RFC 0043 §12, `commands.receipts`
+KINDS = ("person", "org", "idea", "asset", "place", "video", "goal", "receipts", "speakers")
 PLACE_FLAGS = (
     ("--near", "near"),
     ("--radius", "radius"),
@@ -57,6 +62,7 @@ VIDEO_FLAGS = (
     ("--asked", "asked"),
     ("--answered", "answered"),
 )
+WITH = "with"  # RFC 0043 §11: the review-with queue of a stretch (`commands.who`), not a kind of thing
 GOAL_FLAGS = (("--say", "say"), ("--note", "note"))  # a goal's answers: its verdict, and your words on it
 TELLS = (("--accept", "accept"), ("--reject", "reject"), ("--name", "name"), ("--all-above", "all_above"))
 NOTHING_ABOVE = "nothing to write: no proposal at or above that score"
@@ -356,9 +362,16 @@ def review_arguments(sub: Subparsers) -> None:
         " `review speakers` the voices of your recordings not yet named (RFC 0038)."
         " `review video`: the scenes `videos infer` proposed a place or a date for (RFC 0040)."
         " `review goal` your open goals not yet reviewed this week, each answered with --say (RFC 0036)."
+        " `review receipts` the receipt mails proposed as payments, tier 3 (RFC 0043 §12)."
         " With no KIND, every queue, one block each.",
     )
-    s.add_argument("kind", nargs="?", choices=KINDS, metavar="KIND", help=f"one of {', '.join(KINDS)}")
+    s.add_argument(
+        "kind",
+        nargs="?",
+        choices=(*KINDS, WITH),
+        metavar="KIND",
+        help=f"one of {', '.join(KINDS)}; or `with`, who the record puts with you over a stretch (RFC 0043)",
+    )
     s.add_argument("--accept", action="append", metavar="N[,N]", help="accept these proposals")
     s.add_argument(
         "--reject",
@@ -394,6 +407,12 @@ def review_arguments(sub: Subparsers) -> None:
     from .speakers import speakers_arguments
 
     speakers_arguments(s)
+    from .who import review_arguments as with_arguments
+
+    with_arguments(s)
+    from .receipts import receipts_arguments
+
+    receipts_arguments(s)
     v = s.add_argument_group("video", "with `review video` (RFC 0040); --top above counts its scenes")
     v.add_argument(
         "--place",
@@ -444,6 +463,12 @@ def cmd_review(a: argparse.Namespace) -> None:
     """`review [KIND] [--accept N[,N]] [--reject N[,N]] [--name N NAME] [--all-above SCORE] [--json]`
     (and, for a place, `setup places review`'s options): one sitting (`sitting`). With no KIND,
     every queue in turn, nothing written."""
+    from . import who
+
+    if a.kind == WITH:
+        who.review_with(a)
+        return
+    who.refuse_review_flags(a.kind, a)
     lb = Logbook.find()
     if a.kind is None:
         _every_queue(lb, a)
@@ -477,8 +502,12 @@ def cmd_review(a: argparse.Namespace) -> None:
                 f"review {a.kind}",
                 f"{', '.join(given)} {'goes' if len(given) == 1 else 'go'} with `review goal`",
             )
-    from . import speakers
+    from . import receipts, speakers
 
+    if a.kind != "receipts":
+        given = receipts.refuse_flags(a)
+        if given:
+            _refuse(f"review {a.kind}", f"{', '.join(given)} goes with `review receipts`")
     if a.kind == "speakers":
         from ..contrib.speakers_review import ReviewError
 
@@ -528,15 +557,28 @@ def queue_of(kind: str) -> Queue:
         return SpeakerQueue()
     if kind == "goal":
         return GoalQueue()
+    if kind == "receipts":
+        from .receipts import ReceiptQueue
+
+        return ReceiptQueue()
     return EntityQueue(kind)
 
 
 def _every_queue(lb: Logbook, a: argparse.Namespace) -> None:
+    from .receipts import FLAGS as RECEIPT_FLAGS
     from .speakers import FLAGS as SPEAKER_FLAGS
 
     told = [
         flag
-        for flag, dest in (*TELLS, *TOP_FLAGS, *PLACE_FLAGS, *VIDEO_FLAGS, *SPEAKER_FLAGS, *GOAL_FLAGS)
+        for flag, dest in (
+            *TELLS,
+            *TOP_FLAGS,
+            *PLACE_FLAGS,
+            *VIDEO_FLAGS,
+            *SPEAKER_FLAGS,
+            *GOAL_FLAGS,
+            *RECEIPT_FLAGS,
+        )
         if getattr(a, dest, None) not in (None, False)
     ]
     if told:

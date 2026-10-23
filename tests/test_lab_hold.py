@@ -279,6 +279,81 @@ def test_without_the_header_newsletters_are_unknown_not_none(lb: Logbook) -> Non
     assert "newsletters are unknown" in hold.markdown(report)
 
 
+def _listed(lb: Logbook) -> Logbook:
+    """The boat club's newsletter three times, two of them with the list headers (RFC 0015, amendment of
+    2026-10-20), all three in a tab; Ola three times, one in Social, one in Primary, one written before the
+    amendment (neither key); a sent mail with the headers, which is the owner's and not counted."""
+    club_list = {"unsubscribe": True, "one_click": True, "id": "Boat club news <news.boatclub.example.org>"}
+    _mail(
+        lb,
+        "2026-03-01T07:00:00Z",
+        LETTER,
+        OWNER,
+        "t-n1",
+        extra={"list": club_list, "gmail_category": "promotions"},
+    )
+    _mail(
+        lb,
+        "2026-03-08T07:00:00Z",
+        LETTER,
+        OWNER,
+        "t-n2",
+        extra={"list": {"unsubscribe": True}, "gmail_category": "promotions"},
+    )
+    _mail(
+        lb,
+        "2026-03-09T07:00:00Z",
+        LETTER,
+        OWNER,
+        "t-n3",
+        extra={"list": {"id": "<news.boatclub.example.org>"}, "gmail_category": "updates"},
+    )
+    _mail(lb, "2026-03-02T10:15:00Z", OLA, OWNER, "t-ola", extra={"gmail_category": "primary"})
+    _mail(lb, "2026-03-03T10:15:00Z", OLA, OWNER, "t-ola", extra={"gmail_category": "social"})
+    _mail(lb, "2026-03-04T10:15:00Z", OLA, OWNER, "t-ola")
+    _mail(
+        lb,
+        "2026-03-05T10:15:00Z",
+        OWNER,
+        OLA,
+        "t-ola",
+        direction="sent",
+        extra={"list": {"unsubscribe": True}, "gmail_category": "updates"},
+    )
+    return lb  # fmt: skip
+
+
+def test_senders_count_per_sender_the_mails_with_list_unsubscribe_and_in_each_tab(lb: Logbook) -> None:
+    report = hold.census_senders(_listed(lb), now=NOW)
+    rows = {row["email"]: row for row in report["senders"]}
+    assert rows[LETTER]["list_unsubscribe"] == 2, "a List-Id alone is a list, not an unsubscribe"
+    assert rows[LETTER]["tabs"] == {"promotions": 2, "social": 0, "updates": 1}
+    assert rows[OLA]["list_unsubscribe"] == 0
+    assert rows[OLA]["tabs"] == {"promotions": 0, "social": 1, "updates": 0}, "Primary is not counted"
+    assert rows[LETTER]["newsletter"] is True and rows[OLA]["newsletter"] is None
+    assert report["lists_and_tabs"] == {"list_unsubscribe": 2, "promotions": 2, "social": 1, "updates": 1}
+    assert report["newsletters"] == {"held": True, "lines_with_header": 2, "senders": 1, "note": None}
+    text = hold.markdown(report)
+    section = text.split("## Lists and tabs", 1)[1].split("\n## ", 1)[0]
+    assert LETTER in section and OLA in section and "List-Unsubscribe" in section
+    stored = json.loads(json.dumps(report))
+    assert stored["senders"][0]["tabs"] == rows[stored["senders"][0]["email"]]["tabs"]
+
+
+def test_senders_summary_counts_the_lists_and_tabs_and_names_nobody(
+    lb: Logbook, capsys: pytest.CaptureFixture[str]
+) -> None:
+    summary = _census(_listed(lb), "senders", capsys=capsys)
+    assert summary["lists_and_tabs"] == {"list_unsubscribe": 2, "promotions": 2, "social": 1, "updates": 1}
+    assert "@" not in json.dumps({k: v for k, v in summary.items() if k != "report"})
+    report = _report(lb, "senders")
+    assert {row["email"]: row["list_unsubscribe"] for row in report["senders"]} == {LETTER: 2, OLA: 0}
+    cli.main(["lab", "hold", "census", "senders"])
+    text = capsys.readouterr().out
+    assert "2 mails with List-Unsubscribe, 4 in Promotions, Social or Updates" in text
+    assert "example.org" not in text.replace(str(lb.root), "")
+
+
 def test_senders_leave_tier_3_out_unless_asked_and_take_the_highest_tier_read(mailbox: Logbook) -> None:
     default = hold.census_senders(mailbox, now=NOW)
     assert default["tier"] == 2 and default["max_tier"] == 2

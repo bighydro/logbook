@@ -110,19 +110,17 @@ def _policy(lb: Logbook, entry: dict[str, Any] | None, mcp: int = 1) -> None:
 
 
 def _answer(material: dict[str, Any], **parts: list[dict[str, Any]]) -> dict[str, Any]:
-    """A plausible answer from the material: the day's stays and notes cited; `parts` override."""
+    """A plausible dream-day/4 answer from the material: the day's stays and notes cited, its one
+    question unsupported; `parts` override."""
     stays = [r for e in material["timeline"] for r in e["ref"]]
     notes = [n["ref"] for n in material["notes"]]
     found: dict[str, Any] = {
-        "day": [
+        "story": [
             {"text": "A day at home.", "evidence": stays[:1]},
             {"text": "You wrote about lunch.", "evidence": notes[:1] or stays[:1]},
         ],
-        "threads": [],
-        "questions": [
-            {"text": "What came of the lunch?", "evidence": notes[:1] or stays[:1]},
-            {"text": "Was the evening what you wanted?", "unsupported": True},
-        ],
+        "threads": [{"text": "What came of the lunch?", "evidence": notes[:1] or stays[:1]}],
+        "questions": [{"text": "Was the evening what you wanted?", "unsupported": True}],
         "people": [],
         "promises": [],
     }
@@ -277,10 +275,10 @@ def test_a_valid_answer_writes_one_draft_with_what_it_read(
     ]
     assert p["read_count"] == len(on_day)
     assert p["language"] == "en" and "supersedes" not in p
-    assert p["extra"]["prompt"] == "dream-day/3" and p["extra"]["parts"] == [
-        "day",
-        "day",
-        "questions",
+    assert p["extra"]["prompt"] == "dream-day/4" and p["extra"]["parts"] == [
+        "story",
+        "story",
+        "threads",
         "questions",
     ]
     assert drafts.validate(p) == []
@@ -294,16 +292,18 @@ def test_a_valid_answer_writes_one_draft_with_what_it_read(
     assert seen["url"] == "http://127.0.0.1:8080/v1/chat/completions"
 
 
-def test_dream_day_3_is_the_prompt_with_the_proposed_events_and_rule_5() -> None:
-    """dream-day/2 added the proposed events (#278) and rule 5, agents are not people, came after it:
-    each changes what a draft holds, so the prompt with both is dream-day/3, and the pages that explain
-    it name the same one."""
+def test_dream_day_4_is_the_prompt_with_the_story_the_lenses_and_one_question() -> None:
+    """dream-day/2 added the proposed events (#278), dream-day/3 rule 5, agents are not people, and
+    dream-day/4 the story, the lenses, learned, decided, the ideas, the photo, the links and one
+    question (RFC 0043 slice B): each changes what a draft holds, so the prompt is dream-day/4, and the
+    pages that explain it name the same one."""
     prompt = dream.PROMPT_FILE.read_text(encoding="utf-8")
-    assert dream.PROMPT_NAME == "dream-day/3"
+    assert dream.PROMPT_NAME == "dream-day/4"
     assert "- `events`:" in prompt and "\n5. Agents are not people." in prompt
+    assert "- `story`:" in prompt and "- `links`:" in prompt and "exactly one question" in prompt
     for page in ("dream-prompt.md", "dream.md"):
         text = (Path(__file__).resolve().parents[1] / "docs" / page).read_text(encoding="utf-8")
-        assert "`dream-day/3`" in text, page
+        assert "`dream-day/4`" in text, page
 
 
 def test_the_prompt_says_the_language_of_the_day(lb: Logbook, monkeypatch: pytest.MonkeyPatch, no_network):
@@ -347,8 +347,9 @@ def test_too_many_unsupported_segments_refuse_and_write_nothing(
 ):
     def answer(material: dict[str, Any]) -> dict[str, Any]:
         return {
-            "day": [{"text": "A day.", "evidence": material["timeline"][0]["ref"][:1]}],
-            "questions": [{"text": "Why?", "unsupported": True}, {"text": "How?", "evidence": ["nope"]}],
+            "story": [{"text": "A day.", "evidence": material["timeline"][0]["ref"][:1]}],
+            "threads": [{"text": "Why?", "unsupported": True}],
+            "questions": [{"text": "How?", "evidence": ["nope"]}],
         }
 
     _fake(monkeypatch, answer)
@@ -514,7 +515,7 @@ def test_the_day_shows_the_draft_above_the_timeline_and_hides_it_under_no_dream(
     head = next(i for i, row in enumerate(rows) if row.startswith("  draft "))
     assert f"model:{MODEL}" in rows[head] and f"read at {line['payload']['read_head'][:8]}" in rows[head]
     assert "dreamed 1×, last on" in rows[head] and "1 unsupported" in rows[head]
-    assert rows[head + 1].startswith("      day       A day at home.  […")
+    assert rows[head + 1].startswith("      story     A day at home.  […")
     assert rows[head + 4] == "    ~ question  Was the evening what you wanted?  unsupported"
     timeline = next(i for i, row in enumerate(rows) if "stay   Home" in row)
     assert head < timeline  # above every note of the day
@@ -522,7 +523,9 @@ def test_the_day_shows_the_draft_above_the_timeline_and_hides_it_under_no_dream(
     assert code == 0 and "draft" not in out
     data = json.loads(_cli("day", DAY, "--json", "--no-anniversaries")[1])
     assert data["draft"]["line"] == line["id"] and data["draft"]["unsupported"] == 1
-    assert data["draft"]["segments"][0]["supported"] is True and data["draft"]["segments"][0]["part"] == "day"
+    assert (
+        data["draft"]["segments"][0]["supported"] is True and data["draft"]["segments"][0]["part"] == "story"
+    )
     assert "draft" not in json.loads(_cli("day", DAY, "--json", "--no-dream")[1])
     assert "draft" not in json.loads(_cli("day", NEXT, "--json", "--no-anniversaries")[1])
 
@@ -734,6 +737,9 @@ def test_an_unchanged_policy_dreams_nothing_again_and_reads_as_before(
         "line", "seq", "source", "model", "tier", "at", "read_head", "read_count", "language",
         "segments", "unsupported", "proposals", "proposals_unknown", "supersedes", "earlier", "dreamed",
         "last", "malformed",
+        # dream-day/4 (RFC 0043 slice B): what the Day page reads of a day's draft beside the above
+        "evening", "read_until", "lenses", "links", "marked", "dropped", "dropped_links", "dropped_segments",
+        "since_signed", "signed_seq", "closing",
     }  # fmt: skip
 
 

@@ -11,7 +11,7 @@ import re
 from pathlib import Path
 
 import pytest
-from persona import KARI_ID, OLA_ID, persona_record
+from persona import KARI_ID, OLA_ID, flight, persona_record, utc
 
 from logbook import cli
 from logbook.contrib import vault
@@ -263,6 +263,16 @@ def test_since_and_until_pick_the_days(lb: Logbook, tmp_path: Path) -> None:
     assert sorted(p.stem for p in (folder / "people").glob("*.md")) == ["Ola Nordmann"]
     line = list(lb.lines())[-1]
     assert line["payload"]["window"] == {"from": "2026-06-14T22:00:00Z", "to": "2026-06-17T22:00:00Z"}
+
+
+def test_a_flight_with_no_end_is_written_at_its_departure(lb: Logbook, tmp_path: Path) -> None:
+    line = flight(TUESDAY, "565", "ZRH", "OSL", utc(TUESDAY, "20:00"), utc(TUESDAY, "22:00"))
+    del line["end"], line["payload"]["actual_arrival"]
+    lb.append(**line)
+    folder = tmp_path / "Vault"
+    _run(str(folder), "--since", TUESDAY, "--until", TUESDAY)
+    page = _read(folder, "days", "2026", f"{TUESDAY}.md")
+    assert re.search(r"^- 20:00 \S+ XY 565 ZRH .+ OSL", page, re.MULTILINE), page
 
 
 def test_a_backwards_window_and_a_bad_day_are_refused(

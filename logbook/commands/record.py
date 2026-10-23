@@ -665,14 +665,16 @@ SETUP_STEPS = ("folder", "timezone", "owner", "home", "sources", "doctor")
 
 
 def setup_arguments(sub: Subparsers) -> None:
-    """`logbook setup [places|assets|questions|day_start|speakers]`: the guided first run, and the
+    """`logbook setup [places|assets|questions|day_start|speakers|phone]`: the guided first run, and the
     settings of the record that it asks about or that live beside its policy — the named places
     (`places.json`), the assets it tracks (`assets.json`), the digest's questions
-    (`policy/questions.json`), where the day starts — and the diarizer's models (RFC 0038). Each is
-    declared beside the code that reads it."""
+    (`policy/questions.json`), where the day starts, whether the owner's phone writes through the
+    Library — and the diarizer's models (RFC 0038). Each is declared beside the code that reads it."""
     from .day import questions_arguments
     from .derive import speakers_arguments
+    from .maps import setup_map_arguments
     from .places import places_arguments
+    from .serve import phone_arguments
     from .sync import assets_arguments
 
     s = sub.add_parser(
@@ -681,7 +683,7 @@ def setup_arguments(sub: Subparsers) -> None:
         description="the guided first run: where the record lives, your timezone, who you are, your home,"
         " what is"
         " on this machine to import; one question at a time, resumable; --yes takes every default."
-        " The record's settings: places, assets, questions, day_start",
+        " The record's settings: places, assets, questions, day_start, phone",
     )
     s.add_argument("--yes", action="store_true", help="take every default, ask nothing (tests, scripts)")
     s.add_argument("--step", metavar="NAME", help="run one step again: " + ", ".join(SETUP_STEPS))
@@ -693,6 +695,8 @@ def setup_arguments(sub: Subparsers) -> None:
     questions_arguments(settings)
     day_start_arguments(settings)
     speakers_arguments(settings)
+    setup_map_arguments(settings)
+    phone_arguments(settings)
 
 
 def cmd_setup(a: argparse.Namespace) -> None:

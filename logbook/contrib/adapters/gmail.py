@@ -20,10 +20,12 @@ dedupes against both, imported with `--account` or without (`held`, by normalise
 use): the system labels `INBOX`, `SENT`, `IMPORTANT` and `STARRED` as `Inbox`, `Sent`, `Important` and
 `Starred`, every label of the owner's by its name (`Boat/Engine` for a nested one), in the API's order,
 under `payload.labels`, the profile's slot; the thread id under `extra.gmail_thread_id` in decimal, as
-X-GM-THRID and Takeout spell the number the API gives in hex. Dropped, because IMAP never shows them and
-the line would differ: `UNREAD` (a flag, not a label), the category tabs (`CATEGORY_*`) and any label the
-label list does not name. Labels are the mailbox's state when the message is read, taken once; a label
-changed later is never revisited.
+X-GM-THRID and Takeout spell the number the API gives in hex. Dropped from `labels`, because IMAP never
+shows them: `UNREAD` (a flag, not a label), the category tabs (`CATEGORY_*`) and any label the label list
+does not name. The tab is kept instead as `extra.gmail_category` (`mail.gmail_category`: `primary`,
+`social`, `promotions`, `updates`, `forums`; RFC 0015, amendment of 2026-10-20), the one field in which
+this line differs from the IMAP source's, which cannot say it. Labels and the tab are the mailbox's state
+when the message is read, taken once; a label changed later is never revisited.
 
 **What is not a line.** A draft (`DRAFT`: neither sent nor received, and a draft's Message-ID is often
 the one its sent message will carry) is skipped and counted (`skipped_draft`); a message in Spam or Trash
@@ -384,7 +386,8 @@ def _line(
     )
     if line is None:
         return None
-    mail.gmail_fields(line["payload"], _labels(labels, names), _thread(data.get("threadId")))
+    tab = mail.gmail_category(labels)  # the CATEGORY_* ids, which `_labels` drops
+    mail.gmail_fields(line["payload"], _labels(labels, names), _thread(data.get("threadId")), tab)
     return line
 
 

@@ -109,7 +109,7 @@ import textwrap
 from collections import Counter
 from collections.abc import Iterable, Iterator, Mapping, Sequence
 from datetime import UTC, date, datetime, time, timedelta
-from typing import Any, NamedTuple
+from typing import Any, NamedTuple, overload
 from zoneinfo import ZoneInfo
 
 from . import (
@@ -797,7 +797,9 @@ def _finish(
     )
     entry["attached"] = _attached(start, end, lines, stands_for, rd)
     companions = (
-        [] if entry["kind"] == stays.MOVE else present.company(span, lines, rd.identities, rd.places, owner)
+        []
+        if entry["kind"] == stays.MOVE
+        else present.company(span, lines, rd.identities, rd.places, owner, rd.voice_gate)
     )  # with is a stay's relation: a photo from the train attaches to the move, nobody is with you on it
     entry["with"] = {
         "confirmed": [c.to_json() for c in companions if c.status == present.CONFIRMED],
@@ -807,12 +809,26 @@ def _finish(
     if unnamed:  # RFC 0038 §3.4: counted, never named; the key only on a stay that has them
         entry["with"]["unnamed"] = unnamed
     if entry["kind"] == stays.MOVE:
-        entry["flights"] = [
-            f["id"] for f in flights if _instant(f["start"]) < end and (_instant(f["end"]) or start) > start
-        ]
+        entry["flights"] = _covering(flights, start, end)
         if not entry["airports"]:
             entry["airports"] = _flown(start, end, flights)
     return entry
+
+
+def _span(flight: Mapping[str, Any]) -> tuple[datetime, datetime] | None:
+    """A flight's departure and arrival; one with no arrival ends at its departure, one with no
+    departure is None, for the caller to skip."""
+    since = _instant(flight.get("start"))
+    if since is None:
+        return None
+    return since, _instant(flight.get("end")) or since
+
+
+def _covering(flights: Sequence[dict[str, Any]], start: datetime, end: datetime) -> list[str]:
+    """The ids of the flights over a move: the ones whose span overlaps it (`_span`)."""
+    return [
+        str(f["id"]) for f in flights if (span := _span(f)) is not None and span[0] < end and span[1] > start
+    ]
 
 
 def _flown(start: datetime, end: datetime, flights: Sequence[dict[str, Any]]) -> list[str]:
@@ -823,9 +839,10 @@ def _flown(start: datetime, end: datetime, flights: Sequence[dict[str, Any]]) ->
     points near an airport names none."""
     length = (end - start).total_seconds()
     for f in flights:
-        since, until = _instant(f["start"]), _instant(f["end"]) if f["end"] else None
-        if until is None or not (f["from"] and f["to"]):
+        span = _span(f)
+        if span is None or not (f["from"] and f["to"]):
             continue
+        since, until = span  # one with no arrival is an instant: it overlaps no move, so names none
         overlap = (min(end, until) - max(start, since)).total_seconds()
         inside = start <= since and until <= end
         if length > 0 and overlap > 0 and (inside or overlap * 2 >= length):
@@ -1151,8 +1168,14 @@ def _stamp(instant: datetime) -> str:
     return instant.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def _instant(stamp: str) -> datetime:
-    return datetime.fromisoformat(stamp.replace("Z", "+00:00"))
+@overload
+def _instant(stamp: str) -> datetime: ...
+@overload
+def _instant(stamp: None) -> None: ...
+def _instant(stamp: str | None) -> datetime | None:
+    """An RFC3339 stamp as an aware datetime; None for a stamp the line does not have (a flight with
+    no arrival), never a crash on one."""
+    return None if stamp is None else datetime.fromisoformat(stamp.replace("Z", "+00:00"))
 
 
 # -- text ----------------------------------------------------------------------------------------------------
