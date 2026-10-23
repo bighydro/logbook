@@ -93,7 +93,7 @@ HOME, AWAY, ABOARD, IN_TRANSIT, UNKNOWN = "home", "away", "aboard", "in_transit"
 NIGHT_CLASSES = (HOME, AWAY, ABOARD, IN_TRANSIT, UNKNOWN)
 MORE_THAN_ONE = "more than one proposal for next month"
 MORE_QUESTIONS = "more than one question"
-BESIDE_A_NAME = "a number beside a person"  # the key of `extra.marked` for a figure beside a name
+BESIDE_A_NAME = dream.BESIDE_A_NAME  # the key of `extra.marked` for a figure beside a name
 REFLECTION, SIGNED = "reflection", "signed"  # what the owner wrote on a signed day, by where
 
 
@@ -279,8 +279,8 @@ def material(
 def _told(line: Line | None, ids: set[str], made: Material) -> list[dict[str, Any]]:
     """A signed day as its standing draft told it: its supported sentences resting on lines of the
     month, a model's words (`drafted`), `TOLD` at most, each with its part and its references; a
-    sentence that writes a figure beside a person (`beside_a_name`) is left out, so the material never
-    carries one, whatever a day's draft said."""
+    sentence that writes a figure beside a person (`dream.beside_a_name`) is left out, so the material
+    never carries one, whatever a day's draft said."""
     if line is None:
         return []
     payload = line.get("payload") or {}
@@ -290,7 +290,7 @@ def _told(line: Line | None, ids: set[str], made: Material) -> list[dict[str, An
     told: list[dict[str, Any]] = []
     for i, segment in enumerate(segments):
         shown = drafts.segment_json(segment, ids, drafts.NOT_ON_MONTH)
-        if not shown["supported"] or len(told) >= TOLD or beside_a_name(shown["text"], made):
+        if not shown["supported"] or len(told) >= TOLD or dream.beside_a_name(shown["text"], made):
             continue  # a day's sentence with a figure beside a person is never passed on
         ref = made.refs_of(shown["evidence"])
         if ref:
@@ -482,7 +482,7 @@ def prompt(read: Read) -> list[dict[str, str]]:
 def shape(found: Mapping[str, Any], read: Read) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """The answer as a draft has it: every part's segments in order (`dream.segments_of`, strictly),
     one proposal for next month and one question at most, the number rule held (`dream.hold_numbers`)
-    and no figure beside a person (`hold_names`), and the evidence rule's share checked again; and
+    and no figure beside a person (`dream.hold_names`), and the evidence rule's share checked again; and
     what `extra` keeps of it: `parts`, `numbers`, `dropped`, `marked`."""
     made = read.made
     segments, parts = dream.segments_of(found, made, drafts.MONTH_PARTS, strict=True)
@@ -493,7 +493,7 @@ def shape(found: Mapping[str, Any], read: Read) -> tuple[list[dict[str, Any]], d
     unbacked = dream.hold_numbers(segments, made.data, made)
     if unbacked:
         marked[dream.UNBACKED] = unbacked
-    beside = hold_names(segments, made)
+    beside = dream.hold_names(segments, made)
     if beside:
         marked[BESIDE_A_NAME] = beside
     dream.share_of(segments, made.unit)
@@ -517,29 +517,6 @@ def keep_one(
             del segments[i], parts[i]
             dropped[why] += 1
     return dict(dropped)
-
-
-def beside_a_name(text: str, made: Material) -> bool:
-    """Whether `text` names a canonical person of the record (their full name, or their first name,
-    whole words, as written) and writes a figure (`dream.figures`: dates, clock times and the unit's
-    years are not figures): a number beside a person."""
-    years = {str(y + d) for y in map(int, re.findall(r"\b(?:19|20)\d{2}\b", made.day)) for d in (-1, 0, 1)}
-    if not dream.figures(text, years=years, language=made.language):
-        return False
-    names = {n.strip() for n in made.canonical.values() if n and n.strip()}
-    names |= {n.split()[0] for n in list(names) if len(n.split()[0]) >= 3}
-    return any(_names(text, name) for name in names)
-
-
-def hold_names(segments: list[dict[str, Any]], made: Material) -> int:
-    """No number beside a person, in place: a supported segment that writes one (`beside_a_name`) is
-    marked unsupported, whatever its evidence; returns how many were marked."""
-    marked = 0
-    for i, segment in enumerate(segments):
-        if "evidence" in segment and beside_a_name(str(segment["text"]), made):
-            segments[i] = {"text": str(segment["text"]), "unsupported": True}
-            marked += 1
-    return marked
 
 
 # -- the dream --------------------------------------------------------------------------------------------

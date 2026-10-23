@@ -60,9 +60,10 @@ from zoneinfo import ZoneInfo
 
 from ..core import notes, sealing, signing
 from ..core.chain import Line
+from ..core.drafts import KIND as DRAFT_KIND
 from ..core.export import parse_day
 from ..core.store import RETRACTION, Logbook, retractions
-from . import dream_events, promises
+from . import dream_events, keep, promises
 
 SOURCE = "reflect"  # the `source` of the lines `day reflect` writes
 CUE = "reflect"  # the word a Wispr Flow dictation begins with when it is the reflection
@@ -140,6 +141,38 @@ def on_page(lines: Sequence[Line], retracted: Collection[str]) -> set[str]:
         for line in lines
         if line.get("kind") not in (RETRACTION, signing.KIND) and str(line["id"]) not in retracted
     }
+
+
+def ink(lb: Logbook, day: str, confirm: list[str] | None) -> list[str] | None:
+    """RFC 0043 §6 rule 3, the signature never confirms a draft line: `confirm` as `signing.sign`
+    takes it, every `draft` line of the page left out. None, the whole page, becomes the page's lines
+    but its drafts when it has one (else stays None, byte for byte the signature it was); a list
+    loses a draft it names, as a standing signature made before the rule may have. The page digest
+    still covers the draft: the owner signed what they were shown. Read under the caller's lock."""
+    lines, retracted = day_lines(lb, day)
+    page = [line for line in lines if str(line["id"]) in on_page(lines, retracted)]
+    drafted = {str(line["id"]) for line in page if line.get("kind") == DRAFT_KIND}
+    if not drafted:
+        return confirm
+    if confirm is None:
+        return [str(line["id"]) for line in page if str(line["id"]) not in drafted]
+    seqs = {str(line["seq"]) for line in page if str(line["id"]) in drafted}
+    return [entry for entry in confirm if entry.strip() not in drafted and entry.strip() not in seqs]
+
+
+def no_draft(lb: Logbook, day: str, entries: Collection[str]) -> None:
+    """Rule 3 for what the owner typed (`--confirm`, a disposition flag, `sign_day`'s ids): an entry
+    naming a draft line of the page, by seq or id, is refused in one sentence, before anything is
+    written."""
+    lines, _retracted = day_lines(lb, day)
+    for entry in entries:
+        text = entry.strip()
+        for line in lines:
+            if line.get("kind") == DRAFT_KIND and text in (str(line["id"]), str(line["seq"])):
+                raise signing.SignError(
+                    f"#{line['seq']} is the dream's draft, a proposal: a signature never confirms it (RFC"
+                    " 0043 §6 rule 3); confirm the lines it rests on, or keep its sentences with --keep"
+                )
 
 
 def reflections(lines: Sequence[Line], retracted: Collection[str]) -> list[Line]:
@@ -750,6 +783,7 @@ class Closed:
     delegations: tuple[Line, ...]
     kept: str | None
     events: tuple[Line, ...] = ()
+    keeps: tuple[Line, ...] = ()  # what Keep and sign wrote (`keep.write`)
 
 
 def _quiet(_text: str) -> None:
@@ -766,16 +800,18 @@ def close(
     say: Callable[[str], None] = _quiet,
     events: Sequence[dream_events.Proposed] = (),
     first: int = 1,
+    keeping: keep.Asked | None = None,
 ) -> Closed:
     """The day closed: `day reflect --sign`, and the Sign of the Day page. Under one hold of the
     writer lock: the page read again (a disposition's line retracted since the proposals were read
     is refused, nothing written), the dream's proposed events accepted read again, numbered from
     `first`, and every one made into its line before the first is written (`dream_events.prepared`),
-    the reflection written when it is new (`write`), the accepted delegations written as notes
-    (`delegate`), the accepted events as event lines (`dream_events.write`), then the signature
-    through `signing.sign` with what `signature` says, at `at` or now. `say` hears what the command
-    prints as it goes. HeadMoved and another writer are the store's own errors; nothing is
-    retried."""
+    and what the owner keeps (`keeping`: Keep and sign, `keep.prepared`) checked and made, the reflection
+    written when it is new (`write`), the accepted delegations written as notes (`delegate`), the
+    accepted events as event lines (`dream_events.write`), what is kept (`keep.write`), then the
+    signature through `signing.sign` with what `signature` says, never a draft line confirmed (`ink`),
+    at `at` or now. `say` hears what the command prints as it goes. HeadMoved and another writer are
+    the store's own errors; nothing is retried."""
     zone = ZoneInfo(str(lb.meta["timezone"]))
     with lb.writer():
         lines, retracted = day_lines(lb, day)
@@ -784,6 +820,7 @@ def close(
         if gone:
             raise ReflectError(f"#{gone[0].seq} is no longer on the page of {day}; nothing was written")
         prepared = dream_events.prepared(lb, day, events, first)
+        items = keep.prepared(lb, day, keeping) if keeping else []
         with lb.index() as idx:
             earlier = signing.signature_of(idx, day, str(lb.meta["owner_id"]))
         note = r.note
@@ -806,13 +843,15 @@ def close(
             joined.append(str(line["id"]))
             written.append(line)
             say(dream_events.wrote_text(e, line))
+        keeps = keep.write(lb, day, today, items, say, at)
+        joined += [str(line["id"]) for line in keeps]
         args = signature(earlier, page | set(joined), joined, accepted)
         if args.kept is not None:
             say(f"  {args.kept}")
         line = signing.sign(
-            lb, day, confirm=args.confirm, note=args.note, at=at, dispositions=args.dispositions
+            lb, day, confirm=ink(lb, day, args.confirm), note=args.note, at=at, dispositions=args.dispositions
         )
-    return Closed(line, note, r.note is None, tuple(delegations), args.kept, tuple(written))
+    return Closed(line, note, r.note is None, tuple(delegations), args.kept, tuple(written), tuple(keeps))
 
 
 # -- the microphone ----------------------------------------------------------------------------------------

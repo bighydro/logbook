@@ -30,6 +30,7 @@ aboard the yacht Nordlys. Nothing in it is real.*
 | Page | What it is | The command it renders |
 |---|---|---|
 | `/day/YYYY-MM-DD` | the Day as a timeline: the nights either side, the country, the signature (or `unsigned`) with the page digest, the all-day entries, the `with` row (the day's company, your word marked, and the *with…* field); your reflection; one row per stay, stop, move, flight or run aboard an asset, in time order, with the clock, the kind and what it was; each row's attachments (events, transcripts with their voices when the line has them, as the Day names them ([speakers](speakers.md)), notes, mail threads, calls, keepers named; messages by conversation, each folded; photos counted and named) and company (confirmed, then proposed) under a toggle; a star on every row that is a line; what is unplaced; the health line; the sources and when each last spoke; *Everything this day held*, every line of the day, folded ([below](#the-day--everything-it-held)); at its foot, *Reflect and sign* ([below](#reflect-and-sign)) | `logbook day`, and `logbook day reflect`, `logbook star`, `logbook with` |
+| `/week/YYYY-Www` | the week, read-only: seven ribbons, one a day, each a link to its Day; where the week went (the week draft's numbers, each with its lines); each goal with what the week shows for it and the command that gives a verdict; the one proposal for next week, in pencil; the stale question; the people who moved, names only; the sprint and the next trip; Hold's census, counts only ([the week](week.md)) | `logbook dream week`, `goal review`, `show plan`, `lab hold census` |
 | `/days?from=&to=` | one row per day of the window, the day a link to its Day: the night, the kilometres moved, the flights, the stays and what attached, the people confirmed, the health triple, the usual sources with no line that day; then *Starred*, the window's stars, each linked to its row. Without a window, the record's last fortnight; a form and *earlier* / *later* links move it | `logbook show days` |
 | `/trips?year=` | the trips of the year: first and last day (a link to those days), nights, route, flights in and out, places, people. Without a year, the record's last; every year the record covers is a link | `logbook show trips --year` |
 | `/journeys?year=` | the journeys that began in the year, the latest first: the name or the dates (a link to the journey), the nights away, the return day, the route, the photos, the places, the people the record names, the draft folded, the evidence folded ([Journeys](#journeys)). Without a year, the record's last | `logbook show trips --year`, grown |
@@ -107,6 +108,94 @@ a form, moves the head while it runs, the next request brings the index to the n
 kept pages and readings go, and every page reads the new lines, with no restart. That
 rebuild happens once, under a lock, however many requests arrive at that moment; they wait for it
 rather than each starting their own on the same file.
+
+## Built ahead
+
+`logbook serve` answers from pages built ahead of time, not from the record while you wait
+([RFC 0047](https://github.com/bighydro/logbook/blob/main/rfcs/0047-the-librarys-doors.md) §8). Every door and shelf (`/`, `/days`, `/trips`,
+`/journeys`, `/people`, `/places`, `/world`, `/manifest`, `/manifest/people`, `/ideas`, `/promises`,
+`/goals`, `/agents`, `/assets`, `/gaps`) is built, with the Days of the last fortnight and the pages
+those shelves link to first (60 of each kind: the people at the top of People, this year's journeys,
+the orgs, the ideas, the goals, the promises). A built page is the page the server would have rendered
+at that moment, byte for byte, with one sentence added to its footer: `built 06:02`.
+
+When it is built:
+
+- **At the 06:00 close.** `sync --scheduled --close` builds the Library after the sync and the dream
+  and before `doctor`, and says so in one line; the demo month's first build says
+  `library: 90 pages, 90 written, in 7.8 s`. A build another process holds, or one that fails, is
+  that one line and never fails the run.
+- **After every act on a page.** Reflect, Sign, a star, *with…*, a name, a merge, a status: the page
+  the act sends you back to and the front page are dropped at once, so you see what you wrote, and a
+  rebuild of the rest starts in the background on a thread of its own. Acts that come while it builds
+  are one more build, not one each. An act refused because the page was older than the record (409)
+  drops the page its form was on, so your reload is the page as it stands.
+- **By hand.** `logbook serve --build` builds now and says what it did, and which pages took longest.
+  On a record of a hundred thousand lines or more it renders on several processes, one fewer than the
+  machine has, four at most; `LOGBOOK_BUILD_WORKERS` sets how many (1: one process). A page that fails is named and
+  the command exits 1; while another process builds it exits 75.
+- **The first time.** A server that finds no build starts one when it starts.
+
+What is never built: today's Day, whose shape moves with the hour (morning, live, evening; RFC 0043
+§5), the redirect of `/today`, and a photo's pixels. A page no build has written (a Day a year ago, a
+`/days` window you chose) is rendered when you ask for it and kept, so the next visit is a file and the
+next build builds it again (the latest 500 of them). Between builds the pages are as of their build:
+lines a sync appended at noon are on today's Day at once and on the shelves at the next close, or after
+your next act.
+
+A build after the first renders what changed. It keeps the line it read through, and renders every
+door and the pages they link to again, but a Day only when a line landed on it or the day after, and a
+journey only when it holds such a day; the rest stay as they were built. The whole-record readings the
+doors share are kept beside the index and brought forward by the lines appended since, not read again:
+the people of the whole record (`people.read_whole`, behind every person's page and the people review),
+the promises (`promises.extract`), and each person's last real contact (`real_contacts`). Each is held
+to the reading of every line by its own tests, and reads the whole record again when what was appended
+is more than lines of later days: a resolution or a retraction, a line that corrects another, a
+backfill into a month already read, a changed setting, or a new version of the code. A resolution,
+retraction or review line, or a changed setting, also makes the next build a full one. `logbook serve
+--build --full` renders every page whatever the last build left, and is never needed in normal use.
+
+Where: `library/` beside the index, in the cache folder (`~/Library/Caches/logbook/<owner_id>/` on
+macOS, `~/.cache/logbook/<owner_id>/` on Linux, `%LOCALAPPDATA%\logbook\cache\<owner_id>\` on
+Windows), never in the record's folder. No export, vault, crossing or copy of the record carries it,
+and nothing in it is a line. The folder is `0700` and every file `0600`: the pages hold what the
+Library shows, every tier of it, so only the record's user reads them. On a sealed record that means
+the built pages hold, in plain text on this disk, what the Library shows of the sealed lines, as the
+browser's own cache of those pages always has; `logbook serve --live` builds nothing and renders every
+page as it is asked for. A file is named by the SHA-256 of its address, so no address becomes a path
+and two addresses that differ only in case are never one file. Deleting the folder loses nothing: the
+next build writes it again.
+
+## Never hangs
+
+The server keeps answering, whatever a page costs and whatever else writes the record.
+
+- **A page has a limit.** A page the build does not hold is read in a pool of two: however many are
+  asked for together, at most two are read at once, so a whole menu opened at once never holds the
+  record in memory a dozen times over. A page read longer than `--limit` (15 s by default) is stopped
+  and answered with one sentence (*Still reading*, a 503): it is being built in the background and
+  will be here as a file in a few minutes, and every other door opens as usual. Under `--live` the
+  sentence says the reading was stopped. A page the build holds never waits for the pool.
+- **A browser that leaves stops its reading.** The server looks at the connection while the page is
+  read; when the browser closes it, the reading stops at the next line it reads, and nothing is sent.
+  A broken pipe is a browser leaving, never a traceback in the log. A connection that sends nothing for
+  60 s is closed.
+- **A reader never waits on a writer.** A sync appends a line, then `logbook.json`, then the index
+  (SPEC §3). A page read in between finds the index a line short: it reads the record up to the last
+  line the index holds, every line of it whole, and names that head in its tag. It never rebuilds the
+  index from under the writer.
+- **A server that says nothing is restarted.** `serve --status` tells a server that answers, one that
+  takes the connection and says nothing for 5 s (`not answering`: stuck, or paused by the system),
+  and nothing at all apart, and names the command that restarts it. The server asks itself for its
+  icon every 30 s; two silences in a row, and it writes every thread's stack to its log and exits 70,
+  which the service manager starts again (launchd's `KeepAlive`, systemd's `Restart=on-failure`). A
+  process the system paused runs nothing, its watchdog included: the scheduled run (`sync
+  --scheduled`, four times a day) restarts it, `launchctl kickstart -k gui/<uid>/org.logbook.serve`
+  or `systemctl --user restart logbook-serve`, in one line. A system-domain service is restarted by
+  an administrator, and the line says how.
+- **When it does hang anyway**, `kill -USR1 <pid>` writes every thread's stack to the log
+  (`~/Library/Logs/logbook-serve.log` on macOS, the journal on Linux) while the server runs on: send
+  it, and the log says where it waits.
 
 ## Performance
 
@@ -329,6 +418,62 @@ nothing it serves leaves the machine, so whatever you put in front of it decides
 them. Keep it to your own devices. The server does not know it is there and does not change for it:
 same pages, same headers, the same refusal of any other host.
 
+## From your phone
+
+Off by default. Behind Tailscale Serve the phone reads every page; with one setting it writes too:
+Reflect, With, Star and Sign on the Day, and the shelves' forms, each as from this machine.
+
+On the machine that serves the record (the Air):
+
+```bash
+tailscale serve --bg 8765        # https://server.tail1234.ts.net/ on your tailnet → http://127.0.0.1:8765
+logbook setup phone --origin https://server.tail1234.ts.net --login ines@example.org
+```
+
+`tailscale serve --bg 8765` puts the Library behind HTTPS on your tailnet, with the machine's own
+certificate, and keeps it there across restarts; tailscaled forwards each request to
+`127.0.0.1:8765`, so it reaches the server from loopback. It is not `tailscale funnel`, which would
+put the pages on the internet: never funnel this port. The origin is the address the phone opens,
+`https://` and the machine's tailnet name, nothing after it. The login is yours on the tailnet:
+`tailscale status` on the Air lists each device with the login it is signed in as (or
+`tailscale whois` with the phone's tailnet address, or the admin console's Users page). `setup
+phone` prints what it will write to `logbook.json`, asks for a yes typed at a terminal, and writes
+nothing else; the server reads it with each POST, so no restart. `logbook setup phone` alone says
+what is set, `--off` removes it, and `logbook doctor` names the origin on its `phone` line (the
+login shortened). Before you travel, star a line from the phone at home: a `303` and the star.
+
+What it allows: a POST that tailscaled forwards from your phone, all at once: from loopback, with
+the browser's `Origin` exactly the setting's (the host in any case, `:443` written or not), the
+`Host` the setting's host, and `Tailscale-User-Login`, the header Tailscale Serve sets from the
+device's tailnet identity, exactly your login, each header sent once, and not from inside a frame
+(`Sec-Fetch-Dest`, when the browser sends it, is `document`). Then the busy `409`, one write at a
+time, the CLI's own functions, the same headers: everything as from this machine.
+
+What stays refused, a `403` with nothing written: any other device or user on the tailnet (another
+login, or none: a tagged device and a Funnel request carry no login), another tailnet name, `http://`,
+another port, `Origin: null`, a page on another site in the phone's browser (its own origin), a form
+posted from a frame. Without the setting, the phone's forms are refused as they always were, and
+the refusal says what would allow them.
+
+A program on the tailnet is refused too. Behind Tailscale Serve every request arrives from
+loopback, so the server tells this machine's own requests from a proxy's by what the proxy adds: a
+request is *proxied* when its `Host` is not `127.0.0.1` or `[::1]` (any port; `localhost` is a
+name, not one of them) or when it carries any `Tailscale-*` or `X-Forwarded-*` header. A proxied
+POST is answered only as the phone's, through the checks above, and never because it carries no
+`Origin`: `curl` from any device on the tailnet, with no Origin or a login it typed, is a `403` with
+nothing written, the setting on or off. Requests to `http://127.0.0.1:8765` or
+`http://[::1]:8765` from this machine are answered as before (an SSH tunnel's `127.0.0.1:8766`
+too); a request naming any other host, `localhost` included, is treated as coming through a proxy,
+so a form posted to `http://localhost:8765` is refused unless it is the phone's. That rests on tailscaled sending the tailnet name as `Host`
+and adding its `X-Forwarded-*` headers, as Tailscale Serve does today; the star from the phone
+before you travel confirms the first, and a `curl` from another device that comes back `403` the
+second. Keep the tailnet name to your own devices all the same (every tier is on the pages it
+serves), and never `tailscale funnel` the port. Serve it as HTTPS, `tailscale serve --bg 8765`, never
+as a raw TCP forward (`tailscale serve --tcp`, or any port forward): a forward adds no header and
+keeps the client's own `Host`, so the server could not tell another device's request from this
+machine's. The policy's `write` list (the MCP door, ADR 0022)
+is not this and is never read here; ADR 0024 records the change.
+
 ## Places — name this place
 
 `/places` is two things. First the named places of `places.json`, as `setup places list` prints them,
@@ -369,12 +514,15 @@ binds 127.0.0.1 and runs as the record's own user: whoever can reach the form ca
 `setup places review` in a terminal here. The server holds it to that: a POST is answered only when
 the connection comes from this machine (the client address is loopback, `127.0.0.0/8` or `::1`) and,
 when the browser sends an `Origin` header, it names `127.0.0.1` or `[::1]` (the server's own pages,
-as reached from here; not `localhost`, a name, and not another scheme or host). Anything else is a
-`403` and nothing is written. Every page is sent with `Referrer-Policy: same-origin`, so the browser
+as reached from here; not `localhost`, a name, and not another scheme or host). A request that came
+through a proxy (its `Host` not `127.0.0.1` or `[::1]`, or a `Tailscale-*` or `X-Forwarded-*`
+header) is answered only as the owner's phone (*From your phone*). Anything else is a `403` and
+nothing is written. Every page is sent with `Referrer-Policy: same-origin`, so the browser
 names the page a form came from (`Origin: http://127.0.0.1:<port>`) and sends nothing to other sites
 (under `no-referrer` it would send `Origin: null`, and every form would be refused). Through an SSH
 tunnel the browser's origin is `127.0.0.1` and the form works; behind a proxy with its own name it is read-only, as every other page is written, and the
-naming is done here. `GET /places/review` is a `405`.
+naming is done here, unless the proxy is Tailscale Serve and `logbook setup phone` names it (*From
+your phone*). `GET /places/review` is a `405`.
 
 **A Day's stay without a name** carries a small *name this place* link to the Places page at its
 cluster (`/places?at=lat,lon`, which redirects to the page the cluster is on and scrolls to it, or
@@ -500,7 +648,8 @@ nothing fetched:
 - **The week.** On a Sunday whose ISO week has a draft (`dream week`, [the dream](dream.md#journeys-and-weeks)),
   the week's draft, folded under its head, with its numbers and a link to the line; on the six days
   before it, a line linking to it (`/day/SUNDAY#week`). Through the page's gate, as every draft: a
-  draft above it is not there, and neither is the link.
+  draft above it is not there, and neither is the link. Every Day's pager, and the Sunday's draft,
+  link the week's own page, `/week/YYYY-Www` ([the week](week.md)).
 - **The track**, above the timeline: the day's stays as numbered dots on a plain drawing from their
   own coordinates, a move a line between two of them, dashed across a gap or a flight, with a scale
   bar. An inline SVG drawn by the server, as the Places page's spots are: no map tile, no image, no

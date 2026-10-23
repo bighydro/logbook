@@ -54,6 +54,7 @@ DETAILS = (
     ("/promises/ID", serve.PROMISE_PATH),
     ("/goals/ID", serve.GOAL_PATH),
     ("/line/ID", serve.LINE_PATH),
+    ("/week/W", serve.WEEK_PATH),
 )  # the pages one of many: a route each
 ROUTES = frozenset(
     {
@@ -81,6 +82,7 @@ ROUTES = frozenset(
         "/search",
         "/agents",
         "/line/ID",
+        "/week/W",
     }
 )  # every page `Site._page` answers
 EACH = 1  # pages of one kind (a route and the names in its query) the walk reads, beside its seeds

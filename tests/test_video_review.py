@@ -621,6 +621,7 @@ def test_review_alone_lists_the_video_queue_with_the_others(
         "place",
         "video",
         "goal",  # RFC 0036 amendment 1, after the video's
+        "receipts",  # RFC 0043 §12
         "speakers",
     ]
     block = out[out.index("video") + 1 : out.index("goal")]
@@ -899,8 +900,8 @@ def test_rfc_0040_says_scene_review_v1_as_the_writer_writes_it(lb: Logbook) -> N
 # -- the independent check of the queue: every option, every number, the terminal, the identity ------
 
 
-KINDS = ("person", "org", "idea", "asset", "place", "video", "goal", "speakers")
-EVERY = "`review person|org|idea|asset|place|video|goal|speakers …`"
+KINDS = ("person", "org", "idea", "asset", "place", "video", "goal", "receipts", "speakers")
+EVERY = "`review person|org|idea|asset|place|video|goal|receipts|speakers …`"
 PLACE_ARGS: dict[str, tuple[str, ...]] = {
     "--near": ("--near", "Hjem"),
     "--radius": ("--radius", "5"),

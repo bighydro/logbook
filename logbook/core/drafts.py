@@ -88,13 +88,14 @@ from __future__ import annotations
 import re
 from collections.abc import Collection, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from . import policy, resolve
+from . import events, policy, resolve, signing
 from .chain import Line
+from .flights import Airlines
 from .index import Index
 from .store import retractions
 
@@ -105,16 +106,28 @@ UNIT_EVENT = "event"  # a transcript's synthesis: the call is the unit, its line
 UNITS = ("day", "journey", "event", "week", "month", "year", "chapter", "person")
 SOURCE_PREFIX = "model:"  # `source` names the model as its runner names it; never `manual`
 SUPPORTED, UNSUPPORTED, MALFORMED = "supported", "unsupported", "malformed"
-PARTS = ("day", "threads", "questions", "people", "promises")  # the parts of a dream, in order
+# the parts of a day's dream, in order (dream-day/4, RFC 0043 §13.4): the goodnight story, then one part
+# per lens (`lens:<id>`, `LENS`), then the threads, what was learned and decided, the ideas the day moved,
+# the one question, the people and promises proposed, and the photo of the day
+PARTS = ("story", "threads", "learned", "decision", "ideas", "questions", "people", "promises", "photo")
+PARTS_3 = ("day", "threads", "questions", "people", "promises")  # a dream-day/3 draft's, and before it
+STORY, LEARNED, DECISION, IDEAS, PHOTO = "story", "learned", "decision", "ideas", "photo"
+LENS = "lens:"  # a lens's part: `lens:<id>`, the id of a question of the bank asked of the day (RFC 0027)
+NO_ANSWER = (
+    "\u2014 the day doesn't answer this"  # a lens with no segment: the reader's words, never a model's
+)
+SINCE_SIGNED = "since you signed"  # the head of a draft dreamed after the day's standing signature
+EVENING = "the day so far"  # the head of a draft read before the day ended (`extra.evening`)
 # the parts of a journey's dream and of a week's (`dream journey`, `dream week`), in order
 JOURNEY_PARTS = ("journey", "days", "places", "people", "decisions", "promises", "photos", "name")
 WEEK_PARTS = ("time", "energy", "people", "goals", "next_week", "personal")
 PERSON_PARTS = ("person", "threads", "promises", "questions")  # `dream person` (amendment 1)
+DAY_PARTS = tuple(dict.fromkeys((*PARTS_3, *PARTS)))  # every part a day's draft may name, a lens's aside
 # `dream month` and `dream chapter` (the amendment of 2026-10-21), in order
 MONTH_PARTS = ("month", "where", "goals", "next_month", "question")
 CHAPTER_PARTS = ("arc", "rule", "held", "closed")
 UNIT_PARTS = {
-    "day": PARTS,
+    "day": DAY_PARTS,
     "journey": JOURNEY_PARTS,
     "week": WEEK_PARTS,
     "person": PERSON_PARTS,
@@ -122,6 +135,11 @@ UNIT_PARTS = {
     "chapter": CHAPTER_PARTS,
 }  # by `unit`
 PART_LABELS = {
+    "story": "story",
+    "learned": "learned",
+    "decision": "decided",
+    "ideas": "idea",
+    "photo": "photo",
     "day": "day",
     "threads": "thread",
     "questions": "question",
@@ -191,8 +209,11 @@ SUPERSEDED_BY_POLICY = "superseded by policy"  # the Day's row for a draft the d
 DOT = " · "
 EN_DASH = "\u2013"
 PROPOSALS = "proposals"  # the payload key of what a draft proposes beside its text
-EVENT = "event"  # the one kind of proposal so far: an event the owner may confirm into an event/v1 line
-PROPOSAL_KINDS = frozenset({EVENT})  # the kinds this reader shows and its writers write; others are counted
+EVENT = "event"  # a proposed event the owner may confirm into an event/v1 line
+LINK = "link"  # a proposed link of a line of the day to a canonical entity (amendment 2, RFC 0037)
+PROPOSAL_KINDS = frozenset(
+    {EVENT, LINK}
+)  # the kinds this reader shows and its writers write; others are counted
 EVENT_KIND = "event"  # the line a confirmed proposal becomes
 OWNER = "owner"  # its source: the owner confirmed it, the model only proposed it
 CLUSTER = "place:"  # an observed place's id, `place:<lat>,<lon>`, as `places review` names a cluster
@@ -201,6 +222,14 @@ NOT_A_PROPOSAL = (
     "a proposal is {kind: event, title, start, end, place, people, evidence}: start before end, both UTC"
     " with a Z, people and evidence lists of ids, evidence not empty"
 )
+LINK_KEYS = frozenset({"kind", "entity", "text", "evidence", "note"})
+NOT_A_LINK = (
+    "a link is {kind: link, entity, text, evidence, note?}: entity an entity id, text what it says, evidence"
+    " a non-empty list of line ids, note a string when given"
+)
+KEPT_FROM = "from"  # `extra.from` of a line the owner kept from a draft: the draft's id
+KEPT_PROPOSAL = "proposal"  # `extra.proposal` of a kept line: the proposal's kind and identifying fields
+KEEPABLE = (LEARNED, DECISION, IDEAS, PHOTO)  # the parts whose sentences `--keep` keeps (RFC 0043 §5)
 UTC_STAMP = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z\Z")
 
 
@@ -286,15 +315,33 @@ def validate(payload: Mapping[str, Any], *, reader: bool = False) -> list[str]:
             problems.append("proposals must be a list")
         else:
             unknown = [i for i, proposal in enumerate(proposals) if unknown_kind(proposal)]
-            bad = [i for i, p in enumerate(proposals) if i not in unknown and not proposal_shape(p)]
+            bad = [i for i, p in enumerate(proposals) if i not in unknown and not known_shape(p)]
             if unknown and not reader:
                 kind = proposals[unknown[0]]["kind"]
                 problems.append(f"proposal {unknown[0] + 1} is of a kind this writer does not know: {kind!r}")
             if bad:
-                problems.append(f"proposal {bad[0] + 1} is malformed: {NOT_A_PROPOSAL}")
+                found = proposals[bad[0]]
+                said = NOT_A_LINK if isinstance(found, dict) and found.get("kind") == LINK else NOT_A_PROPOSAL
+                problems.append(f"proposal {bad[0] + 1} is malformed: {said}")
     if "extra" in payload and not isinstance(payload["extra"], dict):
         problems.append("extra must be an object")
+    elif isinstance(payload.get("extra"), dict) and "evening" in payload["extra"]:
+        problems += _evening_problems(payload)
     return problems
+
+
+def _evening_problems(payload: Mapping[str, Any]) -> list[str]:
+    """`extra.evening` (amendment 2): `true` on a day draft read before the day ended, and then
+    `extra.read_until`, the moment read up to, RFC 3339 UTC with a `Z`."""
+    extra = payload["extra"]
+    if payload.get("unit") != UNIT_DAY:
+        return ["extra.evening is a day draft's alone"]
+    if extra.get("evening") is not True:
+        return ["extra.evening is true when present"]
+    until = extra.get("read_until")
+    if not isinstance(until, str) or not UTC_STAMP.match(until):
+        return ["an evening draft's extra.read_until is the moment it read up to, UTC with a Z"]
+    return []
 
 
 def _window_problems(payload: Mapping[str, Any]) -> list[str]:
@@ -325,6 +372,25 @@ def unknown_proposals(payload: Mapping[str, Any]) -> int:
     """How many of the draft's proposals are of a kind this reader does not know (`unknown_kind`)."""
     found = payload.get(PROPOSALS)
     return sum(1 for proposal in found if unknown_kind(proposal)) if isinstance(found, list) else 0
+
+
+def known_shape(proposal: object) -> bool:
+    """Whether `proposal` is one of the kinds this reader knows, of its documented shape."""
+    return proposal_shape(proposal) or link_shape(proposal)
+
+
+def link_shape(proposal: object) -> bool:
+    """Whether `proposal` is a link of the documented shape (`NOT_A_LINK`, amendment 2): nothing but
+    its keys, an entity id, the text that says what it links, a non-empty list of line ids and, when
+    given, a note."""
+    if not isinstance(proposal, dict) or not set(proposal) <= LINK_KEYS or proposal.get("kind") != LINK:
+        return False
+    entity, text, evidence = proposal.get("entity"), proposal.get("text"), proposal.get("evidence")
+    if not isinstance(entity, str) or not entity.strip() or not isinstance(text, str) or not text.strip():
+        return False
+    if "note" in proposal and (not isinstance(proposal["note"], str) or not proposal["note"].strip()):
+        return False
+    return isinstance(evidence, list) and bool(evidence) and all(isinstance(e, str) and e for e in evidence)
 
 
 def proposal_shape(proposal: object) -> bool:
@@ -545,17 +611,127 @@ def for_day(
     draft is one of those, a reader that holds the whole record (no `tiers`) gets the row that says
     so (`withheld_json`), never its text or its proposals; None otherwise."""
     retracted = retractions(idx.retractions())
-    shown, withheld = through(of_day(idx.by_kind(KIND), retracted, day), tiers, allowed)
+    found = of_day(idx.by_kind(KIND), retracted, day)
+    shown, withheld = through(found, tiers, allowed)
     latest = standing(shown)
     if latest is None:
         return None, withheld
     lines = idx.day(day)
     on_day = {str(line["id"]) for line in lines if str(line["id"]) not in retracted}
     names: dict[str, str] = {}
-    if (latest.get("payload") or {}).get(PROPOSALS):
+    payload = latest.get("payload") or {}
+    if payload.get(PROPOSALS):
         names = person_names(resolve.identities_from([*idx.retractions(), *idx.resolutions()]))
     confirmed = confirmations(lines, retracted, str(latest["id"]))
-    return day_json(latest, shown, on_day, names, confirmed), withheld
+    kept = kept_keys(lines, retracted, {str(line["id"]) for line in found})
+    block = day_json(latest, shown, on_day, names, confirmed, kept=kept)
+    signature = signing.signature_of(idx, day)
+    block["since_signed"] = signature is not None and int(latest["seq"]) > int(signature["seq"])
+    block["signed_seq"] = None if signature is None else int(signature["seq"])
+    block["closing"] = None
+    if any(segment["part"] == STORY for segment in block["segments"]):
+        block["closing"] = closing(idx, day, tiers, retracted, ZoneInfo(str(latest.get("tz") or "UTC")))
+    return block, withheld
+
+
+def kept_keys(
+    lines: Iterable[Line], retracted: Collection[str], drafts_of_day: Collection[str]
+) -> dict[tuple[Any, ...], dict[str, Any]]:
+    """What the owner kept from any draft of the day (RFC 0043 §6 rule 5): by `proposal_key`, the
+    `{line, seq}` of each line, not retracted, whose `extra.from` names one of `drafts_of_day`, keyed
+    by the proposal it kept: its `extra.proposal` when it carries one, else, for an event line the
+    owner confirmed (`confirmations`), its title and span. So a proposal of a later draft, the morning's
+    after the evening's, that says what a kept one said is kept, though its `raw_id` names another
+    draft."""
+    found: dict[tuple[Any, ...], dict[str, Any]] = {}
+    for line in sorted(lines, key=lambda line: int(line["seq"])):
+        payload = line.get("payload") or {}
+        extra = payload.get("extra")
+        if str(line["id"]) in retracted or not isinstance(extra, dict):
+            continue
+        if not isinstance(extra.get(KEPT_FROM), str) or extra[KEPT_FROM] not in drafts_of_day:
+            continue
+        named = extra.get(KEPT_PROPOSAL)
+        if isinstance(named, dict):
+            key = proposal_key(named)
+        elif line.get("kind") == EVENT_KIND and line.get("source") == OWNER:
+            key = proposal_key(
+                {
+                    "kind": EVENT,
+                    "title": payload.get("title"),
+                    "start": line.get("at"),
+                    "end": line.get("end"),
+                }
+            )
+        else:
+            key = None
+        if key is not None:
+            found[key] = {"line": str(line["id"]), "seq": int(line["seq"])}
+    return found
+
+
+def proposal_key(proposal: Mapping[str, Any]) -> tuple[Any, ...] | None:
+    """What identifies a proposal across drafts (amendment 2, *kept*): an event's title (its words,
+    case aside) and its span as instants; a link's entity and the lines it rests on; a kept sentence's
+    part and its words, case aside (`learned`, `decision`, `ideas`, `photo`: RFC 0043 §6 rule 5). None
+    for a proposal of another kind, or one whose fields do not read."""
+    kind = proposal.get("kind")
+    if kind in KEEPABLE:
+        words = " ".join(str(proposal.get("text") or "").split()).casefold()
+        return (kind, words) if words else None
+    try:
+        if kind == EVENT:
+            title = " ".join(str(proposal.get("title") or "").split()).casefold()
+            start, end = proposal.get("start"), proposal.get("end")
+            if not title or not isinstance(start, str) or not isinstance(end, str):
+                return None
+            return (EVENT, title, _instant(start), _instant(end))
+        if kind == LINK:
+            evidence = proposal.get("evidence")
+            if not isinstance(proposal.get("entity"), str) or not isinstance(evidence, list):
+                return None
+            return (LINK, proposal["entity"], tuple(sorted(str(e) for e in evidence)))
+    except ValueError:
+        return None
+    return None
+
+
+NUMBER_WORDS = ("no", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten")
+
+
+def closing(
+    idx: Index, day: str, tiers: Sequence[int] | None, retracted: Collection[str], tz: ZoneInfo
+) -> dict[str, Any] | None:
+    """The goodnight story's last line, computed here and never written by a model (RFC 0043 §4.3):
+    what tomorrow holds, `Tomorrow: two entries, the first at 09:00.`, from the timed calendar entries
+    of the next local day, standing and folded across calendars (`events.fold`), through the gate
+    `tiers`; None when it holds none."""
+    tomorrow = (datetime.strptime(day, "%Y-%m-%d") + timedelta(days=1)).date().isoformat()
+    found = [
+        line
+        for line in idx.by_kind(EVENT_KIND, tomorrow, tomorrow)
+        if str(line["id"]) not in retracted and (tiers is None or int(line.get("tier") or 0) in tiers)
+    ]
+    folded, _stands_for = events.fold(found, Airlines.load())
+    timed = sorted(
+        (line for line in folded if (line.get("payload") or {}).get("all_day") is not True),
+        key=lambda line: (_instant(str(line["at"])), int(line["seq"])),
+    )
+    if not timed:
+        return None
+    n = len(timed)
+    first = _instant(str(timed[0]["at"])).astimezone(tz).strftime("%H:%M")
+    count = NUMBER_WORDS[n] if n < len(NUMBER_WORDS) else str(n)
+    text = (
+        f"Tomorrow: one entry, at {first}." if n == 1 else f"Tomorrow: {count} entries, the first at {first}."
+    )
+    return {
+        "text": text,
+        "day": tomorrow,
+        "entries": n,
+        "first": first,
+        "lines": [str(t["id"]) for t in timed],
+    }
 
 
 def for_unit(
@@ -692,13 +868,18 @@ def day_json(
     names: Mapping[str, str] | None = None,
     confirmed: Mapping[int, dict[str, Any]] | None = None,
     not_on: str = NOT_ON_DAY,
+    kept: Mapping[tuple[Any, ...], dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """The standing draft as the Day carries it: the line, its source and model, when it was
     written, what it read, its segments each with `supported` and, when a reader holding the
     record found the evidence not on the day, `why`; its proposals (`proposals_json`, the people by
     `names`, each with the event line that `confirmed` it) and how many are of a kind this reader
     does not know (`proposals_unknown`); the ids of the earlier drafts newest
-    first, how many times the day was dreamed and the day it was last. Another unit's page reads its
+    first, how many times the day was dreamed and the day it was last. A day's draft of dream-day/4
+    adds (`dream_day_json`): `evening` and `read_until`, the lenses asked and whether each was
+    answered, the entity an `ideas` segment names, its proposed links (`links`), each proposal `kept`
+    when the owner kept it from this draft or one with the same fields from another draft of the day
+    (`kept`, by `proposal_key`), and what the writer dropped or marked. Another unit's page reads its
     draft the same way, `on_day` the unit's lines and `not_on` its own words for an id outside
     them (`NOT_ON_JOURNEY`)."""
     payload = line.get("payload") or {}
@@ -708,16 +889,24 @@ def day_json(
         segment_json(s, on_day, not_on) for s in (payload.get("segments") or []) if isinstance(s, dict)
     ]
     parts = (payload.get("extra") or {}).get("parts") if isinstance(payload.get("extra"), dict) else None
-    known = UNIT_PARTS.get(str(payload.get("unit")), PARTS)  # each unit's parts, a day's for any other
+    unit = str(payload.get("unit"))
+    known = UNIT_PARTS.get(unit, DAY_PARTS)  # each unit's parts, a day's for any other
     if isinstance(parts, list) and len(parts) == len(segments):
         for segment, part in zip(segments, parts, strict=True):
-            segment["part"] = str(part) if part in known else None
+            lens = (
+                unit == UNIT_DAY and isinstance(part, str) and part.startswith(LENS) and len(part) > len(LENS)
+            )
+            segment["part"] = str(part) if part in known or lens else None
     else:
         for segment in segments:
             segment["part"] = None
     earlier = [str(other["id"]) for other in reversed(found) if other["id"] != line["id"]]
     last = max((str(other["at"]) for other in found), default=str(line["at"]))
-    return {
+    shown = proposals_json(payload, on_day, tz, names or {}, confirmed or {}, not_on)
+    for p in shown:  # kept from another draft of the day: confirmed by that line, never accepted twice
+        p["kept"] = p["confirmed"] or (kept or {}).get(proposal_key(p) or ())
+        p["confirmed"] = p["kept"]
+    out = {
         "line": str(line["id"]),
         "seq": int(line["seq"]),
         "source": str(line.get("source")),
@@ -729,7 +918,7 @@ def day_json(
         "language": payload.get("language"),
         "segments": segments,
         "unsupported": sum(1 for s in segments if not s["supported"]),
-        "proposals": proposals_json(payload, on_day, tz, names or {}, confirmed or {}, not_on),
+        "proposals": shown,
         "proposals_unknown": unknown_proposals(payload),
         "supersedes": payload.get("supersedes"),
         "earlier": earlier,
@@ -737,6 +926,110 @@ def day_json(
         "last": _instant(last).astimezone(tz).date().isoformat(),
         "malformed": problems,
     }
+    if unit == UNIT_DAY:
+        out.update(dream_day_json(payload, segments, on_day, kept or {}, not_on))
+    return out
+
+
+def keep_numbers(payload: Mapping[str, Any], segments: Sequence[Mapping[str, Any]]) -> dict[int, int]:
+    """What `--keep` numbers in a day's draft (RFC 0043 §5): segment index (from 0) → its number. A
+    link keeps the number it has among the proposals; a sentence of a part one keeps (`KEEPABLE`)
+    is numbered after the last proposal, in the draft's order, so a number never names two things
+    and `--accept`'s numbers never move. Read from the draft alone, so the numbers stay while the
+    draft stands."""
+    found = payload.get(PROPOSALS)
+    n = len(found) if isinstance(found, list) else 0
+    numbers: dict[int, int] = {}
+    for i, segment in enumerate(segments):
+        if segment.get("part") in KEEPABLE:
+            n += 1
+            numbers[i] = n
+    return numbers
+
+
+def dream_day_json(
+    payload: Mapping[str, Any],
+    segments: list[dict[str, Any]],
+    on_day: Collection[str] | None,
+    kept: Mapping[tuple[Any, ...], dict[str, Any]],
+    not_on: str = NOT_ON_DAY,
+) -> dict[str, Any]:
+    """What a day's draft carries beside its segments since dream-day/4, as a reader shows it (each
+    key on every day draft, empty or false for an older one): `evening` and `read_until`, the moment an
+    evening draft read up to (amendment 2); `lenses`, `{id, text, answered}` for each lens asked (a lens
+    with no segment is printed by the reader as `NO_ANSWER`, never by the model); `entity` on each
+    `ideas` segment, the idea it names; `links`, the proposed links (`links_json`), each `kept` when
+    the owner kept one of the same fields from any draft of the day, and its `keep`, the number
+    `--keep` takes (its proposal number); `keep` and `kept` on each segment of a part one keeps
+    (`keep_numbers`); and `marked`, `dropped`, `dropped_links`, `dropped_segments`, by why. Sets
+    `entity`, `keep` and `kept` on the segments in place."""
+    found_extra = payload.get("extra")
+    extra: Mapping[str, Any] = found_extra if isinstance(found_extra, dict) else {}
+    answered = {str(s["part"])[len(LENS) :] for s in segments if str(s.get("part") or "").startswith(LENS)}
+    found_lenses, found_ideas = extra.get("lenses"), extra.get("ideas")
+    asked: list[Any] = found_lenses if isinstance(found_lenses, list) else []
+    lenses = [
+        {"id": str(lens["id"]), "text": str(lens.get("text") or ""), "answered": str(lens["id"]) in answered}
+        for lens in asked
+        if isinstance(lens, dict) and isinstance(lens.get("id"), str) and lens["id"]
+    ]
+    ideas: list[Any] = found_ideas if isinstance(found_ideas, list) else []
+    for idea in ideas:
+        n = idea.get("segment") if isinstance(idea, dict) else None
+        if (
+            isinstance(n, int)
+            and not isinstance(n, bool)
+            and 1 <= n <= len(segments)
+            and segments[n - 1]["part"] == IDEAS
+            and isinstance(idea.get("entity"), str)
+        ):
+            segments[n - 1]["entity"] = idea["entity"]
+    links = links_json(payload, on_day, not_on)
+    for link in links:
+        link["keep"] = link["number"]
+        link["kept"] = kept.get(proposal_key(link) or ())
+    for i, number in keep_numbers(payload, segments).items():
+        segment = segments[i]
+        segment["keep"] = number
+        segment["kept"] = kept.get(proposal_key({"kind": segment["part"], "text": segment["text"]}) or ())
+    until = extra.get("read_until")
+    out: dict[str, Any] = {
+        "evening": extra.get("evening") is True,
+        "read_until": until if isinstance(until, str) else None,
+        "lenses": lenses,
+        "links": links,
+    }
+    for key in ("marked", "dropped", "dropped_links", "dropped_segments"):
+        out[key] = dict(extra[key]) if isinstance(extra.get(key), dict) else {}
+    return out
+
+
+def links_json(
+    payload: Mapping[str, Any], on_day: Collection[str] | None, not_on: str = NOT_ON_DAY
+) -> list[dict[str, Any]]:
+    """The draft's proposed links (amendment 2), each numbered by its place among all its proposals,
+    as `proposals_json` numbers the events: the entity, the text, the note, the evidence, and
+    `supported` when every evidence id is a line of the day (when the reader holds it), else `why`."""
+    found = payload.get(PROPOSALS)
+    out: list[dict[str, Any]] = []
+    for n, proposal in enumerate(found if isinstance(found, list) else [], 1):
+        if not link_shape(proposal):
+            continue
+        evidence = [str(e) for e in proposal["evidence"]]
+        outside = on_day is not None and any(e not in on_day for e in evidence)
+        out.append(
+            {
+                "number": n,
+                "kind": LINK,
+                "entity": str(proposal["entity"]),
+                "text": " ".join(str(proposal["text"]).split()),
+                "note": proposal.get("note"),
+                "evidence": evidence,
+                "supported": not outside,
+                "why": not_on if outside else None,
+            }
+        )
+    return out
 
 
 def segment_json(
@@ -767,15 +1060,15 @@ def proposals_json(
     not_on: str = NOT_ON_DAY,
 ) -> list[dict[str, Any]]:
     """The draft's event proposals as a reader shows them, each numbered by its place in the list
-    (a malformed one, or one of a kind this reader does not know, is left out, and its number with
-    it): the title, the span in UTC and in `tz`,
+    (a malformed one, a link, which `links_json` lists, or one of a kind this reader does not know, is
+    left out, and its number with it): the title, the span in UTC and in `tz`,
     the place and where that is in words, the people by id and name, the evidence, `supported` when
     every evidence id is a line of the day (when the reader holds the day), else `why` (`not_on`);
     and `confirmed`, the event line that confirmed it, or None."""
     found = payload.get(PROPOSALS)
     out: list[dict[str, Any]] = []
     for n, proposal in enumerate(found if isinstance(found, list) else [], 1):
-        if not proposal_shape(proposal):
+        if not proposal_shape(proposal):  # an event's; a link is `links_json`'s
             continue
         evidence = [str(e) for e in proposal["evidence"]]
         outside = on_day is not None and any(e not in on_day for e in evidence)
@@ -1026,6 +1319,7 @@ def head_text(draft: Mapping[str, Any], word: bool = True) -> str:
     parts = [
         *(["draft"] if word else []),
         str(draft["source"]),
+        *([EVENING] if draft.get("evening") else []),
         f"read at {head}",
         f"{n} line{'s' if n != 1 else ''}",
         f"dreamed {draft['dreamed']}×, last on {draft['last']}",
@@ -1039,24 +1333,71 @@ def head_text(draft: Mapping[str, Any], word: bool = True) -> str:
         parts.append(
             f"{n} proposed event{'s' if n != 1 else ''}" + (f", {confirmed} confirmed" if confirmed else "")
         )
+    links = draft.get("links") or []
+    if links:
+        n, kept = len(links), sum(1 for p in links if p.get("kept"))
+        parts.append(f"{n} proposed link{'s' if n != 1 else ''}" + (f", {kept} kept" if kept else ""))
+    if draft.get("since_signed"):
+        parts.append(SINCE_SIGNED)
     if draft.get("malformed"):
         parts.append("malformed: " + "; ".join(draft["malformed"]))
     return DOT.join(parts)
 
 
 def rows(draft: Mapping[str, Any], indent: str = "    ") -> Iterator[str]:
-    """The segments, one per row: the part's word, the text, then the evidence ids shortened; an
+    """The segments, one per row: the part's word, the text, then the evidence ids shortened and, for a
+    part one keeps, `keep N`, the number `--keep` takes, or `kept as #seq` once the owner kept it; an
     unsupported one starts with `~` and ends with `unsupported` (and why, when a reader found
-    out), never run into the prose around it."""
-    for segment in draft["segments"]:
-        label = PART_LABELS.get(str(segment.get("part")), "") if segment.get("part") else ""
-        mark = "  " if segment["supported"] else "~ "
-        if segment["supported"]:
-            tail = "[" + ", ".join(short_id(e) for e in segment["evidence"]) + "]"
-        else:
-            tail = UNSUPPORTED if not segment.get("why") else f"{UNSUPPORTED}: {segment['why']}"
-        yield f"{indent}{mark}{label:<9} {segment['text']}  {tail}"
-    yield from proposal_rows(draft.get("proposals") or [], indent)
+    out), never run into the prose around it. After the last sentence of the story, its closing line
+    as the reader computed it (`closing`); after the lenses answered, each lens asked and not
+    answered, `NO_ANSWER`; then the proposals. A draft dreamed after the day's signature shows only
+    what the owner has not kept, under `since you signed`."""
+    segments = list(draft["segments"])
+    closing_row = draft.get("closing")
+    unanswered = [lens for lens in draft.get("lenses") or [] if not lens.get("answered")]
+    told = not closing_row
+    for i, segment in enumerate(segments):
+        part = str(segment.get("part") or "")
+        if not told and part != STORY and any(s.get("part") == STORY for s in segments[:i]):
+            yield f"{indent}  {'':<9} {closing_row['text']}"  # type: ignore[index]
+            told = True
+        if unanswered and part != STORY and not part.startswith(LENS):
+            yield from _unanswered(unanswered, indent)
+            unanswered = []
+        yield _segment_row(segment, indent)
+    if not told:
+        yield f"{indent}  {'':<9} {closing_row['text']}"  # type: ignore[index]
+    yield from _unanswered(unanswered, indent)
+    events_, links = draft.get("proposals") or [], draft.get("links") or []
+    if draft.get("since_signed"):
+        events_ = [p for p in events_ if not p.get("kept")]
+        links = [p for p in links if not p.get("kept")]
+        if events_ or links:
+            yield f"{indent}  {SINCE_SIGNED}"
+    yield from proposal_rows(sorted([*events_, *links], key=lambda p: int(p["number"])), indent)
+
+
+def _segment_row(segment: Mapping[str, Any], indent: str) -> str:
+    part = str(segment.get("part") or "")
+    label = PART_LABELS.get(part, part if part.startswith(LENS) else "") if part else ""
+    mark = "  " if segment["supported"] else "~ "
+    if segment.get("kept"):
+        tail = f"kept as #{segment['kept']['seq']}"
+    elif segment["supported"]:
+        tail = "[" + ", ".join(short_id(e) for e in segment["evidence"]) + "]"
+    else:
+        tail = UNSUPPORTED if not segment.get("why") else f"{UNSUPPORTED}: {segment['why']}"
+    if segment.get("keep") and segment["supported"] and not segment.get("kept"):  # `--keep`'s number (RFC
+        tail += (
+            f"  keep {segment['keep']}"  # 0043 §5), at the end: never beside a name the sentence opens with
+        )
+    return f"{indent}{mark}{label:<9} {segment['text']}  {tail}"
+
+
+def _unanswered(lenses: Iterable[Mapping[str, Any]], indent: str) -> Iterator[str]:
+    """A lens the day gave no segment for, in the reader's words (`NO_ANSWER`), never the model's."""
+    for lens in lenses:
+        yield f"{indent}  {LENS + str(lens['id']):<9} {NO_ANSWER}"
 
 
 def extra_rows(block: Mapping[str, Any], indent: str = "    ") -> Iterator[str]:
@@ -1134,14 +1475,17 @@ def unit_rows(
 
 
 def proposal_rows(proposals: Iterable[Mapping[str, Any]], indent: str = "    ") -> Iterator[str]:
-    """One row per proposed event, after the segments: `event N`, the span, the title, the place and
-    the people; then `proposed` and the evidence, set apart with a leading `?` (greyed on the page),
-    or `confirmed as #seq` once the owner accepted it, or `~` and `unsupported` when a reader found
-    its evidence not on the day."""
+    """One row per proposal, after the segments: `event N`, the span, the title, the place and the
+    people, or `link N` and what it links; then `proposed` and the evidence, set apart with a leading
+    `?` (greyed on the page), or `confirmed as #seq` once the owner accepted it (`kept as #seq` when
+    it was kept from another draft of the day), or `~` and `unsupported` when a reader found its
+    evidence not on the day."""
     for p in proposals:
-        label = f"event {p['number']}"
+        label = f"{p.get('kind') or EVENT} {p['number']}"
         if p.get("confirmed"):
             mark, tail = "  ", f"confirmed as #{p['confirmed']['seq']}"
+        elif p.get("kept"):
+            mark, tail = "  ", f"kept as #{p['kept']['seq']}"
         elif not p["supported"]:
             mark, tail = "~ ", f"{UNSUPPORTED}: {p['why']}" if p.get("why") else UNSUPPORTED
         else:
@@ -1151,7 +1495,10 @@ def proposal_rows(proposals: Iterable[Mapping[str, Any]], indent: str = "    ") 
 
 def proposal_text(p: Mapping[str, Any]) -> str:
     """The span (the two clocks with an en dash between), the title, the place, the people:
-    `19:30` to `22:10  Dinner with Kari Nordmann · Bistro Eksempel · with Kari Nordmann`."""
+    `19:30` to `22:10  Dinner with Kari Nordmann · Bistro Eksempel · with Kari Nordmann`; a link's
+    text, and its note when it has one."""
+    if p.get("kind") == LINK:
+        return DOT.join(str(x) for x in (p["text"], p.get("note")) if x)
     clock = f"{str(p['start_local'])[11:16]}{EN_DASH}{str(p['end_local'])[11:16]}"
     parts = [f"{clock}  {p['title']}"]
     if p.get("where"):
@@ -1186,7 +1533,12 @@ def row_text(payload: Mapping[str, Any]) -> str:
     ]
     proposals = payload.get(PROPOSALS)
     if isinstance(proposals, list) and proposals:
-        parts.append(f"{len(proposals)} proposed event{'s' if len(proposals) != 1 else ''}")
+        links = sum(1 for p in proposals if isinstance(p, dict) and p.get("kind") == LINK)
+        n = len(proposals) - links
+        if n:
+            parts.append(f"{n} proposed event{'s' if n != 1 else ''}")
+        if links:
+            parts.append(f"{links} proposed link{'s' if links != 1 else ''}")
     if payload.get("supersedes"):
         parts.append("supersedes an earlier draft")
     return DOT.join(parts)

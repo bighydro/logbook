@@ -14,6 +14,7 @@ import json
 import re
 import subprocess
 import sys
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -519,3 +520,27 @@ def test_the_library_serves_the_same_page_at_world(lb: Logbook, tmp_path: Path) 
     assert site.respond("/world", "from=2026-07-12&to=2026-07-11").status == 400
     assert 'href="/world"' in site.respond("/", "").body.decode("utf-8"), "in the navigation"
     assert int(lb.meta["seq"]) == seq, "serving appends nothing"
+
+
+def test_a_line_far_in_the_future_does_not_stretch_the_slider_past_today(lb: Logbook) -> None:
+    """A calendar names the future (a renewal in 2055, a recurring entry with no end): the default
+    window, and with it the time slider, still ends on the owner's today, never on the latest line
+    the record holds; asked for by `--to`, the future is still there to read."""
+    whole = world.request(lb)
+    assert whole is not None
+    lb.append(
+        at="2055-03-01T09:00:00Z",
+        source="ics",
+        kind="event",
+        tier=1,
+        payload={"schema": "event/v1", "title": "Passport renewal", "raw_id": "cal:renewal-2055"},
+    )
+    req = world.request(lb, today=whole.last)
+    assert req is not None and (req.first, req.last) == (whole.first, whole.last)
+    later = world.request(lb, today="2026-12-31")
+    assert later is not None and later.last == "2026-12-31", "the window reaches today, not 2055"
+    asked = world.request(lb, last="2055-03-01", today=whole.last)
+    assert asked is not None and asked.last == "2055-03-01"
+    site = serve.Site(lb, now=lambda: datetime.fromisoformat(f"{whole.last}T12:00:00+00:00"))
+    page = site.respond("/world", "").body.decode("utf-8")
+    assert "2055" not in page

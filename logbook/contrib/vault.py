@@ -451,7 +451,9 @@ class _Builder:
         if e["kind"] == day_reader.FLIGHT:
             text = _flight_text(e)
             page.flights.append(text)
-            span = f"{_clock(e['start'], self.tz, day_end)} {EN_DASH} {_clock(e['end'], self.tz, day_end)}"
+            span = _clock(e["start"], self.tz, day_end)
+            if e["end"] is not None:  # a flight with no arrival is written at its departure
+                span += f" {EN_DASH} {_clock(e['end'], self.tz, day_end)}"
             yield f"{indent}- {span} {text}"
             return
         within = e["within_day"]

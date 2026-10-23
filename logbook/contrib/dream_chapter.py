@@ -8,7 +8,7 @@ name, stretch and rules are the owner's, and only `chapter open` and `chapter cl
 It runs on the dream's engine (`logbook.contrib.dream`) under the same `dream` entry of
 `policy/crossing.json`, the same endpoint and the same rules as the month and the week: read under the
 entry's ceiling, every sentence cited or marked, more than 30 % unsupported refused, no figure the
-items it cites do not give (`dream.hold_numbers`) and no figure beside a person (`dream_month.
+items it cites do not give (`dream.hold_numbers`) and no figure beside a person (`dream.
 hold_names`), the tier the highest among what it read, the entry's version recorded.
 
 **From the drafts it spans, never the raw lines.** A chapter may run for years, so it is never read
@@ -424,7 +424,7 @@ def _told(line: Line, on_stretch: Mapping[str, int], made: Material) -> list[dic
         if len(told) >= TOLD:
             break
         shown = drafts.segment_json(segment, set(on_stretch), drafts.NOT_ON_CHAPTER)
-        if not shown["supported"] or not shown["evidence"] or dream_month.beside_a_name(shown["text"], made):
+        if not shown["supported"] or not shown["evidence"] or dream.beside_a_name(shown["text"], made):
             continue  # a sentence with a figure beside a person (a week's `people`) is never passed on
         part = parts[i] if isinstance(parts, list) and len(parts) == len(segments) else None
         told.append({"part": part, "drafted": shown["text"], "ref": made.refs_of(shown["evidence"])})
@@ -467,9 +467,9 @@ def shape(found: Mapping[str, Any], read: Read) -> tuple[list[dict[str, Any]], d
     unbacked = dream.hold_numbers(segments, made.data, made)
     if unbacked:
         marked[dream.UNBACKED] = unbacked
-    beside = dream_month.hold_names(segments, made)
+    beside = dream.hold_names(segments, made)
     if beside:
-        marked[dream_month.BESIDE_A_NAME] = beside
+        marked[dream.BESIDE_A_NAME] = beside
     dream.share_of(segments, made.unit)
     extra: dict[str, Any] = {"parts": parts, "numbers": read.numbers}
     if marked:

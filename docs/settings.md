@@ -10,6 +10,7 @@ in files beside the log, each yours to edit. `logbook setup` asks about the ones
 | your timezone | `logbook.json`, `timezone` | `logbook setup --step timezone` |
 | where your day begins | `logbook.json`, `day_start` | `logbook setup day_start 06:00` |
 | your own addresses | `logbook.json`, `owner_emails` | `logbook setup --step owner` |
+| whether your phone writes through the Library | `logbook.json`, `phone` (off by default) | `logbook setup phone --origin URL --login LOGIN` ([from your phone](serve.md#from-your-phone)) |
 | your other names, addresses, numbers and handles | `policy/owner.json` | `logbook setup --step owner`; `handles` by hand |
 | the named places, your home | `places.json` | `logbook setup places` |
 | the assets you track | `assets.json` | `logbook setup assets` |

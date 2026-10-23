@@ -32,15 +32,18 @@ from collections.abc import Mapping, Sequence
 from datetime import UTC, date, datetime, timedelta
 from typing import Any, NamedTuple
 
-from ..core import day_start, people, reading
+from ..core import day_start, kept, people, reading
 from ..core.chain import Line
 from ..core.flights import Airports
-from ..core.store import Logbook
+from ..core.store import RETRACTION, Logbook
 from . import people_drift
 from . import promises as promise_reader
 
 ANNIVERSARY_DAYS = 30  # the anniversaries a person's page names: today and the 29 days after
 YEAR_DIGITS = 4
+YEARS_KEPT, YEARS_KEPT_VERSION = "people-years.json", 1  # the closed years' rankings, beside the index
+YEAR_SPILL_DAYS = 2  # a year's reading holds the night after its last day and the morning after that
+YEAR_OVERLAY = (RETRACTION, "resolution")  # what changes who is who: a closed year is read again
 
 
 # -- the list --------------------------------------------------------------------------------------------
@@ -65,7 +68,46 @@ def ranked(
     first, last = max(f"{year}-01-01", whole[0]), min(f"{year}-12-31", whole[1])
     if last < first:
         return {"year": year, "years": years, "window": None, "people": []}
-    report = people.read(lb, first, last, airports)
+    if last == whole[1]:  # the year so far: brought forward with the record
+        report = people.read_to_end(lb, first, airports)
+        assert report is not None
+        rows = _rows(lb, report)
+    else:  # a closed year: kept until a line lands on its days
+        rows = _closed_year(lb, first, last, airports)
+    return {"year": year, "years": years, "window": {"since": first, "until": last}, "people": rows}
+
+
+def _closed_year(lb: Logbook, first: str, last: str, airports: Airports | None) -> list[dict[str, Any]]:
+    """The ranking of a closed year's `[first, last]`, kept beside the index (`YEARS_KEPT`) while no
+    line has come for those days and the morning after (`kept.unchanged`), nothing corrects a line or
+    changes who is who, under the same code and settings; read from the lines otherwise."""
+    airports = airports or Airports.load()
+    path = kept.path(lb, YEARS_KEPT)
+    stamp = kept.stamp(
+        lb, str(YEARS_KEPT_VERSION), kept.code_digest(__file__, people_drift.__file__), airports.fingerprint()
+    )
+    reads_to = (date.fromisoformat(last) + timedelta(days=YEAR_SPILL_DAYS)).isoformat()
+    held = kept.load(path) or {}
+    years = (
+        held.get("years")
+        if held.get("version") == YEARS_KEPT_VERSION and held.get("stamp") == stamp
+        else None
+    )
+    years = dict(years) if isinstance(years, dict) else {}
+    with lb.index() as idx:
+        seq, head = idx.indexed()
+        mine = years.get(first)
+        ours = isinstance(mine, dict) and mine.get("last") == last
+        if ours and isinstance(mine, dict) and kept.unchanged(idx, mine, first, reads_to, YEAR_OVERLAY):
+            return list(mine["rows"])
+    rows = _rows(lb, people.read(lb, first, last, airports))
+    years[first] = {"last": last, "seq": seq, "head": head, "rows": rows}
+    kept.save(path, {"version": YEARS_KEPT_VERSION, "stamp": stamp, "years": years})
+    return rows
+
+
+def _rows(lb: Logbook, report: people.Report) -> list[dict[str, Any]]:
+    """`report`'s people as the People page ranks them: most days together first."""
     contacts = people_drift.real_contacts(lb, report)
     rows: list[dict[str, Any]] = [
         {
@@ -80,7 +122,7 @@ def ranked(
         for p in report.people
     ]
     rows.sort(key=lambda r: (-r["days"], _desc(r["last_real_contact"]), r["name"].casefold()))
-    return {"year": year, "years": years, "window": {"since": first, "until": last}, "people": rows}
+    return rows
 
 
 def _desc(contact: Mapping[str, Any] | None) -> str:
@@ -112,9 +154,9 @@ def everyone(lb: Logbook, airports: Airports | None = None) -> Everyone | None:
     """`Everyone` of the record at its head; None for a record with no days. Read once and handed to
     `read` for every person's page (the Library keeps it while the head and the settings stand)."""
     whole = reading.record_days(lb)
-    if whole is None:
+    report = people.read_whole(lb, airports)  # kept between readings, brought forward by what was appended
+    if whole is None or report is None:
         return None
-    report = people.read(lb, *whole, airports)
     contacts = people_drift.real_contacts(lb, report)
     proposals = [p for p in promise_reader.extract(lb).proposals if p.status == "open"]
     return Everyone(whole, report, contacts, proposals)

@@ -31,6 +31,15 @@ read again, as long as it is still enabled and fills. What was asked is remember
 `state/questions.json`, `{"asked": [{"day", "id"}, ...]}`, the last `REMEMBER` days — bookkeeping
 beside the record, like a sync watermark, never in it; losing it only lets a question repeat.
 
+**Lenses** (the amendment of 21 October 2026, RFC 0043 §4.4). A question MAY carry `"ask"`: `"owner"`
+(absent is `"owner"`), the digest's question, asked of the owner; or `"day"`, a lens, a question the
+owner wants the evening's pencil to look at every day, which the dream answers as part `lens:<id>`
+(`logbook.contrib.dream`) and which the digest never draws (`choose`). A value outside the two is
+refused naming the file, and so is a lens with a placeholder (nothing fills it: the dream computes no
+facts) and a bank with more than `MAX_LENSES` enabled lenses. `lenses` reads them from the bank as the
+owner wrote it, and writes no default. A lens is never asked of the owner and never the evening's
+question.
+
 `logbook questions list|add|disable` manages the file (`add`, `disable`); the module writes nothing
 but the bank, its default and the state. Nothing here is a line of the record."""
 
@@ -81,6 +90,9 @@ REUNION_DAYS = 90
 LONG_SLEEP_H = 9.0
 SHORT_SLEEP_H = 6.0
 BUSY_TOMORROW = 3
+OWNER, DAY = "owner", "day"  # `ask`: the digest's question, asked of the owner; or a lens, the dream's
+ASKS = (OWNER, DAY)
+MAX_LENSES = 5  # the lenses the dream answers every evening, at most (RFC 0043 §4.4)
 FALLBACK = "Anything to add?"  # when no question of the bank can be asked; no id, never remembered
 WEEKEND = ("Saturday", "Sunday")
 ABOARD = "aboard "  # how the Day spells a stay aboard an asset
@@ -168,6 +180,7 @@ class Question:
     source: str = ""
     text_de: str | None = None
     enabled: bool = True
+    ask: str = OWNER  # `day`: a lens, answered by the dream and never drawn by the digest
 
     def to_json(self) -> dict[str, Any]:
         weight = int(self.weight) if self.weight == int(self.weight) else self.weight
@@ -176,6 +189,8 @@ class Question:
             out["text_de"] = self.text_de
         out.update({"kind": self.kind, "when": list(self.when), "weight": weight, "source": self.source})
         out["enabled"] = self.enabled
+        if self.ask != OWNER:  # absent is `owner`: a bank written before the amendment reads as it did
+            out["ask"] = self.ask
         return out
 
 
@@ -227,7 +242,21 @@ def read(root: Path) -> list[Question]:
             raise PolicyError(f"{path} names the id {q.id!r} twice; every question has its own")
         seen.add(q.id)
         out.append(q)
+    lenses = [q.id for q in out if q.ask == DAY and q.enabled]
+    if len(lenses) > MAX_LENSES:
+        raise PolicyError(
+            f'{path} has {len(lenses)} lenses enabled ("ask": "day"), and the dream answers at most'
+            f" {MAX_LENSES}; disable one: {', '.join(lenses)}"
+        )
     return out
+
+
+def lenses(root: Path) -> list[Question]:
+    """The enabled lenses of the bank (`"ask": "day"`), in its order, at most `MAX_LENSES`: what the
+    dream answers. The bank as the owner wrote it: no file is no lens, and nothing is written."""
+    if not questions_path(root).exists():
+        return []
+    return [q for q in read(root) if q.ask == DAY and q.enabled]
 
 
 def add(root: Path, question: Question) -> Question:
@@ -296,6 +325,14 @@ def _question(entry: object, path: Path) -> Question:
     enabled = entry.get("enabled", True)
     if not isinstance(enabled, bool):
         raise PolicyError(f"{path}: question {id_!r} has an enabled that is not true or false")
+    ask = entry.get("ask", OWNER)
+    if ask not in ASKS:
+        raise PolicyError(f"{path}: question {id_!r} has ask {ask!r}; it must be {' or '.join(ASKS)}")
+    if ask == DAY and (placeholders(text) or placeholders(text_de)):
+        raise PolicyError(
+            f'{path}: question {id_!r} is a lens ("ask": "day"), and a lens fills no placeholder:'
+            " the dream answers it as written"
+        )
     for name in placeholders(text) + (placeholders(text_de) if text_de else []):
         if name not in PLACEHOLDERS:
             raise PolicyError(
@@ -311,6 +348,7 @@ def _question(entry: object, path: Path) -> Question:
         source=source,
         text_de=text_de,
         enabled=enabled,
+        ask=str(ask),
     )
 
 
@@ -463,13 +501,15 @@ def fill(text: str, values: Mapping[str, str]) -> str:
 
 
 def choose(bank: Sequence[Question], facts: Facts, exclude: set[str], seed: str) -> Question | None:
-    """One question drawn by weight from the enabled questions of `bank` whose `when` holds, whose
-    text fills, and whose id is not in `exclude`; None when there is none. The draw is seeded by
+    """One question drawn by weight from the enabled questions of `bank` asked of the owner (a lens is
+    the dream's, never drawn) whose `when` holds, whose text fills, and whose id is not in `exclude`;
+    None when there is none. The draw is seeded by
     `seed` (the day), so the same inputs draw the same question."""
     candidates = [
         q
         for q in bank
         if q.enabled
+        and q.ask == OWNER
         and q.id not in exclude
         and matches(q, facts)
         and all(name in facts.values for name in placeholders(q.text))
@@ -488,7 +528,7 @@ def pick(root: Path, facts: Facts, day: str) -> dict[str, Any]:
     nothing can be asked the text is `FALLBACK` with id None, and nothing is remembered."""
     bank = read(root)
     by_day = {entry["day"]: entry["id"] for entry in asked(root)}
-    enabled = {q.id: q for q in bank if q.enabled}
+    enabled = {q.id: q for q in bank if q.enabled and q.ask == OWNER}
     chosen: Question | None = None
     standing = enabled.get(by_day.get(day, ""))
     if standing is not None and all(name in facts.values for name in placeholders(standing.text)):

@@ -53,6 +53,8 @@ READERS: tuple[tuple[str, ...], ...] = (
         "days",
     ),
     ("show", "days", "--from", "2026-06-06", "--to", "2026-06-12", "--json"),
+    ("people", "mail", "--since", "2026-06-06", "--until", "2026-06-12"),
+    ("people", "mail", "--since", "2026-06-06", "--until", "2026-06-12", "--json"),
     ("show", "2026-06-08"),
     ("show", "2026-06-08", "--raw"),
     (
@@ -151,11 +153,13 @@ READERS: tuple[tuple[str, ...], ...] = (
     ("people", "nearby", "Cabin"),
     ("people", "nearby", "--days", "2026-06-08", "2026-06-10"),
     ("people", "city", "Bergen"),  # RFC 0043 §12: your people in a city, from the lives-in notes
-    ("people", "city", "Oslo", "--journey", "2026-06-09", "--json"),
+    ("people", "city", "Oslo", "--trip", "2026-06-09", "--json"),
     ("review", "with", "--week", "2026-W24"),  # RFC 0043 §11: the review-with queue, nothing written
     ("review", "with", "--journey", "2026-06-09", "--json"),
     ("review", "speakers"),  # RFC 0038 §4: the queue reads the record and opens nothing
     ("review", "speakers", "--json"),
+    ("review", "receipts"),  # RFC 0043 §12: the mails read by rules, nothing looked up
+    ("review", "receipts", "--since", "2026-01-01", "--json"),
     ("show", "ideas", "--json"),
     ("setup", "assets", "status"),
     ("setup", "assets", "status", "--json"),
@@ -222,6 +226,13 @@ READERS: tuple[tuple[str, ...], ...] = (
     ("videos", "infer", "--dry-run"),
     ("review", "video"),  # the queue reads the record and the registries alone
     ("review", "video", "--json"),
+    (
+        "show",
+        "plan",
+        "2026-06-08",
+    ),  # RFC 0043 §9: no mapping here; `tests/test_plan.py` guards the mapped plan
+    ("show", "plan", "2026-06-08", "--json"),
+    ("show", "plan", "--coverage"),
 )
 
 
@@ -299,6 +310,8 @@ PAGES = (
     "/world",
     "/world?from=2026-06-15&to=2026-06-20",
     "/day/2026-06-14",  # a Sunday: the week's draft, when its week has one
+    "/week/2026-W24",  # the week page: its ribbons, the plan, Hold's census
+    "/week/2026-W24?open=1",
     LINE,
     "/search",
     "/search?q=kari",
@@ -390,6 +403,10 @@ ORG_READERS: tuple[tuple[str, ...], ...] = (
     ("show", "org", "verft"),
     ("show", "org", "Nordmann Tidevann", "--json"),
     ("show", "org", "havbris", "--money"),
+    ("lab", "companies", "2026-09-15"),
+    ("lab", "companies", "2026-09-15", "--json"),
+    ("people", "gifts"),
+    ("people", "gifts", "Per Hansen", "--json"),
 )
 ORG = "/org/ID"  # Nordmann Verft's page, by the entity id the Manifest links
 ORG_PAGES = ("/manifest", "/manifest/people", ORG, f"{ORG}?money=1")
