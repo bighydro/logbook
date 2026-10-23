@@ -28,6 +28,7 @@ TIERS: dict[str, tuple[str, ...]] = {
         "assets",
         "attachments",
         "attribution",
+        "cancel",
         "chain",
         "chapter",
         "countries",
@@ -45,6 +46,7 @@ TIERS: dict[str, tuple[str, ...]] = {
         "goals",
         "health",
         "index",
+        "kept",
         "keepers",
         "ledger",
         "listen_rollup",
@@ -111,7 +113,9 @@ TIERS: dict[str, tuple[str, ...]] = {
         "ios_backup",
         "ios_backup_crypto",
         "journeys",
+        "keep",
         "last_run",
+        "library_build",
         "mail_lookup",
         "map",
         "mcp_server",
@@ -213,6 +217,7 @@ NEW_IN_0_6: frozenset[str] = frozenset(
         "hold",
         "introductions",
         "journeys",
+        "keep",
         "map",
         "letter",
         "notion_export",
@@ -266,6 +271,9 @@ NEW_IN_0_6: frozenset[str] = frozenset(
         "companies",
         "gifts",
         "money",
+        "library_build",
+        "cancel",
+        "kept",
     }
 )  # born in a tier: no 0.5 path to keep
 MOVED: dict[str, str] = {

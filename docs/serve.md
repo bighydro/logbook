@@ -108,6 +108,94 @@ kept pages and readings go, and every page reads the new lines, with no restart.
 rebuild happens once, under a lock, however many requests arrive at that moment; they wait for it
 rather than each starting their own on the same file.
 
+## Built ahead
+
+`logbook serve` answers from pages built ahead of time, not from the record while you wait
+([RFC 0047](https://github.com/bighydro/logbook/blob/main/rfcs/0047-the-librarys-doors.md) §8). Every door and shelf (`/`, `/days`, `/trips`,
+`/journeys`, `/people`, `/places`, `/world`, `/manifest`, `/manifest/people`, `/ideas`, `/promises`,
+`/goals`, `/agents`, `/assets`, `/gaps`) is built, with the Days of the last fortnight and the pages
+those shelves link to first (60 of each kind: the people at the top of People, this year's journeys,
+the orgs, the ideas, the goals, the promises). A built page is the page the server would have rendered
+at that moment, byte for byte, with one sentence added to its footer: `built 06:02`.
+
+When it is built:
+
+- **At the 06:00 close.** `sync --scheduled --close` builds the Library after the sync and the dream
+  and before `doctor`, and says so in one line; the demo month's first build says
+  `library: 90 pages, 90 written, in 7.8 s`. A build another process holds, or one that fails, is
+  that one line and never fails the run.
+- **After every act on a page.** Reflect, Sign, a star, *with…*, a name, a merge, a status: the page
+  the act sends you back to and the front page are dropped at once, so you see what you wrote, and a
+  rebuild of the rest starts in the background on a thread of its own. Acts that come while it builds
+  are one more build, not one each. An act refused because the page was older than the record (409)
+  drops the page its form was on, so your reload is the page as it stands.
+- **By hand.** `logbook serve --build` builds now and says what it did, and which pages took longest.
+  On a record of a hundred thousand lines or more it renders on several processes, one fewer than the
+  machine has, four at most; `LOGBOOK_BUILD_WORKERS` sets how many (1: one process). A page that fails is named and
+  the command exits 1; while another process builds it exits 75.
+- **The first time.** A server that finds no build starts one when it starts.
+
+What is never built: today's Day, whose shape moves with the hour (morning, live, evening; RFC 0043
+§5), the redirect of `/today`, and a photo's pixels. A page no build has written (a Day a year ago, a
+`/days` window you chose) is rendered when you ask for it and kept, so the next visit is a file and the
+next build builds it again (the latest 500 of them). Between builds the pages are as of their build:
+lines a sync appended at noon are on today's Day at once and on the shelves at the next close, or after
+your next act.
+
+A build after the first renders what changed. It keeps the line it read through, and renders every
+door and the pages they link to again, but a Day only when a line landed on it or the day after, and a
+journey only when it holds such a day; the rest stay as they were built. The whole-record readings the
+doors share are kept beside the index and brought forward by the lines appended since, not read again:
+the people of the whole record (`people.read_whole`, behind every person's page and the people review),
+the promises (`promises.extract`), and each person's last real contact (`real_contacts`). Each is held
+to the reading of every line by its own tests, and reads the whole record again when what was appended
+is more than lines of later days: a resolution or a retraction, a line that corrects another, a
+backfill into a month already read, a changed setting, or a new version of the code. A resolution,
+retraction or review line, or a changed setting, also makes the next build a full one. `logbook serve
+--build --full` renders every page whatever the last build left, and is never needed in normal use.
+
+Where: `library/` beside the index, in the cache folder (`~/Library/Caches/logbook/<owner_id>/` on
+macOS, `~/.cache/logbook/<owner_id>/` on Linux, `%LOCALAPPDATA%\logbook\cache\<owner_id>\` on
+Windows), never in the record's folder. No export, vault, crossing or copy of the record carries it,
+and nothing in it is a line. The folder is `0700` and every file `0600`: the pages hold what the
+Library shows, every tier of it, so only the record's user reads them. On a sealed record that means
+the built pages hold, in plain text on this disk, what the Library shows of the sealed lines, as the
+browser's own cache of those pages always has; `logbook serve --live` builds nothing and renders every
+page as it is asked for. A file is named by the SHA-256 of its address, so no address becomes a path
+and two addresses that differ only in case are never one file. Deleting the folder loses nothing: the
+next build writes it again.
+
+## Never hangs
+
+The server keeps answering, whatever a page costs and whatever else writes the record.
+
+- **A page has a limit.** A page the build does not hold is read in a pool of two: however many are
+  asked for together, at most two are read at once, so a whole menu opened at once never holds the
+  record in memory a dozen times over. A page read longer than `--limit` (15 s by default) is stopped
+  and answered with one sentence (*Still reading*, a 503): it is being built in the background and
+  will be here as a file in a few minutes, and every other door opens as usual. Under `--live` the
+  sentence says the reading was stopped. A page the build holds never waits for the pool.
+- **A browser that leaves stops its reading.** The server looks at the connection while the page is
+  read; when the browser closes it, the reading stops at the next line it reads, and nothing is sent.
+  A broken pipe is a browser leaving, never a traceback in the log. A connection that sends nothing for
+  60 s is closed.
+- **A reader never waits on a writer.** A sync appends a line, then `logbook.json`, then the index
+  (SPEC §3). A page read in between finds the index a line short: it reads the record up to the last
+  line the index holds, every line of it whole, and names that head in its tag. It never rebuilds the
+  index from under the writer.
+- **A server that says nothing is restarted.** `serve --status` tells a server that answers, one that
+  takes the connection and says nothing for 5 s (`not answering`: stuck, or paused by the system),
+  and nothing at all apart, and names the command that restarts it. The server asks itself for its
+  icon every 30 s; two silences in a row, and it writes every thread's stack to its log and exits 70,
+  which the service manager starts again (launchd's `KeepAlive`, systemd's `Restart=on-failure`). A
+  process the system paused runs nothing, its watchdog included: the scheduled run (`sync
+  --scheduled`, four times a day) restarts it, `launchctl kickstart -k gui/<uid>/org.logbook.serve`
+  or `systemctl --user restart logbook-serve`, in one line. A system-domain service is restarted by
+  an administrator, and the line says how.
+- **When it does hang anyway**, `kill -USR1 <pid>` writes every thread's stack to the log
+  (`~/Library/Logs/logbook-serve.log` on macOS, the journal on Linux) while the server runs on: send
+  it, and the log says where it waits.
+
 ## Performance
 
 A Day is one `day.read`: one reading of the day and the day before through `index.sqlite`, the

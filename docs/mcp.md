@@ -250,6 +250,11 @@ line's envelope, `header` (the first line `day sign` prints, `2026-06-09: signed
 signed-day/v1`), `kept` (what was kept from the signature it supersedes, the sentence `day sign` prints, or
 null), and counts: `confirmed`, `on_page`, `dispositions` per word, `above_ceiling` (with `unconfirmed`, null
 unless the door left a line above the ceiling unconfirmed), and `supersedes`.
+Like every signature, it never confirms the dream's draft line (RFC 0043 §6 rule 3): a draft on the page
+is neither confirmed nor counted above the ceiling, and `confirm` or a disposition naming it is refused.
+`sign_day` takes nothing of Keep and sign (`day sign --keep`, `--word`, `--done`, `--tomorrow`,
+`--let-go`; [the signed day](signed-day.md#keep-and-sign)), and no argument is added for it: agents
+propose, the owner keeps, on the command line or the Day page.
 
 **`note_day(day, text, at?, kind?)`** appends one `note/v1` line: source `mcp`, tier 2, the text exactly as
 given, never filtered or trimmed, at most 4000 characters (`NOTE_MAX`; a longer one is refused and nothing is

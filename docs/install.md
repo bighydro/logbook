@@ -326,6 +326,21 @@ Removing the command never touches your record. The folder `logbook setup` made 
 unless you chose otherwise) stays where it is, readable as plain files, and a later install finds
 it again.
 
+### Following stable
+
+A machine that updates itself from the repository rather than from a release follows the tag
+`stable`, never `main`. CI moves `stable` to a commit on `main` only after every check of that commit
+passed on Linux, macOS and Windows (the tests with the slow tier, Nix, Homebrew, Docker and the second
+implementation), and never moves it backwards. A commit that turns `main` red is never installed.
+
+```bash
+uv tool install --force "openlogbook @ git+https://github.com/bighydro/logbook@stable"
+```
+
+Run that from whatever updates the machine (a launchd agent, a cron line, a script you run), in place
+of an install from `main`. `logbook --version` says what is installed, and `git ls-remote --tags
+https://github.com/bighydro/logbook stable` which commit `stable` names.
+
 ## Optional extras
 
 Some features need an extra library: reading an encrypted iPhone backup and sharing a signed page
