@@ -424,3 +424,32 @@ def test_a_small_record_builds_in_one_process_and_the_setting_says_how_many(
     monkeypatch.setattr(library_build, "WORKERS_FROM", 0)
     monkeypatch.delenv(library_build.WORKERS_ENV)
     assert 1 <= library_build.workers_default(lb) <= library_build.WORKERS_MOST
+
+
+def _serve_given(monkeypatch: pytest.MonkeyPatch, *args: str) -> dict[str, Any]:
+    """What `logbook serve <args>` hands the server: `serve.serve` caught, nothing bound."""
+    given: dict[str, Any] = {}
+    monkeypatch.setattr(serve, "serve", lambda lb, **kw: given.update(kw))
+    cli.main(["serve", *args])
+    return given
+
+
+def test_serve_is_live_by_default_with_no_limit(lb: Logbook, monkeypatch: pytest.MonkeyPatch) -> None:
+    given = _serve_given(monkeypatch)
+    assert given["built"] is False, "live by default: built pages are a lab"
+    assert given["limit_s"] == float("inf"), "live, a page is read to its end"
+    assert _serve_given(monkeypatch, "--live")["built"] is False, "--live is still accepted"
+    assert _serve_given(monkeypatch, "--live", "--limit", "0")["limit_s"] == float("inf")
+
+
+def test_serve_built_answers_from_the_build_under_the_limit(
+    lb: Logbook, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    given = _serve_given(monkeypatch, "--built")
+    assert given["built"] is True and given["limit_s"] == serve.LIMIT_S == 15.0
+    assert _serve_given(monkeypatch, "--built", "--limit", "0")["limit_s"] == float("inf")
+
+
+def test_serve_live_takes_a_limit_when_given(lb: Logbook, monkeypatch: pytest.MonkeyPatch) -> None:
+    given = _serve_given(monkeypatch, "--live", "--limit", "15")
+    assert given["built"] is False and given["limit_s"] == 15.0

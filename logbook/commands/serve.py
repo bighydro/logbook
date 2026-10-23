@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import sys
 from pathlib import Path
@@ -49,8 +50,8 @@ def serve_arguments(sub: Subparsers) -> None:
     s.add_argument(
         "--build",
         action="store_true",
-        help="build the Library's pages now and exit: what the server answers from (the 06:00 close and"
-        " every act on a page build them too)",
+        help="build the Library's pages now and exit: what `serve --built` answers from (labs); once built,"
+        " the 06:00 close and every act on a page build them too",
     )
     s.add_argument(
         "--full",
@@ -61,15 +62,22 @@ def serve_arguments(sub: Subparsers) -> None:
     s.add_argument(
         "--limit",
         type=float,
-        default=serve.LIMIT_S,
+        default=None,
         metavar="SECONDS",
-        help=f"stop reading a page after this long and say so (default {serve.LIMIT_S:g}); with the pages"
-        " built ahead, it is built in the background instead",
+        help=f"stop reading a page after this long and say so; 0 is no limit (default: none when live,"
+        f" {serve.LIMIT_S:g} with --built, where the page is built in the background instead)",
     )
-    s.add_argument(
+    answer = s.add_mutually_exclusive_group()
+    answer.add_argument(
         "--live",
         action="store_true",
-        help="render every page as it is asked for, never from the pages built ahead",
+        help="render every page as it is asked for, never from the pages built ahead (the default)",
+    )
+    answer.add_argument(
+        "--built",
+        action="store_true",
+        help="answer from pages built ahead (labs): built at the 06:00 close and after every act, once"
+        " turned on by this or --build",
     )
     s.add_argument(
         "--status",
@@ -89,8 +97,10 @@ def cmd_serve(a: argparse.Namespace) -> None:
     quiet — at http://127.0.0.1:8765/. Any other host is refused before a socket is opened; no page
     references a URL outside itself; nothing is written but what the owner names on the Places page
     and reflects and signs on a Day, each through the CLI's own function, from this machine only; a
-    Day hears a recording when this machine can (`day.voice`). `--install-service`, `--uninstall-service`
-    and `--status`: the same server kept running by the machine's service manager (`_service`)."""
+    Day hears a recording when this machine can (`day.voice`). Every page is rendered as it is asked
+    for; `--built` (labs) answers from the pages built ahead instead, under a limit (`_limit`).
+    `--install-service`, `--uninstall-service` and `--status`: the same server kept running by the
+    machine's service manager (`_service`)."""
     if a.host != serve.HOST:
         print(
             f"serve: binds {serve.HOST} only, never {a.host!r}: the record is read from this machine",
@@ -113,8 +123,8 @@ def cmd_serve(a: argparse.Namespace) -> None:
             port=a.port,
             airports=_airports(a.airports),
             voice=voice(),
-            built=not a.live,
-            limit_s=max(1.0, a.limit),
+            built=a.built,
+            limit_s=_limit(a),
         )
     except serve.HostError as e:
         print(f"serve: {e}", file=sys.stderr)
@@ -122,6 +132,15 @@ def cmd_serve(a: argparse.Namespace) -> None:
     except OSError as e:
         print(f"serve: cannot listen on {a.host}:{a.port}: {e}", file=sys.stderr)
         sys.exit(2)
+
+
+def _limit(a: argparse.Namespace) -> float:
+    """How long a page is read before the server stops it and says so: `--limit` as given (0 none,
+    and never under a second); without it, `serve.LIMIT_S` from the pages built ahead and none live,
+    where a heavy page is worth its wait."""
+    if a.limit is None:
+        return serve.LIMIT_S if a.built else math.inf
+    return math.inf if a.limit <= 0 else max(1.0, a.limit)
 
 
 def _build(lb: Logbook, airports: Airports | None, full: bool = False) -> None:

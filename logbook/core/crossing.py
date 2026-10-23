@@ -11,7 +11,10 @@ lines of days the owner has signed cross, unless the request says `--unsigned`. 
 only while the entry it was written under allows its tier (`drafts.Allowed.of`): a person's the
 `relationship` entry, every other unit's the `dream` entry, whatever the destination's ceiling. A
 mail crosses only when it is a person's (RFC 0045, `peoples_mail.Rule`), unless the request says
-`--all-mail`. Nothing here rewrites a line; the only write to the log is that one `Logbook.append`."""
+`--all-mail`. What a podcast or a video said (`heard`, RFC 0046) crosses only to a destination whose
+entry says `"heard": true`, and is counted with the drafts held back by their entry otherwise. The two
+rules read different kinds, so a line passes both and neither decides for the other. Nothing here
+rewrites a line; the only write to the log is that one `Logbook.append`."""
 
 from __future__ import annotations
 
@@ -29,7 +32,7 @@ from pathlib import Path, PurePosixPath
 from typing import Any
 
 from .. import __version__
-from . import attachments, day_start, drafts, peoples_mail, policy, sealing, signing, stars
+from . import attachments, day_start, drafts, heard, peoples_mail, policy, sealing, signing, stars
 from .chain import Line, is_sealed
 from .resolve import Ref, standing, walk
 from .store import Logbook, retractions, utc, uuid7
@@ -205,7 +208,8 @@ class Selection:
     sealed: dict[str, Line] = field(default_factory=dict)  # id → the line as the file holds it, when sealed
     held_back_unsigned: int = 0  # lines in the tiers and kinds asked for whose day is not signed (RFC 0034)
     held_back_by_entry: int = (
-        0  # drafts the entry they were written under no longer allows (`drafts.Allowed.of`)
+        0  # drafts the entry they were written under no longer allows (`drafts.Allowed.of`), and the
+        # `heard` lines of a destination whose entry does not name them (RFC 0046 §9)
     )
     mail_held_back: int | None = None  # mail no person is on (RFC 0045); None when the rule read no mail
 
@@ -308,8 +312,11 @@ def select(lb: Logbook, req: Request) -> Selection:
     # entry (the `relationship` entry's for a person, the `dream` entry's for every other unit) no
     # longer allows its tier it stays home, whatever this ceiling
     entries = drafts.allowed(lb.root)
+    # what was heard leaves only when the entry says so (RFC 0046); it reads `heard` lines alone, as the
+    # mail rule above reads mail alone, so the two rules never see the same line and their order is moot
+    texts = heard.crosses(lb.root, req.destination)
     held_by_entry = len(lines)
-    lines = [line for line in lines if not _held_by_entry(line, entries)]
+    lines = [line for line in lines if not _held_by_entry(line, entries) and not heard.held(line, texts)]
     held_by_entry -= len(lines)
     beside = {str(line["id"]) for line in lines}
     lines = [line for line in lines if stars.beside(line, beside)]

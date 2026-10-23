@@ -57,6 +57,7 @@ from .rows import _day_rows, _line_row, _line_text, by_photo
 if TYPE_CHECKING:
     from ..contrib import serve
 
+HEARD = "heard"  # RFC 0046: what the podcasts and videos you played said (`commands.heard`)
 READERS = ("year", "trip", "trips", "days", "keepers", "stats")  # commands of their own until 0.6
 ORGS = ("org", "orgs")  # RFC 0037: one org's page, and the orgs (the Manifest's text)
 IDEAS = ("idea", "ideas")  # RFC 0037: one idea's page, and the ideas (the Ideas shelf's text)
@@ -70,7 +71,9 @@ def show_arguments(sub: Subparsers) -> None:
         "show",
         help="one day, a page; year, trip(s), days, keepers, stats, orgs, ideas",
         description="one day's lines (default today), a page (person, asset, place, org, idea), or a reader:"
-        " year, trip, trips, days, keepers, stats, orgs (the orgs you named under their status, the most"
+        " heard (what the podcasts and videos you played said: --day, or --since and --until, the last"
+        " 14 days without), year, trip, trips, days, keepers, stats, orgs (the orgs you named under their"
+        " status, the most"
         " recent touch first, stale ones said; the passed with their reasons; the people with more than one"
         " org), ideas (the ideas you named by stage, the most recent touch first, each with its reason),"
         " plan (today's tasks, the sprint and the next trip, from `sync notion`'s tier-1 lines)",
@@ -92,6 +95,7 @@ def show_arguments(sub: Subparsers) -> None:
         " (trip:YYYY-MM-DD:YYYY-MM-DD), or any day inside it",
     )
     s.add_argument("--raw", action="store_true", help="print refs as the sources gave them, never a name")
+    s.add_argument("--day", dest="show_day", metavar="YYYY-MM-DD", help="one local day")
     s.add_argument(
         "--json",
         action="store_true",
@@ -108,14 +112,14 @@ def show_arguments(sub: Subparsers) -> None:
         "--from",
         dest="since",
         metavar="YYYY-MM-DD",
-        help="trips, days, keepers: the first day (default the record's)",
+        help="trips, days, keepers: the first day (default the record's); heard: the first day",
     )
     s.add_argument(
         "--until",
         "--to",
         dest="until",
         metavar="YYYY-MM-DD",
-        help="trips, days, keepers: the last day, inclusive (default the record's)",
+        help="trips, days, keepers: the last day, inclusive (default the record's); heard: default today",
     )
     s.add_argument(
         "--airports",
@@ -278,6 +282,11 @@ def cmd_show(a: argparse.Namespace) -> None:
     in time order (then chain order for the same instant). Senders, organizers and attendees
     are shown by the names the record's own resolution lines give them (RFC 0006), built once
     per call; `--raw` prints the refs as the sources gave them. Nothing is written."""
+    if a.day == HEARD:
+        from .heard import cmd_heard
+
+        cmd_heard(a)
+        return
     if a.day in READERS:
         _show_reader(a)
         return
