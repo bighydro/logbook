@@ -5,6 +5,7 @@
 ```bash
 logbook serve                     # http://127.0.0.1:8765/
 logbook serve --port 8080
+logbook serve --built             # labs: answered from pages built ahead (Built ahead, below)
 logbook serve --install-service   # kept running by launchd or systemd (As a service, below)
 ```
 
@@ -110,8 +111,13 @@ rather than each starting their own on the same file.
 
 ## Built ahead
 
-`logbook serve` answers from pages built ahead of time, not from the record while you wait
-([RFC 0047](https://github.com/bighydro/logbook/blob/main/rfcs/0047-the-librarys-doors.md) §8). Every door and shelf (`/`, `/days`, `/trips`,
+**Labs, off by default.** `logbook serve` renders every page as it is asked for, from the index and the
+record as they stand, with no limit on how long a page reads: a heavy page (People, a person, the
+Manifest, the World, Promises on a record of millions of lines) takes its time and then answers.
+`logbook serve --built` answers from pages built ahead of time instead, not from the record while you
+wait ([RFC 0047](https://github.com/bighydro/logbook/blob/main/rfcs/0047-the-librarys-doors.md) §8);
+it, or `logbook serve --build`, turns the build on for this machine, and the 06:00 close keeps it
+built from then on. `--live` is still accepted and is the default. Every door and shelf (`/`, `/days`, `/trips`,
 `/journeys`, `/people`, `/places`, `/world`, `/manifest`, `/manifest/people`, `/ideas`, `/promises`,
 `/goals`, `/agents`, `/assets`, `/gaps`) is built, with the Days of the last fortnight and the pages
 those shelves link to first (60 of each kind: the people at the top of People, this year's journeys,
@@ -120,10 +126,12 @@ at that moment, byte for byte, with one sentence added to its footer: `built 06:
 
 When it is built:
 
-- **At the 06:00 close.** `sync --scheduled --close` builds the Library after the sync and the dream
-  and before `doctor`, and says so in one line; the demo month's first build says
+- **At the 06:00 close**, once turned on. `sync --scheduled --close` builds the Library after the sync
+  and the dream and before `doctor`, and says so in one line; the demo month's first build says
   `library: 90 pages, 90 written, in 7.8 s`. A build another process holds, or one that fails, is
-  that one line and never fails the run.
+  that one line and never fails the run. On a machine where built pages were never turned on (no
+  `pages.json` in the folder below), the close builds nothing and says `library: not built (built
+  pages are off; logbook serve --built turns them on)`.
 - **After every act on a page.** Reflect, Sign, a star, *with…*, a name, a merge, a status: the page
   the act sends you back to and the front page are dropped at once, so you see what you wrote, and a
   rebuild of the rest starts in the background on a thread of its own. Acts that come while it builds
@@ -133,7 +141,7 @@ When it is built:
   On a record of a hundred thousand lines or more it renders on several processes, one fewer than the
   machine has, four at most; `LOGBOOK_BUILD_WORKERS` sets how many (1: one process). A page that fails is named and
   the command exits 1; while another process builds it exits 75.
-- **The first time.** A server that finds no build starts one when it starts.
+- **The first time.** A server started with `--built` that finds no build starts one when it starts.
 
 What is never built: today's Day, whose shape moves with the hour (morning, live, evening; RFC 0043
 §5), the redirect of `/today`, and a photo's pixels. A page no build has written (a Day a year ago, a
@@ -160,10 +168,22 @@ Windows), never in the record's folder. No export, vault, crossing or copy of th
 and nothing in it is a line. The folder is `0700` and every file `0600`: the pages hold what the
 Library shows, every tier of it, so only the record's user reads them. On a sealed record that means
 the built pages hold, in plain text on this disk, what the Library shows of the sealed lines, as the
-browser's own cache of those pages always has; `logbook serve --live` builds nothing and renders every
+browser's own cache of those pages always has; `logbook serve`, live, builds nothing and renders every
 page as it is asked for. A file is named by the SHA-256 of its address, so no address becomes a path
 and two addresses that differ only in case are never one file. Deleting the folder loses nothing: the
-next build writes it again.
+next build writes it again, and with no `pages.json` the close builds nothing.
+
+Not yet, and why it is a lab:
+
+- **A rebuild through its own Site.** The rebuild after an act renders through the server's own
+  `Site`, and can save a page's stale bytes again; each such save adds another `built hh:mm` to its
+  footer.
+- **A page older than the record's head.** A built page is never checked against the record's head.
+  After `day sign` on the command line, the built Day says *unsigned* until the next 06:00 close.
+- **A sealed record.** On a sealed record the built pages hold tier 2–3 in plain text on this disk, by
+  default (above).
+- **Two writers of `pages.json`.** The server's rebuild and the close's build can each lose the
+  other's writes to the manifest.
 
 ## Never hangs
 
@@ -171,10 +191,12 @@ The server keeps answering, whatever a page costs and whatever else writes the r
 
 - **A page has a limit.** A page the build does not hold is read in a pool of two: however many are
   asked for together, at most two are read at once, so a whole menu opened at once never holds the
-  record in memory a dozen times over. A page read longer than `--limit` (15 s by default) is stopped
-  and answered with one sentence (*Still reading*, a 503): it is being built in the background and
-  will be here as a file in a few minutes, and every other door opens as usual. Under `--live` the
-  sentence says the reading was stopped. A page the build holds never waits for the pool.
+  record in memory a dozen times over. Live, the default, a page has no limit unless `--limit SECONDS`
+  gives one: a heavy page takes its time and answers. Given one, or with `--built` (15 s unless
+  `--limit` says otherwise; `--limit 0` is none), a page read longer is stopped and answered with one
+  sentence (*Still reading*, a 503): with `--built` it is being built in the background and will be
+  here as a file in a few minutes, and every other door opens as usual; live, the sentence says the
+  reading was stopped. A page the build holds never waits for the pool.
 - **A browser that leaves stops its reading.** The server looks at the connection while the page is
   read; when the browser closes it, the reading stops at the next line it reads, and nothing is sent.
   A broken pipe is a browser leaving, never a traceback in the log. A connection that sends nothing for

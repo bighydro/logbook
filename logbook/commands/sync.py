@@ -474,11 +474,15 @@ def _keep_serve_answering() -> None:
 
 def _build_library(lb: Logbook) -> str:
     """The close's third step: the Library's pages built for the day that begins (`library_build`,
-    RFC 0047 §8), so the server answers every door from a file. Never an error of the run: a build
-    another process holds, or one that fails, is one line, and the server answers from the last build.
-    What it did, in a few words, for the summary line."""
+    RFC 0047 §8), so `serve --built` answers every door from a file. Built pages are a lab: only where
+    the owner turned them on (`serve --built` or `serve --build` left a manifest), and otherwise one
+    line saying so. Never an error of the run: a build another process holds, or one that fails, is one
+    line, and the server answers from the last build. What it did, in a few words, for the summary line."""
     from ..contrib import library_build
 
+    if not (library_build.folder_of(lb) / library_build.MANIFEST).exists():
+        print("library: not built (built pages are off; `logbook serve --built` turns them on)")
+        return "library off"
     try:
         result = library_build.build(lb, workers=library_build.workers_default(lb))
     except library_build.Busy as e:
