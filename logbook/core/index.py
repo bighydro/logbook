@@ -177,6 +177,7 @@ INDEX_KEY = "index_key"  # meta: the blinding key, sealed to the recipients (RFC
 INSERT = "INSERT INTO lines VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
 INSERT_TEXT = f"INSERT INTO {SEARCH} (rowid, body, kind, tier, day) VALUES (?, ?, ?, ?, ?)"
 
+GAP_MS = "round((julianday(at) - julianday(prev)) * 86400000)"  # a stretch, to the millisecond
 UTC_SECONDS = (
     "[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]"  # a stamp to the second
 )
@@ -1160,10 +1161,10 @@ class Index:
     def activity(self, first_day: str, last_day: str) -> list[dict[str, Any]]:
         """Per source, most lines first, over the lines whose local day is in [first_day, last_day]
         (`sources --gaps`): lines, first and last `at`, the local days with a line, and the longest
-        stretch between two consecutive lines as its (from, to) stamps, None for a source with one
-        line. Three SELECTs over the columns, nothing read from the files; the stretch is one window
-        query (LAG over each source's lines in `at` order), and SQLite's rule that bare columns
-        beside max() come from the row holding the maximum picks the pair."""
+        stretch between two consecutive lines as its (from, to) stamps, the first of equals (to the
+        millisecond, `GAP_MS`), None for a source with one line. Three SELECTs over the columns,
+        nothing read from the files; the stretch is one window query (LAG over each source's lines in
+        `at` order), ranked."""
         cut = (first_day, last_day)
         totals = self.db.execute(
             "SELECT source, count(*), min(at), max(at) FROM lines WHERE day_local BETWEEN ? AND ?"
@@ -1179,10 +1180,11 @@ class Index:
             days.setdefault(str(source), []).append(str(day))
         stretches = {
             str(source): (str(start), str(end))
-            for source, start, end, _days in self.db.execute(
-                "SELECT source, prev, at, max(julianday(at) - julianday(prev)) FROM ("
+            for source, start, end in self.db.execute(
+                "SELECT source, prev, at FROM (SELECT source, prev, at, row_number() OVER"
+                f" (PARTITION BY source ORDER BY {GAP_MS} DESC, at) AS n FROM ("
                 " SELECT source, at, lag(at) OVER (PARTITION BY source ORDER BY at) AS prev"
-                " FROM lines WHERE day_local BETWEEN ? AND ?) WHERE prev IS NOT NULL GROUP BY source",
+                " FROM lines WHERE day_local BETWEEN ? AND ?) WHERE prev IS NOT NULL) WHERE n = 1",
                 cut,
             )
         }

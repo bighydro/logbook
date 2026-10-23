@@ -4122,11 +4122,7 @@ class Site:
         """`Index.activity` of the record as it stands, read once per window: the page moves with the
         clock, what it counts only with the head."""
 
-        def read() -> list[dict[str, Any]]:
-            with self.lb.index() as idx:
-                return idx.activity(first, last)
-
-        return self.shared(("activity", first, last), read)
+        return self.shared(("activity", first, last), lambda: gaps.activity_of(self.lb, first, last))
 
     def page_gaps(self, since: str | None) -> str:
         data = gaps.report(self.lb, since=since, activity=self._activity)
