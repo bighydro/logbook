@@ -445,7 +445,15 @@ days together the with module confirms (a day, never hours: it puts someone at a
 for all of it); the threads (each chat, mail subject, calendar title and recording title, their time
 clipped to the week); the nights that ended on the week's days as the Day counts them (Monday's began
 the Sunday before, whose evening's sleep lines are read for it), their mean asleep hours, and the
-workouts. The week keeps them under `extra.numbers`, each with its line ids. A sentence that writes a
+workouts. The week keeps them under `extra.numbers`, each with its line ids, but for the people: the
+counts by person are the model's to read and never a reader's, so `extra.numbers.people` keeps each
+person's name, id and lines only, in order (the most contacts first), and every reader (`day`, `show`,
+the Day page, `export site`, letters, `dream week`) prints them as a `with` row of names, never a count
+beside a name. A week written before kept the counts; the readers drop them (`drafts.names_only`).
+And, since `dream-week/2`, no number stands beside a person in the week's pencil either, as for a day,
+a month and a chapter: a sentence that names a canonical person and writes a figure is **held**
+(`dream.hold_names`), its words dropped, counted under `extra.marked` as `a number beside a person`.
+A sentence that writes a
 figure no item it cites gives (rounded, added up, estimated, or a number a day's draft wrote) is
 **marked unsupported** before anything is written and counted under `extra.marked`, so it counts
 against the 30 %. A figure is digits, glued to a unit or not (`45min`, `7,5t`), or a number written
@@ -573,7 +581,7 @@ by line. It reads the chapter as you named it (its name, its stretch and its `ru
 it is for), then the **month drafts** for the months it spans, and, for a month no month draft covers,
 the **week drafts** of its weeks (at most 24 months and 12 weeks, the latest), each draft's supported
 sentences only, and a sentence only when every line it rests on is a line of the chapter's days under
-the ceiling and it puts no figure beside a person (a week's `people` sentence does): a June draft given to a chapter that began on the 20th gives only what rests on the 20th
+the ceiling and it puts no figure beside a person (a week written before `dream-week/2` may hold one): a June draft given to a chapter that began on the 20th gives only what rests on the 20th
 and after. It writes:
 
 - `arc`: the chapter's arc, in the order it was lived, from the months and the weeks;

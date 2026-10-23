@@ -1059,7 +1059,8 @@ def _voices(line: Line, rd: Reading) -> dict[str, Any]:
 
 
 def voices_text(item: Mapping[str, Any]) -> str:
-    """` · you 31 min · S2 14 min` after a transcript's title on the Day; nothing without voices."""
+    """` · you · S2` after a transcript's title on the Day, the one who spoke most first and
+    never a time beside a voice; nothing without voices."""
     found = item.get("speakers")
     return f"{DOT}{speakers.json_text(found)}" if isinstance(found, list) and found else ""
 
@@ -1561,13 +1562,15 @@ def companion_text(c: dict[str, Any]) -> str:
 
 
 def call_text(c: dict[str, Any]) -> str:
+    """`7 min ← who` for an answered call, its length first and never beside the name (RFC 0043: no
+    number beside a person); `→ who, no answer` or `← who, missed` when it did not connect."""
     arrow = ARROW if c["direction"] == "outgoing" else "←"
-    parts = [f"{arrow} {c['who']}"]
     if not c["answered"]:
-        parts.append("no answer" if c["direction"] == "outgoing" else "missed")
-    elif isinstance(c["duration_s"], int) and c["duration_s"] > 0:
-        parts.append(f"{c['duration_s'] // 60} min" if c["duration_s"] >= 60 else f"{c['duration_s']} s")
-    return ", ".join(parts)
+        return f"{arrow} {c['who']}, {'no answer' if c['direction'] == 'outgoing' else 'missed'}"
+    if isinstance(c["duration_s"], int) and c["duration_s"] > 0:
+        length = f"{c['duration_s'] // 60} min" if c["duration_s"] >= 60 else f"{c['duration_s']} s"
+        return f"{length} {arrow} {c['who']}"
+    return f"{arrow} {c['who']}"
 
 
 def health_text(row: dict[str, Any] | None, sleep: bool = True) -> str:

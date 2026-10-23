@@ -3671,7 +3671,7 @@ class Site:
         if page.people:
             parts.append('<ul class="plain">\n')
             for person in page.people:
-                when = f"{_plural(person.days, 'day')}, the last {person.last}"
+                when = f"the last {person.last}"  # the most days first, never their count
                 parts.append(
                     f"<li>{self.link(escape(person.name), _person_path(person.person))}"
                     f' <span class="mute">{escape(when)}</span></li>\n'
@@ -4007,7 +4007,7 @@ class Site:
         if page.people:
             parts.append('<ul class="plain">\n')
             for person in page.people:
-                when = f"{_plural(person.days, 'day')}, the last {person.last}"
+                when = f"the last {person.last}"  # the most days first, never their count
                 parts.append(
                     f"<li>{self.link(escape(person.name), _person_path(person.person))}"
                     f' <span class="mute">{escape(when)}</span></li>\n'

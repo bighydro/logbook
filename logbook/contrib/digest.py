@@ -368,10 +368,10 @@ def _where_text(shape: Mapping[str, Any], logged: bool) -> str:
 
 def _with_text(with_: Mapping[str, Any]) -> str:
     confirmed, proposed = with_["confirmed"], with_["proposed"]
-    text = ", ".join(confirmed) if confirmed else "nobody confirmed"
-    if proposed:
-        text += f" ({len(proposed)} proposed)"
-    return text
+    if not confirmed:
+        return "nobody confirmed" + (f" ({len(proposed)} proposed)" if proposed else "")
+    text = ", ".join(confirmed)  # a word between the last name and the count: never a count beside a name
+    return text + (f" and {len(proposed)} proposed" if proposed else "")
 
 
 def _spoke_text(shape: Mapping[str, Any]) -> str:

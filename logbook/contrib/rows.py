@@ -443,9 +443,10 @@ def _airport_code(ref: object) -> str:
 
 
 def _call_text(p: dict[str, Any], names: Mapping[Ref, str] | None) -> str:
-    """`← who, 7 min, cellular` for an answered incoming call, `→ who` outgoing, `missed` or `no
-    answer` when it did not connect (RFC 0012). The counterparty is its label, else the ref as given;
-    a withheld number is `withheld`. Raw (`names` None): the ref."""
+    """`7 min ← who, cellular` for an answered incoming call, `→ who` outgoing, `missed` or `no
+    answer` when it did not connect (RFC 0012); the length first, never beside the name (RFC 0043: no
+    number beside a person). The counterparty is its label, else the ref as given; a withheld number
+    is `withheld`. Raw (`names` None): the ref."""
     ref = p.get("counterparty")
     who = _name(ref, names) or _ref_value(ref) or "withheld"
     arrow = "→" if p.get("direction") == "outgoing" else "←"
@@ -455,7 +456,7 @@ def _call_text(p: dict[str, Any], names: Mapping[Ref, str] | None) -> str:
     else:
         seconds = p.get("duration_s")
         if isinstance(seconds, int) and seconds > 0:
-            parts.append(f"{seconds // 60} min" if seconds >= 60 else f"{seconds} s")
+            parts[0] = (f"{seconds // 60} min" if seconds >= 60 else f"{seconds} s") + f" {parts[0]}"
     if isinstance(p.get("service"), str):
         parts.append(p["service"])
     return ", ".join(parts)
