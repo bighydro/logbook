@@ -53,6 +53,14 @@ def serve_arguments(sub: Subparsers) -> None:
         " every act on a page build them too)",
     )
     s.add_argument(
+        "--limit",
+        type=float,
+        default=serve.LIMIT_S,
+        metavar="SECONDS",
+        help=f"stop reading a page after this long and say so (default {serve.LIMIT_S:g}); with the pages"
+        " built ahead, it is built in the background instead",
+    )
+    s.add_argument(
         "--live",
         action="store_true",
         help="render every page as it is asked for, never from the pages built ahead",
@@ -94,7 +102,13 @@ def cmd_serve(a: argparse.Namespace) -> None:
     lb = Logbook.find()
     try:
         serve.serve(
-            lb, host=a.host, port=a.port, airports=_airports(a.airports), voice=voice(), built=not a.live
+            lb,
+            host=a.host,
+            port=a.port,
+            airports=_airports(a.airports),
+            voice=voice(),
+            built=not a.live,
+            limit_s=max(1.0, a.limit),
         )
     except serve.HostError as e:
         print(f"serve: {e}", file=sys.stderr)
@@ -345,8 +359,16 @@ def _service_status(platform: str, home: Path, config_home: Path | None, port: i
         address = f"http://{serve.HOST}:{item.port}/"
         if service.answering(item.port):
             print(f"answering at {address}")
+            continue
+        silent = True
+        if service.probe(item.port) == service.NOT_ANSWERING:
+            restart = service.restart_command(item) or service.restart_by_hand(item)
+            print(
+                f"not answering at {address}: it takes the connection and says nothing in"
+                f" {service.PROBE_TIMEOUT_S:g} s; `{restart.text}` restarts it (the scheduled run does);"
+                f" its output: {item.log}"
+            )
         else:
-            silent = True
             print(f"nothing answers at {address}; its output: {item.log}")
     if silent:
         sys.exit(1)

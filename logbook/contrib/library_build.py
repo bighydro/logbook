@@ -523,9 +523,10 @@ def build(
 
 class Rebuilder:
     """The server's own build, on one thread of its own: asked for after every act (`kick`), it builds
-    the Library once for however many acts came in while it built, and waits again. Another process
-    building (`Busy`, the 06:00 close) is waited out and asked again `RETRY_S` later. Never a page's
-    caller: a request never waits for it."""
+    the Library once for however many acts came in while it built, and waits again; asked for one page
+    (`ask`: a reading the server stopped at its limit), it builds the pages asked for, without a limit.
+    Another process building (`Busy`, the 06:00 close) is waited out and asked again `RETRY_S` later.
+    Never a page's caller: a request never waits for it."""
 
     RETRY_S = 30.0
 
@@ -534,6 +535,9 @@ class Rebuilder:
         self._asked = threading.Event()
         self._stop = threading.Event()
         self._thread = threading.Thread(target=self._run, name="library-build", daemon=True)
+        self._full = False
+        self._wanted: list[str] = []
+        self._wanted_lock = threading.Lock()
         self.builds = 0
 
     def start(self) -> Rebuilder:
@@ -541,6 +545,16 @@ class Rebuilder:
         return self
 
     def kick(self) -> None:
+        """A full build: after an act, or when the server finds none."""
+        with self._wanted_lock:
+            self._full = True
+        self._asked.set()
+
+    def ask(self, target: str) -> None:
+        """One page: a reading the server stopped at its limit, built here without one."""
+        with self._wanted_lock:
+            if target not in self._wanted:
+                self._wanted.append(target)
         self._asked.set()
 
     def stop(self) -> None:
@@ -553,9 +567,15 @@ class Rebuilder:
             if self._stop.is_set():
                 return
             self._asked.clear()
+            with self._wanted_lock:
+                full, wanted = self._full, self._wanted
+                self._full, self._wanted = False, []
             try:
-                result = build(self.lb, self.site, self.library)
+                result = build(self.lb, self.site, self.library, only=None if full else wanted)
             except Busy:
+                with self._wanted_lock:
+                    self._full = self._full or full
+                    self._wanted += [t for t in wanted if t not in self._wanted]
                 self._stop.wait(self.RETRY_S)
                 self._asked.set()
                 continue
