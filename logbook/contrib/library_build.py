@@ -34,27 +34,30 @@ for the pages the act changed."""
 
 from __future__ import annotations
 
+import concurrent.futures
+import concurrent.futures.process
 import contextlib
 import hashlib
 import html
 import json
+import multiprocessing
 import os
 import re
 import sys
 import threading
 import time
-from collections.abc import Callable, Iterable, Mapping, Sequence
-from dataclasses import dataclass
-from datetime import UTC, datetime
+from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
+from dataclasses import dataclass, field
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urlsplit
 
-from ..core import day_start, sealing
-from ..core.store import _alive
+from ..core import day_start, kept, sealing
+from ..core.store import Logbook, _alive
 
 if TYPE_CHECKING:
-    from ..core.store import Logbook
+    from ..core.index import Index
     from .serve import Response, Site
 
 VERSION = 1
@@ -79,6 +82,10 @@ DOORS = (
     "/assets",
     "/gaps",
 )
+EVERYWHERE = ("retraction", "resolution", "entity", "entity-review", "people-review")  # who is who
+DAY_PAGE = re.compile(r"^/day/(\d{4}-\d{2}-\d{2})$")
+YEAR_PAGE = re.compile(r"^(/[a-z]+)\?year=\d{4}$")  # a year's page: its pager names every year
+JOURNEY_PAGE = re.compile(r"^/journeys/(\d{4}-\d{2}-\d{2})/(\d{4}-\d{2}-\d{2})$")
 RECENT_DAYS = 14  # the Days of the last fortnight are built; today's is always rendered live
 EACH = 60  # detail pages of one kind the build follows from the doors
 ASKED = 500  # addresses the server added on demand, the latest kept and rebuilt
@@ -87,6 +94,9 @@ HREF = re.compile(r"""href\s*=\s*["']([^"']*)["']""", re.I)
 LIVE_PREFIXES = ("/photo/",)  # pixels from the attachment store: cheap, and not a page
 FOOTER = "</footer>"
 REPLACE_TRIES = 40  # Windows: a file held open by a reader is replaced again for up to two seconds
+WORKERS_ENV, WORKERS_MOST = "LOGBOOK_BUILD_WORKERS", 4  # a build's processes from the command line
+WORKERS_FROM = 100_000  # lines: a smaller record builds in one process
+SLOWEST = 5  # the pages a build names as its slowest
 SAVE_EVERY = 50  # a build names its pages in `pages.json` this many at a time, and at its end
 
 
@@ -164,6 +174,7 @@ class Page:
     at: str
     head: str
     asked: bool = False
+    reads: list[Any] | None = None  # [first, last, kinds]: what the page said it was made of (`Site.reads`)
 
     def to_json(self) -> dict[str, Any]:
         return {k: v for k, v in self.__dict__.items()}
@@ -183,7 +194,16 @@ def _page(v: object) -> Page | None:
         at=str(v.get("at") or ""),
         head=str(v.get("head") or ""),
         asked=bool(v.get("asked")),
+        reads=_reads(v.get("reads")),
     )
+
+
+def _reads(v: object) -> list[Any] | None:
+    """A page's `reads` as `pages.json` holds it, or None for one that says nothing or does not read."""
+    if not isinstance(v, list) or len(v) != 3 or not all(isinstance(d, str) for d in v[:2]):
+        return None
+    kinds = v[2]
+    return [v[0], v[1], [str(k) for k in kinds]] if isinstance(kinds, list) else None
 
 
 class Library:
@@ -281,7 +301,14 @@ class Library:
         if not (path.is_file() and path.read_bytes() == body):
             _write_private(path, body)
         etag = f'"b-{hashlib.sha256(body).hexdigest()[:20]}"'
-        page = Page(name, response.status, response.csp, response.location, etag, _stamp(when), head, asked)
+        reads = (
+            None
+            if response.reads is None
+            else [response.reads.first, response.reads.last, list(response.reads.kinds)]
+        )
+        page = Page(
+            name, response.status, response.csp, response.location, etag, _stamp(when), head, asked, reads
+        )
         with self._lock:
             self._load()
             pages = dict(self._pages)
@@ -405,13 +432,13 @@ def _kind(target: str) -> str:
     return (found.group(0) if found else path) + ("?" + "&".join(names) if names else "")
 
 
-def targets(site: Site, today: str, asked: Sequence[str] = ()) -> list[str]:
+def targets(
+    site: Site, today: str, asked: Sequence[str] = (), doors: Mapping[str, Rendered] | None = None
+) -> list[str]:
     """What a full build renders: the doors, the last fortnight's Days but today's, and the detail
     pages and variants the doors link to, `EACH` of a kind, in the order the doors list them; then the
     addresses asked for on demand. Reads the doors as it goes (they are rendered again by the build:
     the second reading is the server's kept page)."""
-    from datetime import date, timedelta
-
     out: list[str] = list(DOORS)
     first = date.fromisoformat(today)
     out += [f"/day/{(first - timedelta(days=n)).isoformat()}" for n in range(1, RECENT_DAYS + 1)]
@@ -419,8 +446,9 @@ def targets(site: Site, today: str, asked: Sequence[str] = ()) -> list[str]:
     counts: dict[str, int] = {}
     for door in DOORS:
         path, _, query = door.partition("?")
-        response = site.respond(path, query)
-        if response.status != 200:
+        given = (doors or {}).get(door)
+        response = site.respond(path, query) if given is None else given[1]
+        if isinstance(response, str) or response.status != 200:
             continue
         for link in HREF.findall(response.body.decode("utf-8", "replace")):
             link = html.unescape(link).partition("#")[0]
@@ -449,6 +477,60 @@ class Result:
     removed: int
     seconds: float
     failed: dict[str, str]
+    slowest: list[tuple[str, float]] = field(default_factory=list)  # the pages that took longest, first
+
+
+def settled(lb: Logbook, site: Site) -> str:
+    """What the pages read besides the lines and the clock: `logbook.json` without its head and seq,
+    the settings beside the chain and the code (`kept.stamp`), and the review's bookkeeping and the
+    circle's pages (`Site._beside`). A build under another is a full one."""
+    return kept.stamp(lb, kept.code_digest(), *site._beside())
+
+
+def days_touched(lb: Logbook, since: int) -> tuple[set[str], set[str]] | None:
+    """The local days the lines appended after `since` landed on, and each one's day before (its night
+    runs into the next morning), and their kinds; None when one of them changes who is who everywhere
+    (`EVERYWHERE`), which only a full build follows."""
+    with lb.index() as idx:
+        rows = idx.db.execute("SELECT DISTINCT kind, day_local FROM lines WHERE seq > ?", (since,)).fetchall()
+    if any(str(kind) in EVERYWHERE for kind, _day in rows):
+        return None
+    days = {str(day) for _kind, day in rows}
+    days |= {(date.fromisoformat(d) - timedelta(days=1)).isoformat() for d in days}
+    return days, {str(kind) for kind, _day in rows}
+
+
+def _pager_years(idx: Index) -> list[str] | None:
+    """The first and last year a year's page names in its pager: those of the owner's track, else of
+    any line (`Site._whole`); None for an empty record."""
+    span = idx.span("location") or idx.span(None)
+    return None if span is None else [span[0][:4], span[1][:4]]
+
+
+def _wanted_since(
+    target: str, days: set[str], kinds: set[str], built: Mapping[str, Page], new_years: bool = True
+) -> bool:
+    """Whether an incremental build renders `target` again: a Day only when a line landed on it or the
+    day after, or when no build has written it; a journey only when it holds such a day; a page that
+    said what it was made of (`Site.reads`: a year's trips or journeys) only when a line landed on those
+    days or is of those kinds, or, for a year's page, when the years its pager names have changed since
+    the last build (`new_years`: the years of the owner's track, `_pager_years`); every other page
+    (they read the whole record, and the kept readings make that cheap)."""
+    path = target.partition("?")[0]
+    page = built.get(target)
+    if page is None:
+        return True
+    if (day := DAY_PAGE.match(path)) is not None:
+        return day.group(1) in days
+    if (journey := JOURNEY_PAGE.match(path)) is not None:
+        first, last = journey.group(1), journey.group(2)
+        return any(first <= d <= last for d in days)
+    if page.reads is not None:
+        first, last, read_kinds = page.reads
+        if any(first <= d <= last for d in days) or kinds & set(read_kinds):
+            return True
+        return YEAR_PAGE.match(target) is not None and new_years
+    return True
 
 
 def build(
@@ -457,11 +539,17 @@ def build(
     library: Library | None = None,
     only: Sequence[str] | None = None,
     say: Callable[[str], None] | None = None,
+    full: bool = False,
+    workers: int = 1,
 ) -> Result:
-    """Build the Library: every target (`targets`), or `only` those addresses. Each page is
-    `site.respond`'s answer, kept when it is a 200 or a redirect; a page that fails is named in
-    `failed` and the build goes on. A full build removes the pages it no longer names. `Busy` when
-    another process is building."""
+    """Build the Library: what the lines appended since the last build touched (`days_touched`,
+    `_wanted_since`) and every door, or, when the last build was under other settings, when one of
+    those lines changes who is who, when there is no build yet, or with `full`, every target
+    (`targets`); or `only` those addresses. Each page is `site.respond`'s answer, kept when it is a
+    200 or a redirect; a page that fails is named in `failed` and the build goes on. A full build
+    removes the pages it no longer names. `Busy` when another process is building. With `workers`
+    more than one, the pages are rendered in that many processes (`_rendered`), each with a site of
+    its own on the clock as the build began, and written here, the doors first."""
     from . import serve
 
     library = library or Library(lb)
@@ -469,35 +557,49 @@ def build(
     started = time.monotonic()
     with library.building():
         head = str(lb.meta.get("head") or "")
+        with lb.index() as idx:
+            seq = idx.indexed()[0]
+            years = _pager_years(idx)
         today = day_start.of(lb.meta).today(site.now()).isoformat()
         before = library.pages()
+        last = library.built()
+        stamp = settled(lb, site)
+        touched = None
+        if not full and only is None and last.get("settled") == stamp and isinstance(last.get("seq"), int):
+            touched = days_touched(lb, int(last["seq"]))
+        incremental = touched is not None
         asked = sorted((t for t, p in before.items() if p.asked), key=lambda t: before[t].at)[-ASKED:]
-        wanted = list(only) if only is not None else targets(site, today, asked)
-        written = 0
-        failed: dict[str, str] = {}
-        for n, target in enumerate(wanted, 1):
-            path, _, query = target.partition("?")
-            if live(path, today):
-                continue
-            try:
-                response = site.respond(path, query)
-            except Exception as e:  # one page's failure is that page's: named, and the rest are built
-                failed[target] = f"{type(e).__name__}: {e}"
-                continue
-            if response.status not in (200, 302):
-                failed[target] = f"{response.status}"
-                continue
-            old = before.get(target)
-            page = library.put(target, response, head, asked=target in asked, save=False)
-            if old is None or old.etag != page.etag:
-                written += 1
-            if n % SAVE_EVERY == 0:
-                library.save()  # the server answers from the pages built so far
-                if say is not None:
-                    say(f"  {n:,} of {len(wanted):,} pages, {time.monotonic() - started:.0f} s")
+        apart = workers > 1 and not site.static and site.voice is None
+        with _Renderer(site, workers if apart else 1) as render:
+            doors = render.doors() if only is None else {}
+            wanted = list(only) if only is not None else targets(site, today, asked, doors)
+            if touched is not None and only is None:
+                days, kinds = touched
+                new_years = last.get("years") != years
+                wanted = [t for t in wanted if _wanted_since(t, days, kinds, before, new_years)]
+            written = 0
+            failed: dict[str, str] = {}
+            took: dict[str, float] = {}
+            todo = [t for t in wanted if not live(t.partition("?")[0], today)]
+            for n, (target, response, seconds) in enumerate(render.pages(todo, doors), 1):
+                if isinstance(response, str):  # one page's failure is that page's: named, and the rest built
+                    failed[target] = response
+                    continue
+                if response.status not in (200, 302):
+                    failed[target] = f"{response.status}"
+                    continue
+                old = before.get(target)
+                page = library.put(target, response, head, asked=target in asked, save=False)
+                took[target] = seconds
+                if old is None or old.etag != page.etag:
+                    written += 1
+                if n % SAVE_EVERY == 0:
+                    library.save()  # the server answers from the pages built so far
+                    if say is not None:
+                        say(f"  {n:,} of {len(todo):,} pages, {time.monotonic() - started:.0f} s")
         library.save()
         removed = 0
-        if only is None:
+        if only is None and not incremental:
             keep = set(wanted)
             gone = [t for t in library.pages() if t not in keep]
             removed = len(library.drop(gone))
@@ -506,19 +608,141 @@ def build(
                 if f.name not in names:
                     f.unlink(missing_ok=True)
         seconds = round(time.monotonic() - started, 1)
+        slowest = sorted(took.items(), key=lambda kv: (-kv[1], kv[0]))[:SLOWEST]
         pages = library.pages()
         with library._lock:
             library._load()
             library._built = {
                 "when": _stamp(library.now()),
                 "head": head,
+                "seq": seq if only is None else last.get("seq"),
+                "settled": stamp if only is None else last.get("settled"),
                 "seconds": seconds,
                 "pages": len(pages),
                 "written": written,
-                "full": only is None,
+                "rendered": len(wanted),
+                "full": only is None and not incremental,
+                "slowest": [[t, s] for t, s in slowest],
+                "workers": workers if apart else 1,
+                "years": years if only is None else last.get("years"),
             }
             library._save(library._pages, library._built)
-    return Result(len(wanted), written, removed, seconds, failed)
+    return Result(len(wanted), written, removed, seconds, failed, slowest)
+
+
+Rendered = tuple[str, "Response | str", float]  # an address, its page or why it failed, the seconds it took
+
+
+def workers_default(lb: Logbook) -> int:
+    """How many processes a build from the command line renders on: `LOGBOOK_BUILD_WORKERS` when set;
+    else one for a record under `WORKERS_FROM` lines, where starting them costs more than it saves,
+    and one fewer than the machine's processors otherwise, `WORKERS_MOST` at most."""
+    given = os.environ.get(WORKERS_ENV, "").strip()
+    if given.isdigit() and int(given) > 0:
+        return int(given)
+    with lb.index() as idx:
+        if idx.indexed()[0] < WORKERS_FROM:
+            return 1
+    return max(1, min(WORKERS_MOST, (os.cpu_count() or 2) - 1))
+
+
+class _Renderer:
+    """The pages of a build, rendered here (one worker) or in `workers` processes (`_start_worker`,
+    `_render`): the doors first, each in a process of its own, so the whole-record readings behind them
+    run side by side and are kept beside the index for the pages after them; then the rest in runs of
+    one kind, so a process reads what they share once. A pool that breaks renders the rest here."""
+
+    def __init__(self, site: Site, workers: int):
+        self.site, self.workers = site, workers
+        self.pool: concurrent.futures.ProcessPoolExecutor | None = None
+
+    def __enter__(self) -> _Renderer:
+        if self.workers > 1:
+            self.pool = concurrent.futures.ProcessPoolExecutor(
+                self.workers,
+                mp_context=multiprocessing.get_context("spawn"),
+                initializer=_start_worker,
+                initargs=(
+                    str(self.site.lb.root),
+                    self.site.now().isoformat(),
+                    None if self.site.tiers is None else tuple(self.site.tiers),
+                    self.site.with_drafts,
+                ),
+            )
+        return self
+
+    def __exit__(self, *exc: object) -> None:
+        if self.pool is not None:
+            self.pool.shutdown(cancel_futures=True)
+
+    def doors(self) -> dict[str, Rendered]:
+        """Every door, rendered: by address."""
+        return {target: found for found in self._run([[door] for door in DOORS]) for target in [found[0]]}
+
+    def pages(self, wanted: Sequence[str], doors: Mapping[str, Rendered]) -> Iterator[Rendered]:
+        """Every address of `wanted`, rendered (a door as `doors` holds it), as each is done."""
+        yield from (doors[t] for t in wanted if t in doors)
+        rest = [t for t in wanted if t not in doors]
+        if self.pool is None:
+            yield from (_render_one(self.site, t) for t in rest)
+            return
+        yield from self._run(_runs(rest, self.workers))
+
+    def _run(self, runs: Sequence[Sequence[str]]) -> Iterator[Rendered]:
+        if self.pool is None:
+            for run in runs:
+                yield from (_render_one(self.site, t) for t in run)
+            return
+        futures = {self.pool.submit(_render, list(run)): run for run in runs}
+        left: list[str] = []
+        for future in concurrent.futures.as_completed(futures):
+            try:
+                yield from future.result()
+            except concurrent.futures.process.BrokenProcessPool:
+                left += futures[future]
+        for target in left:  # what a broken pool did not render: here, one after another
+            yield _render_one(self.site, target)
+
+
+def _runs(wanted: Sequence[str], workers: int) -> list[list[str]]:
+    """`wanted` in runs of one kind (`_kind`), a kind of many pages cut into `workers` runs, the
+    longest runs first."""
+    by_kind: dict[str, list[str]] = {}
+    for target in wanted:
+        by_kind.setdefault(_kind(target), []).append(target)
+    out: list[list[str]] = []
+    for found in by_kind.values():
+        size = max(1, -(-len(found) // workers))
+        out += [found[n : n + size] for n in range(0, len(found), size)]
+    return sorted(out, key=len, reverse=True)
+
+
+def _render_one(site: Site, target: str) -> Rendered:
+    path, _, query = target.partition("?")
+    began = time.monotonic()
+    try:
+        response = site.respond(path, query)
+    except Exception as e:  # one page's failure is that page's
+        return target, f"{type(e).__name__}: {e}", 0.0
+    return target, response, round(time.monotonic() - began, 2)
+
+
+_WORKER_SITE: Site | None = None  # a build worker's own site (`_start_worker`)
+
+
+def _start_worker(root: str, now: str, tiers: tuple[int, ...] | None, with_drafts: bool) -> None:
+    """A build worker's site: the record at `root`, on the clock as the build began, through its gate."""
+    global _WORKER_SITE
+    from . import serve
+
+    at = datetime.fromisoformat(now)
+    _WORKER_SITE = serve.Site(Logbook(Path(root)), now=lambda: at, tiers=tiers, with_drafts=with_drafts)
+
+
+def _render(targets: list[str]) -> list[Rendered]:
+    """A run of addresses, rendered in a build worker."""
+    assert _WORKER_SITE is not None
+    return [_render_one(_WORKER_SITE, target) for target in targets]
 
 
 class Rebuilder:

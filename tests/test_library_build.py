@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import sys
 import threading
 import time
@@ -192,7 +193,7 @@ def test_a_full_build_removes_what_it_no_longer_names(lb: Logbook) -> None:
     stray = "/days?from=2026-06-01&to=2026-06-02"
     library.put(stray, site.respond("/days", "from=2026-06-01&to=2026-06-02"), "x")
     page = library.pages()[stray]
-    library_build.build(lb, site, library)
+    library_build.build(lb, site, library, full=True)
     assert stray not in library.pages() and not (library.folder / page.file).exists()
 
 
@@ -269,3 +270,157 @@ def test_a_build_names_its_pages_a_few_times_not_once_a_page(
     assert library_build.Library(lb).pages().keys() == library.pages().keys(), (
         "what was saved is what was built"
     )
+
+
+# -- incremental: what the lines since the last build touched ---------------------------------------------
+
+
+def _note(lb: Logbook, at: str, text: str) -> None:
+    lb.append(at=at, source="manual", kind="note", tier=2, payload={"schema": "note/v1", "text": text})
+
+
+def test_a_build_after_a_day_renders_what_the_day_touched_and_every_door(lb: Logbook) -> None:
+    library, _site, _first = _built(lb)
+    before = library.pages()
+    assert library.built()["full"] is True
+    _note(lb, "2026-06-15T10:00:00Z", "The boat is back in the water.")
+    second = library_build.build(lb, serve.Site(lb, now=lambda: JUNE), library)
+    built = library.built()
+    assert built["full"] is False and second.pages < len(before)
+    after = library.pages()
+    for day in ("2026-06-15", "2026-06-14"):  # the day, and the day before (its night)
+        assert (
+            after[f"/day/{day}"].at != before[f"/day/{day}"].at
+            or after[f"/day/{day}"].etag != before[f"/day/{day}"].etag
+        )
+    assert after["/day/2026-06-10"].at == before["/day/2026-06-10"].at, (
+        "a day nothing touched is left as built"
+    )
+    page = library.page("/day/2026-06-15")
+    assert page is not None and b"The boat is back in the water." in page[1]
+    for door in library_build.DOORS:
+        assert door in after, door
+    assert set(after) >= set(before), "an incremental build removes nothing"
+
+
+def test_nothing_appended_renders_the_doors_and_no_day(lb: Logbook) -> None:
+    library, _site, _first = _built(lb)
+    before = library.pages()
+    library_build.build(lb, serve.Site(lb, now=lambda: JUNE), library)
+    after = library.pages()
+    assert all(after[t].at == before[t].at for t in before if t.startswith("/day/"))
+    assert library.built()["full"] is False
+
+
+def test_a_resolution_a_setting_or_full_builds_every_page(lb: Logbook) -> None:
+    library, _site, _first = _built(lb)
+    lb.append(
+        at="2026-06-20T09:00:00Z",
+        source="manual",
+        kind="resolution",
+        tier=2,
+        payload={
+            "schema": "resolution/v1",
+            "ref": {"kind": "email", "value": "new.friend@example.org"},
+            "entity": {"type": "person", "id": "019ea000-0000-7000-8000-00000000f00d", "registry": "logbook"},
+            "label": "Nora Nordmann",
+            "method": "owner",
+        },
+    )
+    library_build.build(lb, serve.Site(lb, now=lambda: JUNE), library)
+    assert library.built()["full"] is True, "who is who changed: every page"
+    library_build.build(lb, serve.Site(lb, now=lambda: JUNE), library)
+    assert library.built()["full"] is False
+    (lb.root / "policy").mkdir(exist_ok=True)
+    (lb.root / "policy" / "stays.json").write_text('{"stay_min_s": 900}', encoding="utf-8")
+    library_build.build(lb, serve.Site(lb, now=lambda: JUNE), library)
+    assert library.built()["full"] is True, "a setting changed: every page"
+    library_build.build(lb, serve.Site(lb, now=lambda: JUNE), library, full=True)
+    assert library.built()["full"] is True
+
+
+def test_serve_build_full_says_every_page(lb: Logbook, capsys: pytest.CaptureFixture[str]) -> None:
+    cli.main(["serve", "--build"])
+    assert "(every page;" in capsys.readouterr().out
+    cli.main(["serve", "--build"])
+    assert "(what changed since the last;" in capsys.readouterr().out
+    cli.main(["serve", "--build", "--full"])
+    assert "(every page;" in capsys.readouterr().out
+
+
+def test_a_build_names_its_slowest_pages(lb: Logbook, capsys: pytest.CaptureFixture[str]) -> None:
+    library, _site, result = _built(lb)
+    slowest = library.built()["slowest"]
+    assert 0 < len(slowest) <= library_build.SLOWEST
+    assert [s for _t, s in slowest] == sorted((s for _t, s in slowest), reverse=True)
+    assert all(t in library.pages() for t, _s in slowest)
+    assert result.slowest == [(t, s) for t, s in slowest]
+    cli.main(["serve", "--build"])
+    lines = capsys.readouterr().out.splitlines()
+    assert lines[0].startswith("library: ") and lines[1].startswith("  slowest: ")
+
+
+def test_a_page_that_says_what_it_read_is_rendered_again_only_for_a_line_of_that() -> None:
+    def page(reads: list[Any] | None) -> library_build.Page:
+        return library_build.Page("f.html", 200, None, None, "e", "2026-06-21T10:00:00Z", "h", reads=reads)
+
+    built = {
+        "/trips?year=2024": page(["2024-01-01", "2025-01-02", []]),
+        "/trips?year=2025": page(["2025-01-01", "2026-01-02", []]),
+        "/trips?year=2026": page(["2026-01-01", "2026-06-23", []]),
+        "/journeys?year=2024": page(["2023-12-01", "2025-02-14", ["draft"]]),
+        "/journeys": page(["2025-12-01", "2026-06-23", ["draft"]]),  # the door: this year's
+        "/people?year=2024": page(None),
+    }
+
+    def wanted(target: str, days: set[str], kinds: set[str], new_years: bool = False) -> bool:
+        return library_build._wanted_since(target, days, kinds, built, new_years)
+
+    june = ({"2026-06-15"}, {"note"})
+    assert not wanted("/trips?year=2024", *june)
+    assert wanted("/trips?year=2026", *june)
+    assert wanted("/trips?year=2024", {"2024-03-01"}, {"note"}), "a backfill into the year"
+    assert wanted("/trips?year=2025", {"2026-01-01"}, {"note"}), "the night after the year's last day"
+    assert not wanted("/trips?year=2025", {"2026-01-05"}, {"note"})
+    assert wanted("/trips?year=2024", {"2027-01-02"}, {"location"}, True), "a new year: every pager names it"
+    assert wanted("/trips?year=2023", *june), "a year no build wrote"
+    assert not wanted("/journeys?year=2024", *june), "this year's journeys are the door's, not a new year"
+    assert wanted("/journeys?year=2024", {"2025-02-01"}, {"note"}), "a journey that ran on past the year"
+    assert wanted("/journeys?year=2024", {"2026-06-15"}, {"draft"}), "a draft names any journey"
+    assert wanted("/people?year=2024", *june), "a page that says nothing reads the whole record"
+    assert not wanted("/trips?year=2024", {"2027-01-02"}, {"event"}), "a meeting booked ahead names no year"
+
+
+def test_the_trips_and_the_journeys_say_what_they_read(lb: Logbook) -> None:
+    site = serve.Site(lb, now=lambda: JUNE)
+    trips = site.respond("/trips", "year=2026")
+    assert trips.reads is not None and trips.reads.first == "2026-06-08" and not trips.reads.kinds
+    journeys = site.respond("/journeys", "year=2026")
+    assert journeys.reads is not None and "draft" in journeys.reads.kinds
+    assert site.respond("/people", "").reads is None, "the People page reads the whole record"
+
+
+def test_a_build_on_workers_writes_the_pages_one_process_writes(lb: Logbook, tmp_path: Path) -> None:
+    one = library_build.Library(lb, now=lambda: JUNE)
+    library_build.build(lb, serve.Site(lb, now=lambda: JUNE), one)
+    pages = {t: one.page(t) for t in one.pages()}
+    shutil.rmtree(library_build.folder_of(lb))
+    two = library_build.Library(lb, now=lambda: JUNE)
+    result = library_build.build(lb, serve.Site(lb, now=lambda: JUNE), two, workers=2)
+    assert result.failed == {}
+    assert set(two.pages()) == set(pages)
+    for target, (page, body) in ((t, two.page(t)) for t in two.pages()):  # type: ignore[misc]
+        before, body_before = pages[target]  # type: ignore[misc]
+        assert body == body_before, target
+        assert (page.status, page.reads, page.etag) == (before.status, before.reads, before.etag), target
+
+
+def test_a_small_record_builds_in_one_process_and_the_setting_says_how_many(
+    lb: Logbook, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    assert library_build.workers_default(lb) == 1
+    monkeypatch.setenv(library_build.WORKERS_ENV, "3")
+    assert library_build.workers_default(lb) == 3
+    monkeypatch.setattr(library_build, "WORKERS_FROM", 0)
+    monkeypatch.delenv(library_build.WORKERS_ENV)
+    assert 1 <= library_build.workers_default(lb) <= library_build.WORKERS_MOST

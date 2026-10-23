@@ -53,6 +53,12 @@ def serve_arguments(sub: Subparsers) -> None:
         " every act on a page build them too)",
     )
     s.add_argument(
+        "--full",
+        action="store_true",
+        help="with --build: every page again, whatever the last build left (never needed in normal use: a"
+        " build renders what the lines since the last one touched)",
+    )
+    s.add_argument(
         "--limit",
         type=float,
         default=serve.LIMIT_S,
@@ -95,7 +101,7 @@ def cmd_serve(a: argparse.Namespace) -> None:
         _service(a)
         return
     if a.build:
-        _build(Logbook.find(), _airports(a.airports))
+        _build(Logbook.find(), _airports(a.airports), a.full)
         return
     from .day import voice  # whether a Day can hear a recording: asked once, now (labs, so here)
 
@@ -118,22 +124,30 @@ def cmd_serve(a: argparse.Namespace) -> None:
         sys.exit(2)
 
 
-def _build(lb: Logbook, airports: Airports | None) -> None:
-    """`serve --build`: the Library's pages built now (`library_build.build`), said in one line; exit 1
-    when a page failed (named), 75 when another process is building."""
+def _build(lb: Logbook, airports: Airports | None, full: bool = False) -> None:
+    """`serve --build [--full]`: the Library's pages built now (`library_build.build`: what the lines
+    since the last build touched, or with `full` every page), said in one line; exit 1 when a page
+    failed (named), 75 when another process is building."""
     from ..contrib import library_build
 
     try:
         result = library_build.build(
-            lb, serve.Site(lb, airports), say=lambda text: print(text, file=sys.stderr)
+            lb,
+            serve.Site(lb, airports),
+            say=lambda text: print(text, file=sys.stderr),
+            full=full,
+            workers=library_build.workers_default(lb),
         )
     except library_build.Busy as e:
         print(f"serve: {e}; try again when it is done", file=sys.stderr)
         sys.exit(75)
+    which = "every page" if library_build.Library(lb).built().get("full") else "what changed since the last"
     print(
         f"library: {result.pages:,} pages, {result.written:,} written, {result.removed:,} removed,"
-        f" in {result.seconds} s ({library_build.folder_of(lb)})"
+        f" in {result.seconds} s ({which}; {library_build.folder_of(lb)})"
     )
+    if result.slowest:
+        print("  slowest: " + ", ".join(f"{target} {seconds:g} s" for target, seconds in result.slowest))
     for target, why in sorted(result.failed.items()):
         print(f"  failed: {target}: {why}", file=sys.stderr)
     if result.failed:

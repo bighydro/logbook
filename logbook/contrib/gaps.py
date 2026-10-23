@@ -22,16 +22,19 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterator, Sequence
 from datetime import UTC, date, datetime, timedelta
+from itertools import pairwise
 from typing import TYPE_CHECKING, Any
 from zoneinfo import ZoneInfo
 
-from ..core import day_start
+from ..core import day_start, kept
 from ..core.export import parse_day
+from ..core.index import GAP_MS, Index
 
 if TYPE_CHECKING:
     from ..core.store import Logbook
 
 FLAG_SECONDS = 86400  # an expected source silent this long, at any point of the range, is flagged
+ACTIVITY_KEPT, ACTIVITY_VERSION = "activity.json", 1  # every source's activity, beside the index
 RUNS_SHOWN = 3  # runs of missing days printed per row before `+N runs`
 
 
@@ -64,11 +67,7 @@ def report(
         if start > today:
             raise ValueError(f"--since {since} is after today ({today.isoformat()})")
     window = ("" if start is None else start.isoformat(), today.isoformat())
-    if activity is not None:
-        found = activity(*window)
-    else:
-        with lb.index() as idx:
-            found = idx.activity(*window)
+    found = activity(*window) if activity is not None else activity_of(lb, *window)
     by_source = {a["source"]: a for a in found}
     names = list(by_source) if expect is None else list(dict.fromkeys(expect))
     sources = [_source(name, by_source.get(name), start, today, instant, days) for name in names]
@@ -225,3 +224,92 @@ def _silence_text(silence: dict[str, Any], tz: ZoneInfo) -> str:
 
 def _clock(stamp: str, tz: ZoneInfo) -> str:
     return _instant(stamp).astimezone(tz).strftime("%Y-%m-%d %H:%M")
+
+
+def activity_of(lb: Logbook, first: str, last: str) -> list[dict[str, Any]]:
+    """`Index.activity` of `[first, last]`; of every day to `last` (`first` empty: the report's own
+    window), kept beside the index (`ACTIVITY_KEPT`) and brought forward by the lines added to it
+    since: those appended, of its days, and those written ahead whose days it has come to (a
+    calendar's coming events). Its counts, stamps and days add up; its longest silence is the kept one
+    or a new one, the first of equals, while no line added is earlier than its source's last
+    (`_forward`). Anything else reads every line again."""
+    with lb.index() as idx:
+        if first:
+            return idx.activity(first, last)
+        path = kept.path(lb, ACTIVITY_KEPT)
+        stamp = kept.stamp(lb, str(ACTIVITY_VERSION), kept.code_digest(__file__))
+        seq, head = idx.indexed()
+        held = kept.load(path)
+        found = None
+        ours = held is not None and held.get("version") == ACTIVITY_VERSION and held.get("stamp") == stamp
+        if held is not None and ours and str(held.get("last")) <= last and kept.read_on(idx, held, {}, ()):
+            found = _forward(idx, held, last, seq)
+        if found is None:
+            found = {
+                str(a["source"]): [a["lines"], a["first"], a["last"], a["days"], a["stretch"], None]
+                for a in idx.activity("", last)
+            }
+            for row in found.values():
+                if row[4] is not None:
+                    row[5] = _gap_ms(idx, row[4][0], row[4][1])
+    kept.save(
+        path,
+        {
+            "version": ACTIVITY_VERSION,
+            "stamp": stamp,
+            "seq": seq,
+            "head": head,
+            "last": last,
+            "sources": found,
+        },
+    )
+    ranked = sorted(found.items(), key=lambda kv: (-int(kv[1][0]), kv[0]))
+    return [
+        {
+            "source": source,
+            "lines": int(n),
+            "first": str(a),
+            "last": str(b),
+            "days": list(days),
+            "stretch": None if stretch is None else (str(stretch[0]), str(stretch[1])),
+        }
+        for source, (n, a, b, days, stretch, _ms) in ranked
+    ]
+
+
+def _forward(idx: Index, held: dict[str, Any], last: str, seq: int) -> dict[str, list[Any]] | None:
+    """The kept activity with the lines added since (`activity_of`), or None when one of them is earlier
+    than its source's last line kept."""
+    since, before = int(held["seq"]), str(held["last"])
+    sources: dict[str, list[Any]] = {k: list(v) for k, v in dict(held["sources"]).items()}
+    added: dict[str, list[tuple[str, str]]] = {}
+    for source, at, day in idx.db.execute(
+        "SELECT source, at, day_local FROM lines WHERE (seq > ? AND seq <= ? AND day_local <= ?)"
+        " OR (day_local > ? AND day_local <= ? AND seq <= ?) ORDER BY at",
+        (since, seq, last, before, last, since),
+    ):
+        added.setdefault(str(source), []).append((str(at), str(day)))
+    for source, rows in added.items():
+        row = sources.get(source)
+        if row is not None and rows[0][0] < str(row[2]):
+            return None  # into the source's past: the silences it splits are not kept
+        ats = [at for at, _day in rows]
+        if row is None:
+            row = sources[source] = [0, ats[0], ats[0], [], None, None]
+            pairs = list(pairwise(ats))
+        else:
+            pairs = list(pairwise([str(row[2]), *ats]))
+        row[0] = int(row[0]) + len(rows)
+        row[2] = ats[-1]
+        row[3] = sorted({*row[3], *(day for _at, day in rows)})
+        for a, b in pairs:
+            ms = _gap_ms(idx, a, b)
+            if ms is not None and (row[5] is None or ms > row[5]):
+                row[4], row[5] = [a, b], ms
+    return sources
+
+
+def _gap_ms(idx: Index, prev: str, at: str) -> int | None:
+    """The stretch from `prev` to `at` in milliseconds, as `Index.activity` ranks it (`GAP_MS`)."""
+    (found,) = idx.db.execute(f"SELECT {GAP_MS} FROM (SELECT ? AS prev, ? AS at)", (prev, at)).fetchone()
+    return None if found is None else int(found)

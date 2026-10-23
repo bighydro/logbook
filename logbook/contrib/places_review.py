@@ -94,13 +94,14 @@ from bisect import bisect_right
 from collections import Counter
 from collections.abc import Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path, PurePosixPath
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from ..core import assets, places, reading, stays
+from ..core import assets, day_start, kept, places, reading, stays
 from ..core.chain import Line
+from ..core.export import day_range
 from ..core.index import Index
 from ..core.places import Place
 from ..core.store import RETRACTION, Logbook, now_utc
@@ -133,6 +134,14 @@ COLUMNS = (
 STATE_FILE = PurePosixPath("state/places-review.json")  # record-relative: a cache of the lines
 MIGRATED_FROM = str(STATE_FILE)  # `extra.migrated_from` of a line `--migrate-rejects` wrote
 TIMELINE_SEGMENTS = {"visit:": "visit", "placeVisit:": "placeVisit"}  # raw_id prefix → `extra.segment`
+FACT_GROUPS = (*(f"timeline:{prefix}" for prefix in TIMELINE_SEGMENTS), "photo", "event")  # names, in order
+KEPT_FILE, KEPT_VERSION = "places-whole.json", 1  # the owner's stays and what the lines name (`_kept`)
+MARGIN_DAYS = 3  # the last days read are read again: a point or evidence late by this is brought forward
+LOOKBACK_DAYS, LOOKBACK_MOST = 32, 512  # how far before them the owner's track is read again
+SEGMENT_PLAIN = (
+    "kind", "subject", "points", "lat", "lon", "place", "attached", "promoted", "aboard", "distance_m",
+    "mode", "first_line", "last_line", "first_seq", "last_seq",
+)  # fmt: skip
 # a line's weight for a specific name; `library` is a photo whose library was asked (`places_photos`)
 WEIGHTS = {"timeline": 3, "calendar": 3, "photo": 2, "dawarich": 2, "library": 2}
 COARSE = ("city", "type")  # grades that weigh 1 whatever said them
@@ -322,20 +331,296 @@ def _table_current(idx: Index, stamp: Mapping[str, str]) -> bool:
 
 def build(lb: Logbook, cluster_m: float = CLUSTER_M) -> list[Observed]:
     """The pure read: the owner's stays of the whole record clustered by spot, each cluster with its
-    counts and the names the record holds for it, ranked (nights, then hours, then the first visit)."""
+    counts and the names the record holds for it, ranked (nights, then hours, then the first visit).
+    The stays and what the lines name are kept beside the index and brought forward (`_kept`)."""
     span = reading.record_days(lb, "location")
     if span is None:
         return []
-    track = reading.owner_track(lb, *span)
-    found = [s for s in track.stays if s.lat is not None and s.lon is not None]
+    whole, facts = _kept(lb, span)
+    bounds = day_start.of(lb.meta)
+    settings = stays.read_settings(lb.root)
+    known = stays.read_places(lb.root, settings.radius_m)
+    found = [s for s in whole if s.lat is not None and s.lon is not None]
     groups = cluster(found, cluster_m)
-    nights = nights_of(found, track.days, track.tz, track.settings)
-    clusters = [_cluster_of(group, nights, track.places) for group in groups]
+    nights = nights_of(found, day_range(*span), bounds.zone, settings)
+    clusters = [_cluster_of(group, nights, known) for group in groups]
     names = _Names(clusters, groups, cluster_m)
-    names.read(lb, track)
+    if clusters:
+        for group in FACT_GROUPS:
+            for fact in facts.get(group, []):
+                names.apply(fact)
+        names.dawarich(lb)
     out = [replace_names(c, names.of(n)) for n, c in enumerate(clusters)]
     out.sort(key=lambda o: (-o.nights, -o.hours, o.first, o.id))
     return out
+
+
+# -- kept between readings -----------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class _Fact:
+    """What one line names, before it is put to a cluster: by its point and hour (`by_place`), or by
+    its hour alone (`by_time`); an event located too far from the cluster it falls in names nothing."""
+
+    origin: str  # timeline, photo, calendar
+    source: str
+    line: str
+    names: tuple[tuple[str, str], ...]  # (name, grade), in the order they are added
+    lat: float | None
+    lon: float | None
+    start: datetime | None
+    end: datetime | None
+    near: tuple[float, float] | None = None  # an event's own point
+
+    def to_json(self) -> list[Any]:
+        return [
+            self.origin, self.source, self.line, [list(n) for n in self.names], self.lat, self.lon,
+            None if self.start is None else self.start.isoformat(),
+            None if self.end is None else self.end.isoformat(),
+            None if self.near is None else list(self.near),
+        ]  # fmt: skip
+
+    @classmethod
+    def from_json(cls, v: Sequence[Any]) -> _Fact:
+        origin, source, line, names, lat, lon, start, end, near = v
+        return cls(
+            str(origin), str(source), str(line), tuple((str(a), str(b)) for a, b in names), lat, lon,
+            None if start is None else datetime.fromisoformat(start),
+            None if end is None else datetime.fromisoformat(end),
+            None if near is None else (float(near[0]), float(near[1])),
+        )  # fmt: skip
+
+
+def _fact(group: str, line: Line) -> _Fact | None:
+    """The names a line gives, as `_Names` puts them to a cluster; None when it gives none."""
+    payload = line.get("payload") or {}
+    source = str(line.get("source") or "")
+    line_id = str(line.get("id"))
+    if group == "photo":
+        extra = payload.get("extra")
+        found = photo_name(extra.get("place") if isinstance(extra, dict) else None)
+        at = stays.instant(line.get("at"))
+        if found is None or at is None:
+            return None
+        lat, lon = _coordinates(payload.get("lat"), payload.get("lon"))
+        return _Fact("photo", source, line_id, (found,), lat, lon, at, None)
+    if group == "event":
+        if payload.get("all_day") is not False or payload.get("status") == "cancelled":
+            return None
+        text = payload.get("location")
+        if not _text(text):
+            return None
+        where = str(text).strip().splitlines()[0].strip()
+        start, end = stays.instant(line.get("at")), stays.instant(line.get("end"))
+        if not where or ONLINE.search(where) or start is None:
+            return None
+        extra = payload.get("extra")
+        located = extra.get("location") if isinstance(extra, dict) else None
+        near = None
+        if isinstance(located, dict):
+            lat, lon = _coordinates(located.get("latitude"), located.get("longitude"))
+            near = None if lat is None or lon is None else (lat, lon)
+        return _Fact("calendar", source, line_id, ((where, "name"),), None, None, start, end, near)
+    extra = payload.get("extra")
+    if not isinstance(extra, dict) or extra.get("edge") != "start":
+        return None
+    segment = extra.get("segment")
+    if segment not in TIMELINE_SEGMENTS.values():
+        return None
+    lat, lon = _coordinates(payload.get("lat"), payload.get("lon"))
+    if lat is None or lon is None:
+        return None
+    start, end = stays.instant(extra.get("segment_start")), stays.instant(extra.get("segment_end"))
+    item = _dict(extra.get(segment))
+    names: list[tuple[str, str]] = []
+    if segment == "placeVisit":
+        visited = _dict(item.get("location"))
+        if _text(visited.get("name")):
+            names.append((str(visited["name"]), "name"))
+        elif _text(visited.get("address")):
+            names.append((str(visited["address"]), "address"))
+        semantic = visited.get("semanticType")
+    else:
+        semantic = _dict(item.get("topCandidate")).get("semanticType")
+    typed = _semantic(semantic)
+    if typed:
+        names.append((typed, "type"))
+    return _Fact("timeline", source, line_id, tuple(names), lat, lon, start, end) if names else None
+
+
+def _fact_lines(
+    idx: Index, group: str, first: str, last: str, where: str = "", args: Sequence[Any] = ()
+) -> Iterator[tuple[str, int, Line]]:
+    """(file, offset, line) of every line of `group` whose local day is in [first, last] and matches
+    `where`, in file order, standing (not retracted, and a photo or an event not superseded)."""
+    if group.startswith("timeline:"):
+        cut = "kind = 'location' AND source = ? AND raw_id GLOB ?"
+        cut_args: tuple[Any, ...] = (places.TIMELINE_SOURCE, group.removeprefix("timeline:") + "*")
+        gone = set(idx.superseded(RETRACTION))
+    else:
+        cut, cut_args = "kind = ?", (group,)
+        gone = set(idx.superseded(RETRACTION)) | set(idx.superseded(group))
+    found = idx.db.execute(
+        f"SELECT file, offset FROM lines WHERE {cut} AND day_local BETWEEN ? AND ?{where}"
+        " ORDER BY file, offset",
+        (*cut_args, first, last, *args),
+    ).fetchall()
+    for (file, offset), line in zip(found, idx.read([(str(f), int(o)) for f, o in found]), strict=True):
+        if str(line.get("id")) not in gone:
+            yield str(file), int(offset), line
+
+
+def _kept(lb: Logbook, span: tuple[str, str]) -> tuple[list[stays.Segment], dict[str, list[_Fact]]]:
+    """The owner's stays of the whole record and what the lines name, by group in file order: kept
+    beside the index (`KEPT_FILE`) and brought forward (`_forward`) while all that came since is that:
+    no retraction, no photo or event that supersedes another, no point or evidence on a day before
+    the last `MARGIN_DAYS` read, under the same code and settings; read from every line otherwise."""
+    first, last = span
+    path = kept.path(lb, KEPT_FILE)
+    stamp = kept.stamp(lb, str(KEPT_VERSION), kept.code_digest(__file__))
+    held = kept.load(path)
+    found = None
+    ours = held is not None and held.get("version") == KEPT_VERSION and held.get("stamp") == stamp
+    if held is not None and ours and held.get("first") == first and str(held.get("last")) <= last:
+        found = _forward(lb, held, span)
+    if found is None:
+        found = _whole(lb, span)
+    memo, whole, facts = found
+    kept.save(path, {"version": KEPT_VERSION, "stamp": stamp, **memo})
+    return whole, facts
+
+
+def _whole(
+    lb: Logbook, span: tuple[str, str]
+) -> tuple[dict[str, Any], list[stays.Segment], dict[str, list[_Fact]]]:
+    first, last = span
+    end = _next_day(last)
+    with lb.index() as idx:
+        seq, head = idx.indexed()
+    whole = reading.owner_track(lb, first, last).stays
+    facts: dict[str, list[tuple[str, int, _Fact]]] = {}
+    with lb.index() as idx:
+        for group in FACT_GROUPS:
+            facts[group] = [
+                (f, o, fact)
+                for f, o, line in _fact_lines(idx, group, first, end, " AND seq <= ?", (seq,))
+                if (fact := _fact(group, line)) is not None
+            ]
+    return (
+        _memo(span, seq, head, whole, facts),
+        whole,
+        {g: [f for _f, _o, f in found] for g, found in facts.items()},
+    )
+
+
+def _memo(
+    span: tuple[str, str],
+    seq: int,
+    head: str,
+    whole: Sequence[stays.Segment],
+    facts: Mapping[str, Sequence[tuple[str, int, _Fact]]],
+) -> dict[str, Any]:
+    cut = max(span[0], (date.fromisoformat(span[1]) - timedelta(days=MARGIN_DAYS)).isoformat())
+    return {
+        "first": span[0],
+        "last": span[1],
+        "cut": cut,
+        "seq": seq,
+        "head": head,
+        "stays": [_segment_json(s) for s in whole],
+        "facts": {g: [[f, o, fact.to_json()] for f, o, fact in found] for g, found in facts.items()},
+    }
+
+
+def _forward(
+    lb: Logbook, held: Mapping[str, Any], span: tuple[str, str]
+) -> tuple[dict[str, Any], list[stays.Segment], dict[str, list[_Fact]]] | None:
+    """The kept stays and names brought to the record as it stands (`_kept`), or None."""
+    first, last = span
+    since, cut, before = int(held["seq"]), str(held["cut"]), str(held["last"])
+    with lb.index() as idx:
+        seq, head = idx.indexed()
+        if not kept.read_on(idx, held, {}, (RETRACTION,)):
+            return None
+        appended = idx.appended(since)
+        if any(appended.get(kind, ("", 0, 0))[2] for kind in ("photo", "event")):
+            return None  # a photo or an event read already, superseded
+        if any(appended[k][0] < cut for k in ("location", *stays.EVIDENCE) if k in appended):
+            return None  # a point or evidence on a day read whole already
+        try:
+            kept_stays = [_segment_from(v) for v in held["stays"]]
+            kept_facts = {
+                g: [(str(f), int(o), _Fact.from_json(v)) for f, o, v in held["facts"][g]] for g in FACT_GROUPS
+            }
+        except (KeyError, TypeError, ValueError):
+            return None
+        end, old_end = _next_day(last), _next_day(before)
+        facts: dict[str, list[tuple[str, int, _Fact]]] = {}
+        for group in FACT_GROUPS:
+            new = [
+                (f, o, fact)
+                for f, o, line in _fact_lines(
+                    idx,
+                    group,
+                    first,
+                    end,
+                    " AND ((seq > ? AND seq <= ?) OR (seq <= ? AND day_local > ?))",
+                    (since, seq, since, old_end),
+                )
+                if (fact := _fact(group, line)) is not None
+            ]
+            facts[group] = sorted([*kept_facts[group], *new], key=lambda t: (t[0], t[1]))
+    whole = _spliced(lb, kept_stays, first, cut, last)
+    if whole is None:
+        return None
+    return (
+        _memo(span, seq, head, whole, facts),
+        whole,
+        {g: [f for _f, _o, f in found] for g, found in facts.items()},
+    )
+
+
+def _spliced(
+    lb: Logbook, kept_stays: Sequence[stays.Segment], first: str, cut: str, last: str
+) -> list[stays.Segment] | None:
+    """The whole track's stays: the kept ones before the second stay of the track read from far
+    enough before `cut` (`LOOKBACK_DAYS`, then twice as far, up to `LOOKBACK_MOST`), and that track's
+    from there. The first stay of a track read from a day may be cut short by it; from the second on,
+    the stays are the whole record's (`tests/test_places_kept.py`). None past `LOOKBACK_MOST`."""
+    begins = day_start.of(lb.meta).span(cut)[0]
+    back = LOOKBACK_DAYS
+    while True:
+        start = max(first, (date.fromisoformat(cut) - timedelta(days=back)).isoformat())
+        part = reading.owner_track(lb, start, last).stays
+        if start == first:
+            return part
+        if len(part) >= 2 and part[1].start < begins:
+            anchor = part[1].start
+            return [s for s in kept_stays if s.start < anchor] + part[1:]
+        if back >= LOOKBACK_MOST:
+            return None
+        back *= 2
+
+
+def _segment_json(s: stays.Segment) -> dict[str, Any]:
+    return {
+        **{k: getattr(s, k) for k in SEGMENT_PLAIN},
+        "start": s.start.isoformat(),
+        "end": s.end.isoformat(),
+        "airports": list(s.airports),
+        "inside": [_segment_json(i) for i in s.inside],
+    }
+
+
+def _segment_from(v: Mapping[str, Any]) -> stays.Segment:
+    return stays.Segment(
+        **{k: v[k] for k in SEGMENT_PLAIN},
+        start=datetime.fromisoformat(v["start"]),
+        end=datetime.fromisoformat(v["end"]),
+        airports=tuple(v["airports"]),
+        inside=tuple(_segment_from(i) for i in v["inside"]),
+    )
 
 
 def replace_names(o: Observed, names: list[Name]) -> Observed:
@@ -557,97 +842,49 @@ class _Names:
 
     # -- the sources --
 
-    def read(self, lb: Logbook, track: reading.OwnerTrack) -> None:
-        if not self.clusters:
-            return
-        first, last = track.first, track.last
+    def apply(self, fact: _Fact) -> None:
+        """What one line names, put to the cluster it falls in (`_fact`)."""
+        if fact.origin == "calendar":
+            assert fact.start is not None
+            stay = self.by_time(fact.start, fact.end)
+            if stay is None:
+                return
+            n: int | None = self.cluster_of[stay.id]
+            if fact.near is not None:
+                c = self.clusters[self.cluster_of[stay.id]]
+                if places.distance_m(fact.near[0], fact.near[1], c.lat, c.lon) > EVENT_NEAR_M:
+                    return
+        elif fact.lat is not None and fact.lon is not None:  # a photo's instant, a visit's span
+            n = self.by_place(
+                fact.lat, fact.lon, fact.start, fact.start if fact.origin == "photo" else fact.end
+            )
+        else:  # a photo without coordinates: the stay its instant falls in
+            assert fact.start is not None
+            stay = self.by_time(fact.start, None)
+            n = None if stay is None else self.cluster_of[stay.id]
+        for name, grade in fact.names:
+            self.add(n, fact.origin, fact.source, name, grade, {"id": fact.line})
+
+    def dawarich(self, lb: Logbook) -> None:
+        """The names Dawarich gave the first and last point of a stay (`_dawarich`)."""
+        edges = {seq: s for s in self.stays for seq in (s.first_seq, s.last_seq) if seq is not None}
         with lb.index() as idx:
             retracted = set(idx.superseded(RETRACTION))
-            for prefix in TIMELINE_SEGMENTS:
-                for line in idx.of_source("location", places.TIMELINE_SOURCE, first, _next_day(last), prefix):
-                    if str(line.get("id")) not in retracted:
-                        self._timeline(line)
-            for kind, take in (("photo", self._photo), ("event", self._event)):
-                gone = retracted | set(idx.superseded(kind))
-                for line in idx.of_kind(kind, first, _next_day(last)):
-                    if str(line.get("id")) not in gone:
-                        take(line)
-            edges = {seq: s for s in self.stays for seq in (s.first_seq, s.last_seq) if seq is not None}
-            for seq, line in sorted(idx.by_seqs(edges).items()):
-                if line.get("source") == "dawarich" and str(line.get("id")) not in retracted:
+            wanted = sorted(edges)
+            theirs: list[int] = []
+            for n in range(0, len(wanted), 500):
+                chunk = wanted[n : n + 500]
+                theirs += [
+                    int(seq)
+                    for (seq,) in idx.db.execute(
+                        f"SELECT seq FROM lines WHERE seq IN ({', '.join('?' * len(chunk))})"
+                        " AND source = 'dawarich'",
+                        chunk,
+                    )
+                ]
+            for seq, line in sorted(idx.by_seqs(theirs).items()):
+                if str(line.get("id")) not in retracted:
                     self._dawarich(line, edges[seq])
-
-    def _timeline(self, line: Line) -> None:
-        payload = line.get("payload") or {}
-        extra = payload.get("extra")
-        if not isinstance(extra, dict) or extra.get("edge") != "start":
-            return
-        segment = extra.get("segment")
-        if segment not in TIMELINE_SEGMENTS.values():
-            return
-        lat, lon = _coordinates(payload.get("lat"), payload.get("lon"))
-        if lat is None or lon is None:
-            return
-        start, end = stays.instant(extra.get("segment_start")), stays.instant(extra.get("segment_end"))
-        n = self.by_place(lat, lon, start, end)
-        item = _dict(extra.get(segment))
-        source = str(line.get("source") or "")
-        if segment == "placeVisit":
-            where = _dict(item.get("location"))
-            if _text(where.get("name")):
-                self.add(n, "timeline", source, str(where["name"]), "name", line)
-            elif _text(where.get("address")):
-                self.add(n, "timeline", source, str(where["address"]), "address", line)
-            semantic = where.get("semanticType")
-        else:
-            semantic = _dict(item.get("topCandidate")).get("semanticType")
-        typed = _semantic(semantic)
-        if typed:
-            self.add(n, "timeline", source, typed, "type", line)
-
-    def _photo(self, line: Line) -> None:
-        payload = line.get("payload") or {}
-        extra = payload.get("extra")
-        place = extra.get("place") if isinstance(extra, dict) else None
-        found = photo_name(place)
-        at = stays.instant(line.get("at"))
-        if found is None or at is None:
-            return
-        lat, lon = _coordinates(payload.get("lat"), payload.get("lon"))
-        if lat is not None and lon is not None:
-            n = self.by_place(lat, lon, at, at)
-        else:
-            stay = self.by_time(at, None)
-            n = None if stay is None else self.cluster_of[stay.id]
-        self.add(n, "photo", str(line.get("source") or ""), found[0], found[1], line)
-
-    def _event(self, line: Line) -> None:
-        payload = line.get("payload") or {}
-        if payload.get("all_day") is not False or payload.get("status") == "cancelled":
-            return
-        text = payload.get("location")
-        if not _text(text):
-            return
-        where = str(text).strip().splitlines()[0].strip()
-        start, end = stays.instant(line.get("at")), stays.instant(line.get("end"))
-        if not where or ONLINE.search(where) or start is None:
-            return
-        stay = self.by_time(start, end)
-        if stay is None:
-            return
-        n = self.cluster_of[stay.id]
-        extra = payload.get("extra")
-        located = extra.get("location") if isinstance(extra, dict) else None
-        if isinstance(located, dict):
-            lat, lon = _coordinates(located.get("latitude"), located.get("longitude"))
-            c = self.clusters[n]
-            if (
-                lat is not None
-                and lon is not None
-                and places.distance_m(lat, lon, c.lat, c.lon) > EVENT_NEAR_M
-            ):
-                return
-        self.add(n, "calendar", str(line.get("source") or ""), where, "name", line)
 
     def _dawarich(self, line: Line, stay: stays.Segment) -> None:
         extra = (line.get("payload") or {}).get("extra")
