@@ -128,7 +128,9 @@ When it is built:
   rebuild of the rest starts in the background on a thread of its own. Acts that come while it builds
   are one more build, not one each. An act refused because the page was older than the record (409)
   drops the page its form was on, so your reload is the page as it stands.
-- **By hand.** `logbook serve --build` builds now and says what it did, and which pages took longest. A page that fails is named and
+- **By hand.** `logbook serve --build` builds now and says what it did, and which pages took longest.
+  On a record of a hundred thousand lines or more it renders on several processes, one fewer than the
+  machine has, four at most; `LOGBOOK_BUILD_WORKERS` sets how many (1: one process). A page that fails is named and
   the command exits 1; while another process builds it exits 75.
 - **The first time.** A server that finds no build starts one when it starts.
 

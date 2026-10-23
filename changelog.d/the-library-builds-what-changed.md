@@ -24,3 +24,5 @@
   silences it names the first.
 - A year's trips and journeys read only the lines a trip is made of (flights, weather, events,
   transcripts, notes and photos) and the stays from the index: the same pages, read faster.
+- A build of a large record renders its pages on several processes, the doors first, side by side
+  (`LOGBOOK_BUILD_WORKERS` sets how many).

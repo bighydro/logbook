@@ -132,7 +132,11 @@ def _build(lb: Logbook, airports: Airports | None, full: bool = False) -> None:
 
     try:
         result = library_build.build(
-            lb, serve.Site(lb, airports), say=lambda text: print(text, file=sys.stderr), full=full
+            lb,
+            serve.Site(lb, airports),
+            say=lambda text: print(text, file=sys.stderr),
+            full=full,
+            workers=library_build.workers_default(lb),
         )
     except library_build.Busy as e:
         print(f"serve: {e}; try again when it is done", file=sys.stderr)

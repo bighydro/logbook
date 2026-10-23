@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import sys
 import threading
 import time
@@ -396,3 +397,29 @@ def test_the_trips_and_the_journeys_say_what_they_read(lb: Logbook) -> None:
     journeys = site.respond("/journeys", "year=2026")
     assert journeys.reads is not None and "draft" in journeys.reads.kinds
     assert site.respond("/people", "").reads is None, "the People page reads the whole record"
+
+
+def test_a_build_on_workers_writes_the_pages_one_process_writes(lb: Logbook, tmp_path: Path) -> None:
+    one = library_build.Library(lb, now=lambda: JUNE)
+    library_build.build(lb, serve.Site(lb, now=lambda: JUNE), one)
+    pages = {t: one.page(t) for t in one.pages()}
+    shutil.rmtree(library_build.folder_of(lb))
+    two = library_build.Library(lb, now=lambda: JUNE)
+    result = library_build.build(lb, serve.Site(lb, now=lambda: JUNE), two, workers=2)
+    assert result.failed == {}
+    assert set(two.pages()) == set(pages)
+    for target, (page, body) in ((t, two.page(t)) for t in two.pages()):  # type: ignore[misc]
+        before, body_before = pages[target]  # type: ignore[misc]
+        assert body == body_before, target
+        assert (page.status, page.reads, page.etag) == (before.status, before.reads, before.etag), target
+
+
+def test_a_small_record_builds_in_one_process_and_the_setting_says_how_many(
+    lb: Logbook, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    assert library_build.workers_default(lb) == 1
+    monkeypatch.setenv(library_build.WORKERS_ENV, "3")
+    assert library_build.workers_default(lb) == 3
+    monkeypatch.setattr(library_build, "WORKERS_FROM", 0)
+    monkeypatch.delenv(library_build.WORKERS_ENV)
+    assert 1 <= library_build.workers_default(lb) <= library_build.WORKERS_MOST
