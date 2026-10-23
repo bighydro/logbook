@@ -405,6 +405,8 @@ def _sync_scheduled(a: argparse.Namespace) -> None:
     run = last_run.Run(started, tuple(runs), None, first)
     last_run.write(lb.root, last_run.State(run, week, weekly_sent))
     closed = _dream_catch_up(lb) if getattr(a, "close", False) and not interrupted else None
+    if closed is not None:
+        closed += f", {_build_library(lb)}"
     if last_run.is_first_sunday(local):
         tested = _restore_test_state(lb)
         if tested is None or tested.at.astimezone(zone).date() != local.date():
@@ -451,6 +453,26 @@ def _sync_scheduled(a: argparse.Namespace) -> None:
 
 DREAM_COMMAND = "logbook.commands.dream"  # the dream (RFC 0036): a command of its own, not in every version
 DREAM_ENTRY = "dream"  # its entry in policy/crossing.json: sending a day to a model is a crossing
+
+
+def _build_library(lb: Logbook) -> str:
+    """The close's third step: the Library's pages built for the day that begins (`library_build`,
+    RFC 0047 §8), so the server answers every door from a file. Never an error of the run: a build
+    another process holds, or one that fails, is one line, and the server answers from the last build.
+    What it did, in a few words, for the summary line."""
+    from ..contrib import library_build
+
+    try:
+        result = library_build.build(lb)
+    except library_build.Busy as e:
+        print(f"library: {e}; not built now")
+        return "library busy"
+    except Exception as e:  # the record is closed and synced; the pages are the next build's
+        print(f"library: the build failed: {type(e).__name__}: {e}")
+        return "library failed"
+    failed = f", {len(result.failed):,} failed" if result.failed else ""
+    print(f"library: {result.pages:,} pages, {result.written:,} written{failed}, in {result.seconds} s")
+    return "library built"
 
 
 def _dream_catch_up(lb: Logbook) -> str:

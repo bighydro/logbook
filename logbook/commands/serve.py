@@ -10,6 +10,7 @@ from pathlib import Path
 
 from ..contrib import phone, schedule, serve, service
 from ..core import sealing
+from ..core.flights import Airports
 from ..core.store import Logbook
 from .common import Subparsers, _airports
 
@@ -46,6 +47,17 @@ def serve_arguments(sub: Subparsers) -> None:
         " that install or remove it printed, never run",
     )
     s.add_argument(
+        "--build",
+        action="store_true",
+        help="build the Library's pages now and exit: what the server answers from (the 06:00 close and"
+        " every act on a page build them too)",
+    )
+    s.add_argument(
+        "--live",
+        action="store_true",
+        help="render every page as it is asked for, never from the pages built ahead",
+    )
+    s.add_argument(
         "--status",
         action="store_true",
         help="whether a serve service is installed and answers; exit 0 answering, 1 installed and not"
@@ -74,17 +86,44 @@ def cmd_serve(a: argparse.Namespace) -> None:
     if a.install_service or a.uninstall_service or a.status or a.system:
         _service(a)
         return
+    if a.build:
+        _build(Logbook.find(), _airports(a.airports))
+        return
     from .day import voice  # whether a Day can hear a recording: asked once, now (labs, so here)
 
     lb = Logbook.find()
     try:
-        serve.serve(lb, host=a.host, port=a.port, airports=_airports(a.airports), voice=voice())
+        serve.serve(
+            lb, host=a.host, port=a.port, airports=_airports(a.airports), voice=voice(), built=not a.live
+        )
     except serve.HostError as e:
         print(f"serve: {e}", file=sys.stderr)
         sys.exit(2)
     except OSError as e:
         print(f"serve: cannot listen on {a.host}:{a.port}: {e}", file=sys.stderr)
         sys.exit(2)
+
+
+def _build(lb: Logbook, airports: Airports | None) -> None:
+    """`serve --build`: the Library's pages built now (`library_build.build`), said in one line; exit 1
+    when a page failed (named), 75 when another process is building."""
+    from ..contrib import library_build
+
+    try:
+        result = library_build.build(
+            lb, serve.Site(lb, airports), say=lambda text: print(text, file=sys.stderr)
+        )
+    except library_build.Busy as e:
+        print(f"serve: {e}; try again when it is done", file=sys.stderr)
+        sys.exit(75)
+    print(
+        f"library: {result.pages:,} pages, {result.written:,} written, {result.removed:,} removed,"
+        f" in {result.seconds} s ({library_build.folder_of(lb)})"
+    )
+    for target, why in sorted(result.failed.items()):
+        print(f"  failed: {target}: {why}", file=sys.stderr)
+    if result.failed:
+        sys.exit(1)
 
 
 def phone_arguments(sub: Subparsers) -> None:
