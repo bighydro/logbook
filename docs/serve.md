@@ -121,8 +121,9 @@ at that moment, byte for byte, with one sentence added to its footer: `built 06:
 When it is built:
 
 - **At the 06:00 close.** `sync --scheduled --close` builds the Library after the sync and the dream
-  and before `doctor`, and says so in one line: `library: 312 pages, 41 written, in 84 s`. A build
-  another process holds, or one that fails, is that one line and never fails the run.
+  and before `doctor`, and says so in one line; the demo month's first build says
+  `library: 90 pages, 90 written, in 7.8 s`. A build another process holds, or one that fails, is
+  that one line and never fails the run.
 - **After every act on a page.** Reflect, Sign, a star, *with…*, a name, a merge, a status: the page
   the act sends you back to and the front page are dropped at once, so you see what you wrote, and a
   rebuild of the rest starts in the background on a thread of its own. Acts that come while it builds
