@@ -369,25 +369,26 @@ def test_a_page_that_says_what_it_read_is_rendered_again_only_for_a_line_of_that
         "/trips?year=2025": page(["2025-01-01", "2026-01-02", []]),
         "/trips?year=2026": page(["2026-01-01", "2026-06-23", []]),
         "/journeys?year=2024": page(["2023-12-01", "2025-02-14", ["draft"]]),
-        "/journeys?year=2025": page(["2024-12-01", "2026-02-02", ["draft"]]),
-        "/journeys?year=2026": page(["2025-12-01", "2026-06-23", ["draft"]]),
+        "/journeys": page(["2025-12-01", "2026-06-23", ["draft"]]),  # the door: this year's
         "/people?year=2024": page(None),
     }
-    wanted = library_build._wanted_since
+
+    def wanted(target: str, days: set[str], kinds: set[str], new_years: bool = False) -> bool:
+        return library_build._wanted_since(target, days, kinds, built, new_years)
+
     june = ({"2026-06-15"}, {"note"})
-    assert not wanted("/trips?year=2024", *june, built)
-    assert wanted("/trips?year=2026", *june, built)
-    assert wanted("/trips?year=2024", {"2024-03-01"}, {"note"}, built), "a backfill into the year"
-    assert wanted("/trips?year=2025", {"2026-01-01"}, {"note"}, built), "the night after the year's last day"
-    assert not wanted("/trips?year=2025", {"2026-01-05"}, {"note"}, built)
-    assert wanted("/trips?year=2024", {"2027-01-02"}, {"note"}, built), "a new year: every pager names it"
-    assert wanted("/trips?year=2023", *june, built), "a year no build wrote"
-    assert not wanted("/journeys?year=2024", *june, built)
-    assert wanted("/journeys?year=2024", {"2025-02-01"}, {"note"}, built), (
-        "a journey that ran on past the year"
-    )
-    assert wanted("/journeys?year=2024", {"2026-06-15"}, {"draft"}, built), "a draft names any journey"
-    assert wanted("/people?year=2024", *june, built), "a page that says nothing reads the whole record"
+    assert not wanted("/trips?year=2024", *june)
+    assert wanted("/trips?year=2026", *june)
+    assert wanted("/trips?year=2024", {"2024-03-01"}, {"note"}), "a backfill into the year"
+    assert wanted("/trips?year=2025", {"2026-01-01"}, {"note"}), "the night after the year's last day"
+    assert not wanted("/trips?year=2025", {"2026-01-05"}, {"note"})
+    assert wanted("/trips?year=2024", {"2027-01-02"}, {"location"}, True), "a new year: every pager names it"
+    assert wanted("/trips?year=2023", *june), "a year no build wrote"
+    assert not wanted("/journeys?year=2024", *june), "this year's journeys are the door's, not a new year"
+    assert wanted("/journeys?year=2024", {"2025-02-01"}, {"note"}), "a journey that ran on past the year"
+    assert wanted("/journeys?year=2024", {"2026-06-15"}, {"draft"}), "a draft names any journey"
+    assert wanted("/people?year=2024", *june), "a page that says nothing reads the whole record"
+    assert not wanted("/trips?year=2024", {"2027-01-02"}, {"event"}), "a meeting booked ahead names no year"
 
 
 def test_the_trips_and_the_journeys_say_what_they_read(lb: Logbook) -> None:

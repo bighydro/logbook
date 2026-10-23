@@ -57,6 +57,7 @@ from ..core import day_start, kept, sealing
 from ..core.store import Logbook, _alive
 
 if TYPE_CHECKING:
+    from ..core.index import Index
     from .serve import Response, Site
 
 VERSION = 1
@@ -499,13 +500,22 @@ def days_touched(lb: Logbook, since: int) -> tuple[set[str], set[str]] | None:
     return days, {str(kind) for kind, _day in rows}
 
 
-def _wanted_since(target: str, days: set[str], kinds: set[str], built: Mapping[str, Page]) -> bool:
+def _pager_years(idx: Index) -> list[str] | None:
+    """The first and last year a year's page names in its pager: those of the owner's track, else of
+    any line (`Site._whole`); None for an empty record."""
+    span = idx.span("location") or idx.span(None)
+    return None if span is None else [span[0][:4], span[1][:4]]
+
+
+def _wanted_since(
+    target: str, days: set[str], kinds: set[str], built: Mapping[str, Page], new_years: bool = True
+) -> bool:
     """Whether an incremental build renders `target` again: a Day only when a line landed on it or the
     day after, or when no build has written it; a journey only when it holds such a day; a page that
     said what it was made of (`Site.reads`: a year's trips or journeys) only when a line landed on those
-    days or is of those kinds, or, for a year's page, landed in a year no build has that page of, which
-    every year's pager then names; every other page (they read the whole record, and the kept readings
-    make that cheap)."""
+    days or is of those kinds, or, for a year's page, when the years its pager names have changed since
+    the last build (`new_years`: the years of the owner's track, `_pager_years`); every other page
+    (they read the whole record, and the kept readings make that cheap)."""
     path = target.partition("?")[0]
     page = built.get(target)
     if page is None:
@@ -519,9 +529,7 @@ def _wanted_since(target: str, days: set[str], kinds: set[str], built: Mapping[s
         first, last, read_kinds = page.reads
         if any(first <= d <= last for d in days) or kinds & set(read_kinds):
             return True
-        if (year := YEAR_PAGE.match(target)) is not None:
-            return any(f"{year.group(1)}?year={d[:4]}" not in built for d in days)
-        return False
+        return YEAR_PAGE.match(target) is not None and new_years
     return True
 
 
@@ -551,6 +559,7 @@ def build(
         head = str(lb.meta.get("head") or "")
         with lb.index() as idx:
             seq = idx.indexed()[0]
+            years = _pager_years(idx)
         today = day_start.of(lb.meta).today(site.now()).isoformat()
         before = library.pages()
         last = library.built()
@@ -566,7 +575,8 @@ def build(
             wanted = list(only) if only is not None else targets(site, today, asked, doors)
             if touched is not None and only is None:
                 days, kinds = touched
-                wanted = [t for t in wanted if _wanted_since(t, days, kinds, before)]
+                new_years = last.get("years") != years
+                wanted = [t for t in wanted if _wanted_since(t, days, kinds, before, new_years)]
             written = 0
             failed: dict[str, str] = {}
             took: dict[str, float] = {}
@@ -614,6 +624,7 @@ def build(
                 "full": only is None and not incremental,
                 "slowest": [[t, s] for t, s in slowest],
                 "workers": workers if apart else 1,
+                "years": years if only is None else last.get("years"),
             }
             library._save(library._pages, library._built)
     return Result(len(wanted), written, removed, seconds, failed, slowest)
