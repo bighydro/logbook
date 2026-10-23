@@ -81,6 +81,8 @@ DOORS = (
 )
 EVERYWHERE = ("retraction", "resolution", "entity", "entity-review", "people-review")  # who is who
 DAY_PAGE = re.compile(r"^/day/(\d{4}-\d{2}-\d{2})$")
+TRIPS_YEAR = re.compile(r"^/trips\?year=(\d{4})$")
+TRIPS_SPILL_DAYS = 2  # a year's trips read the night after its last day, and the morning after that
 JOURNEY_PAGE = re.compile(r"^/journeys/(\d{4}-\d{2}-\d{2})/(\d{4}-\d{2}-\d{2})$")
 RECENT_DAYS = 14  # the Days of the last fortnight are built; today's is always rendered live
 EACH = 60  # detail pages of one kind the build follows from the doors
@@ -476,10 +478,16 @@ def days_touched(lb: Logbook, since: int) -> set[str] | None:
 def _wanted_since(target: str, days: set[str], built: Mapping[str, Page]) -> bool:
     """Whether an incremental build renders `target` again: every door, detail and variant (they read
     the whole record, and the kept readings make that cheap); a Day only when a line landed on it or
-    the day after, or when no build has written it; a journey only when it holds such a day."""
+    the day after, or when no build has written it; a journey only when it holds such a day; a year's
+    trips (`/trips?year=`, which reads that year's days and the morning after) only when a line landed
+    on them, or in a year no build has a page of, which every year's pager then names."""
     path = target.partition("?")[0]
     if target not in built:
         return True
+    if (trips := TRIPS_YEAR.match(target)) is not None:
+        year = trips.group(1)
+        after = (date(int(year) + 1, 1, 1) + timedelta(days=TRIPS_SPILL_DAYS)).isoformat()
+        return any(f"{year}-01-01" <= d < after or f"/trips?year={d[:4]}" not in built for d in days)
     if (day := DAY_PAGE.match(path)) is not None:
         return day.group(1) in days
     if (journey := JOURNEY_PAGE.match(path)) is not None:

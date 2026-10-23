@@ -357,3 +357,16 @@ def test_a_build_names_its_slowest_pages(lb: Logbook, capsys: pytest.CaptureFixt
     cli.main(["serve", "--build"])
     lines = capsys.readouterr().out.splitlines()
     assert lines[0].startswith("library: ") and lines[1].startswith("  slowest: ")
+
+
+def test_a_closed_year_s_trips_are_rendered_again_only_for_a_line_of_their_year() -> None:
+    page = library_build.Page("f.html", 200, None, None, "e", "2026-06-21T10:00:00Z", "h")
+    built = {f"/trips?year={y}": page for y in ("2024", "2025", "2026")}
+    wanted = library_build._wanted_since
+    assert not wanted("/trips?year=2024", {"2026-06-15"}, built)
+    assert wanted("/trips?year=2026", {"2026-06-15"}, built)
+    assert wanted("/trips?year=2024", {"2024-03-01"}, built), "a backfill into the year"
+    assert wanted("/trips?year=2025", {"2026-01-01"}, built), "the night after the year's last day"
+    assert not wanted("/trips?year=2025", {"2026-01-05"}, built)
+    assert wanted("/trips?year=2024", {"2027-01-02"}, built), "a new year: every year's pager names it"
+    assert wanted("/trips?year=2023", {"2026-06-15"}, built), "a year no build wrote"
