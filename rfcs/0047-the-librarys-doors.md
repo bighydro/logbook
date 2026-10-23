@@ -1,6 +1,6 @@
 # RFC 0047 — The Library's doors
 
-Status: draft · 2026-10-22 · for the captain's review before anything visual is built · changes no
+Status: draft, accepted for build · 2026-10-22 · the captain's answers 2026-10-23 (§15) · changes no
 line, no envelope, no SPEC · builds on RFC 0034 (the signed day), RFC 0036 (goals, chapters, drafts),
 RFC 0037 (entities), RFC 0042 (Hold), RFC 0043 (the Day page) and ADR 0025 (derived tables) · names
 RFC 0042's Holdings as the next door and builds none of it
@@ -325,3 +325,26 @@ phone width, light and dark, and an independent review of the screenshots alone 
     that reason: it blinds `raw_id` and rejected a decrypted index on disk. Are built pages of tier 2–3
     lines allowed on disk in plain text, or does a sealed record build tier 1 only unless the owner
     opts in?
+
+## 15. The captain's answers, 23 October 2026
+
+Asked 2026-10-22; answered by the captain 2026-10-23. The question stands in §14 as asked; the answer
+follows here.
+
+3. **The `life` setting.**
+
+   **Decided:** a setting. `life` in `logbook.json` holds the two bounds,
+   `{"from": "<birth date>", "to": "<end date>"}`; for the persona,
+   `{"from": "1986-07-01", "to": "2035-12-31"}` (§4.2). A `chapter/v1` named "Born" may be read
+   later; the setting ships first. The World's slider and Life's timeline both read it, and nothing
+   is drawn past `to`.
+
+**Volumes (§10).** Is Volumes the name of the printed edition?
+
+**Decided:** Volumes is the name. "The paper edition" and "the press" are renamed to Volumes wherever
+the docs and the code's user-facing strings say them, in one follow-up pull request (#386, a draft for
+the captain). It renames words only: the commands, `docs/print.md` and the module names stay as they
+are until the captain takes up the rest of §10. Question 9, one volume per calendar year or one per
+chapter, is not answered by the name.
+
+Every other question in §14 (1, 2 and 4 to 11) stays open for the captain.
