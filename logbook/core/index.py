@@ -177,6 +177,9 @@ INDEX_KEY = "index_key"  # meta: the blinding key, sealed to the recipients (RFC
 INSERT = "INSERT INTO lines VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
 INSERT_TEXT = f"INSERT INTO {SEARCH} (rowid, body, kind, tier, day) VALUES (?, ?, ?, ?, ?)"
 
+UTC_SECONDS = (
+    "[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]"  # a stamp to the second
+)
 RETRACTED = "SELECT supersedes FROM lines WHERE kind = 'retraction' AND supersedes IS NOT NULL"  # a subquery
 
 Row = tuple[
@@ -686,6 +689,33 @@ class Index:
             for seq, id_, at, kind, tier, file, offset in found
         ]
 
+    def window_tally(self, since: str, until: str) -> tuple[list[tuple[int, str, int]], list[Place]]:
+        """`window`, counted: (tier, kind, lines) of the lines whose stamp is a UTC one (`...Z`) and
+        whose seconds lie strictly between those of `since` and `until`, which are inside whatever their
+        fraction, in one statement; and, as `window` gives them, the rest the cut holds (the lines at
+        either edge, and a stamp with an offset), for the caller to hold against the exact instants."""
+        inside = (
+            "substr(at, 1, 19) > ? AND substr(at, 1, 19) < ?"
+            f" AND (at GLOB '{UTC_SECONDS}Z' OR (at GLOB '{UTC_SECONDS}.[0-9]*Z'"
+            " AND substr(at, 21, length(at) - 21) NOT GLOB '*[^0-9]*'))"
+        )
+        bounds = (since[:19], until[:19])
+        counted = self.db.execute(
+            f"SELECT tier, kind, count(*) FROM lines WHERE {inside} GROUP BY tier, kind", bounds
+        ).fetchall()
+        rest = self.db.execute(
+            "SELECT seq, id, at, kind, tier, file, offset FROM lines"
+            f" WHERE substr(at, 1, 19) BETWEEN ? AND ? AND NOT ({inside}) ORDER BY seq",
+            (*bounds, *bounds),
+        ).fetchall()
+        return (
+            [(int(tier), str(kind), int(n)) for tier, kind, n in counted],
+            [
+                Place(int(seq), str(id_), str(at), str(kind), int(tier), str(file), int(offset))
+                for seq, id_, at, kind, tier, file, offset in rest
+            ],
+        )
+
     def read(self, places: Iterable[tuple[str, int]], opened: bool = True) -> list[Line]:
         """The lines at these (file, offset) places, in the order given; `opened` False gives a
         sealed line as the file holds it (for a crossing package, which reseals it)."""
@@ -819,15 +849,35 @@ class Index:
         rows: list[LocationRow] = cursor.fetchall()
         return rows
 
-    def evidence(self, kinds: Sequence[str], first_day: str, last_day: str) -> list[EvidenceRow]:
+    def location_rows(
+        self, first_day: str, last_day: str, tiers: Sequence[int] | None = None
+    ) -> list[tuple[int, str, str, float | None, float | None, str | None, bool]]:
+        """(seq, id, at, lat, lon, subject, retracted) of every location line whose local day is in
+        [first_day, last_day], of every subject (None the owner), in file order; with `tiers`, those of
+        them alone. A line without a point has no `lat` and `lon`. Served from the index's own columns."""
+        gate = "" if tiers is None else f" AND tier IN ({', '.join('?' * len(tiers))})"
+        found = self.db.execute(
+            f"SELECT seq, id, at, lat, lon, subject, id IN ({RETRACTED}) FROM lines"
+            f" WHERE kind = 'location' AND day_local BETWEEN ? AND ?{gate} ORDER BY file, offset",
+            (first_day, last_day, *(int(t) for t in tiers or ())),
+        ).fetchall()
+        return [
+            (int(seq), str(i), str(at), lat, lon, None if subject is None else str(subject), bool(gone))
+            for seq, i, at, lat, lon, subject, gone in found
+        ]
+
+    def evidence(
+        self, kinds: Sequence[str], first_day: str, last_day: str, tiers: Sequence[int] | None = None
+    ) -> list[EvidenceRow]:
         """Every standing line of one of `kinds` whose local day is in [first_day, last_day], with
-        its `end`, ordered by `at` then seq; a retracted line is left out. Served from the index's
-        own columns; nothing is read from the files."""
+        its `end`, ordered by `at` then seq; a retracted line is left out; with `tiers`, those of
+        them alone. Served from the index's own columns; nothing is read from the files."""
+        gate = "" if tiers is None else f" AND tier IN ({', '.join('?' * len(tiers))})"
         cursor = self.db.execute(
             "SELECT kind, at, end FROM lines"
             f" WHERE kind IN ({', '.join('?' * len(kinds))}) AND day_local BETWEEN ? AND ?"
-            f" AND id NOT IN ({RETRACTED}) ORDER BY at, seq",
-            (*kinds, first_day, last_day),
+            f" AND id NOT IN ({RETRACTED}){gate} ORDER BY at, seq",
+            (*kinds, first_day, last_day, *(int(t) for t in tiers or ())),
         )
         rows: list[EvidenceRow] = cursor.fetchall()
         return rows

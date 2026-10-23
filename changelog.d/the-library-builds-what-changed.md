@@ -18,3 +18,5 @@
   (a journey that ran on past the year included), or a draft is written.
 - The People page's year so far is brought forward with the record, and a closed year's ranking is
   kept until a line lands on its days.
+- The world reads its tracks and stays from the index rather than from every line of the year, and
+  counts the lines it holds back in one query: the same page, in a third of the time.

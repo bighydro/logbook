@@ -96,6 +96,10 @@ JOURNEY_KINDS = ("journey", "trip")  # RFC 0031: readers accept both spellings
 JOURNEY_SCHEMAS = ("journey/v1", "trip/v1")
 CHAPTER, CHAPTER_SCHEMA = "chapter", "chapter/v1"
 PHOTO = "photo"
+READ_KINDS: tuple[str, ...] | None = (
+    *JOURNEY_KINDS,
+    PHOTO,
+)  # the lines a year's reading parses; the rest from the index
 KEPT_FILE, KEPT_VERSION = "world-years.json", 1  # the years before the window's last (`_Years`)
 TIER_SETS = {"1": (1,), "1,2": (1, 2), "1,2,3": (1, 2, 3)}
 DEFAULT_TIERS = (1, 2)
@@ -540,7 +544,7 @@ class _Builder:
             closed = years is not None and n < len(chunks) - 1
             part = years.get(first, last) if years is not None and closed else None
             if part is None:
-                rd = reading.read(self.lb, first, last, self.airports, self.req.tiers)
+                rd = reading.read(self.lb, first, last, self.airports, self.req.tiers, READ_KINDS)
                 self.places, self.registry = list(rd.places), dict(rd.assets)
                 part = self._take(rd)
                 if years is not None and closed:
@@ -555,10 +559,16 @@ class _Builder:
         """What one reading adds to the page (`_Part`): a function of the lines of its days and the
         night after, and of the settings, so a year's is the same while neither changes."""
         part = _Part()
+        for p in rd.points or ():  # read from the index: every subject's points of the window
+            self._fix(p.at, p.seq, p.lat, p.lon, p.subject, rd, part)
         for line in rd.lines:
             kind = line.get("kind")
             if kind == "location":
-                self._fix(line, rd, part)
+                payload = line.get("payload") or {}
+                subject = payload.get("subject")
+                at = stays.instant(line.get("at"))
+                if at is not None:
+                    self._fix(at, int(line["seq"]), payload.get("lat"), payload.get("lon"), subject, rd, part)
             elif (
                 kind in JOURNEY_KINDS
                 and (line.get("payload") or {}).get("schema") in JOURNEY_SCHEMAS
@@ -629,23 +639,29 @@ class _Builder:
                 if tally.first is not None and tally.last is not None:
                     into_tally.seen(tally.first, tally.last)
 
-    def _fix(self, line: Line, rd: reading.Reading, part: _Part) -> None:
-        """One location line of the window: the owner's, for the precision of the stays' centres; an
+    def _fix(
+        self,
+        at: datetime,
+        seq: int,
+        lat: object,
+        lon: object,
+        subject: object,
+        rd: reading.Reading,
+        part: _Part,
+    ) -> None:
+        """One location point of the window: the owner's, for the precision of the stays' centres; an
         asset's, the first of its minute kept (a receiver may report every few seconds, and a track is
         never drawn finer than `TRACK_STEP_MIN`). Counted once, by the reading whose day it is on (the
         readings overlap by the night after their last day)."""
-        payload = line.get("payload") or {}
-        found = _position(payload.get("lat"), payload.get("lon"))
-        at = stays.instant(line.get("at"))
-        if found is None or at is None or not self.start <= at < self.end:
+        found = _position(lat, lon)
+        if found is None or not self.start <= at < self.end:
             return
-        subject = payload.get("subject")
         if not isinstance(subject, str) or not subject:
             part.points.append((at, min(decimals(found[0]), decimals(found[1]))))
             return
         if rd.first <= self._day(at) <= rd.last:
             part.held[subject] += 1
-        fix = _Fix(at, int(line["seq"]), own(found[0]), own(found[1]))
+        fix = _Fix(at, seq, own(found[0]), own(found[1]))
         minutes = part.fixes.setdefault(subject, {})
         kept = minutes.get(minute := self._minute(at))
         if kept is None or (fix.at, fix.seq) < (kept.at, kept.seq):
@@ -694,8 +710,18 @@ class _Builder:
     def _count(self) -> None:
         """Every line of the window, crossing or held back, from the index's columns."""
         with self.lb.index() as idx:
-            found = idx.window(stays.instant_text(self.start), stays.instant_text(self.end))
-        for place in found:
+            counted, found = idx.window_tally(stays.instant_text(self.start), stays.instant_text(self.end))
+        for tier, kind, n in counted:  # plainly inside the window
+            if kind == RETRACTION:
+                continue
+            self.logged += n
+            if tier in self.req.tiers:
+                self.crossed += n
+                self.by_tier[tier] += n
+                self.by_kind[kind] += n
+            else:
+                self.held_by_kind[kind] += n
+        for place in found:  # at its edges, or stamped with an offset: by the exact instant
             at = stays.instant(place.at)
             if place.kind == RETRACTION or at is None or not self.start <= at < self.end:
                 continue

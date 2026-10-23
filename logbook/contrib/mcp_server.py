@@ -304,6 +304,9 @@ class GatedIndex(Index):
                 self.gate.withheld.add(place.seq)
         return kept
 
+    def window_tally(self, since: str, until: str) -> tuple[list[tuple[int, str, int]], list[Place]]:
+        return [], self.window(since, until)  # every line through the gate, counted by the caller
+
     def read(self, places: Iterable[tuple[str, int]], opened: bool = True) -> list[Line]:
         return self._kept(super().read(places, opened))
 
@@ -375,12 +378,36 @@ class GatedIndex(Index):
         ).fetchall()
         return rows
 
-    def evidence(self, kinds: Sequence[str], first_day: str, last_day: str) -> list[EvidenceRow]:
+    def location_rows(
+        self, first_day: str, last_day: str, tiers: Sequence[int] | None = None
+    ) -> list[tuple[int, str, str, float | None, float | None, str | None, bool]]:
+        where = "kind = 'location' AND day_local BETWEEN ? AND ?"
+        args: tuple[object, ...] = (first_day, last_day)
+        if tiers is not None:
+            where += f" AND tier IN ({', '.join('?' * len(tiers))})"
+            args += tuple(int(t) for t in tiers)
+        self._count_above(where, args)
+        found = self.db.execute(
+            f"SELECT seq, id, at, lat, lon, subject, id IN ({RETRACTED}) FROM lines"
+            f" WHERE {where} AND {self._cut} ORDER BY file, offset",
+            (*args, *self.gate.cut),
+        ).fetchall()
+        return [
+            (int(seq), str(i), str(at), lat, lon, None if subject is None else str(subject), bool(gone))
+            for seq, i, at, lat, lon, subject, gone in found
+        ]
+
+    def evidence(
+        self, kinds: Sequence[str], first_day: str, last_day: str, tiers: Sequence[int] | None = None
+    ) -> list[EvidenceRow]:
         where = (
             f"kind IN ({', '.join('?' * len(kinds))}) AND day_local BETWEEN ? AND ?"
             f" AND id NOT IN ({RETRACTED})"
         )
         args: tuple[object, ...] = (*kinds, first_day, last_day)
+        if tiers is not None:
+            where += f" AND tier IN ({', '.join('?' * len(tiers))})"
+            args += tuple(int(t) for t in tiers)
         self._count_above(where, args)
         rows: list[EvidenceRow] = self.db.execute(
             f"SELECT kind, at, end FROM lines WHERE {where} AND {self._cut} ORDER BY at, seq",
