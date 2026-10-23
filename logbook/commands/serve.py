@@ -142,6 +142,8 @@ def _build(lb: Logbook, airports: Airports | None, full: bool = False) -> None:
         f"library: {result.pages:,} pages, {result.written:,} written, {result.removed:,} removed,"
         f" in {result.seconds} s ({which}; {library_build.folder_of(lb)})"
     )
+    if result.slowest:
+        print("  slowest: " + ", ".join(f"{target} {seconds:g} s" for target, seconds in result.slowest))
     for target, why in sorted(result.failed.items()):
         print(f"  failed: {target}: {why}", file=sys.stderr)
     if result.failed:

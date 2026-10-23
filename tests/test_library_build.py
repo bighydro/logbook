@@ -345,3 +345,15 @@ def test_serve_build_full_says_every_page(lb: Logbook, capsys: pytest.CaptureFix
     assert "(what changed since the last;" in capsys.readouterr().out
     cli.main(["serve", "--build", "--full"])
     assert "(every page;" in capsys.readouterr().out
+
+
+def test_a_build_names_its_slowest_pages(lb: Logbook, capsys: pytest.CaptureFixture[str]) -> None:
+    library, _site, result = _built(lb)
+    slowest = library.built()["slowest"]
+    assert 0 < len(slowest) <= library_build.SLOWEST
+    assert [s for _t, s in slowest] == sorted((s for _t, s in slowest), reverse=True)
+    assert all(t in library.pages() for t, _s in slowest)
+    assert result.slowest == [(t, s) for t, s in slowest]
+    cli.main(["serve", "--build"])
+    lines = capsys.readouterr().out.splitlines()
+    assert lines[0].startswith("library: ") and lines[1].startswith("  slowest: ")

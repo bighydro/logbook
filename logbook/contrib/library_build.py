@@ -44,7 +44,7 @@ import sys
 import threading
 import time
 from collections.abc import Callable, Iterable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -90,6 +90,7 @@ HREF = re.compile(r"""href\s*=\s*["']([^"']*)["']""", re.I)
 LIVE_PREFIXES = ("/photo/",)  # pixels from the attachment store: cheap, and not a page
 FOOTER = "</footer>"
 REPLACE_TRIES = 40  # Windows: a file held open by a reader is replaced again for up to two seconds
+SLOWEST = 5  # the pages a build names as its slowest
 SAVE_EVERY = 50  # a build names its pages in `pages.json` this many at a time, and at its end
 
 
@@ -450,6 +451,7 @@ class Result:
     removed: int
     seconds: float
     failed: dict[str, str]
+    slowest: list[tuple[str, float]] = field(default_factory=list)  # the pages that took longest, first
 
 
 def settled(lb: Logbook, site: Site) -> str:
@@ -523,10 +525,12 @@ def build(
             wanted = [t for t in wanted if _wanted_since(t, days, before)]
         written = 0
         failed: dict[str, str] = {}
+        took: dict[str, float] = {}
         for n, target in enumerate(wanted, 1):
             path, _, query = target.partition("?")
             if live(path, today):
                 continue
+            began = time.monotonic()
             try:
                 response = site.respond(path, query)
             except Exception as e:  # one page's failure is that page's: named, and the rest are built
@@ -537,6 +541,7 @@ def build(
                 continue
             old = before.get(target)
             page = library.put(target, response, head, asked=target in asked, save=False)
+            took[target] = round(time.monotonic() - began, 2)
             if old is None or old.etag != page.etag:
                 written += 1
             if n % SAVE_EVERY == 0:
@@ -554,6 +559,7 @@ def build(
                 if f.name not in names:
                     f.unlink(missing_ok=True)
         seconds = round(time.monotonic() - started, 1)
+        slowest = sorted(took.items(), key=lambda kv: (-kv[1], kv[0]))[:SLOWEST]
         pages = library.pages()
         with library._lock:
             library._load()
@@ -567,9 +573,10 @@ def build(
                 "written": written,
                 "rendered": len(wanted),
                 "full": only is None and not incremental,
+                "slowest": [[t, s] for t, s in slowest],
             }
             library._save(library._pages, library._built)
-    return Result(len(wanted), written, removed, seconds, failed)
+    return Result(len(wanted), written, removed, seconds, failed, slowest)
 
 
 class Rebuilder:
