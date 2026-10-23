@@ -125,7 +125,9 @@ UNSUPPORTED_SHARE = 0.30  # more than this share of segments unsupported: refuse
 TEXT_CHARS = 400  # a message's text in the material, at most
 NOTE_CHARS = 1500  # a note's text in the material, at most
 MESSAGES_PER_COUNTERPART = 25  # the texts given per counterpart; the count is always whole
-EXCLUDED_KINDS = frozenset({"retraction", "signed-day", drafts.KIND, "crossing"})  # never material
+# never material; `heard` (RFC 0046): the listen or watch it belongs to is, and a text that lands
+# later is no reason to dream a day again
+EXCLUDED_KINDS = frozenset({"retraction", "signed-day", drafts.KIND, "crossing", "heard"})
 DEFAULT_LANGUAGE = "en"
 DOT = " \u00b7 "
 HEAD_MOVED = (

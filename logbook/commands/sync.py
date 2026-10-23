@@ -17,7 +17,7 @@ from ..contrib import asset_status, first_run, gaps, home, last_run, schedule
 from ..core import assets, places, policy, stays
 from ..core import weather as weather_reader
 from ..core.export import day_range, parse_day
-from ..core.store import Logbook, now_utc
+from ..core.store import Logbook, now_utc, retractions
 from .common import (
     EN_DASH,
     Subparsers,
@@ -97,9 +97,9 @@ def sync_arguments(sub: Subparsers) -> None:
         "sync",
         help="pull new items from a live source; --all for every configured one",
         description="pull new items from a live source (immich, dawarich, imessage, beeper, gcal, drive,"
-        " gtasks, meet, gaudit, granola, mail, gmail, notion, telegram, github, ais, adsb, weather); safe to"
-        " re-run; --all for every configured source, --install-schedule for four times a day (00:00, 06:00,"
-        " 12:00, 18:00; the 06:00 run closes the day)."
+        " gtasks, meet, gaudit, granola, mail, gmail, notion, telegram, github, ais, adsb, weather,"
+        " heard); safe to re-run; --all for every configured source, --install-schedule for four times a day"
+        " (00:00, 06:00, 12:00, 18:00; the 06:00 run closes the day)."
         " gmail, gcal, drive, gtasks, meet and gaudit: one Google Workspace service account with domain-wide"
         " delegation, read-only, a scope per source (LOGBOOK_DRIVE_SA_KEY, the key file; LOGBOOK_DRIVE_USER,"
         " the address it reads as); a token per run, never stored; gcal reads its iCal feeds"
@@ -135,7 +135,9 @@ def sync_arguments(sub: Subparsers) -> None:
         " archived; never their text), telegram (what you sent your own bots, from what the Bot API still"
         " holds, read-only), github (commits, issues, pull requests, reviews and comments in the repos"
         " LOGBOOK_GITHUB_REPOS names), ais (your vessels via aisstream.io), adsb (your aircraft via"
-        " OpenSky), weather (the places of your days, one decimal of latitude, from Open-Meteo)",
+        " OpenSky), weather (the places of your days, one decimal of latitude, from Open-Meteo), heard (the"
+        " words of the podcasts and videos you played: a feed's transcript, Apple Podcasts' own, your"
+        " caption files; LOGBOOK_HEARD, docs/heard.md)",
     )
     s.add_argument(
         "--all",
@@ -820,6 +822,8 @@ def _sync_one(a: argparse.Namespace) -> None:
         options["lookup"] = _lookup(lb)
     if _takes(adapter, "existing", live=True):
         options["existing"] = _existing(lb)
+    if _takes(adapter, "lines", live=True):  # heard: the record's own listens and watches
+        options["lines"] = _lines(lb)
     if _takes(adapter, "held", live=True):  # mail: what any mail road wrote, by Message-ID
         from ..contrib import mail_lookup
 
@@ -1519,6 +1523,21 @@ def _lookup(lb: Logbook) -> Callable[[str, str], str | None]:
             return idx.line_id(source, raw_id)
 
     return lookup
+
+
+def _lines(lb: Logbook) -> Callable[[str, str], list[dict[str, Any]]]:
+    """For a live adapter whose `pull` takes `lines`: the record's lines of a kind from a local day on,
+    in chain order, a retracted one left out, read through the index (`by_kind`, on kind and day), so
+    a source of the record's own lines (`heard`: the listens and watches) never reads the log whole.
+    A sealed line comes back opened when the identity is here."""
+
+    def lines(kind: str, first_day: str) -> list[dict[str, Any]]:
+        with lb.index() as idx:
+            found = idx.by_kind(kind, first_day, None)
+            retracted = retractions(idx.retractions())
+        return [dict(line) for line in found if str(line["id"]) not in retracted]
+
+    return lines
 
 
 def _existing(lb: Logbook) -> Callable[[Iterable[tuple[str, str]]], set[tuple[str, str]]]:

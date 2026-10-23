@@ -290,6 +290,7 @@ def test_the_real_adapters_run_immich_last_under_all() -> None:
         "notion",
         "github",
         "weather",
+        "heard",  # RFC 0046: the record's own listens and watches, after every source that writes them
         "immich",
     ]
 

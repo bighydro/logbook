@@ -34,7 +34,7 @@ from pathlib import Path
 from typing import Any, NamedTuple
 from zoneinfo import ZoneInfo
 
-from . import attachments, crossing, day_start, policy, sealing, stars
+from . import attachments, crossing, day_start, heard, policy, sealing, stars
 from .chain import ENVELOPE_FIELDS, Line, canonical_json, compute_hash, is_sealed, parse_line
 from .export import SCHEMA as PACKAGE_SCHEMA
 from .export import entry, parse_day
@@ -236,7 +236,7 @@ class Selection:
     logged: int  # the day's lines, retractions and the retracted aside
     blobs: list[dict[str, Any]]  # SPEC §1.1 references the store holds, in the manifest's shape
     missing: int  # digests referenced whose file the store does not hold
-    sealed: int = 0  # of `lines`, those the record holds as `sealed/v1` (RFC 0029)
+    sealed: int = 0  # of the page's lines before `heard`'s hold (RFC 0046), the `sealed/v1` ones (RFC 0029)
 
     @property
     def held_back(self) -> int:
@@ -268,11 +268,12 @@ class Selection:
         }
 
 
-def select(lb: Logbook, day: str, max_tier: int) -> Selection:
+def select(lb: Logbook, day: str, max_tier: int, to: str | None = None) -> Selection:
     """The day's lines at or under `max_tier`, in time order then chain order (SPEC §3.2): a
     retracted line stays home, and a retraction is not an event of the day it was written. A star
     (RFC 0041) is at its line's day and tier, so it crosses with its line, and never without it; so
-    does a photo's star, its `memory` keeper (`stars.beside`)."""
+    does a photo's star, its `memory` keeper (`stars.beside`). What a podcast or a video said
+    (`heard`, RFC 0046) is on the page only when the entry of `to` says `"heard": true`."""
     with lb.index() as idx:
         # `Index.day`'s own query, the lines as the file holds them, so a sealed one is seen sealed;
         # each is then opened as `Index.day` opens it
@@ -291,8 +292,17 @@ def select(lb: Logbook, day: str, max_tier: int) -> Selection:
     )
     crossing_ids = {str(line["id"]) for line in lines}
     lines = [line for line in lines if stars.beside(line, crossing_ids)]
-    blobs, missing = crossing.blobs(lb, lines)
     sealed = sum(1 for line in lines if int(line["seq"]) in sealed_seqs)
+    # what was heard leaves only when `to`'s entry says so (RFC 0046), held after the sealed lines are
+    # counted, so the sealed-day refusal judges the day as it would without this rule; a star on a
+    # heard line held back stays home with it
+    texts = heard.crosses(lb.root, to)
+    kept = [line for line in lines if not heard.held(line, texts)]
+    if len(kept) != len(lines):
+        kept_ids = {str(line["id"]) for line in kept}
+        kept = [line for line in kept if stars.beside(line, kept_ids)]
+    lines = kept
+    blobs, missing = crossing.blobs(lb, lines)
     return Selection(lines, len(rows), [_attachment(b) for b in blobs], missing, sealed)
 
 
@@ -340,7 +350,7 @@ def share_day(
     allowed = ceiling(lb, to, max_tier)
     meta = lb.meta
     lb._check_format(meta)  # a 0.1 record is refused here, before a page exists that no line could record
-    sel = select(lb, day, max_tier)
+    sel = select(lb, day, max_tier, to)
     if sel.sealed:
         raise ShareError(SEALED_DAY.format(day=day))
     seed, public = owner_key(lb)
