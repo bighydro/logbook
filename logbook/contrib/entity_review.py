@@ -34,7 +34,8 @@ observation carries, never the id a source gives one observation:
 **The table.** The observed rows are the org, idea and asset rows of `observed_entities` in the
 index (`Index.store_observed`), stamped per kind with the head, the zone and the digests of
 `places.json`, `assets.json` and `policy/entities.json`, served while the stamp holds, built again
-when it does not. Nothing is stored in the record.
+when it does not; the orgs' sightings under it are kept beside the index each kind in file order
+(`_org_folds`), so a new head reads only the lines appended since. Nothing is stored in the record.
 
 **The queue.** Each observed thing not yet placed is proposed against each canonical entity of its
 kind with evidence, a plain sum as `people review`'s: for an org the same domain (+60), the same
@@ -80,10 +81,10 @@ from datetime import UTC, date, datetime, timedelta
 from typing import Any, NoReturn
 from urllib.parse import urlsplit
 
-from ..core import assets, day_start, drafts, flights, goals, machine, policy, present, resolve, stays
+from ..core import assets, day_start, drafts, flights, goals, kept, machine, policy, present, resolve, stays
 from ..core.chain import Line
 from ..core.index import Index
-from ..core.store import HeadMoved, Logbook, now_utc, retractions, uuid7
+from ..core.store import RETRACTION, HeadMoved, Logbook, now_utc, retractions, uuid7
 from ..core.transcripts import NOT_CALLS  # a home video's soundtrack (RFC 0040): it proposes no idea
 from . import entities
 from .entities import ASSET, IDEA, ORG, Ref
@@ -93,6 +94,8 @@ TRANSCRIPT = "transcript"
 SYNTHESIS = "synthesis"  # the source an idea from a call is seen by, in the queue only
 TABLE_VERSION = "3"  # 2: transcripts, `sync github` acts, service hosts, the given name; 3: ideas (#292)
 SAMPLES = 3  # line ids kept per observed thing, as evidence
+ORGS_KEPT, ORGS_KEPT_VERSION = "orgs-observed.json", 1  # each kind's orgs, kept beside the index
+ORG_OVERLAY = (RETRACTION, "resolution")  # what changes who is who: every line read again
 NOTION = "notion"  # the source `sync notion` writes
 RELATIONS = "relations"  # the action of a `sync notion --relations-backfill` line: it links, never touches
 BOT = "bot"  # an actor `sync notion` types `bot` and `sync github` `Bot`: an integration, an app
@@ -168,6 +171,26 @@ class Observed:
         self.tier = max(self.tier, tier)
         if len(self.samples) < SAMPLES:
             self.samples.append((line_id, tier))
+
+    def copy(self) -> Observed:
+        return Observed.from_row(self.kind, self.row())
+
+    def merge(self, other: Observed) -> None:
+        """`other`'s lines added after this one's, as one reading of both adds them."""
+        self.labels.update(other.labels)
+        for ref, n in other.identifiers.items():
+            self.saw(ref, n)
+        self.sources.update(other.sources)
+        self.kinds.update(other.kinds)
+        self.days |= other.days
+        for day in (other.first, other.last):
+            if day is not None:
+                self.first = day if self.first is None else min(self.first, day)
+                self.last = day if self.last is None else max(self.last, day)
+        self.lines += other.lines
+        self.tier = max(self.tier, other.tier)
+        self.samples = [*self.samples, *other.samples][:SAMPLES]
+        self.people |= other.people
 
     def saw(self, ref: Ref, times: int = 1) -> None:
         self.identifiers[ref] = self.identifiers.get(ref, 0) + times
@@ -434,35 +457,116 @@ def org_sightings(kind: str, line: Line, ctx: Context) -> list[Sighting]:
 
 
 def _orgs(lb: Logbook, idx: Index, ctx: Context) -> list[Observed]:
-    found: dict[Ref, Observed] = {}
-    merchants: dict[Ref, Observed] = {}
-    names: dict[Ref, list[tuple[str, str]]] = {}  # a domain's display names, each with its address's own
-    for kind in ORG_KINDS:
-        for line in ctx.standing(idx, kind):
-            day = ctx.day(line)
-            if day is None:
-                continue
-            for s in org_sightings(kind, line, ctx):
-                into = merchants if s.key[0] == "merchant" else found
-                o = into.setdefault(s.key, Observed(ORG, s.key, s.hint))
-                o.add(
-                    str(line.get("source") or ""),
-                    str(line.get("kind")),
-                    day,
-                    str(line["id"]),
-                    int(line.get("tier", 0)),
-                    s.label,
-                )
-                o.saw(s.key)
-                if s.person is not None:
-                    o.people.add(s.person)
-                if s.label is not None and s.local is not None:
-                    names.setdefault(s.key, []).append((s.label, s.local))
-    found.update({k: o for k, o in merchants.items() if o.lines >= ctx.settings.merchant_min_lines})
+    """Every org the standing lines name, each kind's lines in file order and the kinds in
+    `ORG_KINDS`'s; a merchant once it recurs (`merchant_min_lines`), a family's domain `personal`.
+    Each kind's sightings are kept beside the index (`_OrgFold`, `ORGS_KEPT`) and read on from where
+    they stopped while that reads the same (`kept.read_on`)."""
+    merged: dict[Ref, Observed] = {}
+    names: dict[Ref, list[tuple[str, str]]] = {}
+    for fold in _org_folds(lb, idx, ctx):
+        for key, o in fold.found.items():
+            if key in merged:
+                merged[key].merge(o)
+            else:
+                merged[key] = o.copy()
+        for key, spelled in fold.names.items():
+            names.setdefault(key, []).extend(spelled)
+    found = {k: o for k, o in merged.items() if k[0] != "merchant"}
+    found.update(
+        {k: o for k, o in merged.items() if k[0] == "merchant" and o.lines >= ctx.settings.merchant_min_lines}
+    )
     for o in found.values():
         if o.key[0] == "domain" and _family(o, names.get(o.key, [])):
             o.hint = "personal"
     return list(found.values())
+
+
+@dataclass
+class _OrgFold:
+    """The orgs the standing lines of one kind name, in file order: each org as its lines add it up,
+    and the display names of each domain with their address's local part (for the family's hint)."""
+
+    kind: str
+    found: dict[Ref, Observed] = field(default_factory=dict)
+    names: dict[Ref, list[tuple[str, str]]] = field(default_factory=dict)
+
+    def take(self, line: Line, ctx: Context) -> None:
+        day = ctx.day(line)
+        if day is None:
+            return
+        for s in org_sightings(self.kind, line, ctx):
+            o = self.found.setdefault(s.key, Observed(ORG, s.key, s.hint))
+            o.add(
+                str(line.get("source") or ""),
+                str(line.get("kind")),
+                day,
+                str(line["id"]),
+                int(line.get("tier", 0)),
+                s.label,
+            )
+            o.saw(s.key)
+            if s.person is not None:
+                o.people.add(s.person)
+            if s.label is not None and s.local is not None:
+                self.names.setdefault(s.key, []).append((s.label, s.local))
+
+    def to_json(self) -> dict[str, Any]:
+        return {
+            "found": [o.row() for o in self.found.values()],
+            "names": [[list(key), [list(n) for n in found]] for key, found in self.names.items()],
+        }
+
+    @classmethod
+    def from_json(cls, kind: str, data: Mapping[str, Any]) -> _OrgFold:
+        found = [Observed.from_row(ORG, row) for row in data["found"]]
+        return cls(
+            kind,
+            {o.key: o for o in found},
+            {(str(k), str(v)): [(str(a), str(b)) for a, b in names] for (k, v), names in data["names"]},
+        )
+
+
+def _org_folds(lb: Logbook, idx: Index, ctx: Context) -> list[_OrgFold]:
+    """Each kind of `ORG_KINDS`'s fold, read on from the kept ones when that reads the same as every
+    line (`kept.read_on`: no retraction or resolution since, which change who is who, no line
+    superseding another, none into an earlier month), else read from every line; kept again."""
+    path = kept.path(lb, ORGS_KEPT)
+    stamp = kept.stamp(lb, str(ORGS_KEPT_VERSION), kept.code_digest(__file__, entities.__file__))
+    seq, head = idx.indexed()
+    held = kept.load(path)
+    folds: list[_OrgFold] | None = None
+    if held is not None and held.get("version") == ORGS_KEPT_VERSION and held.get("stamp") == stamp:
+        files = {str(k): str(v) for k, v in (held.get("files") or {}).items()}
+        if set(files) == set(ORG_KINDS) and kept.read_on(idx, held, files, ORG_OVERLAY):
+            try:
+                folds = [_OrgFold.from_json(kind, held["folds"][kind]) for kind in ORG_KINDS]
+            except (KeyError, TypeError, ValueError):
+                folds = None
+    since = int(held["seq"]) if folds is not None and held is not None else None
+    if folds is None:
+        folds = [_OrgFold(kind) for kind in ORG_KINDS]
+    for fold in folds:
+        superseded = idx.superseded(fold.kind)
+        for line in idx.of_kind(fold.kind, after_seq=since):
+            line_id = str(line.get("id"))
+            if (
+                int(line.get("seq") or 0) <= seq
+                and line_id not in ctx.retracted
+                and line_id not in superseded
+            ):
+                fold.take(line, ctx)
+    kept.save(
+        path,
+        {
+            "version": ORGS_KEPT_VERSION,
+            "stamp": stamp,
+            "seq": seq,
+            "head": head,
+            "files": {kind: idx.last_file(kind, seq) for kind in ORG_KINDS},
+            "folds": {fold.kind: fold.to_json() for fold in folds},
+        },
+    )
+    return folds
 
 
 def _addresses(

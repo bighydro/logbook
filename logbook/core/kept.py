@@ -25,6 +25,7 @@ from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import Any
 
+from .index import Index
 from .store import Logbook
 
 CORE = Path(__file__).resolve().parent
@@ -93,3 +94,25 @@ def save(at: Path | None, data: Mapping[str, Any]) -> None:
         os.replace(tmp, at)
     except OSError:
         tmp.unlink(missing_ok=True)
+
+
+def read_on(idx: Index, held: Mapping[str, Any], files: Mapping[str, str], overlay: Iterable[str]) -> bool:
+    """Whether a reading kept in file order (`held`: the `seq` and `head` it read through) reads on from
+    there with only the lines appended since: the chain is the one it read (the line at its seq has its
+    head), nothing of `overlay` was appended, and every kind of `files` (a kind → the last month file
+    the reading holds a line of) has no line appended into an earlier month file, and none that
+    supersedes another. A line appended to a file the reading holds is after every line of it there,
+    so the reading in file order is the same."""
+    seq, _head = idx.indexed()
+    since = int(held.get("seq") or 0)
+    if since > seq:
+        return False
+    if since and ((line := idx.by_seq(since)) is None or str(line.get("hash")) != str(held.get("head"))):
+        return False
+    appended = idx.appended_files(since)
+    if any(kind in appended for kind in overlay):
+        return False
+    for kind, last in files.items():
+        if kind in appended and (appended[kind][0] < last or appended[kind][1]):
+            return False
+    return True

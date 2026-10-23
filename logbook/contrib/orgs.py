@@ -39,6 +39,7 @@ org at all, the same for every portfolio, so nothing tells which orgs one holds.
 
 from __future__ import annotations
 
+import json
 import os
 import re
 from collections import Counter
@@ -48,7 +49,7 @@ from datetime import date
 from typing import Any
 from urllib.parse import urlsplit
 
-from ..core import day_start, notes, present, stays
+from ..core import day_start, kept, notes, present, stays
 from ..core.chain import Line
 from ..core.index import Index
 from ..core.resolve import Identity, Ref
@@ -57,6 +58,7 @@ from . import entities, entity_review
 from .entities import ORG
 
 KIND = ORG
+TOUCHES_KEPT, TOUCHES_KEPT_VERSION = "orgs-touches-{}.json", 1  # each gate's touches, beside the index
 MONEY_TIER = entities.MONEY_TIER
 TRANSACTION = "transaction"
 HOLDING = ("hold", "add", "sell")
@@ -198,7 +200,7 @@ def _read(lb: Logbook, idx: Index, g: Gate, today: str | None) -> Record:
         history,
         retracted,
         hidden,
-        _touches(idx, ctx, bound, g) if orgs else [],
+        _touches(lb, idx, ctx, bound, g) if orgs else [],
         names,
         ctx.identities,
         ctx.owner,
@@ -234,41 +236,109 @@ def _named(
     return orgs, bound, shown, hidden
 
 
-def _touches(idx: Index, ctx: entity_review.Context, bound: Mapping[Ref, str], g: Gate) -> list[Touch]:
+def _touches(
+    lb: Logbook, idx: Index, ctx: entity_review.Context, bound: Mapping[Ref, str], g: Gate
+) -> list[Touch]:
     """Every standing line the gate reads that resolves to a named org through one of its refs, the
-    ledger's among them (`Record.shown` says which are shown as themselves)."""
-    found: list[Touch] = []
-    for kind in entity_review.ORG_KINDS:
-        for line in ctx.standing(idx, kind):
-            if not g.reads(_tier(line)):
+    ledger's among them (`Record.shown` says which are shown as themselves): each kind's in file
+    order, the kinds in `ORG_KINDS`'s. Each kind's are kept beside the index (`TOUCHES_KEPT`) under the
+    gate and the refs bound, and read on from where they stopped while that reads the same
+    (`kept.read_on`)."""
+    from .adapters.ios_contacts import DIAL_PREFIX_ENV
+
+    path = kept.path(
+        lb, TOUCHES_KEPT.format("-".join(map(str, g.tiers or ("all",))) + ("-money" if g.money else ""))
+    )
+    stamp = kept.stamp(
+        lb,
+        str(TOUCHES_KEPT_VERSION),
+        kept.code_digest(__file__, entity_review.__file__, entities.__file__),
+        json.dumps(sorted([k, v, org] for (k, v), org in bound.items())),
+        json.dumps([g.tiers, g.money]),
+        os.environ.get(DIAL_PREFIX_ENV, "").strip(),
+    )
+    seq, head = idx.indexed()
+    held = kept.load(path)
+    by_kind: dict[str, list[Touch]] | None = None
+    if held is not None and held.get("version") == TOUCHES_KEPT_VERSION and held.get("stamp") == stamp:
+        files = {str(k): str(v) for k, v in (held.get("files") or {}).items()}
+        if set(files) == set(entity_review.ORG_KINDS) and kept.read_on(
+            idx, held, files, entity_review.ORG_OVERLAY
+        ):
+            try:
+                by_kind = {
+                    kind: [_touch_from(t) for t in held["touches"][kind]] for kind in entity_review.ORG_KINDS
+                }
+            except (KeyError, TypeError, ValueError):
+                by_kind = None
+    since = int(held["seq"]) if by_kind is not None and held is not None else None
+    if by_kind is None:
+        by_kind = {kind: [] for kind in entity_review.ORG_KINDS}
+    for kind, found in by_kind.items():
+        superseded = idx.superseded(kind)
+        for line in idx.of_kind(kind, after_seq=since):
+            line_id = str(line.get("id"))
+            if int(line.get("seq") or 0) > seq or line_id in ctx.retracted or line_id in superseded:
                 continue
-            hits: dict[str, str] = {}
-            for s in entity_review.org_sightings(kind, line, ctx):
-                org = bound.get(s.key)
-                if org is not None:
-                    hits.setdefault(org, s.key[0])
-            if not hits:
-                continue
-            day = ctx.day(line)
-            if day is None:
-                continue
-            people, unplaced = _people_on(kind, line, ctx)
-            for org, via in hits.items():
-                found.append(
-                    Touch(
-                        org,
-                        int(line["seq"]),
-                        str(line["id"]),
-                        day,
-                        kind,
-                        str(line.get("source") or ""),
-                        _tier(line),
-                        via,
-                        people,
-                        unplaced,
-                    )
-                )
-    return found
+            found.extend(_touched(kind, line, ctx, bound, g))
+    kept.save(
+        path,
+        {
+            "version": TOUCHES_KEPT_VERSION,
+            "stamp": stamp,
+            "seq": seq,
+            "head": head,
+            "files": {kind: idx.last_file(kind, seq) for kind in entity_review.ORG_KINDS},
+            "touches": {kind: [_touch_json(t) for t in found] for kind, found in by_kind.items()},
+        },
+    )
+    return [t for kind in entity_review.ORG_KINDS for t in by_kind[kind]]
+
+
+def _touched(
+    kind: str, line: Line, ctx: entity_review.Context, bound: Mapping[Ref, str], g: Gate
+) -> list[Touch]:
+    """The touches of one standing line: one per named org it resolves to, through its first ref."""
+    if not g.reads(_tier(line)):
+        return []
+    hits: dict[str, str] = {}
+    for s in entity_review.org_sightings(kind, line, ctx):
+        org = bound.get(s.key)
+        if org is not None:
+            hits.setdefault(org, s.key[0])
+    if not hits:
+        return []
+    day = ctx.day(line)
+    if day is None:
+        return []
+    people, unplaced = _people_on(kind, line, ctx)
+    return [
+        Touch(
+            org,
+            int(line["seq"]),
+            str(line["id"]),
+            day,
+            kind,
+            str(line.get("source") or ""),
+            _tier(line),
+            via,
+            people,
+            unplaced,
+        )
+        for org, via in hits.items()
+    ]
+
+
+def _touch_json(t: Touch) -> list[Any]:
+    return [t.entity, t.seq, t.line, t.day, t.kind, t.source, t.tier, t.via, list(t.people), list(t.unplaced)]
+
+
+def _touch_from(row: Sequence[Any]) -> Touch:
+    entity, seq, line, day, kind, source, tier, via, people, unplaced = row
+    return Touch(
+        str(entity), int(seq), str(line), str(day), str(kind), str(source), int(tier), str(via),
+        tuple(map(str, people)), tuple(map(str, unplaced)),
+    )  # fmt: skip
 
 
 def _people_on(kind: str, line: Line, ctx: entity_review.Context) -> tuple[tuple[str, ...], tuple[str, ...]]:

@@ -9,3 +9,5 @@
   again, as before.
 - The world keeps each year before the current one beside the index and reads only the current
   year again, unless a line comes for an earlier year's days.
+- The Manifest and each org's page read the org sightings and touches kept beside the index and the
+  lines appended since, instead of every mail, meeting and chat.

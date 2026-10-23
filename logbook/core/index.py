@@ -936,6 +936,23 @@ class Index:
         ).fetchall()
         return {str(kind): (str(day), int(n), int(sup or 0)) for kind, day, n, sup in rows}
 
+    def appended_files(self, seq: int) -> dict[str, tuple[str, int]]:
+        """What was appended after `seq`, by kind: the first month file (by the path's order, which is
+        the months') a line of it went to, and how many of them supersede another line. What a reading
+        kept in file order asks before it reads on from where it stopped (`entity_review`)."""
+        rows = self.db.execute(
+            "SELECT kind, min(file), sum(supersedes IS NOT NULL) FROM lines WHERE seq > ? GROUP BY kind",
+            (seq,),
+        ).fetchall()
+        return {str(kind): (str(file), int(sup or 0)) for kind, file, sup in rows}
+
+    def last_file(self, kind: str, seq: int) -> str:
+        """The last month file (by the path's order) a line of `kind` up to `seq` is in; empty for none."""
+        (found,) = self.db.execute(
+            "SELECT max(file) FROM lines WHERE kind = ? AND seq <= ?", (kind, seq)
+        ).fetchone()
+        return str(found or "")
+
     def by_ids(self, ids: Iterable[str]) -> dict[str, Line]:
         """id → line for these line ids, read from the files; an id the record has no line for is
         absent. A few hundred ids per statement; `id` has no index of its own, so each statement
