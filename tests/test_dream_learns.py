@@ -9,8 +9,10 @@ Nordmann, the yacht Solvind, the idea "Boat-share log", the chapter "The Fjord S
 from __future__ import annotations
 
 import contextlib
+import html
 import io
 import json
+import re
 from collections.abc import Callable
 from datetime import UTC, date, datetime
 from pathlib import Path
@@ -18,9 +20,10 @@ from typing import Any
 
 import pytest
 from persona import HOME, KARI, KARI_ID, dwell, event, note, photo, resolution, utc
+from test_day_rhythm import _seen, beside
 
 from logbook import cli
-from logbook.contrib import dream, entities, model_client, questions
+from logbook.contrib import day_rhythm, dream, entities, model_client, questions, serve
 from logbook.core import chapter, drafts, goals, policy, signing, stars
 from logbook.core.store import Logbook
 
@@ -762,8 +765,9 @@ def test_no_number_stands_beside_a_person_in_a_day_segment(
     lb: Logbook, monkeypatch: pytest.MonkeyPatch, no_network
 ):
     """A figure the cited line gives (`hold_numbers` lets it stand) is still never written beside a
-    person's name: the sentence is marked unsupported and counted (`dream.BESIDE_A_NAME`), and the same
-    figure without the name, or the name without a figure, stays."""
+    person's name: the sentence's words are dropped, its slot held unsupported with the reason
+    (`dream.HELD`), its evidence kept under `extra.held`, and it is counted (`dream.BESIDE_A_NAME`);
+    the same figure without the name, or the name without a figure, stays."""
     lb.append_many(
         [
             resolution(("email", "per.hansen@example.org"), PER_ID, "Per Hansen"),
@@ -788,12 +792,131 @@ def test_no_number_stands_beside_a_person_in_a_day_segment(
     assert code == 0, err
     p = _drafts(lb)[-1]["payload"]
     learned = [s for s, part in zip(p["segments"], p["extra"]["parts"], strict=True) if part == "learned"]
-    assert learned[:2] == [
-        {"text": "Per Hansen brought 3 sails.", "unsupported": True},
-        {"text": "Per brought 3 sails.", "unsupported": True},
-    ]
+    assert learned[:2] == [{"text": dream.HELD, "unsupported": True}] * 2
+    assert dream.HELD == "held: a number beside a name"
     assert "evidence" in learned[2] and "evidence" in learned[3]
     assert p["extra"]["marked"] == {dream.BESIDE_A_NAME: 2}
+    sails_id = next(line["id"] for line in lb.lines() if "sails" in str(line["payload"].get("text")))
+    slots = [n for n, s in enumerate(p["segments"], 1) if s["text"] == dream.HELD]
+    assert p["extra"]["held"] == [{"segment": n, "evidence": [sails_id]} for n in slots]
+    assert "brought 3 sails" not in json.dumps(p), "the held words are in no field of the line"
     for segment in p["segments"]:
         if "evidence" in segment:
             assert not ("Per" in segment["text"] and any(c.isdigit() for c in segment["text"])), segment
+
+
+def test_a_segment_with_a_number_beside_a_name_is_written_without_its_words_and_no_reader_prints_them(
+    lb: Logbook, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, no_network
+):
+    """RFC 0043: no number beside a person anywhere, pencil included. "Per Hansen · 3 calls" rests on a
+    line that gives the 3, and "Per Hansen · 5 calls" on one that does not (`hold_numbers` marks it
+    first): both are written without their words, each slot kept with its evidence and the reason, and
+    `day DAY`, `day --json`, the Day page in every shape and `export site --with-drafts` print none of it."""
+    lb.append_many(
+        [
+            resolution(("email", "per.hansen@example.org"), PER_ID, "Per Hansen"),
+            note(utc(DAY, "15:00"), "Rang about the berth for Solvind 3 times; Per Hansen answered."),
+        ]
+    )
+
+    def answer(m: dict[str, Any]) -> dict[str, Any]:
+        calls = next(n["ref"] for n in m["notes"] if "berth" in n["text"])
+        return _answer(
+            m,
+            learned=[
+                {"text": "Per Hansen · 3 calls", "evidence": [calls]},
+                {"text": "Per Hansen · 5 calls", "evidence": [calls]},
+                {"text": "The berth for Solvind is settled.", "evidence": [calls]},
+                {"text": dream.HELD, "evidence": [calls]},  # the reason's own words, from the model
+            ],
+        )
+
+    _fake(monkeypatch, answer)
+    code, _out, err = _cli("dream", "day", DAY)
+    assert code == 0, err
+    line = _drafts(lb)[-1]
+    p = line["payload"]
+    calls_id = next(x["id"] for x in lb.lines() if "berth" in str(x["payload"].get("text")))
+    learned = [
+        (n, s)
+        for n, (s, part) in enumerate(zip(p["segments"], p["extra"]["parts"], strict=True), 1)
+        if part == "learned"
+    ]
+    assert [s for _n, s in learned[:2]] == [{"text": dream.HELD, "unsupported": True}] * 2
+    assert learned[2][1] == {"text": "The berth for Solvind is settled.", "evidence": [calls_id]}
+    assert learned[3][1] == {"text": dream.HELD, "unsupported": True}, "never prose that reads as held"
+    held = [learned[0], learned[1], learned[3]]
+    assert p["extra"]["held"] == [{"segment": n, "evidence": [calls_id]} for n, _s in held]
+    assert p["extra"]["marked"] == {dream.UNBACKED: 1, dream.BESIDE_A_NAME: 3}
+    assert _words(json.dumps(line, ensure_ascii=False)) == [], "the held words are in no field of the line"
+
+    code, out, err = _cli("day", DAY, "--no-anniversaries")
+    assert code == 0, err
+    assert dream.HELD in out and _words(out) == []
+    assert _words(json.dumps(_day_json(), ensure_ascii=False)) == []
+    site = serve.Site(lb)
+    for shape in day_rhythm.SHAPES:
+        page = site.page_day(DAY, expanded=True, shape=shape)
+        assert _words(page) == [], shape
+        assert beside(_seen(page), ["Per Hansen"]) == [], shape
+    folder = tmp_path / "Site"
+    assert _cli("export", "site", str(folder), "--with-drafts")[0] == 0
+    pages = sorted((folder / "days").glob("*.html"))
+    assert DAY in [x.stem for x in pages]
+    for found in pages:
+        text = found.read_text(encoding="utf-8")
+        assert _words(text) == [] and beside(_seen(text), ["Per Hansen"]) == [], found.name
+
+
+def _words(text: str) -> list[str]:
+    """The held segments' own words wherever they show: `3 calls`, `5 calls`, `Per Hansen ·`."""
+    return re.findall(r"[35] calls|Per Hansen \u00b7", html.unescape(text))
+
+
+def test_a_proposal_or_a_link_with_a_number_beside_a_name_is_dropped_and_no_reader_prints_it(
+    lb: Logbook, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, no_network
+):
+    """The same rule for what a draft proposes beside its text: an event whose title, or a link whose
+    text or note, puts a number beside a person's name is dropped, never kept, and counted under
+    `dream.DROP_BESIDE_A_NAME`; the event or link without one stays."""
+    lb.append_many([resolution(("email", "per.hansen@example.org"), PER_ID, "Per Hansen")])
+
+    def answer(m: dict[str, Any]) -> dict[str, Any]:
+        notes_ = _refs(m)[1]
+        event_ = {"start": "12:00", "end": "13:00", "place": "Home", "people": [], "evidence": notes_[:1]}
+        link = {"entity": IDEA_ID, "evidence": notes_[:1]}
+        return _answer(
+            m,
+            events=[{**event_, "title": "Crew planning"}, {**event_, "title": "Per Hansen · 3 calls"}],
+            links=[
+                {**link, "text": "Crew list"},
+                {**link, "text": "Per Hansen · 3 calls"},
+                {**link, "text": "Crew list", "note": "Per Hansen · 5 calls"},
+            ],
+        )
+
+    _fake(monkeypatch, answer)
+    code, _out, err = _cli("dream", "day", DAY)
+    assert code == 0, err
+    line = _drafts(lb)[-1]
+    p = line["payload"]
+    assert [(x["kind"], x.get("title") or x.get("text")) for x in p[drafts.PROPOSALS]] == [
+        (drafts.EVENT, "Crew planning"),
+        (drafts.LINK, "Crew list"),
+    ]
+    assert p["extra"]["dropped"] == {dream.DROP_BESIDE_A_NAME: 1}
+    assert p["extra"]["dropped_links"] == {dream.DROP_BESIDE_A_NAME: 2}
+    assert _words(json.dumps(line, ensure_ascii=False)) == []
+    code, out, err = _cli("day", DAY, "--no-anniversaries")
+    assert code == 0, err
+    assert "Crew planning" in out and _words(out) == []
+    assert _words(json.dumps(_day_json(), ensure_ascii=False)) == []
+    site = serve.Site(lb)
+    for shape in day_rhythm.SHAPES:
+        page = site.page_day(DAY, expanded=True, shape=shape)
+        assert _words(page) == [] and beside(_seen(page), ["Per Hansen"]) == [], shape
+    folder = tmp_path / "Site"
+    assert _cli("export", "site", str(folder), "--with-drafts")[0] == 0
+    for found in sorted((folder / "days").glob("*.html")):
+        text = found.read_text(encoding="utf-8")
+        assert _words(text) == [] and beside(_seen(text), ["Per Hansen"]) == [], found.name
