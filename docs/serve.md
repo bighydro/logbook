@@ -613,8 +613,9 @@ command refuses (an empty reflection, a number no proposal has) is a `400` with 
 never waits for another writer: while a sync holds the record it says so (`409`, the one answer
 [above](#three-rules)), keeps your words, and you click *Try again*. Every write in the server is one at a time.
 
-**Not the door.** The page reads `policy/crossing.json` for its `dream` entry alone (whether a draft is
-shown, and whether *Dream the day so far* is offered), never its `write` list: this is not the MCP door
+**Not the door.** The page reads `policy/crossing.json` for the entries that say which drafts it shows
+(`dream`, and `relationship` for a person's) and whether *Dream the day so far* is offered, never its
+`write` list: this is not the MCP door
 (ADR 0022), and that list may stay empty. The Library is your own Sign path, on your own machine. The
 Purser, the orchestrator that builds the Day page elsewhere and carries your verdict back through
 `sign_day`, remains an alternative front door, open only when you name the tool in that list
@@ -666,7 +667,8 @@ and checked is `HeadMoved`, before the first line.
 command writes it, comes back in pencil above the form, and nothing of it is kept until you keep it.
 The button is there only while the owner's `dream` entry in `policy/crossing.json` stands ([the
 dream](dream.md#the-policy-entry)); without one, the page says in one sentence how to add it, and
-nothing of the day is sent. An expired entry, an endpoint not set, a day with nothing to dream: the
+nothing of the day is sent. The dream holds the record's writer lock while the model answers, as the command does, and
+the server's other forms wait for it. An expired entry, an endpoint not set, a day with nothing to dream: the
 dream's own sentence, and nothing sent. A past day is dreamed whole at the command line, `logbook
 dream day DAY`.
 

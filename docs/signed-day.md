@@ -312,8 +312,8 @@ under it, one kept already, a photo starred already, `--mend` or `--revisit` for
 keep, a revisit that is not a later day, a word that is two words or a number, a second word on the day,
 a task given two answers, one `show plan` does not list, one answered already. Then, under one hold of
 the writer lock, the lines are written in that order (the sentences, the links, the photo, the word,
-the answers), after the events you `--accept` and, under `day reflect`, after the reflection and its
-delegations; then the signature, which confirms them. Signing again keeps them, as it keeps any line it
+the answers), after the events you `--accept` and, under `day reflect`, after the reflection and before
+its delegations (RFC 0043 §5); then the signature, which confirms them. Signing again keeps them, as it keeps any line it
 confirmed, and never writes them twice. A busy record (another command writing) is said in one
 sentence and nothing is written. Bare `logbook day DAY` refuses these flags; `day reflect` takes them
 only with `--sign`.

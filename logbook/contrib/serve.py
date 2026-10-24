@@ -1544,7 +1544,7 @@ class Site:
                     self._day_kept.pop(next(iter(self._day_kept)))
         return found
 
-    def _day_later(self, key: tuple[str, ...], build: Callable[[], T]) -> T | None:
+    def _day_later(self, key: tuple[str, ...], build: Callable[[], T], stand_in: bool = True) -> T | None:
         """A reading the Day shows a part of that reads more than the day (the drift for one reconnect,
         the replies owed, the decisions to revisit), kept by `key`: the part, the day, and for one that a
         sync changes the head. Seconds to minutes on a record of millions of lines. With `read_later`
@@ -1552,7 +1552,8 @@ class Site:
         (`_day_later_start`), so no page waits for it and none is slowed while it renders: until it has
         arrived, the latest reading of the same part and day stands in (None when there is none), and
         the Day's tag names what has arrived, so the page is read again once it has. Without it (a test,
-        a script) it is read on the request. `DAY_LATER_KEPT` at most, the oldest going first."""
+        a script) it is read on the request. `DAY_LATER_KEPT` at most, the oldest going first. Without
+        `stand_in`, nothing stands in: a form that answers what it shows waits for its own reading."""
         with self._kept_lock:
             if key in self._day_later_kept and self._day_later_kept[key] is not None:
                 kept: T = self._day_later_kept[key]
@@ -1562,6 +1563,8 @@ class Site:
                     self._day_later_kept[key] = None
                     self._day_later_queue.append((key, build))
                     self._day_later_trim()
+                if not stand_in:
+                    return None
                 earlier: T | None = next(
                     (
                         v
@@ -2095,8 +2098,7 @@ class Site:
         if self.with_drafts and data.get("draft"):
             model = escape(day_rhythm.model_of(data["draft"]))
             pencil = (
-                f'<div class="paper" id="{PENCIL}">'
-                f'<p class="eyebrow">Pencil <span class="sc">{model}</span></p>\n'
+                f'<div class="paper"><p class="eyebrow">Pencil <span class="sc">{model}</span></p>\n'
                 f"{_draft_html(data['draft'], star)}</div>\n"
             )
         if self.with_drafts and data.get("draft_withheld"):  # the policy no longer allows it: the row
@@ -2114,8 +2116,8 @@ class Site:
             said = f"{confirmed} of {len(proposed)} proposals confirmed" if proposed else "the model's draft"
             folds["pencil"] = day_rhythm.fold("Pencil", said, pencil, expanded)
             pieces["pencil"] = folds["pencil"] if shown == day_rhythm.SIGNED else ""
-        elif pencil:
-            pieces["pencil"] = pencil
+        elif pencil:  # open, where Dream the day so far sends the owner back
+            pieces["pencil"] = f'<span id="{PENCIL}"></span>{pencil}'
         pieces["photos"] = self._photos_html(day, marks, expanded)
         if not pieces["photos"]:
             empty.append("photos")
@@ -2641,23 +2643,31 @@ class Site:
         out.append(self._tasks_html(day))
         return "".join(out)
 
-    def _day_plan(self, day: str) -> object:
+    def _day_plan(self, day: str, stand_in: bool = True) -> object:
         """The task tool's plan for `day` as `show plan` reads it (tier 1 alone), beside the page on
         `logbook serve` (`_day_later`): a `Plan`, the mapping's error in a sentence, None while it is
-        read, or when the page's gate holds no tier 1."""
-        if self.tiers is not None and 1 not in self.tiers:
+        read (an earlier head's reading standing in, with `stand_in`), or when the page's gate holds
+        no tier 1."""
+        if not self._plan_seen():
             return None
         return self._day_later(
-            ("plan", day, str(self.lb.meta.get("head"))), lambda: day_rhythm.plan_of(self.lb, day)
+            ("plan", day, str(self.lb.meta.get("head"))), lambda: day_rhythm.plan_of(self.lb, day), stand_in
         )
+
+    def _plan_seen(self) -> bool:
+        """Whether the page's gate holds tier 1, the plan's tier."""
+        return self.tiers is None or 1 in self.tiers
 
     def _tasks_html(self, day: str) -> str:
         """Today's tasks answered (RFC 0043 §9): each numbered as `show plan` numbers it, with three
         choices, done, tomorrow and let go, none chosen; a task answered already says how, and offers
         none. Nothing but the hidden `tasks`, the tasks the page showed, when the record maps no
-        tasks database."""
-        found = self._day_plan(day)
+        tasks database or the page's gate holds no tier 1. The plan at this head alone: one read at an
+        earlier head (before this close was signed) would offer a task answered since."""
+        found = self._day_plan(day, stand_in=False)
         hidden = f'<input type="hidden" name="tasks" value="{escape(_tasks_digest(found))}">\n'
+        if not self._plan_seen():
+            return hidden
         if isinstance(found, str):
             body = f'<p class="mute">{escape(found)}</p>\n'
         elif found is None:

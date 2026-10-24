@@ -15,13 +15,16 @@ in-process fake (`model_client.send` replaced) and no test opens a connection.""
 from __future__ import annotations
 
 import html
+import http.client
 import itertools
 import json
 import re
 import shutil
+import threading
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlencode
 
 import pytest
 import test_dream_learns as dreams
@@ -303,7 +306,6 @@ def test_the_lines_come_in_the_order_of_section_5_under_one_hold(
     assert no_network == []
     kinds = [(x["kind"], _labels(x)) for x in _after(closing, seq)]
     assert kinds == [
-        ("note", ["delegation"]),
         ("note", ["learned"]),
         ("note", ["decision"]),
         ("note", ["idea"]),
@@ -312,6 +314,7 @@ def test_the_lines_come_in_the_order_of_section_5_under_one_hold(
         ("note", ["word"]),
         ("note", ["task"]),
         ("note", ["task"]),
+        ("note", ["delegation"]),
         ("signed-day", []),
     ]
     assert holds and holds[0] == 0 and all(h >= 1 for h in holds[1:]), "one hold, re-entered"
@@ -542,3 +545,77 @@ def test_the_button_is_for_today_alone_and_from_this_machine_alone(
     assert seen["calls"] == [] and _seq(evening) == seq
     assert _post(_site(evening, AFTER), {"act": "dream"}, to="reflect").status == 400, "not today"
     assert seen["calls"] == [] and _seq(evening) == seq
+
+
+# -- over the socket, and beside the page ------------------------------------------------------------------
+
+
+def test_keep_and_sign_round_trips_over_the_socket(closing: Logbook) -> None:
+    """The browser sends a box ticked twice as two `keep` fields and a task's choice as its radio: the
+    server joins them as `--keep N,N` takes them. On `logbook serve` the tasks are read beside the page,
+    so the form offers them once they are read."""
+    server = serve.make_server(Logbook(closing.root), port=0)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    seq = _seq(closing)
+    try:
+        port = server.server_address[1]
+        headers = {"Content-Type": "application/x-www-form-urlencoded", "Origin": f"http://{LOOPBACK}:{port}"}
+        connection = http.client.HTTPConnection(LOOPBACK, port, timeout=30)
+
+        def page() -> str:
+            connection.request("GET", f"/day/{DAY}")
+            reply = connection.getresponse()
+            return reply.read().decode("utf-8")
+
+        first = page()
+        server.site.settle(timeout=30)  # the tasks, read beside the page
+        sign = _form(page() if 'name="task-1"' not in first else first, "sign")
+        assert 'name="task-1"' in sign
+        fields = [
+            *_hidden(sign).items(),
+            ("keep", str(KEEP_LEARNED)),
+            ("keep", str(KEEP_DECIDED)),
+            (f"revisit-{KEEP_DECIDED}", REVISIT),
+            ("word", "calm"),
+            ("task-2", "tomorrow"),
+            ("act", "sign"),
+        ]
+        connection.request("POST", f"/day/{DAY}/sign", body=urlencode(fields), headers=headers)
+        reply = connection.getresponse()
+        assert reply.status == 303 and reply.read() == b""
+        connection.close()
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+    kinds = [(x["kind"], _labels(x)) for x in _after(closing, seq)]
+    assert kinds == [
+        ("note", ["learned"]),
+        ("note", ["decision"]),
+        ("note", ["word"]),
+        ("note", ["task"]),
+        ("signed-day", []),
+    ]
+    decided, task = _after(closing, seq)[1], _after(closing, seq)[3]
+    assert (
+        decided["payload"]["extra"]["revisit"] == REVISIT
+        and task["payload"]["extra"]["outcome"] == "tomorrow"
+    )
+
+
+def test_a_plan_read_before_the_close_never_stands_in_for_the_tasks(closing: Logbook) -> None:
+    """Beside the page (`read_later`, as on `logbook serve`), the tasks read at an earlier head are
+    not offered after a sign moved it: the form waits for its own reading, so a task answered since is
+    never offered again."""
+    site = _site(closing, read_later=True)
+    _page(site)
+    site.settle(timeout=30)
+    fields = {**_signing(site), "task-1": "done", "act": "sign"}
+    assert 'name="task-1"' in _form(_page(site), "sign")
+    assert _post(site, fields).status == 303
+    sign = _form(_page(site), "sign")
+    assert 'name="task-1"' not in sign and "being read" in sign
+    site.settle(timeout=30)
+    sign = _form(_page(site), "sign")
+    assert 'name="task-1"' not in sign and "done today" in sign and 'name="task-2"' in sign
