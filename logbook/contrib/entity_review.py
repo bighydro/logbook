@@ -275,11 +275,13 @@ class Observed:
 
 def observed(lb: Logbook, kind: str) -> list[Observed]:
     """Every observed thing of `kind` (org, idea, asset) from the index's table: served while its
-    stamp holds, built from the lines and stored otherwise. Writes nothing to the record."""
+    stamp holds, built from the lines and stored otherwise. Writes nothing to the record. The stamp's
+    head is the one the index holds (`Index.indexed`): a table built while a writer is between
+    `logbook.json` and the index is stamped with what it read, so the next reading builds it again."""
     if kind not in KINDS:
         raise ValueError(f"not a kind this queue reads: {kind!r}")
     with lb.index() as idx:
-        stamp = _stamp(lb, kind)
+        stamp = _stamp(lb, kind, idx.indexed()[1])
         if idx.observed_stamp(kind) == stamp:
             return [Observed.from_row(kind, row) for row in idx.observed(kind)]
         found = build(lb, idx, kind)
@@ -287,7 +289,7 @@ def observed(lb: Logbook, kind: str) -> list[Observed]:
         return found
 
 
-def _stamp(lb: Logbook, kind: str) -> dict[str, str]:
+def _stamp(lb: Logbook, kind: str, head: str) -> dict[str, str]:
     meta = lb.meta
 
     def digest(path: Any) -> str:
@@ -297,7 +299,7 @@ def _stamp(lb: Logbook, kind: str) -> dict[str, str]:
             return ""
 
     return {
-        "head": str(meta["head"]),
+        "head": head,
         "timezone": str(meta["timezone"]),
         "version": TABLE_VERSION,
         "kind": kind,

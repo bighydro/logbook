@@ -557,9 +557,8 @@ def build(
     site = site or serve.Site(lb)
     started = time.monotonic()
     with library.building():
-        head = str(lb.meta.get("head") or "")
         with lb.index() as idx:
-            seq = idx.indexed()[0]
+            seq, head = idx.indexed()  # what the pages read: a writer may be between logbook.json and it
             years = _pager_years(idx)
         today = day_start.of(lb.meta).today(site.now()).isoformat()
         before = library.pages()

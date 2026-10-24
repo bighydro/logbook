@@ -433,15 +433,15 @@ class Observed:
 
 def observed(lb: Logbook) -> list[Observed]:
     """Every observed person of the record, from the index's derived table: served while the
-    table's head is the record's, built from the lines and stored otherwise. Writes nothing to
-    the record."""
+    table's head is the one the index holds (`Index.indexed`, so a table built while a writer is
+    between `logbook.json` and the index is stamped with what it read), built from the lines and
+    stored otherwise. Writes nothing to the record."""
     with lb.index() as idx:
         return observed_in(lb, idx)
 
 
 def observed_in(lb: Logbook, idx: Index) -> list[Observed]:
-    meta = lb.meta
-    stamp = {"head": str(meta["head"]), "timezone": str(meta["timezone"]), "version": TABLE_VERSION}
+    stamp = {"head": idx.indexed()[1], "timezone": str(lb.meta["timezone"]), "version": TABLE_VERSION}
     if _table_current(idx, stamp):
         rows = idx.db.execute(
             f"SELECT {', '.join(COLUMNS)} FROM {TABLE} ORDER BY key_kind, key_value"

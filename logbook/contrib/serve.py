@@ -1450,8 +1450,10 @@ class Site:
         """What `build` reads, read once for the record as it stands and handed to every request that
         asks for `key` until it moves: the same head, the same settings beside the chain and the same
         day (`_state`, what a page's tag digests besides the request). Requests that ask together wait
-        for one build. A page reads it and never changes it."""
-        state = self._state(self.lb.meta)
+        for one build. A page reads it and never changes it. The head is the one the index holds
+        (`current`): a reading made while a writer is between `logbook.json` and the index is kept
+        under the head it read, never under the line not yet indexed."""
+        state = self._state(self.current())
         with self._kept_lock:
             if state != self._shared_state:
                 self._shared.clear()
@@ -1474,8 +1476,8 @@ class Site:
     def _day_reading(self, key: tuple[str, ...], build: Callable[[], T]) -> T:
         """What the Day reads beside the day (`day_rhythm`), kept for the record as it stands as
         `shared` keeps a page's readings, in a pool of its own (`DAY_KEPT`), so paging through days
-        never pushes out what `shared` keeps for the other pages."""
-        state = self._state(self.lb.meta)
+        never pushes out what `shared` keeps for the other pages. By the head read, as `shared`."""
+        state = self._state(self.current())
         with self._kept_lock:
             if state != self._day_state:
                 self._day_kept.clear()
@@ -1785,8 +1787,9 @@ class Site:
         """One HTML document: the head, the navigation, `body`, the footer and `footnote` under it;
         `script` is the one inline script a page may carry (the Places page's keys, the Day's record
         button), named by hash in that page's policy; `style` what a page adds to the one inline
-        stylesheet (the Manifest's, the table pages', so every other page keeps its bytes)."""
-        meta = self.lb.meta
+        stylesheet (the Manifest's, the table pages', so every other page keeps its bytes). The head
+        is the one the page read (`current`), as its tag names it."""
+        meta = self.current()
         head = str(meta.get("head") or "")[:HEAD_CHARS]
         footer = (
             f"read-only{DOT}head <code>{escape(head)}…</code>{DOT}{escape(str(meta.get('timezone')))}"
@@ -1978,7 +1981,7 @@ class Site:
         # line, seconds on a record of millions, so beside the page on `logbook serve` (`_day_later`)
         plan = (
             self._day_later(
-                ("plan", day, str(self.lb.meta.get("head"))), lambda: day_rhythm.plan_of(self.lb, day)
+                ("plan", day, str(self.current().get("head"))), lambda: day_rhythm.plan_of(self.lb, day)
             )
             if not self.static and morning and (self.tiers is None or 1 in self.tiers)
             else None
@@ -2045,11 +2048,12 @@ class Site:
             elif drifted is not None:
                 empty_ahead.append("one person")
         # the morning's replies owed and decisions to revisit, read beyond the day, so beside the page on
-        # `logbook serve` (`_day_later`), by the head a sync moves; never a site's (a site has no morning)
+        # `logbook serve` (`_day_later`), by the head a sync moves (the one read, `current`); never a
+        # site's (a site has no morning)
         owed: Sequence[Mapping[str, Any]] | None = None
         revisit: Sequence[Mapping[str, Any]] | None = None
         if not self.static and morning:
-            head = str(self.lb.meta.get("head"))
+            head = str(self.current().get("head"))
             owed = self._day_later(
                 ("owed", day, head), lambda: day_rhythm.replies_owed(self.lb, day, directory, self.tiers)
             )
