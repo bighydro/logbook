@@ -282,6 +282,9 @@ def observed(lb: Logbook, kind: str) -> list[Observed]:
         raise ValueError(f"not a kind this queue reads: {kind!r}")
     with lb.index() as idx:
         stamp = _stamp(lb, kind, idx.indexed()[1])
+        if not kept.on_disk(lb):  # a sealed record: in memory, never in the index file (docs/sealing.md)
+            kept.off_disk(idx, kind)
+            return kept.observed(lb, kind, stamp, lambda: build(lb, idx, kind))
         if idx.observed_stamp(kind) == stamp:
             return [Observed.from_row(kind, row) for row in idx.observed(kind)]
         found = build(lb, idx, kind)

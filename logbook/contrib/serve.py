@@ -884,8 +884,8 @@ class Site:
             today = day_start.of(meta).today(self.now()).isoformat()
         except (day_start.DayStartError, KeyError, ValueError):
             return
-        if library_build.live(path, today):
-            return
+        if library_build.live(path, today) or not library_build.allowed(self.lb):
+            return  # a sealed record turned off while the server runs: its next build removes the rest
         target, head = library_build.address(path, query), str(meta.get("head") or "")
         with contextlib.suppress(OSError):  # a full disk or a cache folder gone: the page was answered
             self.library.put(target, response, head, asked=True)
@@ -5589,6 +5589,11 @@ def make_server(
             f"serve binds {HOST} only, never {host!r}: the record is read from this machine, "
             "and nothing here leaves it"
         )
+    if built and not library_build.allowed(lb):
+        library_build.clear(lb)
+        if say is not None:
+            say(f"built pages: off; {library_build.SEALED}")
+        built = False
     if not built:
         return Server(port, Site(lb, airports, voice=voice, read_later=True), limit_s)
     library = library_build.Library(lb)

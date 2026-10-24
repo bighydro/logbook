@@ -14,7 +14,11 @@ browser waits for a door.
 Where: the folder `library/` beside the index, in the cache folder (`<cache dir>/logbook/<owner_id>/`,
 RFC 0029 §8), never in the record's own folder, so no export, vault, crossing or copy of the record
 ever carries it. The folder is 0700 and every file 0600 (on the platforms that have modes): the pages
-hold what the Library shows, every tier of it, so only the record's user reads them. A file is named
+hold what the Library shows, every tier of it, so only the record's user reads them. A sealed record
+(RFC 0029) builds none of it unless the owner turns on `plaintext_cache` in `logbook.json`
+(`kept.on_disk`, `allowed`; docs/sealing.md), not even pages of tier 1, which still name who is who
+from tier 2 resolutions: the server renders every page as it is asked for, and a build left from
+before is removed (`Sealed`, `clear`). A file is named
 by the SHA-256 of its address, not by the address, so `/People` and `/people` are never one file on a
 filesystem that does not tell case apart, and no address becomes a path. `pages.json` names each:
 `{"version", "built": {when, head, seconds, pages, written}, "pages": {address: {file, status, csp,
@@ -43,6 +47,7 @@ import json
 import multiprocessing
 import os
 import re
+import shutil
 import sys
 import threading
 import time
@@ -102,6 +107,36 @@ SAVE_EVERY = 50  # a build names its pages in `pages.json` this many at a time, 
 
 class Busy(Exception):
     """Another process is building the Library now."""
+
+
+class Sealed(Exception):
+    """The record is sealed and the owner has not let its pages be kept on this disk: nothing is built."""
+
+
+SEALED = (
+    "a sealed record keeps no built page on this disk, so nothing is built and every page is rendered"
+    f' as it is asked for; "{kept.PLAIN}": true in logbook.json allows it (docs/sealing.md)'
+)
+
+
+def allowed(lb: Logbook) -> bool:
+    """Whether the Library's pages may be built on this disk: on a record that seals nothing, or that
+    the owner lets keep its readings there (`kept.on_disk`). Never on a sealed one otherwise, not even
+    pages of tier 1: they name who is who from the resolutions, which are tier 2."""
+    return kept.on_disk(lb)
+
+
+def clear(lb: Logbook) -> None:
+    """The built pages removed, folder and all: what a sealed record may not keep (`allowed`). Not
+    while another live process builds them: its own end, or the next build, removes them."""
+    folder = folder_of(lb)
+    try:
+        pid = int(json.loads((folder / LOCK).read_bytes()).get("pid", 0))
+    except (OSError, ValueError, AttributeError):
+        pid = 0
+    if pid and pid != os.getpid() and _alive(pid):
+        return
+    shutil.rmtree(folder, ignore_errors=True)
 
 
 def folder_of(lb: Logbook) -> Path:
@@ -553,8 +588,11 @@ def build(
     its own on the clock as the build began, and written here, the doors first."""
     from . import serve
 
-    library = library or Library(lb)
     site = site or serve.Site(lb)
+    if not allowed(lb):
+        clear(lb)
+        raise Sealed(SEALED)
+    library = library or Library(lb)
     started = time.monotonic()
     with library.building():
         with lb.index() as idx:
@@ -802,6 +840,10 @@ class Rebuilder:
                     self._wanted += [t for t in wanted if t not in self._wanted]
                 self._stop.wait(self.RETRY_S)
                 self._asked.set()
+                continue
+            except Sealed as e:  # the owner turned plaintext_cache off: every page is rendered live
+                if self.say is not None:
+                    self.say(f"library: {e}")
                 continue
             except Exception as e:  # the server goes on answering from the build it has
                 if self.say is not None:

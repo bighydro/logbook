@@ -113,9 +113,15 @@ def cmd_serve(a: argparse.Namespace) -> None:
     if a.build:
         _build(Logbook.find(), _airports(a.airports), a.full)
         return
+    from ..contrib import library_build
     from .day import voice  # whether a Day can hear a recording: asked once, now (labs, so here)
 
     lb = Logbook.find()
+    built = a.built
+    if built and not library_build.allowed(lb):  # a sealed record: live, and read to the end as live is
+        library_build.clear(lb)
+        print(f"serve: built pages are off; {library_build.SEALED}", file=sys.stderr)
+        built = False
     try:
         serve.serve(
             lb,
@@ -123,8 +129,8 @@ def cmd_serve(a: argparse.Namespace) -> None:
             port=a.port,
             airports=_airports(a.airports),
             voice=voice(),
-            built=a.built,
-            limit_s=_limit(a),
+            built=built,
+            limit_s=_limit(a, built),
         )
     except serve.HostError as e:
         print(f"serve: {e}", file=sys.stderr)
@@ -134,12 +140,12 @@ def cmd_serve(a: argparse.Namespace) -> None:
         sys.exit(2)
 
 
-def _limit(a: argparse.Namespace) -> float:
+def _limit(a: argparse.Namespace, built: bool) -> float:
     """How long a page is read before the server stops it and says so: `--limit` as given (0 none,
-    and never under a second); without it, `serve.LIMIT_S` from the pages built ahead and none live,
-    where a heavy page is worth its wait."""
+    and never under a second); without it, `serve.LIMIT_S` from the pages built ahead (`built`) and none
+    live, where a heavy page is worth its wait."""
     if a.limit is None:
-        return serve.LIMIT_S if a.built else math.inf
+        return serve.LIMIT_S if built else math.inf
     return math.inf if a.limit <= 0 else max(1.0, a.limit)
 
 
@@ -160,6 +166,9 @@ def _build(lb: Logbook, airports: Airports | None, full: bool = False) -> None:
     except library_build.Busy as e:
         print(f"serve: {e}; try again when it is done", file=sys.stderr)
         sys.exit(75)
+    except library_build.Sealed as e:
+        print(f"serve: {e}", file=sys.stderr)
+        sys.exit(2)
     which = "every page" if library_build.Library(lb).built().get("full") else "what changed since the last"
     print(
         f"library: {result.pages:,} pages, {result.written:,} written, {result.removed:,} removed,"

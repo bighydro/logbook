@@ -291,11 +291,16 @@ def observed(lb: Logbook, cluster_m: float = CLUSTER_M) -> list[Observed]:
     holds, built from the lines and stored otherwise. Writes nothing to the record. The stamp's head
     is the one the index holds when the reading starts (`Index.indexed`): a table built while a writer
     is between `logbook.json` and the index is stamped with no later head than it read."""
+    on_disk = kept.on_disk(lb)
     with lb.index() as idx:
         stamp = _stamp(lb, cluster_m, idx.indexed()[1])
-        if _table_current(idx, stamp):
+        if not on_disk:  # a sealed record: in memory, never in the index file (docs/sealing.md)
+            kept.off_disk(idx, OBSERVED_KIND)
+        elif _table_current(idx, stamp):
             rows = idx.db.execute(f"SELECT {', '.join(COLUMNS)} FROM {TABLE} ORDER BY rowid").fetchall()
             return [Observed._from_row(row) for row in rows]
+    if not on_disk:
+        return kept.observed(lb, OBSERVED_KIND, stamp, lambda: build(lb, cluster_m))
     found = build(lb, cluster_m)
     with lb.index() as idx:
         idx.store_observed(OBSERVED_KIND, [o._row() for o in found], stamp)
