@@ -20,6 +20,11 @@ pass  record  1,204 lines, head 4dc18fde900d…, verified; 3 attachments missing
 Their bytes are not hashed here, nor a sealed one opened: the doctor runs four times a day, and a store of
 photos is read by `logbook verify` by hand, or by `logbook backup --verify`.
 
+`logbook doctor --attachments` names them: per source, the most first, each standing line whose file the
+store lacks, with its kind, its time and the first twelve characters of the digest, then the count by
+source ([the attachment store](attachments.md#the-lines-whose-file-is-missing)). It exits 0 and changes
+nothing.
+
 ## Agents
 
 A record with a line marked machine text, or a `policy/agents.json` that names a sender, gets an `agents`

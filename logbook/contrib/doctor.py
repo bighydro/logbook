@@ -1656,6 +1656,81 @@ def report_implausible(lb: Logbook, out: TextIO = sys.stdout, now: datetime | No
     return 0
 
 
+@dataclass(frozen=True)
+class Missing:
+    """A standing line whose attachment the store lacks: the line, and the digest it names."""
+
+    id: str
+    source: str
+    kind: str
+    at: str
+    sha256: str
+
+
+def missing_attachments(lb: Logbook, state: str) -> list[Missing]:
+    """The standing lines whose attachment (`index.media_of`: the one `import attachments status`
+    counts) is not under `attachments/`, in chain order: from the index when it is `current`, opened
+    read-only, else from the month files; a sealed line this machine cannot open names no digest."""
+    folder = lb.root / attachments.DIR
+    found: list[Missing] = []
+    if state == "current":
+        db = sqlite3.connect(f"{lb.index_path.resolve().as_uri()}?mode=ro", uri=True)
+        try:
+            rows = db.execute(
+                "SELECT id, source, kind, at, media FROM lines WHERE media IS NOT NULL"
+                f" AND id NOT IN ({index.RETRACTED}) ORDER BY seq"
+            ).fetchall()
+        finally:
+            db.close()  # before anything could unlink it: Windows refuses to delete an open file
+        named = [
+            Missing(str(i), str(source), str(kind), str(at), str(media))
+            for i, source, kind, at, media in rows
+        ]
+    else:
+        retracted = retractions(line for line in lb.lines_unsorted() if line.get("kind") == RETRACTION)
+        named = []
+        for line in lb.lines_unsorted():
+            if str(line.get("id")) in retracted:
+                continue
+            payload = _opened(lb, line).get("payload")
+            media = index.media_of(payload) if isinstance(payload, dict) else None
+            if media is not None:
+                named.append(
+                    Missing(str(line["id"]), str(line["source"]), str(line["kind"]), str(line["at"]), media)
+                )
+    for m in named:
+        if attachments.is_digest(m.sha256) and not (folder / m.sha256).is_file():
+            found.append(m)
+    return found
+
+
+def report_attachments(lb: Logbook, out: TextIO = sys.stdout) -> int:
+    """`logbook doctor --attachments`: per source, the most first, the lines whose attachment the
+    store lacks (id, kind, time, the digest's first twelve characters), then the count by source.
+    Exit 0: a missing attachment is reported, never an error (SPEC §1.1)."""
+    found = missing_attachments(lb, index_state(lb)[0])
+    if not found:
+        out.write(f"every file the lines name is in the store ({attachments.DIR}/)\n")
+        return 0
+    by_source: dict[str, list[Missing]] = {}
+    for m in found:
+        by_source.setdefault(m.source, []).append(m)
+    ranked = sorted(by_source.items(), key=lambda kv: (-len(kv[1]), kv[0]))
+    for source, missing in ranked:
+        out.write(
+            f"{source}: {len(missing):,} line{'s' if len(missing) != 1 else ''} whose file the store lacks\n"
+        )
+        for m in missing:
+            out.write(f"  {m.id}  {m.kind}  {m.at}  {m.sha256[:12]}…\n")
+    listed = ", ".join(f"{source} {len(missing):,}" for source, missing in ranked)
+    out.write(
+        f"{len(found):,} line{'s' if len(found) != 1 else ''} name a file the store lacks: {listed}."
+        " Adding the export that holds them again stores them (`logbook add transcript FOLDER`;"
+        " `logbook import attachments import-backup` for a phone's); nothing was changed\n"
+    )
+    return 0
+
+
 def report(checks: list[Check], out: TextIO = sys.stdout) -> int:
     """One line per check, a summary, and the exit status: 1 when any check failed."""
     width = max(len(c.name) for c in checks)

@@ -326,7 +326,8 @@ def test_a_folder_yields_one_line_per_transcript_and_counts_the_rest(tmp_path):
     counts: dict[str, int] = {}
     lines = list(transcript.run(folder, source="manual", counts=counts))
     assert [line["source"] for line in lines] == ["manual", "manual"]  # an explicit source wins
-    assert counts == {"skipped_not_transcript": 1, "skipped_no_start": 1}  # png; txt has no start
+    # png; txt has no start; the export holds no file for exported.json's content reference
+    assert counts == {"skipped_not_transcript": 1, "skipped_no_start": 1, "attachments_missing": 1}
 
 
 def test_every_line_is_valid_against_the_schema_and_appends(tmp_path):

@@ -158,6 +158,8 @@ NOTE_PHRASES = {  # counts that are not skips: the line was written, with someth
     "attachments_referenced": "attachments referenced, not stored",
     "attachments_stored": "attachments stored",
     "attachments_missing": "attachments missing from the export",
+    "attachments_refused": "attachments whose bytes in the export do not hash to the line's reference,"
+    " not stored",
     "trashed": "marked trashed",
     "pending": "still pending",
     "from_last_message": "from a room's last-message row (not in the event cache)",

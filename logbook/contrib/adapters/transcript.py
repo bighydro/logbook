@@ -6,8 +6,15 @@ Reads, by content:
 - **JSON in transcript/v1 shape** — the interchange format for any tool: one object per file with the
   envelope fields `at`, `end`, `tz`, `source`, `tier` and a `payload` whose `schema` is
   `transcript/v1` (what `logbook export` writes for such a line, minus the chain fields). The payload
-  is kept as given; `content` may be a SPEC §1.1 reference (kept, nothing stored) or
-  `{"media_type", "text"}` with the text inline, which is stored and replaced by its reference.
+  is kept as given; `content` may be `{"media_type", "text"}` with the text inline, which is stored
+  and replaced by its reference, or a SPEC §1.1 reference, kept as it is. A reference's file (and a
+  spans file's, `diarization.spans`) is looked for in the export, as Granola's and Fireflies' write
+  it beside the JSON: at the reference's own `path`, by its parts, under the JSON's folder or the
+  folder `run` was given, then `attachments/<sha256>` in either, then `<sha256>` beside the JSON.
+  A file whose bytes hash to the reference is stored (`attachments_stored`); one that hashes to
+  something else is never stored (`attachments_refused`); none found is `attachments_missing`, and
+  the line is written all the same, its file a missing attachment (SPEC §1.1) until an export
+  that holds it is added again. Nothing outside the folder given is read, whatever the path says.
 - **WebVTT** and **SRT** — every cue is a turn; the speaker is the VTT voice tag (`<v Name>`) or a
   leading `Name:`, else unknown. The cues' offsets give the duration; the start comes from `--at`
   or from a date and time in the file name (`2026-03-01T13-00-00Z …`, Zoom's
@@ -30,15 +37,16 @@ exported by hand and the same one pulled by API are one line with one `raw_id`.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 from collections.abc import Callable, Iterator
 from datetime import UTC, datetime, timedelta
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from ...core.attachments import reference
+from ...core.attachments import is_digest, reference
 
 # The parser is core (`logbook.core.transcripts`): `search` and `promises` read it there. These
 # names stay reachable here too, for the code that learned them on this module.
@@ -118,15 +126,17 @@ def run(
         if path.is_file()
         else sorted(f for f in path.iterdir() if f.is_file() and not f.name.startswith("."))
     )
+    root = path if path.is_dir() else path.parent
     for file in files:
-        result = _file(file, counts, timezone, source, tier, at)
+        result = _file(file, counts, timezone, source, tier, at, root)
         if result is None:
             continue
-        line, data = result
+        line, held = result
         if since and line["at"] < since:
             continue
-        if store is not None and data is not None:
-            store(data)
+        if store is not None:
+            for data in held:
+                store(data)
         yield line
 
 
@@ -191,13 +201,15 @@ def _file(
     source: str | None,
     tier: int | None,
     at: str | None,
-) -> tuple[dict[str, Any], bytes | None] | None:
+    root: Path | None = None,
+) -> tuple[dict[str, Any], list[bytes]] | None:
     """The draft for one file and the bytes to store, or None (counted) when it is not a transcript
-    or has no start."""
+    or has no start. `root` is the folder the export is (the file's own when None): a reference's
+    file is looked for under it and nowhere else."""
     data = file.read_bytes()
     fmt = _format(file, data)
     if fmt == "json":
-        return _json(file, data, counts, timezone, source, tier)
+        return _json(file, data, counts, timezone, source, tier, root or file.parent)
     if fmt is None:
         _count(counts, NOT_TRANSCRIPT)
         return None
@@ -222,7 +234,7 @@ def _file(
         participants=parsed.participants,
         extra={"format": fmt, "file": file.name},
     )
-    return line, data
+    return line, [data]
 
 
 def _json(
@@ -232,7 +244,8 @@ def _json(
     timezone: str | None,
     source: str | None,
     tier: int | None,
-) -> tuple[dict[str, Any], bytes | None] | None:
+    root: Path,
+) -> tuple[dict[str, Any], list[bytes]] | None:
     try:
         obj = json.loads(data.decode("utf-8-sig"))
     except (UnicodeDecodeError, ValueError):
@@ -255,12 +268,13 @@ def _json(
     if at is None:
         _count(counts, NO_START)
         return None
-    to_store: bytes | None = None
+    to_store: list[bytes] = []
     content = payload.get("content")
     if isinstance(content, dict) and isinstance(content.get("text"), str):
         media_type = str(content.get("media_type") or MEDIA_TYPES["markdown"])
-        to_store = content["text"].encode("utf-8")
-        payload["content"] = reference(to_store, media_type)
+        text = content["text"].encode("utf-8")
+        to_store.append(text)
+        payload["content"] = reference(text, media_type)
         fmt = "markdown" if media_type == "text/markdown" else "text"
         parsed = parse_text(content["text"], fmt)
         payload.setdefault("participants", parsed.participants)
@@ -269,6 +283,11 @@ def _json(
             **(payload.get("extra") or {}),
             **counts_of(parsed.turns, at, end),
         }
+    elif isinstance(content, dict):
+        to_store.extend(_found(file, root, content, counts))
+    diarization = payload.get("diarization")
+    if isinstance(diarization, dict) and isinstance(diarization.get("spans"), dict):
+        to_store.extend(_found(file, root, diarization["spans"], counts))
     payload.setdefault("raw_id", f"{provider}:{reference(data, MEDIA_TYPES['json'])['sha256']}")
     line = {
         "at": at,
@@ -280,6 +299,51 @@ def _json(
         "payload": payload,
     }
     return line, to_store
+
+
+def _found(file: Path, root: Path, ref: dict[str, Any], counts: dict[str, int]) -> list[bytes]:
+    """The bytes a §1.1 reference names, from the export: `[bytes]` when a file there hashes to it,
+    else `[]`, counted as refused (a file under one of its names with other bytes) or missing."""
+    sha256 = ref.get("sha256")
+    if not isinstance(sha256, str) or not is_digest(sha256):
+        return []
+    refused = False
+    for place in _places(file, root, ref, sha256):
+        try:
+            data = place.read_bytes()
+        except OSError:
+            continue
+        if hashlib.sha256(data).hexdigest() == sha256:
+            _count(counts, "attachments_stored")
+            return [data]
+        refused = True
+    _count(counts, "attachments_refused" if refused else "attachments_missing")
+    return []
+
+
+def _places(file: Path, root: Path, ref: dict[str, Any], sha256: str) -> Iterator[Path]:
+    """Where an export keeps a reference's file, in order, each a file under `root`: its own `path`
+    (POSIX, relative, read by its parts) below the JSON's folder and below `root`, then
+    `attachments/<sha256>` below each, then `<sha256>` beside the JSON."""
+    below: list[tuple[str, ...]] = []
+    given = ref.get("path")
+    if isinstance(given, str) and given.strip():
+        parts = PurePosixPath(given.strip()).parts
+        if parts and not PurePosixPath(given.strip()).is_absolute() and ".." not in parts:
+            below.append(parts)
+    below.append(("attachments", sha256))
+    inside = root.resolve()
+    seen: set[Path] = set()
+    candidates = [base.joinpath(*parts) for parts in below for base in (file.parent, root)]
+    for place in [*candidates, file.parent / sha256]:
+        try:
+            resolved = place.resolve()
+        except OSError:
+            continue
+        if resolved in seen or not resolved.is_file() or not resolved.is_relative_to(inside):
+            continue
+        seen.add(resolved)
+        yield resolved
 
 
 def _json_kind(obj: object) -> str | None:

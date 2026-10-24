@@ -45,6 +45,45 @@ A synthetic line, the Oslo persona's:
   "sha256":"5f0c…a41e","bytes":21}}}}
 ```
 
+## Transcripts: what the export holds
+
+A transcript exported as transcript/v1 JSON (Granola's, Fireflies', or a crossing package's) names its text
+by a reference, `content: {sha256, path, bytes, media_type}`, and the bytes sit beside it in the export.
+`logbook add transcript <folder>` looks for them there, in this order, and nowhere else: the reference's
+own `path` (read by its parts, never one that leaves the folder) below the JSON's folder and below the
+folder you named, then `attachments/<sha256>` below each, then a file named `<sha256>` beside the JSON. A
+spans file (`diarization.spans`, RFC 0038) is looked for the same way.
+
+- A file whose bytes hash to the reference is **stored** under its digest, before the line is written.
+- A file there under one of those names whose bytes hash to something else is **refused**: never stored,
+  and counted.
+- None found is **missing**: the line is written all the same, and names a file the store does not hold
+  until an export that holds it is added.
+
+```
+added 0 lines from transcript
+  60 already in the record (same source and raw_id), nothing written twice
+  also 60 attachments stored
+```
+
+The same export added again finds its lines in the record (by `raw_id`) and writes none, but stores every
+file it holds that the store lacks: that is how a transcript imported before its file was there gets it.
+
+## The lines whose file is missing
+
+`logbook doctor --attachments` lists every standing line whose attachment (the one `import attachments
+status` counts) is not in the store, per source, the most first, then the count by source. Read from the index
+when it is current, else from the month files; nothing is changed, and it exits 0, since SPEC §1.1 allows a
+missing file.
+
+```
+granola: 41 lines whose file the store lacks
+  019a3c2e-…  transcript  2026-03-02T08:00:00Z  7ed527057371…
+fireflies: 30 lines whose file the store lacks
+  019a3c2f-…  transcript  2026-03-04T14:00:00Z  2b81fe0c4d19…
+71 lines name a file the store lacks: granola 41, fireflies 30. Adding the export that holds them again stores them (…); nothing was changed
+```
+
 ## `attach import-backup`
 
 `logbook attach import-backup <backup> --only <sources> [--since YYYY-MM-DD] [--dry-run]` reads, through
@@ -121,4 +160,5 @@ line names and nothing else). No line is appended, rewritten or removed: the pas
 lines already point at. Until it runs, and after a run that stopped, such a line names a file the
 store does not hold — a missing attachment, which SPEC §1.1 allows: the chain's `verify` reports it
 separately and exits 0, `status` counts it, and the next run fills it in. Nothing is fetched from
-anywhere but the backup folder on this machine.
+anywhere but the backup folder on this machine, and `add transcript` reads nothing but the export
+folder it is given.
