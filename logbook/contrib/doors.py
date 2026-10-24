@@ -162,13 +162,14 @@ footer.door code{{font-family:var(--mono);font-size:.95em}}
 .fact{{color:var(--pencil);font-size:.8rem;font-variant-numeric:tabular-nums}}
 @media (max-width:40rem){{
 header.doors{{flex-wrap:wrap;gap:.6rem;padding:.7rem 1rem}}
-header.doors a.wordmark{{font-size:1.4rem}}
+header.doors a.wordmark{{font-size:1.4rem;margin-right:auto}}
 form.ask{{order:3;flex:1 0 100%}}
 form.ask input{{max-width:none}}
 nav.doors{{position:fixed;left:0;right:0;bottom:0;z-index:10;justify-content:space-around;gap:0;
 padding:.25rem .5rem .5rem;background:var(--surface);
 border-top:1px solid var(--line)}}
 nav.doors a{{flex:1;justify-content:center;font-size:.85rem;padding:0 .3rem}}
+nav.doors a[aria-current=page]{{background:var(--ink);color:var(--paper);box-shadow:none}}
 body{{padding-bottom:4.5rem}}
 main.door,footer.door{{padding-left:1rem;padding-right:1rem}}
 }}
@@ -207,7 +208,8 @@ def header(site: Site, door: str) -> str:
         parts.append(
             f'<form class="ask" method="get" action="{ASK}" role="search">'
             '<label for="ask">Ask</label>'
-            '<input id="ask" type="search" name="q" placeholder="Ask the record" autocomplete="off">'
+            '<input id="ask" type="search" name="q" placeholder="Ask: a name, a place, a word"'
+            ' autocomplete="off">'
             "</form>"
         )
         title = escape(GEAR_TITLE)
@@ -228,7 +230,7 @@ def page(
     """One door's page: the head, the header (`header`), `body` in `<main class="door">`, then the
     footer the Library's every page carries (`footnote` under it). `style_` is the door's own rules,
     after the frame; `script` its one inline script, named by hash in its policy."""
-    footer = site.footer_text(footnote)
+    footer = site.footer_text(footnote, door=True)
     return (
         "<!doctype html>\n"
         '<html lang="en">\n<head>\n<meta charset="utf-8">\n'

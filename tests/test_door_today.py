@@ -243,7 +243,7 @@ def test_the_date_and_where_the_night_was(lb: Logbook) -> None:
     page = _today(_site(lb))
     date_ = _section(page, "date")
     assert '<a href="/day/2026-06-19">' in date_ and "Friday 19 June" in _text(date_)
-    assert "Home" in _text(date_), "the night after Thursday, at home after Zürich"
+    assert "Last night at Home" in _text(date_), "the night after Thursday, at home after Zürich"
     assert page.index('<section class="date"') < page.index('<section class="open"')
 
 
@@ -264,6 +264,21 @@ def test_what_is_open_both_ways_the_plan_and_the_replies_owed_oldest_first(lb: L
     assert 'class="what pencil"' in open_, "a promise the rules read is pencil until the owner says"
     names = sorted({p.name for p in people.directory(lb).known.values()})
     assert beside(_seen(page), names) == [], "no number beside a name"
+
+
+def test_since_is_a_weekday_within_the_week_and_a_date_before_it() -> None:
+    assert door_today.since(TODAY, TODAY) == "today"
+    assert door_today.since("2026-06-18", TODAY) == "since yesterday"
+    assert door_today.since("2026-06-15", TODAY) == "since Monday"
+    assert door_today.since("2026-06-08", TODAY) == "since Mon 8 June"
+    assert door_today.since("2025-06-08", TODAY) == "since Sun 8 June 2025"
+
+
+def test_a_door_s_footer_is_not_read_only_beside_its_forms(lb: Logbook) -> None:
+    footer = re.search(r'<footer class="door">(.*?)</footer>', _today(_site(lb)), re.S)
+    assert footer is not None and "read-only" not in footer.group(1)
+    assert footer.group(1).startswith("Nothing here leaves this machine")
+    assert "read-only" in _site(lb).respond("/days").body.decode("utf-8"), "the old pages as they were"
 
 
 def test_what_is_open_is_seven_at_most_and_the_rest_one_link(lb: Logbook) -> None:

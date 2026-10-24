@@ -86,7 +86,6 @@ ul.open{list-style:none;margin:0;padding:0;border-top:1px solid var(--line)}
 ul.open li{display:flex;gap:.9rem;padding:.75rem 0;border-bottom:1px solid var(--line-soft)}
 ul.open span.mark{flex:0 0 .45rem;height:.45rem;margin-top:.55rem;border-radius:50%;
 background:var(--pencil-rule)}
-ul.open li.owed span.mark{background:var(--signal)}
 ul.open li.task span.mark{background:var(--ink)}
 ul.open div{min-width:0;overflow-wrap:anywhere}
 ul.open a.what{display:block;font-weight:400;font-size:1.2rem;line-height:1.3;font-family:var(--serif);
@@ -96,6 +95,7 @@ text-underline-offset:.22em}
 ul.open span.sub{display:block;margin-top:.15rem;color:var(--pencil);font-size:.85rem}
 ul.open li.more{display:block;color:var(--pencil);font-size:.85rem}
 p.said{margin:0;color:var(--pencil)}
+span.person{white-space:nowrap}
 a.memory{display:block;padding:1.1rem 1.2rem;border-radius:14px;background:var(--card-dark);
 color:var(--card-dark-text);text-decoration:none;overflow-wrap:anywhere}
 a.memory img{display:block;width:100%;max-width:100%;height:auto;max-height:16rem;object-fit:cover;
@@ -105,6 +105,7 @@ a.memory span.when{font-weight:400;font-size:1.5rem;line-height:1.2;font-family:
 a.memory span.where{margin-top:.2rem;color:var(--card-dark-muted);font-size:.9rem}
 a.memory span.words{margin-top:.7rem;font-style:italic;font-weight:400;font-size:1.15rem;line-height:1.4;
 font-family:var(--serif)}
+a.memory span.open{margin-top:.8rem;font-size:.85rem;color:var(--card-dark-muted)}
 a.memory:hover span.when{text-decoration:underline;text-decoration-color:var(--signal)}
 section.close{margin:2.5rem 0 0;padding:1.5rem 0 0;border-top:1px solid var(--line)}
 section.close h2{margin:0 0 .6rem}
@@ -195,17 +196,18 @@ def date_html(site: Site, today: str) -> str:
     )
     said = site._day_reading(("today-weather", today), lambda: weather_of(site.lb, today, night, site.tiers))
     if night["in_transit"]:
-        where = "in transit"
+        where = "Last night in transit"
     elif night["where"] is None:
-        where = "nowhere the record places you last night"
+        where = "No place the record knows for last night"
     else:
-        where = str(night["where"]) + ("" if night["home"] else f"{DOT}away")
+        where = f"Last night at {night['where']}" + ("" if night["home"] else ", away from home")
     line = DOT.join(x for x in (where, said) if x)
-    d = date.fromisoformat(today)
+    # an exported site's Today is its last day, which may be any year: the year is said there
+    words = day_words(today, year=site.static)
+    eyebrow = '<p class="eyebrow">The last day in the record</p>\n' if site.static else ""
     return (
         '<section class="date">\n'
-        f'<p class="eyebrow">{"Today" if not site.static else "The last day"}{DOT}{d.year}</p>\n'
-        f"<h1>{site.link(escape(day_words(today)), f'/day/{today}')}</h1>\n"
+        f"{eyebrow}<h1>{site.link(escape(words), f'/day/{today}')}</h1>\n"
         f'<p class="where">{escape(line)}</p>\n'
         "</section>\n"
     )
@@ -215,9 +217,9 @@ def date_html(site: Site, today: str) -> str:
 
 
 def since(then: str, today: str) -> str:
-    """When something began, in words and never a date beside a name: `today`, `since yesterday`,
-    `since Tuesday`, `since Tuesday last week`, `since a Tuesday in May`, `since May last year`,
-    `since 2024`."""
+    """When something began: `today`, `since yesterday`, `since Tuesday` within the week, else the date,
+    `since Mon 8 June`, with its year when it is not this one, `since Wed 3 June 2026`. A row says it
+    first, so a date never stands beside a name."""
     a, b = date.fromisoformat(then), date.fromisoformat(today)
     gap = (b - a).days
     weekday = day_reader.WEEKDAYS[a.weekday()]
@@ -227,15 +229,8 @@ def since(then: str, today: str) -> str:
         return "since yesterday"
     if gap < WEEK:
         return f"since {weekday}"
-    if a.isocalendar()[:2] == (b - timedelta(days=WEEK)).isocalendar()[:2]:
-        return f"since {weekday} last week"
-    if a.year == b.year:
-        return (
-            f"since a {weekday} {'earlier this month' if a.month == b.month else 'in ' + MONTHS[a.month - 1]}"
-        )
-    if a.year == b.year - 1:
-        return f"since {MONTHS[a.month - 1]} last year"
-    return f"since {a.year}"
+    said = f"since {weekday[:3]} {a.day} {MONTHS[a.month - 1]}"
+    return said if a.year == b.year else f"{said} {a.year}"
 
 
 def _person(name: str) -> str:
@@ -291,7 +286,8 @@ def _promise_row(site: Site, p: promises.Proposal, today: str) -> Row:
 def _owed_row(site: Site, owed: Mapping[str, Any], today: str) -> Row:
     day = str(owed["day"])
     what = site.link("A reply owed", f"/day/{day}", "what")
-    sub = day_rhythm.wrote_said(owed, today, lambda o: _person(str(o.get("name") or "")))
+    when = since(day, today)
+    sub = f"{escape(when[:1].upper() + when[1:])}{DOT}{_person(str(owed.get('name') or ''))} wrote"
     return Row(day, 1, "owed", _li("owed", what, sub))
 
 
@@ -355,7 +351,8 @@ def open_html(site: Site, today: str) -> str:
             shelf_link = site.link("the Promises shelf", "/promises")
             more = WORDS[rest] if rest < len(WORDS) else "many"
             out.append(
-                f'<li class="more">And {more} more, the newest: every promise is on {shelf_link}.</li>\n'
+                f'<li class="more">{more.capitalize()} more, newer than these: every promise is on'
+                f" {shelf_link}.</li>\n"
             )
         out.append("</ul>\n")
     elif not waiting:
@@ -469,7 +466,7 @@ def memory_html(site: Site, today: str) -> str:
         return f'<section class="memory">\n<h2>A year ago today</h2>\n{said}</section>\n'
     bits = []
     if found.where:
-        bits.append(f"night {'away, ' if found.away else ''}at {found.where}")
+        bits.append(f"the night at {found.where}" + (", away from home" if found.away else ""))
     if found.starred:
         bits.append("a starred photo" if len(found.starred) == 1 else "starred photos")
     if found.flight:
@@ -483,7 +480,9 @@ def memory_html(site: Site, today: str) -> str:
     words = f'<span class="words ink">“{escape(found.said)}”</span>' if found.said else ""
     line = DOT.join(bits)
     where = f'<span class="where">{escape(line[:1].upper() + line[1:])}</span>' if bits else ""
-    inner = f'{thumbnail}<span class="when">{escape(day_words(found.day, year=True))}</span>{where}{words}'
+    cue = '<span class="open">Open the day</span>' if site.href(f"/day/{found.day}") is not None else ""
+    when = escape(day_words(found.day, year=True))
+    inner = f'{thumbnail}<span class="when">{when}</span>{where}{words}{cue}'
     href = site.href(f"/day/{found.day}")
     card = (
         f'<a class="memory" href="{escape(href)}">{inner}</a>'

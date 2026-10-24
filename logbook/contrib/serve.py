@@ -1779,16 +1779,19 @@ class Site:
             "</body>\n</html>\n"
         )
 
-    def footer_text(self, footnote: str | None = None) -> str:
+    def footer_text(self, footnote: str | None = None, door: bool = False) -> str:
         """What every page's footer says: read-only, the head, the timezone, and that nothing leaves this
-        machine (or the site's own footer), then `footnote` under it."""
+        machine (or the site's own footer), then `footnote` under it. A door (`doors.page`) carries forms,
+        so it says nothing leaves this machine first and is not read-only."""
         meta = self.lb.meta
-        head = str(meta.get("head") or "")[:HEAD_CHARS]
+        head = f"head <code>{escape(str(meta.get('head') or '')[:HEAD_CHARS])}…</code>"
+        zone = escape(str(meta.get("timezone")))
         footer = (
-            f"read-only{DOT}head <code>{escape(head)}…</code>{DOT}{escape(str(meta.get('timezone')))}"
-            f"{DOT}nothing here leaves this machine"
-            if self.footer is None
-            else self.footer
+            self.footer
+            if self.footer is not None
+            else f"Nothing here leaves this machine{DOT}{zone}{DOT}{head}"
+            if door
+            else f"read-only{DOT}{head}{DOT}{zone}{DOT}nothing here leaves this machine"
         )
         if footnote is not None:
             footer += f'<br><span class="footnote">{escape(footnote)}</span>'
