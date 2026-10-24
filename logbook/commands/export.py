@@ -734,16 +734,17 @@ def _trip_bundle_rows(prepared: trip_bundle.Prepared) -> Iterator[str]:
 
 
 def import_arguments(sub: Subparsers) -> None:
-    """`logbook import backup|trip-bundle|page|inbox|attachments`: what a phone backup, another record
-    or a friend hands over. `backup`, `inbox` and `attachments` are declared beside `add`, the
-    family that reads the files; `page` beside `share`, its other side."""
-    from .add import attach_arguments, import_backup_arguments, inbox_arguments
+    """`logbook import backup|trip-bundle|page|inbox|attachments|pickup`: what a phone backup, another
+    record, a friend or the receiving side hands over. `backup`, `inbox`, `attachments` and `pickup`
+    are declared beside `add`, the family that reads the files; `page` beside `share`, its other side."""
+    from .add import attach_arguments, import_backup_arguments, inbox_arguments, pickup_arguments
 
     s = sub.add_parser(
         "import",
-        help="an iOS backup, a trip bundle, a shared page; inbox; attachments",
-        description="an iOS backup (`backup DIR`), a trip bundle (`trip-bundle FOLDER`) or a shared page"
-        " (`page FILE`) brought in; `inbox`: what was imported; `attachments`: the store",
+        help="an iOS backup, a trip bundle, a page, a pickup; inbox; attachments",
+        description="an iOS backup (`backup DIR`), a trip bundle (`trip-bundle FOLDER`), a shared page"
+        " (`page FILE`) or a folder of transcripts collected from the receiving side (`pickup FOLDER`)"
+        " brought in; `inbox`: what was imported; `attachments`: the store",
     )
     verbs = s.add_subparsers(dest="what", required=True, metavar="<what>")
     import_backup_arguments(verbs)
@@ -757,6 +758,7 @@ def import_arguments(sub: Subparsers) -> None:
     receive_arguments(verbs)
     inbox_arguments(verbs)
     attach_arguments(verbs)
+    pickup_arguments(verbs)
 
 
 def cmd_import(a: argparse.Namespace) -> None:
