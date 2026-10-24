@@ -94,6 +94,9 @@ def test_the_site_is_a_year_page_a_days_index_every_trip_the_places_and_the_peop
         f"trips/{SATURDAY_TRIP}.html",
         f"trips/{ZURICH_TRIP}.html",
         "places.html",
+        "places/home.html",
+        "places/marina.html",
+        "places/office.html",
         "people.html",
         "people/kari-nordmann.html",
         "people/ola-nordmann.html",
@@ -128,6 +131,9 @@ def test_the_site_is_a_year_page_a_days_index_every_trip_the_places_and_the_peop
     assert f'href="trips/{SATURDAY_TRIP}.html"' in trips and f'href="trips/{ZURICH_TRIP}.html"' in trips
     places = _read(folder, "places.html")
     assert "<h1>Places</h1>" in places and "Marina" in places and "59.9050,10.7350" in places
+    assert 'href="places/home.html"' in places and "<form" not in places, "the door, a page per place"
+    office = _read(folder, "places", "office.html")
+    assert "<h1>Office</h1>" in office and 'href="../places.html"' in office
     people = _read(folder, "people.html")
     assert 'href="people/kari-nordmann.html"' in people and 'href="people/ola-nordmann.html"' in people
     ola = _read(folder, "people", "ola-nordmann.html")
@@ -208,6 +214,7 @@ def test_a_day_page_the_root_and_the_tables_hold_a_phone_s_column(lb: Logbook, t
         ("days", "2026.html"),
         ("trips.html",),
         ("places.html",),
+        ("places", "office.html"),
         ("people.html",),
         ("people", "ola-nordmann.html"),
     ):
@@ -304,7 +311,9 @@ def test_every_run_appends_one_crossing_line_naming_the_site_and_the_folder_dige
         whole.update(f"{hashlib.sha256(files[rel]).hexdigest()}  {rel}\n".encode())
     assert p["package_sha256"] == whole.hexdigest()
     pages = p["extra"]["site"]["pages"]
-    assert pages == {"years": 1, "days": 1, "day_pages": 1, "trips": 2, "places": 1, "people": 2}
+    assert pages == {
+        "years": 1, "days": 1, "day_pages": 1, "trips": 2, "places": 1, "place_pages": 3, "people": 2,
+    }  # fmt: skip
     assert p["extra"]["site"]["files"] == {"written": len(files), "unchanged": 0, "total": len(files)}
     assert lb.meta["seq"] == before + 1, "one line, nothing else"
 

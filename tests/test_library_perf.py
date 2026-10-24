@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import contextlib
 import importlib.util
+import re
 import sqlite3
 from collections import Counter
 from collections.abc import Iterator
@@ -170,3 +171,36 @@ def test_an_index_built_before_its_new_indexes_is_given_them_by_the_library(
             for row in idx.db.execute("EXPLAIN QUERY PLAN SELECT file FROM lines WHERE id = ?", ("x",))
         )
         assert "lines_id" in plan
+
+
+@pytest.mark.parametrize("lines", SIZES)
+def test_the_places_door_reads_what_the_library_keeps_once_per_head(
+    lines: int, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The Places door (RFC 0047 §4.4) within the budget the other doors meet: the owner's stays folded
+    at most as often as a page may (the World's bundle, a year at a time, the closed years kept), no
+    message read whole, and asked again at the same head, nothing read at all. The first place's page
+    reads the people of the record once (as a person's page does); every other place's reads nothing."""
+    lb, _built = _record(tmp_path, monkeypatch, lines)
+    site = serve.Site(lb, now=lambda: bench.NOW)
+    reads = Reads(monkeypatch)
+    door = site.respond("/places")
+    assert door.status == 200
+    assert reads.folds <= 24, reads.folds
+    assert "message" not in reads.whole, dict(reads.whole)
+    text = door.body.decode("utf-8")
+    ids = re.findall(r'<a class="place-name" href="/places/([a-z0-9-]+)">', text)
+    assert ids, "the bench's places, listed"
+    year = str(bench.NOW.year - 3)
+    for target in ("/places", f"/places?at={year}", *(f"/places/{i}" for i in ids[:3])):
+        path, _, query = target.partition("?")
+        reads.clear()
+        first = site.respond(path, query)
+        assert first.status == 200, target
+        assert reads.folds <= 24, (target, reads.folds)
+        assert "message" not in reads.whole, (target, dict(reads.whole))
+        if target.startswith("/places/") and target != f"/places/{ids[0]}":
+            assert reads.read == 0, (target, dict(reads.lines))
+        reads.clear()
+        again = site.respond(path, query)
+        assert again.body == first.body and reads.read == 0, (target, dict(reads.lines))
