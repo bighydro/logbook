@@ -481,6 +481,10 @@ def _build_library(lb: Logbook) -> str:
     line, and the server answers from the last build. What it did, in a few words, for the summary line."""
     from ..contrib import library_build
 
+    if not library_build.allowed(lb):  # a sealed record (docs/sealing.md): nothing built, nothing kept
+        library_build.clear(lb)
+        print(f"library: {library_build.SEALED}")
+        return "library off"
     if not (library_build.folder_of(lb) / library_build.MANIFEST).exists():
         print("library: not built (built pages are off; `logbook serve --built` turns them on)")
         return "library off"
@@ -489,6 +493,9 @@ def _build_library(lb: Logbook) -> str:
     except library_build.Busy as e:
         print(f"library: {e}; not built now")
         return "library busy"
+    except library_build.Sealed as e:
+        print(f"library: {e}")
+        return "library off"
     except Exception as e:  # the record is closed and synced; the pages are the next build's
         print(f"library: the build failed: {type(e).__name__}: {e}")
         return "library failed"

@@ -163,29 +163,41 @@ is more than lines of later days: a resolution or a retraction, a line that corr
 backfill into a month already read, a changed setting, or a new version of the code. A resolution,
 retraction or review line, or a changed setting, also makes the next build a full one. `logbook serve
 --build --full` renders every page whatever the last build left, and is never needed in normal use.
+On a sealed record these readings, and the review pages' tables of observed people, orgs, ideas, assets
+and places, are kept in the process's memory for its life instead, never on this disk, unless
+`plaintext_cache` is on ([sealing](sealing.md)): a server reads the whole record once after it starts.
 
 Where: `library/` beside the index, in the cache folder (`~/Library/Caches/logbook/<owner_id>/` on
 macOS, `~/.cache/logbook/<owner_id>/` on Linux, `%LOCALAPPDATA%\logbook\cache\<owner_id>\` on
 Windows), never in the record's folder. No export, vault, crossing or copy of the record carries it,
 and nothing in it is a line. The folder is `0700` and every file `0600`: the pages hold what the
-Library shows, every tier of it, so only the record's user reads them. On a sealed record that means
-the built pages hold, in plain text on this disk, what the Library shows of the sealed lines, as the
-browser's own cache of those pages always has; `logbook serve`, live, builds nothing and renders every
-page as it is asked for. A file is named by the SHA-256 of its address, so no address becomes a path
+Library shows, every tier of it, so only the record's user reads them. A file is named by the SHA-256
+of its address, so no address becomes a path
 and two addresses that differ only in case are never one file. Deleting the folder loses nothing: the
 next build writes it again, and with no `pages.json` the close builds nothing.
 
-Not yet, and why it is a lab:
+**A sealed record builds nothing.** On a sealed record (recipients in `logbook.json`), no built page
+is kept on this disk in plain text, not even one of tier 1, which still names who is who from the
+resolutions (tier 2): `logbook serve --built` renders every page as it is asked for, reads each to its
+end as live does, and says so when it starts; `logbook serve --build` refuses in one sentence (exit
+2); the close says `library: a sealed record keeps no built page on this disk, …`; and a build left
+from before is removed, unless another process is building it then (the next build removes it). The
+pages a running server keeps are in its memory and go when it stops. To build
+anyway, set `"plaintext_cache": true` in `logbook.json` (off by default): the built pages, and the
+readings kept beside the index (above), are then on this disk in plain text, `0600`, as on a record
+that seals nothing ([sealing](sealing.md); RFC 0047 §15, question 11).
 
-- **A rebuild through its own Site.** The rebuild after an act renders through the server's own
+Not yet, and why it is a lab (after v1; nothing here is built now):
+
+- [ ] **A rebuild through its own Site.** The rebuild after an act renders through the server's own
   `Site`, and can save a page's stale bytes again; each such save adds another `built hh:mm` to its
-  footer.
-- **A page older than the record's head.** A built page is never checked against the record's head.
-  After `day sign` on the command line, the built Day says *unsigned* until the next 06:00 close.
-- **A sealed record.** On a sealed record the built pages hold tier 2–3 in plain text on this disk, by
-  default (above).
-- **Two writers of `pages.json`.** The server's rebuild and the close's build can each lose the
-  other's writes to the manifest.
+  footer, and marks the page `asked`. It should render through a `Site` with no library.
+- [ ] **A page older than the record's head.** A built page is never checked against the record's
+  head. After `day sign` on the command line, the built Day says *unsigned* until the next 06:00 close.
+  A built page whose head is not the record's should still be served, and start one rebuild per head,
+  so acts and syncs from the command line are on the pages within one build.
+- [ ] **Two writers of `pages.json`.** The server's rebuild and the close's build can each lose the
+  other's writes to the manifest. The server should write it only under the build lock.
 
 ## Never hangs
 
@@ -361,7 +373,8 @@ million lines for the Day, `/days`, a journey's page, `/`, `/assets` and `/goals
 year (`/trips`, `/journeys`) take tens of seconds, and those that read the whole record minutes, once
 for each head. Keeping their readings across a restart, and growing them with each sync instead of
 reading again, would bring those under a second too; it would put what they read of the sealed lines
-in a file beside the index, which is a decision for the record's owner, not for a reader.
+in a file beside the index, which is the record's owner's to decide: on a sealed record they stay in
+memory unless the owner sets `plaintext_cache` ([sealing](sealing.md)).
 
 
 The server is the standard library's (`http.server`, one thread per request); it is meant for one

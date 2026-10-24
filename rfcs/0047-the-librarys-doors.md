@@ -339,6 +339,19 @@ follows here.
    later; the setting ships first. The World's slider and Life's timeline both read it, and nothing
    is drawn past `to`.
 
+11. **Built pages on a sealed record.** (Answered 24 October 2026.)
+
+    **Decided for v1, the owner may revisit:** a sealed record keeps no reading of its tier 2–3
+    lines in plain text on this disk. On a sealed record, the built pages (§8) and the readings kept
+    beside the index (phase 5's kept readings and the review pages' observed tables, all in the cache
+    folder) hold no tier 2–3 material; anything derived from tier 2–3 lines stays in memory for the
+    life of the process. A page of tier 1 still names who is who from the resolutions, which are
+    tier 2, so a sealed record builds no page at all: `serve --built` renders every page live, and a
+    build left from before is removed. The owner may turn this off with one setting,
+    `"plaintext_cache": true` in `logbook.json`, off by default ([sealing](../docs/sealing.md),
+    [serve](../docs/serve.md#built-ahead)). This keeps RFC 0029 §8's line: no plaintext copy of the
+    sealed lines on disk unless the owner asks for one.
+
 **Volumes (§10).** Is Volumes the name of the printed edition?
 
 **Decided:** Volumes is the name. "The paper edition" and "the press" are renamed to Volumes wherever
@@ -347,4 +360,4 @@ the captain). It renames words only: the commands, `docs/print.md` and the modul
 are until the captain takes up the rest of §10. Question 9, one volume per calendar year or one per
 chapter, is not answered by the name.
 
-Every other question in §14 (1, 2 and 4 to 11) stays open for the captain.
+Every other question in §14 (1, 2 and 4 to 10) stays open for the captain.

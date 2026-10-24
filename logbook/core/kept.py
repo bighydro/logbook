@@ -11,24 +11,43 @@ without its head and seq, whether the sealed lines open, and every settings file
 (`places.json`, `assets.json`, `policy/`). A stamp that differs, and a file that does not read, is a
 reading made again from the lines.
 
-What it holds names the record's people and counts their lines: on a sealed record that is plain
-text on this disk, as the Library's built pages are (docs/serve.md, *Built ahead*), readable by the
-record's user alone."""
+What it holds names the record's people and counts their lines. On a sealed record (recipients in
+`logbook.json`, RFC 0029) that is never written to this disk in plain text: the reading is kept in this
+process's memory instead, for its life, and a file left from before is removed (`on_disk`; RFC 0047
+§15). The owner may allow the files with `"plaintext_cache": true` in `logbook.json` (docs/sealing.md);
+they are then 0600, readable by the record's user alone, as on a record that seals nothing."""
 
 from __future__ import annotations
 
+import copy
 import functools
 import hashlib
 import json
 import os
-from collections.abc import Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from pathlib import Path
 from typing import Any
 
+from . import sealing
 from .index import Index
 from .store import Logbook
 
 CORE = Path(__file__).resolve().parent
+PLAIN = "plaintext_cache"  # the key of logbook.json: true lets a sealed record keep readings on this disk
+_MEMORY: dict[Path, bytes] = {}  # the readings a sealed record keeps, by where the file would be
+_IN_MEMORY: set[Path] = set()  # where a reading is kept in memory, not on the disk (`path`)
+_SWEPT: set[Path] = set()  # the folders cleared of kept files in this process, while that holds
+_TABLES: dict[tuple[Path, str], tuple[str, Any]] = {}  # an observed table in memory: its stamp, its rows
+
+
+def on_disk(lb: Logbook) -> bool:
+    """Whether readings of the record's lines may be kept on this disk in plain text: always for a
+    record that seals nothing; for a sealed one (recipients in `logbook.json`, RFC 0029) only when the
+    owner says so, `"plaintext_cache": true` in `logbook.json` (off by default; docs/sealing.md). What
+    is read of a sealed record's tier 2 and 3 lines otherwise stays in memory for the life of the
+    process: the kept readings here, the review pages' observed tables and the Library's built pages."""
+    meta = lb.meta
+    return not sealing.recipients_of(meta) or meta.get(PLAIN) is True
 
 
 @functools.cache
@@ -64,10 +83,61 @@ def stamp(lb: Logbook, *extra: str) -> str:
 def path(lb: Logbook, name: str) -> Path | None:
     """Where the kept reading `name` lives: beside the index; None for a record whose index is not the
     plain one (the MCP server's `GatedLogbook`, which serves only what its gate lets through): it keeps
-    nothing and reads every line each time, so a reading never crosses from one to the other."""
+    nothing and reads every line each time, so a reading never crosses from one to the other. On a
+    sealed record that may not keep readings on this disk (`on_disk`), the reading is kept in this
+    process's memory under that path (`load`, `save`), and every kept file there from before is removed
+    (`_sweep`), whatever reading it was."""
     if type(lb).index is not Logbook.index:
         return None
-    return lb.index_path.parent / name
+    folder = lb.index_path.parent
+    at = folder / name
+    if on_disk(lb):
+        _IN_MEMORY.discard(at)
+        _MEMORY.pop(at, None)
+        _SWEPT.discard(folder)
+    else:
+        _IN_MEMORY.add(at)
+        if folder not in _SWEPT:
+            _sweep(folder)
+            _SWEPT.add(folder)
+        at.unlink(missing_ok=True)
+    return at
+
+
+def _sweep(folder: Path) -> None:
+    """Every kept reading in `folder` removed (the JSON files beside the index, and the half-written ones
+    a crash left, `.<name>.<pid>.tmp`), whichever reading kept it: a gate's, a window's, one no reader
+    asks for again. Never the index, nor the Library's folder."""
+    try:
+        found = list(folder.iterdir())
+    except OSError:
+        return
+    for f in found:
+        if (f.suffix == ".json" or (f.name.startswith(".") and f.name.endswith(".tmp"))) and f.is_file():
+            f.unlink(missing_ok=True)
+
+
+def off_disk(idx: Index, kind: str) -> None:
+    """The rows of `kind` an observed table of the review pages (`Index.store_observed`, RFC 0037) held
+    in the index file from before, removed: for a record that may not keep them there (`on_disk`)."""
+    if idx.observed_stamp(kind):
+        idx.store_observed(kind, [], {})
+
+
+def observed[T](lb: Logbook, kind: str, stamp: Mapping[str, str], build: Callable[[], T]) -> T:
+    """An observed table of the review pages for a record that may not keep it on this disk
+    (`on_disk`, `off_disk`): built by `build` and kept in this process's memory while `stamp` holds,
+    handed out as a copy each time, so a reader that changes what it was given never changes what is
+    kept. A record whose index is not the plain one (`path`) keeps nothing: it builds each time."""
+    if type(lb).index is not Logbook.index:
+        return build()
+    key, mark = (lb.index_path, kind), json.dumps(dict(stamp), sort_keys=True)
+    found = _TABLES.get(key)
+    if found is None or found[0] != mark:
+        found = (mark, build())
+        _TABLES[key] = found
+    held: T = copy.deepcopy(found[1])
+    return held
 
 
 def load(at: Path | None) -> dict[str, Any] | None:
@@ -75,16 +145,21 @@ def load(at: Path | None) -> dict[str, Any] | None:
     if at is None:
         return None
     try:
-        data = json.loads(at.read_bytes())
-    except (OSError, ValueError):
+        data = json.loads(_MEMORY[at] if at in _IN_MEMORY else at.read_bytes())
+    except (OSError, ValueError, KeyError):
         return None
     return data if isinstance(data, dict) else None
 
 
 def save(at: Path | None, data: Mapping[str, Any]) -> None:
     """`data` at `at`, 0600 from its first byte, moved into place whole; nothing when the cache folder
-    cannot be written (the next reading reads the whole record), or for no path (`path`)."""
+    cannot be written (the next reading reads the whole record), or for no path (`path`). In memory,
+    never on the disk, where `path` said so: the same bytes a file would hold, so a reader that changes
+    what it loaded never changes what is kept."""
     if at is None:
+        return
+    if at in _IN_MEMORY:
+        _MEMORY[at] = json.dumps(data, separators=(",", ":")).encode("utf-8")
         return
     tmp = at.with_name(f".{at.name}.{os.getpid()}.tmp")
     try:

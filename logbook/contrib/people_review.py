@@ -442,6 +442,9 @@ def observed(lb: Logbook) -> list[Observed]:
 
 def observed_in(lb: Logbook, idx: Index) -> list[Observed]:
     stamp = {"head": idx.indexed()[1], "timezone": str(lb.meta["timezone"]), "version": TABLE_VERSION}
+    if not kept.on_disk(lb):  # a sealed record: in memory, never in the index file (docs/sealing.md)
+        kept.off_disk(idx, OBSERVED_KIND)
+        return kept.observed(lb, OBSERVED_KIND, stamp, lambda: build(lb, idx))
     if _table_current(idx, stamp):
         rows = idx.db.execute(
             f"SELECT {', '.join(COLUMNS)} FROM {TABLE} ORDER BY key_kind, key_value"
