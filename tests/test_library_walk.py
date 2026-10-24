@@ -79,6 +79,7 @@ ROUTES = frozenset(
         "/promises/ID",
         "/goals",
         "/goals/ID",
+        "/search",
         "/agents",
         "/line/ID",
         "/week/W",
@@ -556,7 +557,15 @@ def walked(
         sites = (
             (
                 site,
-                ["/", f"/day/{WEDNESDAY}", f"/day/{WEDNESDAY}?open=1", "/nowhere", "/days?from=2026-13-01"],
+                [
+                    "/",
+                    f"/day/{WEDNESDAY}",
+                    f"/day/{WEDNESDAY}?open=1",
+                    "/nowhere",
+                    "/days?from=2026-13-01",
+                    "/search?q=ola",  # a search with hits
+                    "/search?q=ola&page=0",  # and one refused
+                ],
             ),
             (_manifest_site(_copy(manifest, folder / "orgs", mp)), ["/", "/manifest/people?money=1"]),
             (_ideas_site(_copy(shelf_of_ideas, folder / "ideas", mp)), ["/", "/ideas"]),
