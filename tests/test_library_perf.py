@@ -170,3 +170,32 @@ def test_an_index_built_before_its_new_indexes_is_given_them_by_the_library(
             for row in idx.db.execute("EXPLAIN QUERY PLAN SELECT file FROM lines WHERE id = ?", ("x",))
         )
         assert "lines_id" in plan
+
+
+@pytest.mark.parametrize("lines", SIZES)
+def test_life_reads_what_its_zoom_needs_once_per_head(
+    lines: int, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The Life door (`door_life`) within the budget every door meets: the owner's stays folded once a
+    reading, never the messages whole, nothing read again at the same head. The Life zoom reads no track
+    at all: the marks the index hands out by kind and the days kept beside it, a tenth of the record at
+    most; the Year reads its year as the Journeys door does, and shares that reading with it."""
+    lb, _built = _record(tmp_path, monkeypatch, lines)
+    site = serve.Site(lb, now=lambda: bench.NOW)
+    reads = Reads(monkeypatch)
+    for query in ("", "zoom=life", "zoom=month", "zoom=week", "zoom=day"):
+        reads.clear()
+        response = site.respond("/life", query)
+        assert response.status == 200, query
+        assert reads.folds <= 24, (query, reads.folds)
+        assert "message" not in reads.whole, (query, dict(reads.whole))
+        if query == "zoom=life":
+            assert not [k for k in reads.lines if k[0] == "location"], dict(reads.lines)
+            assert reads.read < lines / 10, dict(reads.lines)
+        reads.clear()
+        again = site.respond("/life", query)
+        assert again.body == response.body
+        assert reads.read == 0, (query, dict(reads.lines))
+    reads.clear()
+    site.respond("/journeys")  # the year the Life door read is the Journeys door's, read once
+    assert not [k for k in reads.lines if k[0] == "location"], dict(reads.lines)

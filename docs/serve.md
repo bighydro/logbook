@@ -30,6 +30,7 @@ aboard the yacht Nordlys. Nothing in it is real.*
 
 | Page | What it is | The command it renders |
 |---|---|---|
+| `/life?zoom=&at=` | the Life door (RFC 0047 §4.2): the chapter you are in and its rules, the year's goals and those for life with their last review, then one timeline of your life between its bounds (`life` in `logbook.json`), at five zooms — Life, Year (the default, today in view), Month, Week, Day — or one trip (`?trip=FIRST/LAST`); the chapters not yet placed; the Volumes ([Life](#life)) | `logbook chapter list`, `goal list`, `show trips` |
 | `/day/YYYY-MM-DD` | the Day as a timeline: the nights either side, the country, the signature (or `unsigned`) with the page digest, the all-day entries, the `with` row (the day's company, your word marked, and the *with…* field); your reflection; one row per stay, stop, move, flight or run aboard an asset, in time order, with the clock, the kind and what it was; each row's attachments (events, transcripts with their voices when the line has them, as the Day names them ([speakers](speakers.md)), notes, mail threads, calls, keepers named; messages by conversation, each folded; photos counted and named) and company (confirmed, then proposed) under a toggle; a star on every row that is a line; what is unplaced; the health line; the sources and when each last spoke; *Everything this day held*, every line of the day, folded ([below](#the-day--everything-it-held)); at its foot, *Reflect and sign* ([below](#reflect-and-sign)) | `logbook day`, and `logbook day reflect`, `logbook star`, `logbook with` |
 | `/week/YYYY-Www` | the week, read-only: seven ribbons, one a day, each a link to its Day; where the week went (the week draft's numbers, each with its lines); each goal with what the week shows for it and the command that gives a verdict; the one proposal for next week, in pencil; the stale question; the people who moved, names only; the sprint and the next trip; Hold's census, counts only ([the week](week.md)) | `logbook dream week`, `goal review`, `show plan`, `lab hold census` |
 | `/days?from=&to=` | one row per day of the window, the day a link to its Day: the night, the kilometres moved, the flights, the stays and what attached, the people confirmed, the health triple, the usual sources with no line that day; then *Starred*, the window's stars, each linked to its row. Without a window, the record's last fortnight; a form and *earlier* / *later* links move it | `logbook show days` |
@@ -781,6 +782,39 @@ part of a journey that enters the record. The latest standing name wins; a name 
 days still names it after a recompute has moved its bounds. A name is never read out of a note's
 prose: only the label and the id make a note a name. A form from a page older than the record,
 naming a journey that is no longer one, is a `409`; a blank name a `400`; nothing written either way.
+
+## Life
+
+`/life` is the second door of RFC 0047 (§4.2): where you are in your life, and what it is for. It is
+read-only, has no script and no form, and every zoom, every move and every moment in it is a link whose
+address carries it (`/life?at=2026-06-15&zoom=week`, `/life?at=2026-06`, `/life?trip=2026-06-15/2026-06-20`),
+so a page linked or bookmarked opens where it was.
+
+- **This chapter**: the chapter today is in, since when, and its rules in your words; the first sentence
+  of a model's draft of it in pencil, when the `dream` entry allows one. With none: the one command that
+  names one, `logbook chapter open "NAME" --from YYYY-MM-DD`.
+- **Goals for the year**, then **for life**: each in your words, with the day you last reviewed it (or
+  since when it holds), and *Next look* when a standing review names a day to look again (its
+  `extra.revisit`). Never a percentage, a score or a streak.
+- **The timeline**, between the bounds of your life: `life` in `logbook.json` ([settings](settings.md#your-life-life)),
+  else the record's first day to the end of next year, never to the last line the record holds.
+  **Life** is one line across the bounds, a tick every five years: the chapters as bands, the trips you
+  named, the reflections you starred on a day you signed, the first signed day, NOW in the one accent and
+  what is ahead lighter; before the record it is dotted, and where the record is silent for a month or
+  more it is a lighter gap, never an error. At most a dozen labels; every other moment is a mark with its
+  title. **Year** (the default) is twelve months: each trip as a span with its name (or where it went),
+  the chapters, the signed days as dots, the starred reflections as rings, a silence of a week or more.
+  **Month** is its weeks, each a link to its week page (`/week/YYYY-Www`) and each day to its Day;
+  **Week** its seven days; **Day** a fortnight, or `?from=&to=` (92 days at most). *Earlier* and *later*
+  move by the zoom's own step, never past the bounds.
+- **Not yet placed**: a chapter line with no first day, and the command that dates one.
+- **Volumes**: the years of the record as spines, this one *being written*, each a link to its days.
+
+Through a gate (`export site --tier 1`, a page read at tier 1), Life shows no chapter, goal, name or
+reflection, each your own words at tier 2, and says so; the trips, the signed days and the silences are
+read at the gate's tiers. It reads no track over the whole record: the Year reads its year as `/journeys`
+does, and shares that reading with it; the Life zoom reads the marks the index hands out by kind and the
+days kept beside the index (the reading `/gaps` keeps).
 
 ## People
 

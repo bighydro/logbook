@@ -83,6 +83,7 @@ ROUTES = frozenset(
         "/agents",
         "/line/ID",
         "/week/W",
+        "/life",
     }
 )  # every page `Site._page` answers
 EACH = 1  # pages of one kind (a route and the names in its query) the walk reads, beside its seeds
@@ -565,6 +566,7 @@ def walked(
                     "/days?from=2026-13-01",
                     "/search?q=ola",  # a search with hits
                     "/search?q=ola&page=0",  # and one refused
+                    "/life",  # the Life door, not in the navigation yet
                 ],
             ),
             (_manifest_site(_copy(manifest, folder / "orgs", mp)), ["/", "/manifest/people?money=1"]),
@@ -572,7 +574,7 @@ def walked(
             # the Promises, Goals and Agents shelves, on their record (`shelves_record.py`)
             (
                 serve.Site(shelves_record.record(folder / "shelves", mp), now=lambda: shelves_record.NOW),
-                ["/", "/promises", "/goals", "/agents"],
+                ["/", "/promises", "/goals", "/agents", "/life"],
             ),
         )
         found: dict[str, list[Page]] = {}
