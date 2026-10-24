@@ -17,6 +17,7 @@ import subprocess
 import sys
 import threading
 from collections.abc import Iterator
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -225,3 +226,177 @@ def test_a_sealed_index_opened_otherwise_is_not_behind_and_is_rebuilt_writer_or_
             assert idx.matches(keyless.meta)
             assert idx.indexed() == (int(keyless.meta["seq"]), str(keyless.meta["head"]))
     assert _opened(keyless) == "false"
+
+
+# -- a reading in the gap is kept under the head it read ---------------------------------------------
+
+READ_AT = datetime(2026, 6, 21, 5, 0, tzinfo=UTC)  # the persona's last day, 07:00 in Oslo: the morning
+YARD = "kaiwerft.example.org"  # a boatyard the record has not seen; it does not exist, nor does Sindre
+BYGDOY = (59.9070, 10.6840)  # a spot west of the city the persona has not been to
+
+
+def _indexed(lb: Logbook) -> tuple[int, str]:
+    with lb.index() as idx:
+        return idx.indexed()
+
+
+def _caught_up(lb: Logbook) -> tuple[int, str]:
+    """The writer gone and the index brought to `logbook.json`, as the next reader with no writer about
+    brings it. The seq and head it holds."""
+    with lb.index() as idx:
+        assert idx.matches(lb.meta)
+        return idx.indexed()
+
+
+def test_a_reading_shared_in_the_gap_is_kept_under_the_head_it_read(
+    lb: Logbook, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A page read while a writer is between `logbook.json` and the index reads the index as it stands
+    (`Site.current` names that head); what `Site.shared` and `Site._day_reading` keep of that reading is
+    kept under it, so once the writer is done the next page reads the record with the new line, never
+    the earlier reading under the new head."""
+    from logbook.contrib import serve
+
+    site = serve.Site(lb, now=lambda: READ_AT)
+    site.current()
+    held = _behind(lb, monkeypatch, "Coffee with Ines Nordmann on the quay")
+    with _live_writer(lb):
+        assert site.current()["head"] == held[1]
+        assert site.shared(("read",), lambda: _indexed(lb)) == held
+        assert site._day_reading(("read",), lambda: _indexed(lb)) == held
+    now = _caught_up(lb)
+    assert now == (held[0] + 1, str(lb.meta["head"]))
+    assert site.shared(("read",), lambda: _indexed(lb)) == now, "the earlier reading, kept as the new head's"
+    assert site._day_reading(("read",), lambda: _indexed(lb)) == now
+
+
+def test_the_mornings_readings_asked_in_the_gap_are_keyed_by_the_head_read(
+    lb: Logbook, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The Day's readings beyond the day (`Site._day_later`: the replies owed, the decisions to revisit)
+    are kept by the head; one asked for in the gap is kept by the head the page read."""
+    from logbook.contrib import serve
+
+    site = serve.Site(lb, now=lambda: READ_AT)
+    site.current()
+    held = _behind(lb, monkeypatch, "Ola Nordmann asked about the mooring fee")
+    with _live_writer(lb):
+        page = site.respond("/day/2026-06-21", "")
+        assert page.status == 200
+    keys = [key for key in site._day_later_kept if key[0] in ("owed", "revisit")]
+    assert keys, "the morning asked for its replies owed and its revisits"
+    assert {key[-1] for key in keys} == {held[1]}, "kept by the head the page read, not logbook.json's"
+
+
+def _observed_people(lb: Logbook) -> list[dict[str, Any]]:
+    from logbook.contrib import people_review
+
+    return [o._row() for o in people_review.observed(lb)]
+
+
+def _built_people(lb: Logbook) -> list[dict[str, Any]]:
+    from logbook.contrib import people_review
+
+    with lb.index() as idx:
+        return [o._row() for o in people_review.build(lb, idx)]
+
+
+def _observed_orgs(lb: Logbook) -> list[dict[str, Any]]:
+    from logbook.contrib import entity_review
+
+    return [o.row() for o in entity_review.observed(lb, "org")]
+
+
+def _built_orgs(lb: Logbook) -> list[dict[str, Any]]:
+    from logbook.contrib import entity_review
+
+    with lb.index() as idx:
+        return [o.row() for o in entity_review.build(lb, idx, "org")]
+
+
+def _observed_places(lb: Logbook) -> list[dict[str, Any]]:
+    from logbook.contrib import places_review
+
+    return [o._row() for o in places_review.observed(lb)]
+
+
+def _built_places(lb: Logbook) -> list[dict[str, Any]]:
+    from logbook.contrib import places_review
+
+    return [o._row() for o in places_review.build(lb)]
+
+
+def _hull_survey() -> list[dict[str, Any]]:
+    """A guest at a yard the record has not seen: a person and an org it observes for the first time."""
+    from persona import attendee, event
+
+    return [
+        event(
+            "2026-06-22T08:00:00Z",
+            "2026-06-22T09:00:00Z",
+            "Hull survey",
+            [attendee(f"sindre@{YARD}", "Sindre Nordmann")],
+        )
+    ]
+
+
+def _bygdoy_morning() -> list[dict[str, Any]]:
+    """Three hours at a spot the record has not seen: a place it observes for the first time."""
+    from persona import dwell
+
+    return dwell("2026-06-22", "11:00", "14:00", BYGDOY)
+
+
+@pytest.mark.parametrize(
+    ("kind", "drafts", "observed", "built"),
+    [
+        ("person", _hull_survey, _observed_people, _built_people),
+        ("org", _hull_survey, _observed_orgs, _built_orgs),
+        ("place", _bygdoy_morning, _observed_places, _built_places),
+    ],
+)
+def test_an_observed_table_built_in_the_gap_is_stamped_with_the_head_it_read(
+    lb: Logbook, monkeypatch: pytest.MonkeyPatch, kind: str, drafts: Any, observed: Any, built: Any
+) -> None:
+    """The review pages' tables (`observed_entities`, in the index file: they outlive the server) are
+    stamped with the head of what they were built from; one built in the gap is stamped with the index's
+    head, so once the writer has added its lines to the index (`Index.add`, which keeps the tables) the
+    next reading builds the table again, with what the lines brought."""
+    before = observed(lb)
+    with lb.index() as idx:
+        assert idx.matches(lb.meta)
+        held = idx.indexed()
+    adds: list[tuple[Any, Any]] = []
+    with monkeypatch.context() as mp:  # the writer, stopped between logbook.json and the index
+        mp.setattr(index_module.Index, "add", lambda _idx, *a, **k: adds.append((a, k)))
+        lb.append_many(drafts())
+    assert adds and int(lb.meta["seq"]) > held[0]
+    with _live_writer(lb):
+        assert observed(lb) == before, "read in the gap: the record up to the index's last line"
+        with _as_it_is(lb) as idx:
+            assert idx.observed_stamp(kind)["head"] == held[1], "stamped with the head it was built from"
+    with _as_it_is(lb) as idx:  # the writer goes on: its lines added to the index, the tables kept
+        for a, k in adds:
+            idx.add(*a, **k)
+        assert idx.matches(lb.meta)
+        assert idx.observed_stamp(kind), "the table built in the gap is still in the index"
+    after = observed(lb)
+    assert after == built(lb) and len(after) == len(before) + 1, "built again, with what the lines brought"
+
+
+def test_a_page_and_a_build_made_in_the_gap_name_the_head_they_read(
+    lb: Logbook, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """The footer's head and the build's record name what the page read, as its tag does."""
+    from logbook.contrib import library_build, serve
+
+    held = _behind(lb, monkeypatch, "Ola Nordmann brought the new jib")
+    ahead = str(lb.meta["head"])
+    with _live_writer(lb):
+        site = serve.Site(lb, now=lambda: READ_AT)
+        body = site.respond("/days", "").body.decode("utf-8")
+        assert f"<code>{held[1][: serve.HEAD_CHARS]}…</code>" in body
+        assert ahead[: serve.HEAD_CHARS] not in body
+        library = library_build.Library(lb, tmp_path / "library")
+        library_build.build(lb, site, library, only=["/days"])
+        assert library.pages()["/days"].head == held[1]

@@ -288,9 +288,11 @@ class Observed:
 
 def observed(lb: Logbook, cluster_m: float = CLUSTER_M) -> list[Observed]:
     """Every observed place of the record, from the index's derived table: served while its stamp
-    holds, built from the lines and stored otherwise. Writes nothing to the record."""
-    stamp = _stamp(lb, cluster_m)
+    holds, built from the lines and stored otherwise. Writes nothing to the record. The stamp's head
+    is the one the index holds when the reading starts (`Index.indexed`): a table built while a writer
+    is between `logbook.json` and the index is stamped with no later head than it read."""
     with lb.index() as idx:
+        stamp = _stamp(lb, cluster_m, idx.indexed()[1])
         if _table_current(idx, stamp):
             rows = idx.db.execute(f"SELECT {', '.join(COLUMNS)} FROM {TABLE} ORDER BY rowid").fetchall()
             return [Observed._from_row(row) for row in rows]
@@ -300,10 +302,10 @@ def observed(lb: Logbook, cluster_m: float = CLUSTER_M) -> list[Observed]:
     return found
 
 
-def _stamp(lb: Logbook, cluster_m: float) -> dict[str, str]:
+def _stamp(lb: Logbook, cluster_m: float, head: str) -> dict[str, str]:
     meta = lb.meta
     return {
-        "head": str(meta["head"]),
+        "head": head,
         "timezone": str(meta["timezone"]),
         "version": TABLE_VERSION,
         "cluster_m": repr(float(cluster_m)),
