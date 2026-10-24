@@ -153,11 +153,13 @@ from ..core import (
     drafts,
     goals,
     keepers,
+    notes,
     people,
     places,
     policy,
     presence,
     reading,
+    sealing,
     share,
     signing,
     stars,
@@ -194,6 +196,7 @@ from . import (
     shelf_goals,
     shelf_promises,
     trip_page,
+    week_close,
     week_page,
     week_paper,
     world,
@@ -253,7 +256,8 @@ PHOTOS = "photos"  # the Day page's anchor of its photo review, where the review
 WEEK = "week"  # the anchor of a Sunday's week draft (`dream week`), which the other six days link to
 LINE_PATH = re.compile(r"^/line/([^/]+)$")  # one line as written, read-only, through the gate
 PHOTO_PATH = re.compile(r"^/photo/([^/]+)$")  # a photo line's pixels from the attachment store, likewise
-WEEK_PATH = re.compile(r"^/week/(\d{4}-W\d{2})$")  # the week page (RFC 0043 §8, `week_page`), read-only
+WEEK_PATH = re.compile(r"^/week/(\d{4}-W\d{2})$")  # the week page (RFC 0043 §8, `week_page`)
+WEEK_ACT = re.compile(r"^/week/(\d{4}-W\d{2})/close$")  # its one act, Close the week: POST only, likewise
 CLOSE = "close"  # the Day page's anchor of Reflect and sign, where a write sends the owner back
 # pages the record's today moves too (this year, anniversaries, drift, the stale orgs and ideas): in the tag
 # /goals: a goal goes past; /world: its window ends on today, whatever the calendar holds after it
@@ -280,6 +284,7 @@ TYPED = {
     "names": "who was there",
     "reason": "the reason",
     "portfolio": "the portfolio",
+    "intention": "next week's intention",
 }
 AUDIO_BYTES = 64 * 1024 * 1024  # the most a recording may carry: half an hour of speech, even as WAV
 STATE_FILES = (
@@ -758,6 +763,8 @@ class Site:
             return self._error(405, f"{path} takes the forms of the server's own pages (POST), nothing else")
         if DAY_ACT.match(path) is not None:
             return self._error(405, f"{path} takes the Day page's forms (POST), nothing else")
+        if WEEK_ACT.match(path) is not None:
+            return self._error(405, f"{path} takes the week page's form (POST), nothing else")
         if self.library is not None and (built := self._built(path, query, if_none_match)) is not None:
             return built  # what the build wrote: no index opened, nothing read
         return None
@@ -925,7 +932,8 @@ class Site:
         review (`_write_review`), the Manifest's queue and an org's status (`_write_manifest`), the
         Ideas shelf's queue and an idea's status (`_write_ideas`). A Day's: Reflect and Sign
         (`_reflect`, `_sign`), through `day reflect`'s own functions, and the star and the "with…"
-        field (`_star`, `_with`), through `logbook star`, `unstar` and `with`'s.
+        field (`_star`, `_with`), through `logbook star`, `unstar` and `with`'s. A week's: Close the
+        week (`_close_week`), through `goal review`'s and `day reflect --intention`'s.
         Another command writing the record is the same answer on every one of them, caught here
         once (`_busy`: a 409, the form kept), and nothing is written. Refused (403, nothing
         written) unless `client`, the connection's address, is loopback and `origin`, the browser's
@@ -939,12 +947,14 @@ class Site:
         as `--accept N,N` takes them; `upload` is the file a form carried, the Day's recording. One
         write at a time (`_write_lock`)."""
         day_act = DAY_ACT.match(path)
-        if path not in WRITE_PATHS and path not in LINE_ACTS and day_act is None:
+        week_act = WEEK_ACT.match(path)
+        if path not in WRITE_PATHS and path not in LINE_ACTS and day_act is None and week_act is None:
             posts = ", ".join(WRITE_PATHS)
             return self._error(
                 404,
                 f"nothing to post at {path}; the server's own forms post to {posts}, a Day's to"
-                f" /day/YYYY-MM-DD/reflect and /day/YYYY-MM-DD/sign, {STAR_PATH} and {WITH_PATH}",
+                f" /day/YYYY-MM-DD/reflect and /day/YYYY-MM-DD/sign, {STAR_PATH} and {WITH_PATH}, a"
+                " week's to /week/YYYY-Www/close",
             )
         # through Tailscale Serve (or any proxy): the phone's checks, or nothing
         proxied = phone.proxied(asked)
@@ -975,7 +985,10 @@ class Site:
                 " pages or `logbook status idea`",
             }.get(
                 path,
-                "a day is reflected on and signed from this machine only, through the server's own"
+                "a week is closed from this machine only, through the server's own pages or `logbook goal"
+                " review` and `logbook day reflect --intention`"
+                if week_act is not None
+                else "a day is reflected on and signed from this machine only, through the server's own"
                 " pages or `logbook day reflect`",
             )
             return self._error(403, f"refused {where}: {what}, {phone.FROM_PHONE}; nothing was written")
@@ -983,6 +996,8 @@ class Site:
             if day_act is not None:
                 day, act = day_act.group(1), day_act.group(2)
                 return self._reflect(day, form, upload) if act == REFLECT else self._sign(day, form)
+            if week_act is not None:
+                return self._close_week(week_act.group(1), form)
             if path == STAR_PATH:
                 return self._star(form)
             if path == WITH_PATH:
@@ -1124,6 +1139,46 @@ class Site:
             except ValueError as e:  # ReflectError, NoteError, SignError (the note's moment)
                 return self._error(400, str(e))
         return Response(303, b"", location=f"/day/{day}#{CLOSE}")
+
+    def _close_week(self, week: str, form: Mapping[str, str]) -> Response:
+        """Close the week (`week_page.close_html`): each `verdict-GOAL` chosen, with its `note-GOAL`,
+        and the `intention` when `keep` is ticked, through `week_close.close`, the writers `goal review
+        GOAL VERDICT --period week --at SUNDAY` and `day reflect SUNDAY --intention` run: every item
+        checked before the first line, under one writer lock, so a refusal (a 400) writes nothing.
+        Your words on a goal given no verdict are refused, as `review goal`'s `--note` is. Done, a 303
+        to the week at Close the week."""
+        if form.get("act", "") != "close":
+            return self._error(400, "the form names an act: close")
+        try:
+            week = week_paper.parse_week(week)[0]
+        except ValueError as e:
+            return self._error(400, str(e))
+        verdicts, unsaid = [], []
+        for name, value in form.items():
+            goal = name.removeprefix("verdict-")
+            said = form.get(f"note-{goal}", "").strip() or None
+            if goal != name and value.strip():
+                verdicts.append(week_close.Verdict(goal, value, said))
+            elif goal != name and said is not None:
+                unsaid.append(goal)
+        if unsaid:
+            return self._error(
+                400, "your words on a goal go with its verdict: choose one of the five; nothing was written"
+            )
+        intention = form.get("intention", "") if form.get("keep") == "1" else None
+        with self._write_lock:
+            try:
+                with self.lb.writer(command="logbook serve", wait=False):
+                    self.current()
+                    today = day_start.of(self.lb.meta).today(self.now()).isoformat()
+                    week_close.close(self.lb, week, verdicts, intention, today)
+            except HeadMoved as e:
+                return self._error(409, str(e))
+            except (sealing.IdentityRequired, sealing.MissingExtra) as e:  # a sealed record's own rule
+                return self._error(400, f"{e}; nothing was written")
+            except ValueError as e:  # CloseError, GoalError, NoteError
+                return self._error(400, str(e))
+        return Response(303, b"", location=f"{week_page.week_path(week)}#{week_page.CLOSE}")
 
     def _typed(
         self, day: str, form: Mapping[str, str], lines: Sequence[Line], retracted: Collection[str]
@@ -1933,6 +1988,16 @@ class Site:
         pieces["the-day"] = ribbon
         pieces["so-far"] = ribbon
         directory = self._day_reading(("directory",), lambda: people.directory(self.lb))
+        intention = None  # kept on the Sunday before (RFC 0043 §8): under For, in ink, with its Sunday
+        if morning and (self.tiers is None or notes.TIER in self.tiers):
+            intention = self._day_reading(
+                ("intention-for", day), lambda: week_close.for_day(self.lb, day, self.tiers)
+            )
+            if intention is not None:
+                names = [p.name for p in directory.known.values() if p.name]
+                pieces["for"] += day_rhythm.intention_html(
+                    intention.text, intention.sunday, link, week_page.beside(intention.text, names)
+                )
         if morning:
             entries = day_rhythm.planned(data, marks.lines)
             due = day_rhythm.due_on(near, day)
@@ -1950,7 +2015,8 @@ class Site:
                 today_parts.append(day_rhythm.fold(day_rhythm.SEEING, said, body, True))
             else:
                 empty_ahead.append(day_rhythm.SEEING.lower())
-            if self.with_drafts:  # a model's proposal (pencil): none on a site built without drafts (#364)
+            if self.with_drafts and intention is None:  # a model's proposal (pencil), until it is kept;
+                # none on a site built without drafts (#364)
                 proposal = self._day_reading(
                     ("proposal", day), lambda: day_rhythm.week_proposal(self.lb, day, self.tiers)
                 )
