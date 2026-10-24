@@ -5,7 +5,8 @@ The record read back as a site a browser opens from a folder or a web server: on
 serve`'s `/day`, every toggle open), every Trip page (`logbook trip --html`, the map inside), a Days
 index per year (`serve`'s `/days` table, one row per day the record covers, a pick's row linking its
 Day), the places (`/places`) and the people — an index, and a page per person confirmed present with
-the years together and the trips — and a root page that lists the years. Every page is one file with one
+the years together and the trips —, Today (`/`, `door_today`) as of the record's last day, and a root
+page that lists the years. Every page is one file with one
 inline stylesheet: no script, no image, no font, no stylesheet link, nothing fetched, and every link a
 relative path to another file in the folder, so the site reads the same from a file manager, under
 any prefix on any web server, or in twenty years. It is `serve` written down: the same renderers
@@ -52,7 +53,7 @@ from ..core import year as year_reader
 from ..core.chain import Line
 from ..core.flights import Airports
 from ..core.store import Logbook, uuid7
-from . import serve, trip_page
+from . import door_today, serve, trip_page
 from .vault import digest, write
 
 __all__ = ["digest", "write"]  # the folder is written and digested as a vault is
@@ -63,6 +64,8 @@ YEARS, DAYS, TRIPS, PLACES, PEOPLE = "years", "days", "trips", "places", "people
 DAY_PAGES = "day_pages"  # a kind of page, in the console and the crossing line; the files are under days/
 INDEX = "index.html"
 TRIPS_PAGE, PLACES_PAGE, PEOPLE_PAGE = "trips.html", "places.html", "people.html"
+TODAY_PAGE = "today.html"  # Today, the Library's front door, as of the record's last day (`door_today`)
+DOOR_FILES = {"/": TODAY_PAGE, "/people": PEOPLE_PAGE, "/places": PLACES_PAGE}  # Today's doors, here
 PAGE_NOUNS = {  # a kind of page, singular and plural, for the console
     YEARS: ("year", "years"),
     DAYS: ("days index", "days indexes"),
@@ -368,7 +371,10 @@ class _Builder:
         """A link `serve` makes, as the page being rendered writes it: a day to its Day page when it
         has one, else to its row in its year's Days index (plain text on that index itself, or for a
         day outside the record); the fortnight around a day to the Days index at the fortnight's
-        first day the record covers. Anything else has no page here and is plain text."""
+        first day the record covers. Anything else has no page here and is plain text. On Today, the
+        doors' header links the doors this site has a page for: Today itself, the people and the places."""
+        if self.here == TODAY_PAGE and path in DOOR_FILES:
+            return relative(self.here, DOOR_FILES[path])
         found = serve.DAY_PATH.match(path)
         if found:
             day = found.group(1)
@@ -435,8 +441,15 @@ class _Builder:
         out[PEOPLE_PAGE] = self._people_index()
         for page in self.people.values():
             out[self.person_path(page)] = self._person_page(page)
+        out[TODAY_PAGE] = self._today()
         out[INDEX] = self._root()
         return {path: text.encode("utf-8") for path, text in out.items()}
+
+    def _today(self) -> str:
+        """Today as of the record's last day: the date and where, what was open, one memory; no form,
+        no Ask and no font (`door_today`, a static page)."""
+        self.here = TODAY_PAGE
+        return door_today.page_today(self.view)
 
     def _document(self, here: str, title: str, body: str) -> str:
         self.here, self.view.nav = here, self.nav(here)
@@ -611,6 +624,8 @@ class _Builder:
         )
         body += (
             '<ul class="plain">\n'
+            f'<li><a href="{TODAY_PAGE}">Today</a>: the morning of the last day, what was open and one'
+            " memory.</li>\n"
             f'<li><a href="{TRIPS_PAGE}">Trips</a>: every run of nights away,'
             f" {_plural(len(self.trips), 'page')}.</li>\n"
             f'<li><a href="{PLACES_PAGE}">Places</a>: the named places of the record.</li>\n'

@@ -97,6 +97,7 @@ def test_the_site_is_a_year_page_a_days_index_every_trip_the_places_and_the_peop
         "people.html",
         "people/kari-nordmann.html",
         "people/ola-nordmann.html",
+        "today.html",
     }
 
     # The Year is the `logbook year --html` page, with the site's navigation above it and its trips
@@ -136,6 +137,12 @@ def test_the_site_is_a_year_page_a_days_index_every_trip_the_places_and_the_peop
     index = _read(folder, "index.html")
     assert 'href="years/2026.html"' in index and 'href="days/2026.html"' in index
     assert "tier 1" in _text(index)
+
+    # Today is the Library's front door as of the record's last day, in the doors' header: no form, no
+    # Ask, no font, its doors linked to the pages the site has.
+    today = _read(folder, "today.html")
+    assert "Sunday 21 June" in today and 'href="people.html"' in today and 'href="places.html"' in today
+    assert "<form" not in today and "@font-face" not in today and 'href="today.html"' in index
 
 
 def test_every_page_is_self_contained_and_every_link_is_relative_and_resolves(

@@ -176,6 +176,8 @@ from . import (
     asset_status,
     day_photos,
     day_rhythm,
+    door_today,
+    doors,
     dream,
     entities,
     entity_review,
@@ -219,12 +221,14 @@ CSP = "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-u
 SHOWN_MESSAGES, LONG_CONVERSATION = 10, 30  # a conversation of more than 30 shows 10, the rest folded
 DAY_PATH = re.compile(r"^/day/(\d{4}-\d{2}-\d{2})$")
 TODAY = "/today"
+SHELVES = "/shelves"  # the shelves listed: the gear's index until `/gear` exists (`doors.GEAR`)
 # the record's pages, not the clock's (and every Day, journey, person and org)
 RECORD_PAGES = frozenset(
     {"/", "/days", "/trips", "/places", "/world", "/journeys", "/people", "/manifest", "/manifest/people"}
     | {"/ideas"}
     | {"/promises", "/goals", "/agents"}  # the shelves' lists
     | {"/search"}  # the record's words (`search_page`)
+    | {SHELVES}  # the shelves listed, the front page before Today
 )
 JOURNEY_PATH = re.compile(r"^/journeys/(\d{4}-\d{2}-\d{2})/(\d{4}-\d{2}-\d{2})$")  # its first and last day
 PERSON_PATH = re.compile(r"^/people/([^/]+)$")  # a canonical person, by entity id
@@ -359,6 +363,7 @@ DAY_SCRIPT_HASH = "sha256-" + base64.b64encode(hashlib.sha256(DAY_SCRIPT.encode(
 DAY_IMAGES = CSP.replace("default-src 'none';", "default-src 'none'; img-src 'self';")  # a Day's thumbnails
 DAY_CSP = DAY_IMAGES.replace("style-src", f"script-src '{DAY_SCRIPT_HASH}'; style-src")
 WORLD_CSP = CSP.replace("style-src", f"script-src '{world.SCRIPT_HASH}'; style-src")
+DOOR_CSP = doors.CSP.replace("style-src", f"script-src '{DAY_SCRIPT_HASH}'; style-src")  # Today, recording
 YEAR = re.compile(r"^\d{4}$")
 DAY = re.compile(r"\d{4}-\d{2}-\d{2}")
 EN_DASH, ARROW, DOT = day_reader.EN_DASH, day_reader.ARROW, day_reader.DOT
@@ -754,6 +759,8 @@ class Site:
         thread; everything else is a reading, under the limit (`Handler`)."""
         if path == "/favicon.ico":
             return Response(204, b"", "image/x-icon")
+        if (face := doors.FONT_PATH.match(path)) is not None:
+            return self._font(face.group(1), if_none_match)
         if path in WRITE_PATHS or path in LINE_ACTS:
             return self._error(405, f"{path} takes the forms of the server's own pages (POST), nothing else")
         if DAY_ACT.match(path) is not None:
@@ -805,6 +812,8 @@ class Site:
         csp = PLACES_CSP if path == "/places" else WORLD_CSP if path == "/world" else CSP
         if DAY_PATH.match(path) is not None:
             csp = DAY_CSP if self._records() else DAY_IMAGES
+        if path == "/":  # Today: its fonts and its memory's thumbnail from here, the Day's forms
+            csp = DOOR_CSP if self._records() else doors.CSP
         said = _READS.set(None)
         try:
             rendered = self._page(path, params).encode("utf-8")
@@ -861,10 +870,31 @@ class Site:
         if found is None:
             return None
         page, body = found
+        if path == "/" and not self._built_today(page.at, today):
+            return None  # Today as of another day: rendered, as today's Day is
         if if_none_match is not None and _matches(if_none_match, page.etag):
             return Response(304, b"", etag=page.etag)
         csp = page.csp if page.csp is not None else CSP
         return Response(page.status, body, etag=page.etag, location=page.location, csp=csp)
+
+    def _built_today(self, at: str, today: str) -> bool:
+        """Whether a page built `at` (the build's UTC stamp) was built on the record's `today`."""
+        when = stays.instant(at)
+        try:
+            return when is not None and day_start.of(self.lb.meta).day(when).isoformat() == today
+        except (day_start.DayStartError, KeyError, ValueError):
+            return False
+
+    def _font(self, name: str, if_none_match: str | None) -> Response:
+        """`/font/NAME`: a face the doors are set in (`doors.FACES`), from the package's own folder;
+        a 404 for any other name. It reads nothing of the record."""
+        data = doors.font_bytes(name)
+        if data is None:
+            return self._error(404, f"no font at /font/{name}")
+        etag = doors.font_tag(data)
+        if if_none_match is not None and _matches(if_none_match, etag):
+            return Response(304, b"", etag=etag)
+        return Response(200, data, doors.FONT_TYPE, etag=etag)
 
     def _build_too(self, path: str, query: str, meta: Mapping[str, Any], response: Response) -> None:
         """A page the build did not hold, rendered for this request, added to it (`asked`): the next
@@ -1547,7 +1577,8 @@ class Site:
         parts = [self._started, path, query, json.dumps(meta, sort_keys=True)]
         # a week's plan, and its trip's days to go, move with the record's today
         if (
-            DAY_PATH.match(path) is not None
+            path == "/"
+            or DAY_PATH.match(path) is not None
             or WEEK_PATH.match(path) is not None
             or path.startswith(CLOCK_PAGES)
         ):
@@ -1560,6 +1591,8 @@ class Site:
         if (day := DAY_PATH.match(path)) is not None:  # today's shape and its now line move with the clock
             parts.append(day_rhythm.clock_tag(day.group(1), meta, self.now()))
             parts.append(self._day_later_tag())  # a reconnect read off the request has arrived
+        if path == "/" and self.read_later:  # Today's promises, plan and replies owed, read off the
+            parts.append(self._day_later_tag())  # request, have arrived (on it, the page holds them)
         parts += self._beside()
         digest = hashlib.sha256("\n".join(parts).encode("utf-8")).hexdigest()
         return f'"{str(meta.get("head") or "")[:HEAD_CHARS]}-{digest[:16]}"'
@@ -1669,6 +1702,8 @@ class Site:
 
     def _page(self, path: str, params: Mapping[str, str]) -> str:
         if path == "/":
+            return door_today.page_today(self)
+        if path == "/shelves":  # SHELVES, the shelves listed
             return self.page_index()
         if (m := DAY_PATH.match(path)) is not None:
             return self.page_day(m.group(1), expanded=params.get("open") == "1", shape=params.get("shape"))
@@ -1732,16 +1767,7 @@ class Site:
         `script` is the one inline script a page may carry (the Places page's keys, the Day's record
         button), named by hash in that page's policy; `style` what a page adds to the one inline
         stylesheet (the Manifest's, the table pages', so every other page keeps its bytes)."""
-        meta = self.lb.meta
-        head = str(meta.get("head") or "")[:HEAD_CHARS]
-        footer = (
-            f"read-only{DOT}head <code>{escape(head)}…</code>{DOT}{escape(str(meta.get('timezone')))}"
-            f"{DOT}nothing here leaves this machine"
-            if self.footer is None
-            else self.footer
-        )
-        if footnote is not None:
-            footer += f'<br><span class="footnote">{escape(footnote)}</span>'
+        footer = self.footer_text(footnote)
         return (
             "<!doctype html>\n"
             '<html lang="en">\n<head>\n<meta charset="utf-8">\n'
@@ -1752,6 +1778,24 @@ class Site:
             f"<footer>{footer}</footer>\n{'' if script is None else f'<script>{script}</script>' + chr(10)}"
             "</body>\n</html>\n"
         )
+
+    def footer_text(self, footnote: str | None = None, door: bool = False) -> str:
+        """What every page's footer says: read-only, the head, the timezone, and that nothing leaves this
+        machine (or the site's own footer), then `footnote` under it. A door (`doors.page`) carries forms,
+        so it says nothing leaves this machine first and is not read-only."""
+        meta = self.lb.meta
+        head = f"head <code>{escape(str(meta.get('head') or '')[:HEAD_CHARS])}…</code>"
+        zone = escape(str(meta.get("timezone")))
+        footer = (
+            self.footer
+            if self.footer is not None
+            else f"Nothing here leaves this machine{DOT}{zone}{DOT}{head}"
+            if door
+            else f"read-only{DOT}{head}{DOT}{zone}{DOT}nothing here leaves this machine"
+        )
+        if footnote is not None:
+            footer += f'<br><span class="footnote">{escape(footnote)}</span>'
+        return footer
 
     def _whole(self) -> tuple[str, str] | None:
         """The days the owner's track covers, else any line's; None for an empty record."""
