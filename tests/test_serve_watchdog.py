@@ -106,8 +106,11 @@ def test_the_scheduled_run_restarts_a_stuck_service_and_names_a_system_one(
     fine = service.Installed("launchd agent", tmp_path / "a.plist", answering, "")
     daemon = service.Installed("launchd daemon", tmp_path / "d.plist", mute, "")
     monkeypatch.setattr(service, "find", lambda *_a, **_k: [stuck, fine, daemon])
+    real = service.probe
     monkeypatch.setattr(service, "PROBE_TIMEOUT_S", 0.5)
-    monkeypatch.setattr(service, "probe", lambda port, timeout=0.5, real=service.probe: real(port, 0.5))
+    # `mute` is connected to by the kernel and never answered, so 0.5 s or any wait reads it as stuck;
+    # the server that answers is waited for until it answers (None), never against a clock
+    monkeypatch.setattr(service, "probe", lambda port, *_a: real(port, 0.5 if port == mute else None))
     ran: list[tuple[str, ...]] = []
     said: list[str] = []
     restarted = service.keep_answering(
