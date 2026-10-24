@@ -1259,11 +1259,11 @@ LIBRARY_STYLE = """
 """  # the Library's `/world` only, its canvases held to a phone's column; the exported file keeps STYLE
 
 
-def page(json_text: str, nav: str = "", standalone: bool = True) -> str:
+def page(json_text: str, nav: str = "", standalone: bool = True, shell: str = "", style: str = "") -> str:
     """The page around the record's JSON: the canvas, the scrubber, the land table, the script.
     `standalone` (the exported file) carries the Content-Security-Policy in a meta element, since a
-    file has no headers; the Library sends it as one, passes its navigation as `nav` and adds
-    `LIBRARY_STYLE`."""
+    file has no headers; the Library sends it as one, passes its header as `shell` (or a navigation
+    as `nav`) with that header's `style`, and adds `LIBRARY_STYLE`."""
     bundle = json.loads(json_text)
     window = bundle["window"]
     head = _head(bundle)
@@ -1274,8 +1274,8 @@ def page(json_text: str, nav: str = "", standalone: bool = True) -> str:
         '<meta name="viewport" content="width=device-width, initial-scale=1">\n'
         f"{policy_meta}"
         "<title>The world · Logbook</title>\n"
-        f"<style>{STYLE}{'' if standalone else LIBRARY_STYLE}</style>\n</head>\n<body>\n"
-        f"<header>{f'<nav>{nav}</nav>' if nav else ''}"
+        f"<style>{STYLE}{'' if standalone else LIBRARY_STYLE}{style}</style>\n</head>\n<body>\n"
+        f"{shell}<header>{f'<nav>{nav}</nav>' if nav else ''}"
         f"<h1>The world <small>{escape(head)}</small></h1>"
         '<p id="readout" aria-live="polite"></p></header>\n'
         "<main>\n"
@@ -1561,13 +1561,20 @@ def console(built: Build, result: Result) -> Iterator[str]:
 
 
 def library_page(
-    lb: Logbook, first: str | None, last: str | None, nav: str, airports: Airports, today: str | None = None
+    lb: Logbook,
+    first: str | None,
+    last: str | None,
+    nav: str,
+    airports: Airports,
+    today: str | None = None,
+    shell: str = "",
+    style: str = "",
 ) -> str | None:
     """The Library's `/world`: the page the export writes by default (the same request, the same
-    JSON), with the Library's navigation and the policy left to the header; None for a record with
-    no day."""
+    JSON), with the Library's header (`shell` and its `style`, or a navigation, `nav`) and the
+    policy left to the header; None for a record with no day."""
     req = request(lb, first, last, today=today)
     if req is None:
         return None
     built = build(lb, req, airports)
-    return page(built.json, nav=nav, standalone=False)
+    return page(built.json, nav=nav, standalone=False, shell=shell, style=style)
