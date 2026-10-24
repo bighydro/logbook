@@ -267,9 +267,11 @@ def test_every_page_and_every_error_names_its_origin_to_itself_only(
 
 def _page_of(act: walk.Act) -> str:
     """The page whose form posts the act: the Places page, the journey's, the People queue's year,
-    the Manifest's and Ideas' own `back`, the Day the act is on."""
+    the Manifest's and Ideas' own `back`, the Day or the week the act is on."""
     if (day := serve.DAY_ACT.match(act.path)) is not None:
         return f"/day/{day.group(1)}"
+    if (week := serve.WEEK_ACT.match(act.path)) is not None:
+        return f"/week/{week.group(1)}"
     if act.path in serve.LINE_ACTS:
         return f"/day/{act.form['day']}"
     if act.path == serve.REVIEW_PATH:

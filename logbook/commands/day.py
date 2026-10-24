@@ -456,6 +456,13 @@ def day_arguments(sub: Subparsers) -> None:
         action="store_true",
         help="reflect: print the reflection and its proposals; write nothing",
     )
+    s.add_argument(
+        "--intention",
+        metavar="TEXT",
+        help="reflect, on a Sunday: keep the week's one proposal, or your own sentence, as next week's"
+        " intention (RFC 0043 §8), the line the week page's Keep writes; again with other words, it"
+        " supersedes the first",
+    )
     kept = s.add_argument_group(
         "keep and sign",
         "with `day sign`, or `day reflect --sign`: each written as its line before the signature, every"
@@ -742,6 +749,7 @@ def _reflect_flags(a: argparse.Namespace) -> list[str]:
             ("--from-wispr", "from_wispr"),
             ("--accept", "accept"),
             ("--model", "model"),
+            ("--intention", "intention"),
         )
         if getattr(a, dest, None) is not None
     ]
@@ -791,6 +799,9 @@ def _day_reflect(lb: Logbook, a: argparse.Namespace) -> None:
             f"{_listed(signs)} belong to `day sign`; a reflection signs with --sign and the proposals"
             " you --accept"
         )
+    if a.intention is not None:
+        _intention(lb, a)
+        return
     if a.accept is not None and not a.sign:
         _refuse("--accept goes with --sign: the proposals you accept are written when the day is signed")
     keeping = keep_sign.given(a)
@@ -817,6 +828,38 @@ def _day_reflect(lb: Logbook, a: argparse.Namespace) -> None:
         _reflect(lb, a, day, today, wanted, keep_sign.from_args(a))
     except ValueError as e:  # ReflectError, SignError, NoteError, a day that is not one
         _refuse(str(e))
+
+
+def _intention(lb: Logbook, a: argparse.Namespace) -> None:
+    """`day reflect SUNDAY --intention TEXT` (RFC 0043 §8): the week's intention kept on its Sunday
+    through `week_close.keep`, the writer the week page's Keep runs: the same line, byte for byte. Alone:
+    a reflection, a signature or `--at` beside it is refused, and nothing is written."""
+    others = [flag for flag in _reflect_flags(a) if flag != "--intention"]
+    others += ["--at"] if a.at is not None else []
+    others += keep_sign.given(a)
+    if others:
+        _refuse(
+            f"--intention keeps the week's intention on its own, at the Sunday's moment; {_listed(others)}"
+            f" {'goes' if len(others) == 1 else 'go'} without it"
+        )
+    from ..contrib import week_close
+
+    try:
+        done = week_close.keep(lb, a.signed_day, a.intention)
+    except ValueError as e:  # CloseError, NoteError
+        _refuse(str(e))
+    sunday = parse_day(a.signed_day).isoformat()  # a Sunday that has come: `keep` checked it
+    week = week_paper.week_of(sunday)
+    if done.line is None:
+        existing = done.existing or {}
+        print(f"the intention kept on {sunday} ({week}) is these words already (#{existing.get('seq')});"
+              " nothing was written")  # fmt: skip
+        return
+    instead = f", in place of #{done.supersedes['seq']}" if done.supersedes is not None else ""
+    print(
+        f"kept the intention for the week after {week} as #{done.line['seq']} {notes.SCHEMA}"
+        f" ({notes.INTENTION}, source {week_close.SOURCE}, tier {notes.TIER}) on {sunday}{instead}"
+    )
 
 
 def _reflect(

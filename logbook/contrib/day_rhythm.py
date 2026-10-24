@@ -78,6 +78,7 @@ RSQUO = "\u2019"
 DASH = day_reader.EN_DASH
 APART = " \u2014 "  # a time, then an entry: an em dash, never a mark a number may stand beside a name across
 NO_FOR = "No goals or chapter set yet — the page can't say what a day was for."
+INTENTION_WITHHELD = "The week's intention is withheld here: it sets a number beside a person's name."
 NO_FOR_DAY = "No chapter holds this day and it touched no goal."
 FOOTER = "Every row is computed from the record. What a model wrote is in pencil, with the lines it rests on."
 NO_PLAN = "nothing planned in the calendar"
@@ -402,6 +403,23 @@ def for_html(
         said = NO_FOR_DAY if written else NO_FOR
         return f'<p class="for mute">{escape(said, quote=False)} {link("Goals", "/goals")}</p>\n'
     return f'<p class="for"><span class="eyebrow-inline mute">For</span> {DOT.join(named)}</p>\n'
+
+
+def intention_html(text: str, sunday: str, link: Callable[[str, str], str], withheld: bool = False) -> str:
+    """The week's intention, kept on the Sunday before (RFC 0043 §8), under For: the owner's words, in
+    ink, and the Sunday it was kept on, linked to that Day; when it would set a number beside a
+    person's name, the sentence that says it is withheld instead."""
+    when = date.fromisoformat(sunday)
+    on = link(f"Sunday {when.day} {MONTHS[when.month - 1]}", f"/day/{sunday}")
+    said = (
+        f'<span class="mute">{escape(INTENTION_WITHHELD)}</span>'
+        if withheld
+        else f'<span class="ink">{escape(text)}</span>'
+    )
+    return (
+        f'<p class="for intention"><span class="eyebrow-inline mute">This week</span> {said}'
+        f'<span class="mute">{DOT}kept on {on}</span></p>\n'
+    )
 
 
 # -- the ribbon -----------------------------------------------------------------------------------------

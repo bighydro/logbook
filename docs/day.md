@@ -335,6 +335,8 @@ never follows a name. Nothing on it weighs the plan against the day.
   A goal is touched when a line of it, a review of it, or a review naming one of the day's lines as what
   it rests on was written on the day. With no chapter and no goal written at all, the page says it
   can't tell what the day was for; with some written but none for this day, it says that instead.
+  In the morning, under them, **This week**: the intention you kept on the Sunday before
+  ([closing the week](week.md#close-the-week)), in ink, with that Sunday, linked to its Day.
 - **Yesterday** (morning): signed or open, how many it kept, what arrived after its signature (with a
   link to sign again), what it carried, and the nearest earlier day still open, within 60 days.
 - **Today** (morning): the ribbon so far, then the day's timed entries and the promises due today, a row
@@ -409,7 +411,10 @@ on a site (`logbook export site`): a site's Day is never the morning.
 - **The week's one proposal**: when the standing draft of the week before (written on its Sunday, so it
   proposes for this week) made one (its `next_week` part), one line under Today, in pencil, headed with
   the model's name and linked to the draft. Through the gate and the `dream` entry as every draft on the
-  page; never on a page built without drafts.
+  page; never on a page built without drafts. Once you keep an intention for the week (on the week
+  page, or `logbook day reflect SUNDAY --intention "…"`), the intention is under **For**, in ink, and the
+  pencil is not drawn: kept, it is yours. An intention that would set a number beside a person's name
+  is withheld, the row saying so.
 
 The task tool's plan, the reconnect, the replies owed and the decisions to revisit read more than the
 day: the plan every `sync notion` line, the drift rule the whole record (minutes on a record of millions
