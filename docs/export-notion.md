@@ -96,10 +96,18 @@ the resolution lines hold them) and `facts`:
   `photo`; a day together names the day when it falls on the last one);
 - `days_together`: the days you spent together over the whole record, not only the window, with
   `first_together` and `last_together`, the first and the last of them (`YYYY-MM-DD`); 0 and null when
-  there are none;
+  there are none. "Days together" counts days the person was confirmed with the owner at one of the
+  owner's stays; a person known only from messages and mail has none, and their page carries no such
+  line;
 - `promises`, open both ways ([promises](promises.md)): `owed_by_owner` and `owed_to_owner`, each
   `{sentence, date, line}`: the sentence as `logbook promises` quotes it (one sentence, its case kept,
-  its whitespace collapsed), the day it was said, the line it was read in. Only a promise still open,
+  its whitespace collapsed), the day it was said, the line it was read in. Only a promise: what
+  `logbook promises` reads as your own (`owed_by_owner`) or the person's own (`owed_to_owner`), never a
+  request, whoever asked; a request the person makes of you is not something you promised. Only a
+  whole sentence: never a line quoted in a reply (one that begins with `>` or `|`), a chat line pasted
+  with its time stamp (`[12.09.26, 15:10] Ola Nordmann: …`), or a run of more than 40 words without a
+  full stop, which is a whole chat message (`notion_export.QUOTED_LINE`, `CHAT_STAMP`,
+  `SENTENCE_WORDS`). Only a promise still open,
   said in the window and in the 365 days before the moment the record is read, and only from a
   conversation the person is a direct party to: a one-to-one chat with them, a mail you are both on
   that did not come through a mailing list, a call or a meeting they spoke in. A group chat, a mailing
@@ -119,12 +127,12 @@ Offene Versprechen von mir:
 – „I will call the yard tomorrow.“ (12.10.2026)
 Offene Versprechen an mich:
 – „I'll send you the drawings by Friday.“ (11.10.2026)
-…
-und 3 weitere
+– „I'll bring the fenders on Saturday.“ (02.10.2026)
 ```
 
-With no day together there is no "Tage zusammen" line at all; with more than ten promises a side, the
-side ends in one line, `und N weitere`.
+With no day together there is no "Tage zusammen" line at all. A side lists at most ten promises; with
+more than ten, it lists the newest ten and ends in one line, `und N weitere`, so that line only ever
+follows ten listed promises (the example's sides have one and two, and no such line).
 
 **Ideas.** Every idea whose entity has a Notion page ref: `page` (`notion:<id>`), `status` (the current
 status as the gate lets it be read, whatever its day, tier 2, with the day it took effect and its line;
@@ -187,5 +195,14 @@ the read to the append, so the line follows the head the folder reflects. A dry 
 ## The dry run
 
 `--dry-run` reads the record through the same gate and prints the counts per section, what was left out
-for want of a key or for naming money, and how many lines the gate held back above the tier or on
-unsigned days. It writes nothing: no folder, no line.
+for want of a key or for naming money, how wide the pages' two long sections are, and how many lines the
+gate held back above the tier or on unsigned days. It writes nothing: no folder, no line. The width is
+one line of totals, never a name:
+
+```
+  pages: days together: 2 lines on 2 pages; promises: 9 lines (5 listed, 0 more not listed)
+```
+
+the "Tage zusammen" lines and the pages they are on; the lines of the promise sections (each side's
+heading, its promises and its `und N weitere`), the promises listed and those past the cap of ten. The
+real run prints the same line.

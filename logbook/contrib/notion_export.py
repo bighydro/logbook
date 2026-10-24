@@ -31,7 +31,9 @@ the other files. Three sections, one file each, each matched on the Notion side 
   `facts`: the last contact (its date and kind), the days together over the whole record
   (`days_together`, `first_together`, `last_together`), and the promises open both ways said in the
   window and in the 365 days before the read time, in a conversation the person is a direct party to
-  (`Proposal.parties`), newest first, ten a side (`promises`: the sentence as it quotes it, its date,
+  (`Proposal.parties`), the owner's own or the person's own and never a request (`PROMISE_ROLES`), one
+  whole sentence and never a quoted line, a pasted chat line or a whole chat message
+  (`whole_sentence`), newest first, ten a side (`promises`: the sentence as it quotes it, its date,
   the line it was read in), the rest counted (`promises_more`). No message, mail or transcript text
   but that one sentence. The person's `page` is the facts as German lines, emitted whole: the writer
   replaces the page, never merges it.
@@ -109,6 +111,16 @@ STATUS_WORDS = {  # an idea's dispositions (RFC 0037 §10.3) in German, the word
 }
 PROMISE_DAYS = 365  # a promise on a page was said in the year before the read time
 PROMISES_SHOWN = 10  # a side of a page lists the newest ten; the rest are counted ("und N weitere")
+# A promise on a page is what the promises reader reads as the owner's own or the person's own, never a
+# request: someone asking is not someone promising (`people_drift.promises_with` reads a request the
+# person writes as owed by the owner).
+PROMISE_ROLES = frozenset({promise_reader.PROMISE, promise_reader.THEIRS})
+# A sentence that is no sentence of the owner's or the person's: a line quoted from what they answer
+# (`> …`), a line of a chat pasted whole (`[12.09.26, 15:10] Ola: …`), or a run of more than
+# `SENTENCE_WORDS` words with no full stop in it, which is a whole chat message, not a sentence.
+QUOTED_LINE = re.compile(r"^\s*[>|]")
+CHAT_STAMP = re.compile(r"^\[?\d{1,4}[./-]\d{1,2}[./-]\d{1,4},?\s+\d{1,2}[:.]\d{2}")
+SENTENCE_WORDS = 40
 DASH = "\u2014"  # between an entry's date and its text
 EN_DASH = "\u2013"  # a bullet on a person's page, and a span of days
 OPEN_QUOTE, CLOSE_QUOTE = "\u201e", "\u201c"  # German quotes, low then high
@@ -338,6 +350,19 @@ class Built:
     held_back: dict[str, int]
     lines: dict[str, Any]  # RFC 0011's counts of the lines read through the gate (`Gate.lines`)
 
+    def sections(self) -> dict[str, int]:
+        """How wide the pages' two long sections are, in totals: the lines of the days together and the
+        pages they are on; the lines of the promises, the promises listed and those past the cap."""
+        together = [len(_together_lines(p["facts"])) for p in self.persons]
+        facts = [p["facts"] for p in self.persons]
+        return {
+            "together": sum(together),
+            "together_pages": sum(1 for n in together if n),
+            "promise_lines": sum(len(_promise_lines(f)) for f in facts),
+            "listed": sum(len(found) for f in facts for found in f["promises"].values()),
+            "more": sum(n for f in facts for n in f["promises_more"].values()),
+        }
+
     def counts(self) -> dict[str, Any]:
         return {
             "persons": len(self.persons),
@@ -411,7 +436,8 @@ def _persons(
     the window, the days together over the whole record, and the open promises said in the window and
     in the `PROMISE_DAYS` before the read time, in a conversation the person is a direct party to
     (`Proposal.parties`: a direct chat, a mail both are on and no list sent, a call they spoke in; a
-    mail's quoted part is never read), newest first, `PROMISES_SHOWN` a side and the rest counted."""
+    mail's quoted part is never read), the owner's own or the person's own in one whole sentence
+    (`_a_promise`), newest first, `PROMISES_SHOWN` a side and the rest counted."""
     heard = list(report.people)
     cutoff = datetime.fromisoformat(req.as_of.replace("Z", "+00:00")) - timedelta(days=PROMISE_DAYS)
     since = max(req.since, g.days.day(cutoff).isoformat())
@@ -431,6 +457,8 @@ def _persons(
             sentence = proposal.match.quote
             if talks_money(sentence):
                 left["sentences_with_money"] += 1
+                continue
+            if not _a_promise(proposal):
                 continue
             side = promise_reader.OWED_BY_OWNER if mine else promise_reader.OWED_TO_OWNER
             said = {"sentence": sentence, "date": proposal.day, "line": proposal.line}
@@ -459,6 +487,18 @@ def _persons(
     return out
 
 
+def _a_promise(p: promise_reader.Proposal) -> bool:
+    """Whether a proposal is a promise for a page: the owner's own or the person's own words (a request
+    is someone asking, not a promise), in one whole sentence (`whole_sentence`)."""
+    return p.role in PROMISE_ROLES and whole_sentence(p.match.quote)
+
+
+def whole_sentence(quote: str) -> bool:
+    """Whether a quote is one sentence of the owner's or the person's: not a line quoted in a reply,
+    not a chat line pasted with its time stamp, not a run of more than `SENTENCE_WORDS` words."""
+    return not (QUOTED_LINE.match(quote) or CHAT_STAMP.match(quote) or len(quote.split()) > SENTENCE_WORDS)
+
+
 def _last_contact(person: people.Person) -> dict[str, str] | None:
     """The last day of any contact in the window, and what it was: a day together, else the kind of
     the line, by `CONTACT_ORDER` when several fell on that day."""
@@ -479,25 +519,39 @@ def _person_page(req: Request, facts: Mapping[str, Any]) -> Iterator[str]:
         yield f"Letzter Kontakt: keiner seit {german(req.since)}"
     else:
         yield f"Letzter Kontakt: {german(contact['date'])} ({CONTACT_WORDS[contact['kind']]})"
-    if facts["days_together"]:
-        yield (
-            f"Tage zusammen: {facts['days_together']}"
-            f" (zuerst {german(facts['first_together'])}, zuletzt {german(facts['last_together'])})"
-        )
+    yield from _together_lines(facts)
+    yield from _promise_lines(facts)
+
+
+def _together_lines(facts: Mapping[str, Any]) -> list[str]:
+    """The days together over the whole record, with the first and the last; none on the page of a
+    person with no day together."""
+    if not facts["days_together"]:
+        return []
+    return [
+        f"Tage zusammen: {facts['days_together']}"
+        f" (zuerst {german(facts['first_together'])}, zuletzt {german(facts['last_together'])})"
+    ]
+
+
+def _promise_lines(facts: Mapping[str, Any]) -> list[str]:
+    """Each side's open promises, newest first, as the facts list them, then how many more there are."""
+    out = []
     for side, title in (
         (promise_reader.OWED_BY_OWNER, "Offene Versprechen von mir"),
         (promise_reader.OWED_TO_OWNER, "Offene Versprechen an mich"),
     ):
         found = facts["promises"][side]
         if not found:
-            yield f"{title}: keine"
+            out.append(f"{title}: keine")
             continue
-        yield f"{title}:"
+        out.append(f"{title}:")
         for promise in found:
-            yield f"{EN_DASH} {quoted(promise['sentence'])} ({german(promise['date'])})"
+            out.append(f"{EN_DASH} {quoted(promise['sentence'])} ({german(promise['date'])})")
         more = facts["promises_more"][side]
         if more:
-            yield f"und {more} weitere"
+            out.append(f"und {more} weitere")
+    return out
 
 
 def _ideas(
@@ -846,6 +900,13 @@ def rows(req: Request, built: Built) -> Iterator[str]:
         _plural(left["sentences_with_money"], "sentence") + " naming money",
     ]
     yield "  left out: " + "; ".join(missing)
+    sizes = built.sections()
+    yield (
+        f"  pages: days together: {_plural(sizes['together'], 'line')}"
+        f" on {_plural(sizes['together_pages'], 'page')};"
+        f" promises: {_plural(sizes['promise_lines'], 'line')} ({sizes['listed']} listed,"
+        f" {sizes['more']} more not listed)"
+    )
     held = built.held_back
     gate_word = "unsigned days" if req.signed_only else "unsigned days (the gate is lifted)"
     yield (

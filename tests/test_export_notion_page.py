@@ -314,3 +314,125 @@ def test_a_promise_that_talks_of_money_is_left_out_and_counted(lb: Logbook, tmp_
     assert "SENTINEL-KEPT" in whole, "a promise that does not talk of money still leaves"
     assert _read(out, "manifest.json")["left_out"]["sentences_with_money"] == 3
     assert json.loads((out / "persons.json").read_bytes())["persons"]
+
+
+# -- promises: the owner's or the person's own, whole sentences -----------------------------------------
+
+REQUEST = "Can you send me the SENTINEL-REQUEST hull numbers?"
+MY_REQUEST = "Can you send me the SENTINEL-MY-REQUEST mooring plan?"
+MAIL_REQUEST = "Could you send me the SENTINEL-MAIL-REQUEST survey?"
+MY_MAIL = "I will send the SENTINEL-MY-MAIL drawings on Monday."
+QUOTED = "> I will call the SENTINEL-QUOTED yard tomorrow.\nGreat, thanks"
+WHOLE_CHAT = (
+    "ok so I'll look at the SENTINEL-CHAT hull on monday and then we see what the yard says and if they"
+    " agree we go ahead and book the crane and the slip and the paint and everything else that goes with it"
+    " and then we talk again about the rest of the season and the mooring and the winter storage too"
+)
+PASTED = "[12.09.26, 15:10] Ola Nordmann: I'll bring the SENTINEL-PASTED fenders"
+
+
+def _sent_mail(day: str, body: str, clock: str = "11:00") -> dict[str, Any]:
+    found = _mail(day, {"name": OWNER["name"], "email": OWNER["email"]}, f"To {OLA['name']}", clock=clock)
+    found["payload"]["to"] = [{"email": OLA["email"], "name": OLA["name"]}]
+    found["payload"]["direction"] = "sent"
+    found["payload"]["body"] = body
+    return found
+
+
+def _promises_record(lb: Logbook) -> None:
+    _add(
+        lb,
+        _theirs("2026-10-12", REQUEST, clock="16:10"),
+        _message("2026-10-12", MY_REQUEST, OLA_CHAT, clock="16:12"),
+        _mail_with("2026-10-12", MAIL_REQUEST, "09:50"),
+        _theirs("2026-10-12", QUOTED, clock="16:15"),
+        _message("2026-10-12", WHOLE_CHAT, OLA_CHAT, clock="16:20"),
+        _message("2026-10-12", PASTED, OLA_CHAT, clock="16:25"),
+        _theirs("2026-10-12", "I'll send you the SENTINEL-THEIRS sketches by Friday.", clock="16:30"),
+        _sent_mail("2026-10-12", MY_MAIL),
+    )
+
+
+def test_a_request_said_by_either_side_appears_on_neither_list(lb: Logbook, tmp_path: Path):
+    """A request is someone asking, not a promise: the promises reader reads one the person writes as
+    asked of the owner, which used to be listed as "owed by me". Neither the person's request (in a
+    chat or a mail) nor the owner's leaves, on either side."""
+    _promises_record(lb)
+    out = tmp_path / "out"
+    _run(out, "--since", "2026-10-01")
+    owed_by = _said(out, OLA["id"], "owed_by_owner")
+    owed_to = _said(out, OLA["id"], "owed_to_owner")
+    for asked in (REQUEST, MY_REQUEST, MAIL_REQUEST):
+        assert asked not in owed_by and asked not in owed_to, asked
+    whole = _all_bytes(out)
+    for left_out in ("SENTINEL-REQUEST", "SENTINEL-MY-REQUEST", "SENTINEL-MAIL-REQUEST"):
+        assert left_out not in whole, left_out
+    assert "I'll send you the SENTINEL-THEIRS sketches by Friday." in owed_to, "the person's own promise"
+    assert MY_MAIL in owed_by, "the owner's own promise"
+
+
+def test_a_promise_on_a_page_is_one_of_the_owners_or_the_persons_own(lb: Logbook, tmp_path: Path):
+    """Only whole sentences: never a line quoted in a reply (`> …`), a chat line pasted with its time
+    stamp, or a run of more than `SENTENCE_WORDS` words with no full stop (a whole chat message)."""
+    _promises_record(lb)
+    out = tmp_path / "out"
+    _run(out, "--since", "2026-10-01")
+    page = "\n".join(_page(out, OLA["id"]))
+    mine = _said(out, OLA["id"], "owed_by_owner")
+    theirs = _said(out, OLA["id"], "owed_to_owner")
+    assert "SENTINEL-REQUEST" not in page and REQUEST not in mine, "a request is no promise"
+    assert MY_MAIL in mine, "a mail the owner wrote"
+    assert "SENTINEL-QUOTED" not in page, "a quoted line inside a reply"
+    assert "SENTINEL-CHAT" not in page, "a whole chat message is no sentence"
+    assert "SENTINEL-PASTED" not in page, "a chat line pasted with its time stamp is no sentence"
+    assert "I'll send you the SENTINEL-THEIRS sketches by Friday." in theirs
+    assert "SENTINEL-QUOTED" not in _all_bytes(out) and "SENTINEL-CHAT" not in _all_bytes(out)
+
+
+@pytest.mark.parametrize(
+    ("quote", "whole"),
+    [
+        ("I'll bring the fenders on Saturday.", True),
+        ("> I'll bring the fenders on Saturday.", False),
+        ("| I'll bring the fenders on Saturday.", False),
+        ("[12.09.26, 15:10] Ola Nordmann: I'll bring the fenders", False),
+        ("12.09.2026, 15:10 - Ola Nordmann: I'll bring the fenders", False),
+        (" ".join(["word"] * 40), True),
+        (" ".join(["word"] * 41), False),
+    ],
+)
+def test_a_whole_sentence(quote: str, whole: bool):
+    assert notion_export.SENTENCE_WORDS == 40
+    assert notion_export.whole_sentence(quote) is whole, quote
+
+
+def test_the_dry_run_says_how_wide_the_sections_are(lb: Logbook, tmp_path: Path, capsys):
+    """One line of totals, so the receiving side can see before a real run how much the two long
+    sections of the pages hold: the days-together lines and the pages they are on; the promise lines,
+    the promises listed and those past the cap. Totals only, never a name."""
+    _add(
+        lb,
+        *(_theirs(f"2026-10-{n:02d}", f"I'll send you drawing number {n} tomorrow.") for n in range(1, 12)),
+    )
+    _run(tmp_path / "out", "--since", "2026-10-01", "--dry-run")
+    text = capsys.readouterr().out
+    assert not (tmp_path / "out").exists()
+    built = notion_export.build(lb, notion_export.request(lb, "2026-10-01"))
+    sizes = built.sections()
+    with_days = [p for p in built.persons if p["facts"]["days_together"]]
+    assert sizes["together"] == sizes["together_pages"] == len(with_days) == 1, "Ola's page alone"
+    assert sizes["listed"] == 10 and sizes["more"] == 1, "ten of Ola's eleven, one past the cap"
+    assert sizes["promise_lines"] == sum(
+        1
+        for p in built.persons
+        for line in p["page"]
+        if "Versprechen" in line or line.startswith(f"{DASH} ") or line.startswith("und ")
+    )
+    line = next(row for row in text.splitlines() if row.strip().startswith("pages:"))
+    assert line == (
+        "  pages: days together: 1 line on 1 page;"
+        f" promises: {sizes['promise_lines']} lines (10 listed, 1 more not listed)"
+    )
+    for person in (OWNER, OLA, KARI):
+        for word in person["name"].split():
+            assert word not in line, word
