@@ -31,7 +31,16 @@ from library_record import BERGEN_WINTER, library_record
 from orgs_record import TODAY, evidence_record, settle
 from persona import persona_record
 
-from logbook.contrib import entity_review, ideas, orgs, people_review, places_review, reflect, serve
+from logbook.contrib import (
+    entity_review,
+    ideas,
+    orgs,
+    people_review,
+    places_review,
+    reflect,
+    serve,
+    week_paper,
+)
 from logbook.core import store
 from logbook.core.store import Logbook
 
@@ -352,12 +361,19 @@ def _acts(years: Logbook, manifest: Logbook, shelf_of_ideas: Logbook) -> list[Ac
         Act(site, serve.WITH_PATH, {"day": DAY, "names": f"{ASTRID['name']}, Bjørn Lie", "at": "13:30"}),
         Act(site, serve.STAR_PATH, {**passing.fields, "act": serve.PASS}),  # the photo review's Not a keeper
         Act(site, serve.STAR_PATH, {**keep.fields, "act": "star"}),  # and its Star
+        Act(  # the week page's Close the week: next week's intention kept on its Sunday
+            site,
+            f"/week/{week_paper.week_of(DAY)}/close",
+            {"act": "close", "intention": "Send Astrid the harbour map first thing.", "keep": "1"},
+        ),
     ]
 
 
 def _path(act: Act) -> str:
     """The act's path, a Day's with the day left out."""
     found = serve.DAY_ACT.match(act.path)
+    if serve.WEEK_ACT.match(act.path) is not None:
+        return "/week/W/close"
     return f"/day/D/{found.group(2)}" if found is not None else act.path
 
 
@@ -398,7 +414,8 @@ def test_every_act_answers_a_busy_record_one_way_and_writes_nothing(
     assert found is not None, serve.DAY_ACT.pattern
     day_acts = {f"/day/D/{act}" for act in found.group(1).split("|")}
     assert day_acts == {"/day/D/reflect", "/day/D/sign"}
-    assert {_path(a) for a in acts} == {*serve.WRITE_PATHS, *serve.LINE_ACTS, *day_acts}, "every act's path"
+    every = {*serve.WRITE_PATHS, *serve.LINE_ACTS, *day_acts, "/week/W/close"}
+    assert {_path(a) for a in acts} == every, "every act's path"
     assert {_kind(a) for a in acts} >= {
         f"{serve.REVIEW_PATH} name",
         f"{serve.REVIEW_PATH} reject",

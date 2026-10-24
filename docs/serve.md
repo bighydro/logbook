@@ -31,7 +31,7 @@ aboard the yacht Nordlys. Nothing in it is real.*
 | Page | What it is | The command it renders |
 |---|---|---|
 | `/day/YYYY-MM-DD` | the Day as a timeline: the nights either side, the country, the signature (or `unsigned`) with the page digest, the all-day entries, the `with` row (the day's company, your word marked, and the *with…* field); your reflection; one row per stay, stop, move, flight or run aboard an asset, in time order, with the clock, the kind and what it was; each row's attachments (events, transcripts with their voices when the line has them, as the Day names them ([speakers](speakers.md)), notes, mail threads, calls, keepers named; messages by conversation, each folded; photos counted and named) and company (confirmed, then proposed) under a toggle; a star on every row that is a line; what is unplaced; the health line; the sources and when each last spoke; *Everything this day held*, every line of the day, folded ([below](#the-day--everything-it-held)); at its foot, *Reflect and sign* ([below](#reflect-and-sign)) | `logbook day`, and `logbook day reflect`, `logbook star`, `logbook with` |
-| `/week/YYYY-Www` | the week, read-only: seven ribbons, one a day, each a link to its Day; where the week went (the week draft's numbers, each with its lines); each goal with what the week shows for it and the command that gives a verdict; the one proposal for next week, in pencil; the stale question; the people who moved, names only; the sprint and the next trip; Hold's census, counts only ([the week](week.md)) | `logbook dream week`, `goal review`, `show plan`, `lab hold census` |
+| `/week/YYYY-Www` | the week: seven ribbons, one a day, each a link to its Day; where the week went (the week draft's numbers, each with its lines); each goal with what the week shows for it and the command that gives a verdict; the intention kept, in ink, and the one proposal for next week, in pencil; the stale question; the people who moved, names only; the sprint and the next trip; Hold's census, counts only; at its foot, *Close the week*: each open goal's verdict and next week's intention, one form ([the week](week.md)) | `logbook dream week`, `goal review`, `day reflect SUNDAY --intention`, `show plan`, `lab hold census` |
 | `/days?from=&to=` | one row per day of the window, the day a link to its Day: the night, the kilometres moved, the flights, the stays and what attached, the people confirmed, the health triple, the usual sources with no line that day; then *Starred*, the window's stars, each linked to its row. Without a window, the record's last fortnight; a form and *earlier* / *later* links move it | `logbook show days` |
 | `/trips?year=` | the trips of the year: first and last day (a link to those days), nights, route, flights in and out, places, people. Without a year, the record's last; every year the record covers is a link | `logbook show trips --year` |
 | `/journeys?year=` | the journeys that began in the year, the latest first: the name or the dates (a link to the journey), the nights away, the return day, the route, the photos, the places, the people the record names, the draft folded, the evidence folded ([Journeys](#journeys)). Without a year, the record's last | `logbook show trips --year`, grown |
@@ -96,6 +96,7 @@ Places page's form ([below](#places--name-this-place)), a journey's name ([below
 People page's review ([below](#people)), the Manifest's review and an org's status ([below](#the-manifest)),
 the Ideas shelf's review and an idea's status ([below](#ideas)),
 the Day's Reflect and Sign ([below](#reflect-and-sign)) and its star and *with…* ([below](#the-day--star-and-with)),
+and the week's Close the week ([the week](week.md#close-the-week)),
 each a POST from this machine only, each
 through the command's own function, one at a time, and none waits for another writer: while another
 command holds the record's writer lock (a sync running), every one of them answers the same way
@@ -133,8 +134,8 @@ When it is built:
   that one line and never fails the run. On a machine where built pages were never turned on (no
   `pages.json` in the folder below), the close builds nothing and says `library: not built (built
   pages are off; logbook serve --built turns them on)`.
-- **After every act on a page.** Reflect, Sign, a star, *with…*, a name, a merge, a status: the page
-  the act sends you back to and the front page are dropped at once, so you see what you wrote, and a
+- **After every act on a page.** Reflect, Sign, a star, *with…*, a name, a merge, a status, Close the
+  week: the page the act sends you back to and the front page are dropped at once, so you see what you wrote, and a
   rebuild of the rest starts in the background on a thread of its own. Acts that come while it builds
   are one more build, not one each. An act refused because the page was older than the record (409)
   drops the page its form was on, so your reload is the page as it stands.

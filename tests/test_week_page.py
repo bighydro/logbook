@@ -220,7 +220,8 @@ def test_the_week_page_holds_its_parts_each_folded_with_a_summary(lb: Logbook) -
     assert titles == list(FOLDS)
     for title in FOLDS:
         assert _summary(page, title).strip(), title
-    assert "<form" not in page and "<script" not in page, "read-only: no form, no script (part 2 adds close)"
+    actions = re.findall(r'<form [^>]*action="([^"]+)"', page)
+    assert actions == [f"/week/{W25}/close"] and "<script" not in page, "one form, Close the week; no script"
     pager = re.findall(r'href="/week/(\d{4}-W\d{2})"', page)
     assert W24 in pager and "2026-W26" in pager, "the week before and after"
 

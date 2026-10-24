@@ -4,10 +4,8 @@
 ([`dream week`](dream.md#journeys-and-weeks)) grown into a page, beside the seven days it covers. Every
 Day links to the week it is in (the pager under its date), and so does the Sunday's week draft. The
 week's own pager links the week before and after while they hold a day of the record (or today); past
-its first and last week they are named, not linked. The page is read-only: nothing on it writes, and it
-carries no form and no script. Closing the week is the second part of
-[RFC 0043](https://github.com/bighydro/logbook/blob/main/rfcs/0043-the-day-page.md) §8 and is not built
-yet.
+its first and last week they are named, not linked. At its foot, **Close the week**: one form, no
+script, through the writers that exist ([below](#close-the-week); RFC 0043 §8, the second part).
 
 ```
 The week 2026-W25          15–21 June 2026 · nothing read above tier 2
@@ -43,12 +41,13 @@ part with nothing in it is not drawn: the empty ones are named once, in one mute
 3. **Goals.** Each goal open on the Sunday, or touched in the week: the days the week touched it, your
    latest verdict, the verdict the week's draft proposes (in pencil), and the command that gives one of
    the five verdicts, `logbook goal review GOAL advancing|stalled|done|let-go|superseded --period week
-   --at SUNDAY` (or `logbook review goal`, the week's sitting). There is no form yet. Under the goals,
-   the two honest moves when a goal stalls: **change the days** (the week's one proposal) or **change
-   the sentence** (reword it, `goal add … --supersedes GOAL`, or let it go). The page never draws a
-   verdict of its own.
-4. **Next week.** The week draft's one proposal for next week, in pencil, headed with the model that
-   wrote it, with its lines. A proposal only: showing it writes nothing.
+   --at SUNDAY` (or `logbook review goal`, the week's sitting), which [Close the week](#close-the-week)
+   gives on the page. Under the goals, the two honest moves when a goal stalls: **change the days**
+   (the week's one proposal) or **change the sentence** (reword it, `goal add … --supersedes GOAL`, or
+   let it go). The page never draws a verdict of its own.
+4. **Next week.** The intention you kept on the Sunday, in ink, when you kept one; and the week draft's
+   one proposal for next week, in pencil, headed with the model that wrote it, with its lines. A
+   proposal only: showing it writes nothing.
 5. **The question.** The week's one stale question about a holding or an idea, asked once
    ([the dream](dream.md#journeys-and-weeks)); answer it with `logbook status`, or leave it.
 6. **People who moved.** The people whose contacts in this week's draft differ from the week before's,
@@ -74,14 +73,79 @@ invented in their place.
 - **Ink and pencil.** The numbers are the code's; the proposal and the proposed verdicts are the
   model's, in pencil, each with its lines. A site built without its drafts (`logbook export site`
   without `--with-drafts`) reads no draft: the page says so in one line and shows no pencil.
-- **No number beside a person.** A model's sentence, a thread's title or the question that would put a
-  digit beside a person's name is withheld, its row saying so and linking the draft as written.
-- **Nothing fetched, nothing written.** One document, one inline stylesheet, no script; the Library's
-  [three rules](serve.md#three-rules) hold.
+- **No number beside a person.** A model's sentence, a thread's title, the question or a kept intention
+  that would put a digit beside a person's name is withheld, its row saying so and linking the line as
+  written; the field of Close the week is left empty rather than hold it.
+- **Nothing fetched, nothing written until you press.** One document, one inline stylesheet, no
+  script; the Library's [three rules](serve.md#three-rules) hold. Reading the page writes nothing; only
+  Close the week does, and only what you chose.
+
+## Close the week
+
+At the foot of the week, on `logbook serve` (a static site carries no form), and only where the page
+reads tier 2: the goals and the intention are your own words. One form and one button. Each control
+has, beside it, the command that writes the same line, byte for byte:
+
+| On the page | The command beside it |
+|---|---|
+| each goal open on the Sunday: one choice of five, `advancing`, `stalled`, `done`, `let-go` or `superseded` (or *no verdict*, where it starts), and your words on it | `logbook goal review GOAL VERDICT --period week --at SUNDAY --note "…"` |
+| *change the sentence*, when a goal stalls: the goal's page, and the command written out with its id and horizon | `logbook goal add "…" --horizon year --supersedes GOAL` |
+| *change the days*, when a goal stalls: next week's intention, the field under the goals, and **Keep these words as next week's intention** | `logbook day reflect SUNDAY --intention "…"` |
+
+```
+Close the week
+  Goals
+    Sail to Lofoten and back this summer.
+      (•) no verdict  ( ) advancing  ( ) stalled  ( ) done  ( ) let-go  ( ) superseded
+      [your words on it, if any]
+      logbook goal review 019c… advancing|stalled|done|let-go|superseded --period week --at 2026-06-21 --note "…"
+      When it stalls: change the days, keep next week's intention below; or change the sentence,
+      reword it: logbook goal add "…" --horizon year --supersedes 019c…
+  Next week's intention
+    The week's proposal is in the field, pencil until you keep it; change the words first if they need it.
+    [Send Kari Nordmann the harbour map.]
+    [ ] Keep these words as next week's intention
+    logbook day reflect 2026-06-21 --intention "…"
+  [Close the week]
+```
+
+- **A verdict** is one `review/v1` line on the goal, for the period `week`, at the Sunday: now when you
+  close the week on the Sunday, else the Sunday's last minute ([goals](goals.md)). A goal reviewed
+  already on a day of the week (by `review goal`, `goal review`, or here) shows its verdict and no
+  choice: the same verdict on the same day again writes nothing, and another is refused.
+- **The intention** is one `note/v1` line labelled `intention` on the Sunday, source `reflect`, tier 2,
+  your words as one line. Once kept, the words are shown in ink above an empty field (other words
+  kept there take their place); before, the field holds the week draft's proposal when it is shown and
+  supported (pencil until you keep it), else nothing; it is written only when
+  *Keep* is ticked. The same words again write nothing; other words are a new line whose `supersedes`
+  names the first, so one intention stands for a week, never two. Next week's mornings show it under
+  *For*, in ink, with its Sunday, in place of the pencil ([the Day](day.md#the-morning)); this page shows
+  it under *Next week*.
+- **One press, every item checked first.** Every verdict and the intention are checked before the first line is
+  written, under one writer lock: a sixth word, a goal that is no goal, your words on a goal given no
+  verdict, an empty intention, a second verdict for the week (or the same one in other words), or a
+  sealed record on a machine without
+  its identity each refuse the whole press (a 400, its sentence naming what and why), and nothing is
+  written. Another command writing the record is the 409 of every act, your words kept in its form.
+- **The gate** is every act's ([serve](serve.md)): from this machine, through the server's own pages,
+  or from your phone once `logbook setup phone` names it; anything else is a 403 and nothing written.
+- **The week closes on its Sunday.** Before its Sunday the part says when it closes and carries no form;
+  `day reflect` refuses a day ahead of today, or one that is not a Sunday.
+
+From the command line, the same week closed:
+
+```
+$ logbook goal review 019c… stalled --period week --at 2026-06-21 --note "The boat is on land."
+$ logbook day reflect 2026-06-21 --intention "Send Kari Nordmann the harbour map."
+kept the intention for the week after 2026-W25 as #412 note/v1 (intention, source reflect, tier 2) on 2026-06-21
+```
+
+`day reflect SUNDAY --intention` is the command because an intention is a note in your words on a named
+day, and `day reflect` is the command that writes those (`notes.write`, source `reflect`). It stands
+alone: a reflection, `--sign` or `--at` beside it is refused.
 
 ## Later
 
 Time by project (the plan's projects against the lived hours), the sprint's outcomes (done, rolled to
-next week, let go: they need the signed day's dispositions in the crossing, RFC 0043 slice C), the
-tasks untouched for 90 days, let go together in one decision, and **close the week**: the verdicts,
-the kept proposal as an intention for next week's mornings, through the writers that exist.
+next week, let go: they need the signed day's dispositions in the crossing, RFC 0043 slice C), and the
+tasks untouched for 90 days, let go together in one decision.
