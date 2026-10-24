@@ -20,7 +20,7 @@ import pytest
 from persona import note, persona_record, utc
 
 from logbook import cli
-from logbook.contrib import serve, world
+from logbook.contrib import library_shell, serve, world
 from logbook.core import index
 from logbook.core.store import Logbook
 
@@ -142,7 +142,11 @@ def test_no_page_references_a_url_outside_itself(tmp_path: Path, monkeypatch: py
             assert tag not in low, (page, tag)
         style = re.search(r"<style>(.*?)</style>", text, re.S)
         assert style is not None, page
-        assert "url(" not in style.group(1) and "@import" not in style.group(1), page
+        # the shell's fonts are the one `url()`: the server's own `/fonts/`, held in test_door_today.py
+        own = style.group(1)
+        assert own.count(library_shell.STYLE) == 1, page
+        own = own.replace(library_shell.STYLE, "")
+        assert "url(" not in own and "@import" not in style.group(1), page
         assert "http://" not in style.group(1) and "https://" not in style.group(1), page
         assert csp.startswith("default-src 'none'"), page
 
@@ -369,7 +373,9 @@ def test_today_is_the_current_day_in_the_records_timezone(
     assert 'href="/day/2026-06-21"' in late.body.decode("utf-8")
     clock[0] = datetime(2026, 6, 21, 22, 0, 0, tzinfo=UTC)
     assert site.respond("/today", "").headers["Location"] == "/day/2026-06-22"
-    assert 'href="/today"' in site.respond("/", "").body.decode("utf-8"), "in the navigation"
+    front = site.respond("/", "").body.decode("utf-8")  # Today is the front door; /today the Day it is
+    assert '<a href="/" aria-current="page">Today</a>' in front, "in the header"
+    assert 'href="/day/2026-06-22"' in front, "the Day /today names, one tap from Today (its week)"
 
 
 def test_today_west_of_utc_is_still_yesterday_there(tmp_path: Path) -> None:

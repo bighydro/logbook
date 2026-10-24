@@ -59,6 +59,7 @@ DETAILS = (
 ROUTES = frozenset(
     {
         "/",
+        "/shelves",
         "/day/D",
         "/days",
         "/trips",

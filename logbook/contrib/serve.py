@@ -544,6 +544,7 @@ section.held td{overflow-wrap:anywhere;vertical-align:baseline}
 section.held td.at{white-space:nowrap;font-variant-numeric:tabular-nums;color:var(--mute)}
 details.conversation,details.all{margin:.2rem 0 0}
 section.held details.held{margin:1.5rem 0 0}
+ul.unplaced li{overflow-wrap:anywhere}
 section.held h3{font-size:1rem;margin:.8rem 0 .2rem}
 span.way{font-size:.78rem;color:var(--mute)}
 @media (max-width:40rem){ul.strip{margin-left:1rem}}
@@ -1583,7 +1584,9 @@ class Site:
                 today = day_start.of(meta).today(self.now()).isoformat()
             except day_start.DayStartError:
                 today = "-"
-            parts += [today, day_rhythm.clock_tag(today, meta, self.now()), self._day_later_tag()]
+            parts += [today, day_rhythm.clock_tag(today, meta, self.now())]
+            if self.read_later:  # read off the request, and arrived since: read on it, the head names them
+                parts.append(self._day_later_tag())
         parts += self._beside()
         digest = hashlib.sha256("\n".join(parts).encode("utf-8")).hexdigest()
         return f'"{str(meta.get("head") or "")[:HEAD_CHARS]}-{digest[:16]}"'
@@ -1694,7 +1697,7 @@ class Site:
     def _page(self, path: str, params: Mapping[str, str]) -> str:
         if path == "/":
             return door_today.page_today(self)
-        if path == library_shell.GEAR:
+        if path == "/shelves":  # the gear (`library_shell.GEAR`): every shelf, the front page as it was
             return self.page_index()
         if (m := DAY_PATH.match(path)) is not None:
             return self.page_day(m.group(1), expanded=params.get("open") == "1", shape=params.get("shape"))
@@ -1792,7 +1795,7 @@ class Site:
         gear), or the navigation a static site gives (`nav`), as it was."""
         if self.nav is not None:
             return f"<header><nav>{self.nav}</nav></header>\n"
-        return library_shell.header_html(_PATH.get(), self.href)
+        return library_shell.header_html(_PATH.get(), self.href, ask=not self.static)
 
     def _whole(self) -> tuple[str, str] | None:
         """The days the owner's track covers, else any line's; None for an empty record."""

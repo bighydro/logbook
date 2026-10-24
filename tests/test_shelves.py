@@ -15,6 +15,7 @@ import claude_sessions as cs
 import page_text
 import pytest
 import shelves_record as sr
+from library_header import without_shell
 
 from logbook.contrib import promises, serve, shelf_agents, shelf_goals, shelf_promises
 from logbook.core.store import Logbook
@@ -299,6 +300,7 @@ def test_no_shelf_page_carries_a_form_and_a_post_is_refused(lb: Logbook) -> None
     promise = shelf_promises.read(lb).rows[0].proposal.id
     for target in (*PAGES, f"/goals/{found['quarter']}", f"/promises/{promise}"):
         status, page = _get(site, target)
+        page = without_shell(page)  # the header's one form is Ask, a GET, and it is the shell's own
         assert status == 200 and "<form" not in page and 'method="post"' not in page, target
     before = sorted(p.name for p in (lb.root).rglob("*.jsonl"))
     response = site.write("/goals", {}, "127.0.0.1", None)
@@ -306,8 +308,11 @@ def test_no_shelf_page_carries_a_form_and_a_post_is_refused(lb: Logbook) -> None
     assert sorted(p.name for p in (lb.root).rglob("*.jsonl")) == before
 
 
-def test_the_shelves_join_the_navigation_after_ideas() -> None:
-    nav = serve.NAV
+def test_the_shelves_join_the_gear_after_ideas(lb: Logbook) -> None:
+    """The shelves are listed behind the gear (`/shelves`, the front page as it was before the doors)
+    after Ideas, and before Places, as the navigation listed them."""
+    _status, nav = _get(_site(lb), "/shelves")
+    nav = nav[nav.index("<main>") :]
     assert nav.index('"/ideas"') < nav.index('"/promises"') < nav.index('"/goals"') < nav.index('"/agents"')
     assert nav.index('"/agents"') < nav.index('"/places"')
 

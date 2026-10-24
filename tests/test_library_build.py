@@ -48,7 +48,9 @@ def _served(lb: Logbook, library: library_build.Library) -> serve.Site:
 def test_a_build_writes_every_door_beside_the_index_never_in_the_record(lb: Logbook) -> None:
     library, _site, result = _built(lb)
     pages = library.pages()
-    assert set(library_build.DOORS) <= set(pages), set(library_build.DOORS) - set(pages)
+    built = {door for door in library_build.DOORS if not library_build.live(door, TODAY)}
+    assert built <= set(pages), built - set(pages)
+    assert "/" in library_build.DOORS and "/" not in pages, "Today is rendered for its links, always live"
     assert result.failed == {} and result.pages == len(pages)
     assert library.folder.parent == lb.index_path.parent, "beside the index, in the cache folder"
     assert lb.root not in library.folder.parents and library.folder != lb.root
@@ -78,7 +80,7 @@ def test_a_build_writes_nothing_to_the_record(lb: Logbook) -> None:
 
 def test_a_built_page_is_the_server_s_page_and_says_when_it_was_built(lb: Logbook) -> None:
     library, site, _result = _built(lb)
-    for target in ("/", "/people", "/days", f"/day/{WEDNESDAY}"):
+    for target in ("/shelves", "/people", "/days", f"/day/{WEDNESDAY}"):
         path, _, query = target.partition("?")
         page, body = library.page(target) or pytest.fail(target)
         assert body == library_build.stamped(site.respond(path, query).body, "12:00"), target
@@ -96,7 +98,7 @@ def test_a_built_page_is_answered_without_opening_the_index(
         raise AssertionError("a built page opened the index")
 
     monkeypatch.setattr(index_module.Index, "open", opened)
-    for target in ("/", "/people", "/journeys", "/world", "/gaps", f"/day/{WEDNESDAY}"):
+    for target in ("/shelves", "/people", "/journeys", "/world", "/gaps", f"/day/{WEDNESDAY}"):
         path, _, query = target.partition("?")
         response = served.respond(path, query)
         assert response.status == 200 and b"built 12:00" in response.body, target
@@ -118,6 +120,8 @@ def test_the_build_is_served_as_built_after_the_head_moves_but_today_is_live(lb:
     assert served.respond("/people").body == before, "static: as of the build"
     today = served.respond(f"/day/{TODAY}").body.decode("utf-8")
     assert "The harbour office opens at nine." in today and "built 12:00" not in today
+    front = served.respond("/")
+    assert front.status == 200 and b"built 12:00" not in front.body, "Today is live, as today's Day is"
 
 
 def test_a_page_no_build_wrote_is_rendered_once_and_kept(lb: Logbook) -> None:
@@ -152,7 +156,7 @@ def test_an_act_drops_the_page_it_returns_to_and_asks_for_a_rebuild(lb: Logbook)
     form = {"act": "reflect", "text": "We sailed home before the wind turned."}
     answered = served.write(f"/day/{day}/reflect", form, LOOPBACK, None)
     assert answered.status == 303
-    assert f"/day/{day}" not in library.pages() and "/" not in library.pages()
+    assert f"/day/{day}" not in library.pages() and "/shelves" not in library.pages()
     assert "/people" in library.pages(), "the rest is the rebuild's, in the background"
     assert asked == ["rebuild"]
     page = served.respond(f"/day/{day}").body.decode("utf-8")
@@ -177,7 +181,7 @@ def test_a_form_refused_as_older_than_the_record_drops_its_page_so_the_reload_is
     form = {"act": "reflect", "text": "Said aloud.", "dictation": "0190a1b2-0000-7000-8000-000000000000"}
     refused = served.write(f"/day/{day}/reflect", form, LOOPBACK, None)
     assert refused.status == 409
-    assert f"/day/{day}" not in library.pages() and "/" in library.pages()
+    assert f"/day/{day}" not in library.pages() and "/shelves" in library.pages()
     assert "built 12:00" not in served.respond(f"/day/{day}").body.decode("utf-8")
     assert library_build.touched(
         ["/people", "/people?year=2026", "/people/x", "/peoplex"], "/people/review", 409, "", {}
@@ -217,7 +221,7 @@ def test_the_rebuilder_builds_once_for_many_acts(lb: Logbook) -> None:
         deadline = time.monotonic() + 120
         while rebuilder.builds == 0 and time.monotonic() < deadline:
             time.sleep(0.05)
-        assert rebuilder.builds >= 1 and "/" in library.pages()
+        assert rebuilder.builds >= 1 and "/shelves" in library.pages()
         time.sleep(0.2)
         assert rebuilder.builds <= 2, "five asks while one build ran: at most one more"
     finally:
@@ -299,7 +303,7 @@ def test_a_build_after_a_day_renders_what_the_day_touched_and_every_door(lb: Log
     page = library.page("/day/2026-06-15")
     assert page is not None and b"The boat is back in the water." in page[1]
     for door in library_build.DOORS:
-        assert door in after, door
+        assert door in after or library_build.live(door, TODAY), door
     assert set(after) >= set(before), "an incremental build removes nothing"
 
 

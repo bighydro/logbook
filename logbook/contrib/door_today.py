@@ -78,20 +78,20 @@ CHECK = (
 )
 
 STYLE = """
-body:has(main.today){background:var(--paper,#F4F1EA);color:var(--ink,#16181D)}
+body.today{background:var(--paper,#F4F1EA);color:var(--ink,#16181D)}
 main.today{max-width:84rem;padding:28px 1.5rem 3rem;font:15px/1.5 var(--sans,system-ui,sans-serif);
 color:var(--ink,#16181D)}
 main.today a{color:inherit}
 main.today h1,main.today h2{font-family:var(--serif,Georgia,serif);font-weight:400;color:var(--ink,#16181D)}
 .today-grid{display:grid;grid-template-columns:minmax(0,1fr);gap:28px}
 .today-main{display:flex;flex-direction:column;gap:28px;min-width:0}
-.mono-label{font:500 12px/1.4 var(--mono,ui-monospace,monospace);letter-spacing:.13em;
+.mono-label{font:12px/1.4 var(--mono,ui-monospace,monospace);font-weight:500;letter-spacing:.13em;
 text-transform:uppercase;color:var(--pencil,#62666D);margin:0 0 8px}
 .muted{color:var(--pencil,#62666D)}
 .pencil{color:var(--pencil,#62666D);text-decoration:underline dotted var(--pencil-rule,#8C8F95);
 text-decoration-thickness:1px;text-underline-offset:3px}
 .card{background:var(--surface,#FBFAF6);border:1px solid var(--line,#E3DED3);border-radius:20px;padding:32px}
-section.the-day h1{font-size:72px;line-height:1.02;margin:.1rem 0 .4rem;letter-spacing:-.01em}
+section.the-day h1{font-size:72px;line-height:1.02;margin:.1rem 0 .4rem}
 section.the-day p{margin:0}
 p.weather{font-size:15px;margin:0 0 .5rem}
 p.state{display:flex;align-items:center;gap:.4rem;font-size:15px}
@@ -104,10 +104,11 @@ border:0}
 section.year-ago{background:var(--card-dark,#16181D);color:var(--card-dark-text,#F4F1EA);border-radius:20px;
 padding:32px}
 section.year-ago .mono-label,section.year-ago p.where{color:var(--card-dark-muted,#C9C4B8)}
-section.year-ago p.said{font:400 30px/1.2 var(--serif,Georgia,serif);margin:0 0 .7rem}
+section.year-ago p.said{font:30px/1.2 var(--serif,Georgia,serif);font-weight:400;margin:0 0 .7rem}
 section.year-ago p.where{font-size:13px;margin:0 0 1.1rem}
 a.pill,button.pill,section.acts button{display:inline-flex;align-items:center;justify-content:center;
-min-height:44px;padding:0 1.3rem;border-radius:23px;font:500 15px var(--sans,system-ui,sans-serif);
+min-height:44px;padding:0 1.3rem;border-radius:23px;
+font:15px var(--sans,system-ui,sans-serif);font-weight:500;
 text-decoration:none;cursor:pointer;box-sizing:border-box;border:1px solid var(--ink,#16181D);
 background:transparent;color:var(--ink,#16181D);margin:0}
 section.acts button.primary,section.acts form.sign button{background:var(--ink,#16181D);
@@ -124,15 +125,17 @@ padding:14px 0;text-decoration:none;color:inherit;min-height:44px}
 ol.loose a.row:hover .what{text-decoration:underline;text-decoration-thickness:1px}
 span.circle{width:18px;height:18px;border:1.5px solid var(--pencil-rule,#8C8F95);border-radius:50%;
 margin-top:5px;box-sizing:border-box}
-span.what{display:block;font:400 22px/1.25 var(--serif,Georgia,serif);color:var(--ink,#16181D);
+span.what{display:block;font:22px/1.25 var(--serif,Georgia,serif);font-weight:400;color:var(--ink,#16181D);
 overflow-wrap:anywhere}
 span.prov{display:block;font-size:13px;margin-top:3px;color:var(--pencil,#62666D);overflow-wrap:anywhere}
-span.due{font:500 12px/1 var(--mono,ui-monospace,monospace);letter-spacing:.06em;text-transform:uppercase;
+span.due{font:12px/1 var(--mono,ui-monospace,monospace);font-weight:500;letter-spacing:.06em;
+text-transform:uppercase;
 padding:6px 10px;border-radius:12px;border:1px solid var(--line,#E3DED3);color:var(--pencil,#62666D);
 white-space:nowrap;margin-top:4px}
 span.due.today{color:var(--signal,#C8401A);border-color:var(--signal,#C8401A)}
 p.more{font-size:13px;margin:.6rem 0 0}
-section.words .ink{font:400 24px/1.35 var(--serif,Georgia,serif);color:var(--ink,#16181D);margin:0 0 .6rem}
+section.words .ink{font:24px/1.35 var(--serif,Georgia,serif);font-weight:400;color:var(--ink,#16181D);
+margin:0 0 .6rem}
 dl.questions{margin:1.2rem 0 1.4rem;display:grid;grid-template-columns:max-content minmax(0,1fr);
 gap:.35rem 1rem;color:var(--pencil,#62666D);font-size:15px}
 dl.questions dt{margin:0}dl.questions dd{margin:0;overflow-wrap:anywhere}
@@ -152,7 +155,7 @@ aside.today-aside .card{padding:24px}
 ol.week{list-style:none;display:flex;gap:8px;margin:0 0 .8rem;padding:0}
 ol.week a,ol.week span.day{display:flex;flex-direction:column;align-items:center;gap:6px;min-width:32px;
 min-height:44px;text-decoration:none;color:var(--pencil,#62666D);
-font:500 12px var(--mono,ui-monospace,monospace)}
+font:12px var(--mono,ui-monospace,monospace);font-weight:500}
 ol.week i{display:block;width:22px;height:22px;border-radius:50%;
 border:1.5px solid var(--pencil-rule,#8C8F95);box-sizing:border-box}
 ol.week .signed i{background:var(--ink,#16181D);border-color:var(--ink,#16181D)}
@@ -314,7 +317,7 @@ def _the_day(site: Site, day: str, morning: Morning, local: datetime) -> str:
         signed = f"<span>Signed at {escape(morning.signed_at)}</span>"
         parts.append(f'<p class="state signed">{CHECK}{signed}</p>\n')
     elif not empty:
-        sign = "" if site.static else ' <a href="#acts">Sign it</a>'
+        sign = "" if site.static else ' <a href="/#acts">Sign it</a>'
         parts.append(f'<p class="state muted">Not signed yet.{sign}</p>\n')
     if empty:
         parts.append(
@@ -681,7 +684,7 @@ def _words(
 def _ideas_touched(site: Site, day: str) -> list[str]:
     """The ideas the day's lines touched (the Ideas shelf's touches, `ideas.read`), by name; none read
     when the record names no idea."""
-    if not ideas.named(site.lb, site.tiers):
+    if not site._day_reading(("ideas named",), lambda: bool(ideas.named(site.lb, site.tiers))):
         return []
     rec = site._idea_record()
     seen: dict[str, str] = {}

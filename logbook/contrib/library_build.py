@@ -7,7 +7,8 @@ and the location it was answered with, so a built page is the page the server wo
 the moment of the build, byte for byte, with one sentence added to its footer saying when that was.
 The server answers a GET from the build when the build holds the address, and renders only what the
 build does not hold: today's Day, whose shape moves with the clock (RFC 0043 §5), the redirect of
-`/today`, a photo's pixels, and an address no build has written yet, which it renders once and adds
+`/today`, Today (`/`: the build renders it for the pages it links, and never keeps it), a photo's pixels,
+and an address no build has written yet, which it renders once and adds
 to the build (`Library.keep`), so the next visit is a file. Nothing a page shows is computed while a
 browser waits for a door.
 
@@ -66,7 +67,8 @@ MANIFEST = "pages.json"
 LOCK = "building.lock"
 # the doors and shelves of the Library today (RFC 0047 §9 maps each to its door)
 DOORS = (
-    "/",
+    "/",  # Today: built with the doors, so its links lead the build to the days it names; answered live
+    "/shelves",
     "/days",
     "/trips",
     "/journeys",
@@ -91,6 +93,7 @@ EACH = 60  # detail pages of one kind the build follows from the doors
 ASKED = 500  # addresses the server added on demand, the latest kept and rebuilt
 DETAIL = re.compile(r"^/(people|journeys|org|idea|goals|promises|day)/")
 HREF = re.compile(r"""href\s*=\s*["']([^"']*)["']""", re.I)
+FRONT = ("/", "/shelves")  # the front pages an act changes: Today (live), and every shelf with its count
 LIVE_PREFIXES = ("/photo/",)  # pixels from the attachment store: cheap, and not a page
 FOOTER = "</footer>"
 REPLACE_TRIES = 40  # Windows: a file held open by a reader is replaced again for up to two seconds
@@ -381,9 +384,10 @@ class Library:
 
 
 def live(path: str, today: str) -> bool:
-    """Whether the server renders `path` always, never from the build: today's Day (its shape moves
-    with the clock), `/today` (a redirect to it) and a photo's pixels."""
-    if path == "/today" or path.startswith(LIVE_PREFIXES):
+    """Whether the server renders `path` always, never from the build: Today (`/`) and today's Day
+    (their day, their clock and their morning move with the hour), `/today` (a redirect to it) and a
+    photo's pixels."""
+    if path in ("/", "/today") or path.startswith(LIVE_PREFIXES):
         return True
     return path == f"/day/{today}"
 
@@ -422,7 +426,7 @@ def touched(pages: Iterable[str], act: str, status: int, back: str, form: Mappin
         return [t for t in pages if any(_under(t.partition("?")[0], p) for p in prefixes)]
     if status >= 400:
         return []
-    return [t for t in pages if t == "/" or (back and t.partition("?")[0] == back)]
+    return [t for t in pages if t in FRONT or (back and t.partition("?")[0] == back)]
 
 
 def _kind(target: str) -> str:
@@ -439,7 +443,7 @@ def targets(
     pages and variants the doors link to, `EACH` of a kind, in the order the doors list them; then the
     addresses asked for on demand. Reads the doors as it goes (they are rendered again by the build:
     the second reading is the server's kept page)."""
-    out: list[str] = list(DOORS)
+    out: list[str] = [door for door in DOORS if not live(door, today)]  # Today: read for its links alone
     first = date.fromisoformat(today)
     out += [f"/day/{(first - timedelta(days=n)).isoformat()}" for n in range(1, RECENT_DAYS + 1)]
     seen = set(out)

@@ -37,6 +37,7 @@ from dream_fortnight import (
     run_cli,
 )
 from ideas_record import notion
+from library_header import without_shell
 from persona import CAFE, HOME, KARI, KARI_ID, OLA, ZURICH, attendee, dwell, event, flight, note, photo, utc
 
 from logbook import cli
@@ -293,7 +294,7 @@ def test_a_shape_asked_for_is_shown_for_reading_and_an_unknown_one_falls_back(lb
     unknown = _page(site, SATURDAY, "shape=noon")
     assert _eyebrow(unknown) == _eyebrow(computed) == "Saturday · morning · 09:00"
     assert _parts(unknown) == _parts(computed) and "shown for reading" not in unknown
-    forms = re.findall(r'<form [^>]*action="([^"]+)"', _page(site, SATURDAY, "shape=evening"))
+    forms = re.findall(r'<form [^>]*action="([^"]+)"', without_shell(_page(site, SATURDAY, "shape=evening")))
     assert forms and all(
         f in ("/with", "/star", f"/day/{SATURDAY}/reflect", f"/day/{SATURDAY}/sign") for f in forms
     )
@@ -610,7 +611,8 @@ def test_the_page_loads_nothing_and_opens_nothing(lb: Logbook, no_network: list[
         response = site.respond(f"/day/{day}", "open=1")
         page = response.body.decode("utf-8")
         assert response.csp in (serve.DAY_CSP, serve.DAY_IMAGES)
-        assert "url(" not in page and "@import" not in page and "<link" not in page
+        own = without_shell(page)  # the shell's fonts are the server's own (`/fonts/`), and nothing else
+        assert "url(" not in own and "@import" not in page and "<link" not in page
         assert page.count("<script") <= 1 and ("<script" not in page or serve.DAY_SCRIPT in page)
         assert phone_width.problems(page) == []
     assert no_network == []

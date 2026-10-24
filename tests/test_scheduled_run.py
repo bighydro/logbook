@@ -374,7 +374,7 @@ def test_the_close_builds_the_library_after_the_dream_and_before_the_doctor(
     built = next(line for line in out.splitlines() if line.startswith("library: "))
     assert out.index("2026-10-07  dreamed") < out.index(built) < out.index("scheduled run, the close")
     library = library_build.Library(lb)
-    assert library.built()["pages"] > 0 and "/" in library.pages()
+    assert library.built()["pages"] > 0 and "/shelves" in library.pages()
     assert lb.root not in library.folder.parents
 
 

@@ -21,6 +21,7 @@ from typing import Any
 
 import pytest
 from dream_fortnight import W25, fake, fortnight, run_cli
+from library_header import without_shell
 from orgs_record import TODAY, evidence_record, settle
 from persona import CAFE, note, persona_record, photo, utc
 
@@ -290,7 +291,7 @@ def test_every_row_that_is_a_line_opens_its_line_read_only_and_through_the_gate(
         assert f'href="/line/{line["id"]}"' in page, line["kind"]
     raw = _site(lb).respond(f"/line/{lunch['id']}", "")
     text = raw.body.decode("utf-8")
-    assert raw.status == 200 and raw.etag is not None and "<form" not in text
+    assert raw.status == 200 and raw.etag is not None and "<form" not in without_shell(text)
     assert "Lunch" in text and lunch["hash"] in text and f'href="/day/{WEDNESDAY}"' in text
     assert re.search(r"<pre[^>]*>", text) and "&quot;schema&quot;: &quot;event/v1&quot;" in text
     written = _append(lb, note(utc(WEDNESDAY, "15:00"), "A synthetic thought, tier 2."))

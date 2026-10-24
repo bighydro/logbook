@@ -39,6 +39,7 @@ from dream_fortnight import (
     set_dream_entry,
 )
 from ideas_record import notion
+from library_header import without_shell
 from test_day_rhythm import _seen, beside
 from test_dream_week_question import MAP, SAUNA
 from test_dream_week_question import name as name_entity
@@ -220,7 +221,8 @@ def test_the_week_page_holds_its_parts_each_folded_with_a_summary(lb: Logbook) -
     assert titles == list(FOLDS)
     for title in FOLDS:
         assert _summary(page, title).strip(), title
-    assert "<form" not in page and "<script" not in page, "read-only: no form, no script (part 2 adds close)"
+    own = without_shell(page)  # the header's one form is Ask, a GET, and it is the shell's own
+    assert "<form" not in own and "<script" not in page, "read-only: no form, no script (part 2 adds close)"
     pager = re.findall(r'href="/week/(\d{4}-W\d{2})"', page)
     assert W24 in pager and "2026-W26" in pager, "the week before and after"
 

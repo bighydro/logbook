@@ -145,7 +145,8 @@ def test_every_page_renders_on_the_four_years_and_points_at_nothing_but_itself(l
         )
         assert response.headers["Content-Security-Policy"].startswith("default-src 'none'")
         assert response.etag is not None, f"{page}: the record's, kept by the browser"
-        assert '<a href="/journeys">journeys</a><a href="/people">people</a>' in text, "in the navigation"
+        assert '<a href="/people"' in text and ">People</a>" in text, "in the header"
+        assert 'href="/shelves"' in text, "the gear: every shelf, the Journeys among them"
 
 
 def test_serving_the_shelves_writes_nothing(lb: Logbook) -> None:
@@ -513,4 +514,7 @@ def test_no_shelf_is_wider_than_a_phone(lb: Logbook) -> None:
         text = _get(site, page)
         assert phone_width.problems(text) == [], page
         assert phone_width.phone_breakpoints(phone_width.parse(text)[1]), page
-    assert phone_width.images(_get(site, BERGEN_PAGE)) == ["html > body > main > svg.stays"]
+    assert phone_width.images(_get(site, BERGEN_PAGE)) == [
+        "body > header.shell > a.gear > svg",
+        "html > body > main > svg.stays",
+    ]

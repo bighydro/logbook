@@ -209,11 +209,9 @@ def test_every_manifest_page_is_one_document_that_fetches_nothing(lb: Logbook) -
             assert target.startswith("/") and not target.startswith("//"), (path, target)
         assert site.respond(path, "", if_none_match=response.etag).status == 304
     assert site.respond("/org/nobody", "").status == 404
-    front = _get(site, "/")
-    assert (
-        'href="/manifest"' in front
-        and '<a href="/people">people</a><a href="/manifest">manifest</a>' in front
-    )
+    front = _get(site, "/shelves")  # behind the gear: every shelf, as the front page listed them
+    front = front[front.index("<main>") :]
+    assert 'href="/manifest"' in front and front.index('href="/people"') < front.index('href="/manifest"')
 
 
 def test_no_manifest_page_is_wider_than_a_phone(lb: Logbook) -> None:

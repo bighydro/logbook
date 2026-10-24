@@ -196,6 +196,7 @@ div.card{{background:var(--card);border:1px solid var(--line);border-radius:6px;
 div.card p{{margin:0 0 6px}}div.card p:last-child{{margin:0}}
 ul.rows{{list-style:none;padding:0;margin:0}}
 ul.rows li{{display:flex;gap:.7rem;padding:7px 0;border-bottom:1px solid var(--line);font-size:13.5px}}
+ul.rows li>span{{min-width:0;overflow-wrap:anywhere}}
 ul.rows li:last-child{{border-bottom:0}}
 ul.rows div.t{{flex:0 0 3.2rem;color:var(--mute);font-size:12.5px;padding-top:1px}}
 ul.rows span.sub{{display:block;color:var(--mute);font-size:12.5px}}

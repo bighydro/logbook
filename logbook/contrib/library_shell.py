@@ -101,7 +101,8 @@ STYLE = (
 @media (prefers-color-scheme:dark){{:root,header.shell{{{DARK}}}}}
 header.shell{{display:flex;align-items:center;gap:1.4rem;padding:.7rem 1.5rem;margin:0;
 background:var(--paper);color:var(--ink);border-bottom:1px solid var(--line);font:15px/1.4 var(--sans)}}
-header.shell a.wordmark{{font:400 28px/1 var(--serif);color:var(--ink);text-decoration:none;margin:0;
+header.shell a.wordmark{{font:28px/1 var(--serif);font-weight:400;color:var(--ink);text-decoration:none;
+margin:0;
 padding:.2rem 0;white-space:nowrap}}
 header.shell nav.doors{{display:flex;gap:1.4rem;flex-wrap:nowrap;row-gap:0}}
 header.shell nav.doors a{{display:inline-flex;align-items:center;min-height:44px;margin:0;padding:0 .1rem;
@@ -118,6 +119,7 @@ header.shell form.ask input::placeholder{{color:var(--pencil);opacity:1}}
 header.shell a.gear{{display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;
 flex:none;border-radius:22px;color:var(--pencil);border:1px solid transparent;box-sizing:border-box}}
 header.shell a.gear:hover,header.shell a.gear[aria-current=page]{{color:var(--ink);border-color:var(--line)}}
+header.shell svg{{max-width:100%}}
 header.shell :focus-visible{{outline:2px solid var(--ink);outline-offset:2px}}
 @media (max-width:40rem){{
 header.shell{{flex-wrap:wrap;gap:.5rem .8rem;padding:.6rem 16px .7rem}}
@@ -127,7 +129,7 @@ header.shell form.ask{{order:3;flex:1 1 100%}}
 header.shell form.ask input{{max-width:none}}
 header.shell nav.doors{{position:fixed;left:0;right:0;bottom:0;z-index:10;justify-content:space-around;gap:0;
 background:var(--surface);border-top:1px solid var(--line);
-padding:0 env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}}
+padding-bottom:env(safe-area-inset-bottom)}}
 header.shell nav.doors a{{flex:1 1 0;justify-content:center;min-height:52px;font-size:14px;
 border-bottom:0;border-top:2px solid transparent}}
 header.shell nav.doors a[aria-current=page]{{border-top-color:var(--ink)}}
@@ -148,9 +150,10 @@ def current(path: str) -> str | None:
     return None
 
 
-def header_html(path: str, href: Callable[[str], str | None]) -> str:
+def header_html(path: str, href: Callable[[str], str | None], ask: bool = True) -> str:
     """The header of the page at `path`, every link written through `href` (a server path → the link to
-    write, or None for a page that has no link: the static site's)."""
+    write, or None for a page that has no link: the static site's); `ask` False for a page with nothing
+    to submit to (a static one), which carries no form."""
     here = current(path)
 
     def a(text: str, target: str, cls: str = "", label: str = "", inner: str = "") -> str:
@@ -164,11 +167,11 @@ def header_html(path: str, href: Callable[[str], str | None]) -> str:
         return f'<a href="{escape(link)}"{attrs}>{inner or escape(text)}</a>'
 
     doors = "".join(a(name, target) for name, target in DOORS)
-    ask = href(ASK)
+    target = href(ASK) if ask else None
     form = (
         ""
-        if ask is None
-        else f'<form class="ask" role="search" method="get" action="{escape(ask)}">'
+        if target is None
+        else f'<form class="ask" role="search" method="get" action="{escape(target)}">'
         f'<input type="search" name="q" placeholder="{escape(ASK_PLACEHOLDER)}" aria-label="Ask"></form>'
     )
     gear = a(GEAR_LABEL, GEAR, "gear", GEAR_LABEL, GEAR_SVG)
