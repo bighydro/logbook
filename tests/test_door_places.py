@@ -138,7 +138,8 @@ def test_the_door_is_the_head_the_globe_next_and_your_places_then_the_register_a
 
 
 def test_the_globe_is_inline_svg_on_a_dark_card_turned_to_home(lb: Logbook) -> None:
-    door = _door(_get(_site(lb), "/places"))
+    text = _get(_site(lb), "/places")
+    door = _door(text)
     svg = re.search(r"<svg[^>]*>.*?</svg>", door, re.S)
     assert svg is not None
     globe = svg.group(0)
@@ -151,7 +152,7 @@ def test_the_globe_is_inline_svg_on_a_dark_card_turned_to_home(lb: Logbook) -> N
     w = float(re.search(r'viewBox="0 0 ([\d.]+) ', globe).group(1))  # type: ignore[union-attr]
     assert abs(x - w / 2) < w * 0.2 and abs(y - w / 2) < w * 0.2, "home near the centre"
     assert re.search(r'class="arc past"', globe), "the Zürich trip, lived: a muted arc"
-    assert "#0E141B" in door or "#0e141b" in door.lower()
+    assert ".globe-card{background:#0E141B" in text, "the dark card, in the page's one stylesheet"
 
 
 def test_the_coastlines_come_from_the_map_file_when_it_is_set(lb: Logbook, tmp_path: Path) -> None:
