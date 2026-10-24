@@ -17,7 +17,7 @@ from typing import Any
 
 from .. import FORMAT
 from ..contrib import demo
-from ..core import attachments, day_start, health, repair, sealing, voiceprints
+from ..core import attachments, day_start, health, policy, repair, sealing, voiceprints
 from ..core.index import Index
 from ..core.store import (
     IDENTITY_NEEDED,
@@ -665,11 +665,12 @@ SETUP_STEPS = ("folder", "timezone", "owner", "home", "sources", "doctor")
 
 
 def setup_arguments(sub: Subparsers) -> None:
-    """`logbook setup [places|assets|questions|day_start|speakers|phone]`: the guided first run, and the
-    settings of the record that it asks about or that live beside its policy — the named places
+    """`logbook setup [places|assets|questions|day_start|speakers|phone|agents]`: the guided first run,
+    and the settings of the record that it asks about or that live beside its policy — the named places
     (`places.json`), the assets it tracks (`assets.json`), the digest's questions
     (`policy/questions.json`), where the day starts, whether the owner's phone writes through the
-    Library — and the diarizer's models (RFC 0038). Each is declared beside the code that reads it."""
+    Library, the owner's own agents (`policy/agents.json`) — and the diarizer's models (RFC 0038). Each
+    is declared beside the code that reads it."""
     from .day import questions_arguments
     from .derive import speakers_arguments
     from .maps import setup_map_arguments
@@ -683,7 +684,7 @@ def setup_arguments(sub: Subparsers) -> None:
         description="the guided first run: where the record lives, your timezone, who you are, your home,"
         " what is"
         " on this machine to import; one question at a time, resumable; --yes takes every default."
-        " The record's settings: places, assets, questions, day_start, phone",
+        " The record's settings: places, assets, questions, day_start, phone, agents",
     )
     s.add_argument("--yes", action="store_true", help="take every default, ask nothing (tests, scripts)")
     s.add_argument("--step", metavar="NAME", help="run one step again: " + ", ".join(SETUP_STEPS))
@@ -697,6 +698,7 @@ def setup_arguments(sub: Subparsers) -> None:
     speakers_arguments(settings)
     setup_map_arguments(settings)
     phone_arguments(settings)
+    agents_arguments(settings)
 
 
 def cmd_setup(a: argparse.Namespace) -> None:
@@ -799,6 +801,68 @@ def _signatures_moved(lb: Logbook) -> tuple[int, int]:
             if (signing.signed_json(line, tz, signing.page(idx, day), day) or {}).get("page_matches") is False
         )
     return moved, len(standing)
+
+
+def agents_arguments(sub: Subparsers) -> None:
+    """`logbook setup agents list | add SENDER [--name NAME] | remove SENDER`: the owner's own bots, by
+    the sender id a source gives them (`policy/agents.json`, docs/adapters/agents.md)."""
+    s = sub.add_parser(
+        "agents",
+        help="your own bots, by the sender id Beeper gives them: their lines are marked machine text",
+        description="your own agents, by the sender id a source gives them (policy/agents.json): `add beeper`"
+        " and `sync beeper` mark a named sender's lines as machine text (extra.machine) and a direct chat"
+        " with one as a conversation with an agent (extra.counterpart), so no reader takes the bot for a"
+        " person. Lines already in the record are never changed",
+    )
+    verbs = s.add_subparsers(dest="verb", required=True)
+    v = verbs.add_parser("list", help="one line per named agent: its sender id and name")
+    v.set_defaults(fn=cmd_agents)
+    v = verbs.add_parser("add", help="name one sender one of your agents")
+    v.add_argument(
+        "sender",
+        help="the sender id as the line carries it: extra.matrix_user (the phone's Beeper),"
+        " extra.sender_id (Beeper Desktop), e.g. @telegram_900000001:beeper.local",
+    )
+    v.add_argument("--name", help="what you call it; else the name the source shows")
+    v.set_defaults(fn=cmd_agents)
+    v = verbs.add_parser("remove", help="take a sender off the list")
+    v.add_argument("sender", help="the sender id, as `setup agents list` shows it")
+    v.set_defaults(fn=cmd_agents)
+
+
+def cmd_agents(a: argparse.Namespace) -> None:
+    """`setup agents list`: the named senders. `setup agents add`: name one (a setting, not a line:
+    nothing is appended, and the lines already written keep what they were written with).
+    `setup agents remove`: take one off; a sender the file does not name exits 2."""
+    lb = Logbook.find()
+    path = policy.AGENTS_FILE
+    try:
+        if a.verb == "add":
+            if not policy.agent_add(lb.root, a.sender, a.name):
+                print(f"{a.sender.strip()} is already named in {path}; nothing changed")
+                return
+            name = policy.agent_senders(lb.root)[a.sender.strip()]
+            print(
+                f"{a.sender.strip()}{f'  {name}' if name else ''}: named in {path}. The next `add beeper` or"
+                " `sync beeper` marks its lines machine text; lines already in the record keep the marks"
+                " they were written with"
+            )
+            return
+        if a.verb == "remove":
+            if not policy.agent_remove(lb.root, a.sender):
+                print(f"setup agents: {path} names no agent {a.sender.strip()!r}", file=sys.stderr)
+                sys.exit(2)
+            print(f"{a.sender.strip()}: no longer named in {path}; no line changed")
+            return
+        senders = policy.agent_senders(lb.root)
+    except policy.PolicyError as e:
+        print(f"setup agents: {e}", file=sys.stderr)
+        sys.exit(2)
+    if not senders:
+        print(f"no agent named in {path}; `logbook setup agents add SENDER --name NAME` names one")
+        return
+    for sender, name in senders.items():
+        print(f"{sender}  {name}" if name else sender)
 
 
 def doctor_arguments(sub: Subparsers) -> None:

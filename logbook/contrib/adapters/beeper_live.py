@@ -36,6 +36,13 @@ cache from an iPhone backup (the `beeper` file adapter) — is a second line her
 source and raw_id. `--networks` chooses which networks to pull; the default is every one but
 imessage, which the local source has.
 
+The owner's own bots are named in the record's settings, never here: `pull` takes `agents`, the
+Beeper user id of each (`policy/agents.json`, `logbook setup agents`) with the owner's name for it. A
+line a named sender wrote carries `extra.machine` true (`logbook.core.machine`, docs/adapters/agents.md),
+and every line of a `single` chat with one, the owner's and the bot's, carries `extra.counterpart`, the
+bot as an observed entity of kind `agent` keyed by `{handle, <Beeper user id>}`, with the setting's
+name, else the one the app shows. In a group only the bot's own lines are marked.
+
 `pull` takes `marks`, the watermark per chat `sync` keeps under `marks` in `state/beeper.json` and
 hands back next run, and `networks`, the slugs `--networks` names. Network happens only inside
 `pull` and `check`, which only `logbook sync beeper` and `logbook doctor` call.
@@ -54,6 +61,7 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlencode, urlsplit
 from urllib.request import Request, urlopen
 
+from ...core import machine
 from . import phone
 
 __all__ = [
@@ -168,14 +176,17 @@ def pull(
     counts: dict[str, int] | None = None,
     networks: Iterable[str] | None = None,
     marks: dict[str, str] | None = None,
+    agents: Mapping[str, str | None] | None = None,
 ) -> Iterator[dict[str, Any]]:
     """Every message of every chat of every account on the networks asked for (`networks`; None
     means all but `EXCLUDED_BY_DEFAULT`), each chat oldest first, one message/v1 line draft each,
     streamed. A chat with a mark in `marks` (`<account>/<chat>` → RFC3339) is read from the lookback
     before it, any other from `since` (None means all), and its mark is raised to the newest message
     yielded. Skips and notes are tallied in `counts`; `progress(messages_so_far, elapsed_seconds)`
-    is called every thousand lines and once at the end. Raises OSError when the app does not answer
-    or refuses the token, ValueError on a page that is not what the API documents."""
+    is called every thousand lines and once at the end. `agents` (sender id → the owner's name for
+    it, `policy/agents.json`) are the owner's own bots, whose lines are marked machine. Raises
+    OSError when the app does not answer or refuses the token, ValueError on a page that is not what
+    the API documents."""
     counts = counts if counts is not None else {}
     counts.setdefault(DIRECT_CHAT, 0)
     counts.setdefault(GROUP_CHAT, 0)
@@ -207,7 +218,7 @@ def pull(
                 continue
             key = f"{account_id}/{chat_id}"
             start = _start(marks.get(key), since)
-            room = _Room(account_id, chat_id, network, owner_id, chat)
+            room = _Room(account_id, chat_id, network, owner_id, chat, agents or {})
             for message in reversed(_messages(config, chat_id, start)):
                 draft = _draft(message, room, counts)
                 if draft is None or (start is not None and draft["at"] < start):
@@ -230,10 +241,21 @@ class _Room:
     network: str
     owner_id: str | None
     chat: dict[str, Any]
+    agents: Mapping[str, str | None]
 
     @property
     def group(self) -> bool:
         return self.chat.get("type") != "single"
+
+    def agent(self, people: Mapping[str, dict[str, Any]]) -> dict[str, Any] | None:
+        """The counterpart of a one-on-one chat with a named agent, else None."""
+        if self.group:
+            return None
+        for user_id in sorted(people):
+            if user_id in self.agents and user_id != self.owner_id and not people[user_id].get("isSelf"):
+                name = self.agents[user_id] or _text(people[user_id].get("fullName"))
+                return machine.counterpart({"kind": "handle", "value": user_id}, name)
+        return None
 
     def participants(self) -> dict[str, dict[str, Any]]:
         people = self.chat.get("participants")
@@ -381,6 +403,11 @@ def _draft(message: dict[str, Any], room: _Room, counts: dict[str, int]) -> dict
     extra: dict[str, Any] = {"network": room.network, "account": room.account_id}
     if sender_id is not None:
         extra["sender_id"] = sender_id
+    agent = room.agent(people)
+    if agent is not None:
+        extra[machine.COUNTERPART] = agent
+    if not from_me and sender_id is not None and sender_id in room.agents:
+        extra[machine.MACHINE] = True
     if message.get("isDeleted"):
         extra["deleted"] = True
     edited = _rfc3339(message.get("editedTimestamp"))

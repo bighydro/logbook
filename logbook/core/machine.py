@@ -53,6 +53,15 @@ def with_agent(payload: Mapping[str, Any]) -> bool:
     return agent_of(payload) is not None
 
 
+def counterpart(ref: Mapping[str, Any], name: str | None = None) -> dict[str, Any]:
+    """The `extra.counterpart` of a line of a conversation with an agent: the agent as an observed
+    entity of kind `agent`, keyed by the source's own ref for it, with the name it goes by."""
+    found: dict[str, Any] = {"kind": AGENT, "ref": dict(ref)}
+    if name:
+        found["name"] = name
+    return found
+
+
 def is_machine_participant(participant: object) -> bool:
     return isinstance(participant, Mapping) and participant.get(MACHINE) is True
 

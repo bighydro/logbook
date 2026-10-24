@@ -21,6 +21,7 @@ from ..core.resolve import Ref, identities_from, labels
 from ..core.store import Logbook, dedupe_key, now_utc
 from .common import (
     Subparsers,
+    _agents,
     _airports,
     _csv,
     _is_rfc3339,
@@ -227,6 +228,8 @@ def _append_with(
             sys.exit(2)
     if _takes(adapter, "owner_aliases"):
         options["owner_aliases"] = _owner_aliases(lb, "add")
+    if _takes(adapter, "agents"):
+        options["agents"] = _agents(lb, "add")
     if _takes(adapter, "owner_emails"):
         owner_emails = lb.meta.get("owner_emails") or []
         options["owner_emails"] = owner_emails
