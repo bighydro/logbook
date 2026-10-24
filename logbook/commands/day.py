@@ -53,6 +53,8 @@ from ..core.store import RETRACTION, Logbook, retractions
 from .common import Subparsers, _airports, _clock, _csv, _print_target, _under_home
 from .derive import TRANSCRIBE_DEFAULT_MODEL
 from .rows import _day_rows, _line_row, _line_text, by_photo
+from .timeline import WHAT as TIMELINE
+from .timeline import cmd_timeline, timeline_arguments
 
 if TYPE_CHECKING:
     from ..contrib import serve
@@ -76,14 +78,16 @@ def show_arguments(sub: Subparsers) -> None:
         " status, the most"
         " recent touch first, stale ones said; the passed with their reasons; the people with more than one"
         " org), ideas (the ideas you named by stage, the most recent touch first, each with its reason),"
-        " plan (today's tasks, the sprint and the next trip, from `sync notion`'s tier-1 lines)",
+        " plan (today's tasks, the sprint and the next trip, from `sync notion`'s tier-1 lines),"
+        " timeline (the moments of a day, a week, a month, a year or all years: --day, --week, --month,"
+        " --year, --life)",
     )
     s.add_argument(
         "day",
         nargs="?",
         metavar="WHAT",
         help="YYYY-MM-DD or today; person|asset|place|org|idea NAME; year YYYY; trip ID-OR-DAY; trips; days;"
-        " keepers; stats; orgs; ideas; plan [DAY]",
+        " keepers; stats; orgs; ideas; plan [DAY]; timeline",
     )
     s.add_argument(
         "name",
@@ -105,8 +109,9 @@ def show_arguments(sub: Subparsers) -> None:
         "--year",
         metavar="YYYY",
         help="trips: one calendar year (default: the whole record); orgs --money: the ledger's year (default"
-        " this one); ideas: the year of the words written (default this one)",
+        " this one); ideas: the year of the words written (default this one); timeline: one year",
     )
+    timeline_arguments(s)
     s.add_argument(
         "--since",
         "--from",
@@ -286,6 +291,9 @@ def cmd_show(a: argparse.Namespace) -> None:
         from .heard import cmd_heard
 
         cmd_heard(a)
+        return
+    if a.day == TIMELINE:
+        cmd_timeline(a)
         return
     if a.day in READERS:
         _show_reader(a)
