@@ -319,9 +319,12 @@ The day in two lanes, from its start to its end (midnight to midnight unless `da
 otherwise), with the hours every three. **PLANNED** shows the calendar's timed entries: filled when
 something lived is beside one (the Day placed it at a stay or a move), hollow and dashed when nothing is
 (an entry the Day leaves unplaced). An all-day entry is not drawn. **LIVED** shows the stays, moves and
-time aboard in their colours, with calls as thin ticks. On today a line marks now. When the calendar
-has nothing timed the lane says so, and a day with no stay says why. A sentence for a screen reader
-says the same, and a legend names the colours. Nothing on it weighs the plan against the day.
+time aboard in their colours, with calls as thin ticks. The task tool's tasks of the day that carry a
+time are ticks on the PLANNED lane in the morning (of the five the plan shows). On today a line
+marks now. When the calendar has nothing timed the lane says so, and a day with no stay says why. A
+sentence for a screen reader says the same, and a legend names the colours. Every block's tooltip and
+the sentence say the time first, then the entry (*19:30 — Dinner with Per Hansen*), so a clock time
+never follows a name. Nothing on it weighs the plan against the day.
 
 ### The parts
 
@@ -335,17 +338,21 @@ says the same, and a legend names the colours. Nothing on it weighs the plan aga
 - **Yesterday** (morning): signed or open, how many it kept, what arrived after its signature (with a
   link to sign again), what it carried, and the nearest earlier day still open, within 60 days.
 - **Today** (morning): the ribbon so far, then the day's timed entries and the promises due today, a row
-  each.
+  each; then, each in its fold, open, with its summary: **Today's tasks** from the task tool and the
+  next trip, and **Who you'll see**; then the week's one proposal, in pencil (*The morning*, below).
 - **One person** (morning): a birthday in the coming week, from a resolution line's
-  `extra.birthday`. Nothing when there is none.
+  `extra.birthday`; on a morning with none, one person to reconnect with (*The morning*, below).
+  Nothing when there is neither.
 - **Loose ends**: the promises made on the day and the ones due on it, both ways (yours, asked of you,
-  owed to you), and the decisions the day's call syntheses wrote. Read-only. A promise is due on a day
-  when it was said in the 14 days before it.
+  owed to you), the replies owed, the decisions the day's call syntheses wrote, and the decisions to
+  revisit (these two in the morning). Read-only: the verbs (keep, carry, let go) come later. A promise is
+  due on a day when it was said in the 14 days before it.
 - **People**: who showed up, the most time together first, from the people confirmed at a row, the ones
   you said were there and the people on the day's calls. Birthdays in the coming week are listed too.
   A name never has a count, an age or a score beside it: a birthday is only its day.
-- **Looking back**: this day 1, 2, 3, 5 and 10 years ago, the ones the record has: where the night was
-  spent, who was there, how many photos were starred, and the first sentence of that day's reflection.
+- **Looking back**: in the morning the decisions whose revisit day is the day, first; then this day 1, 2, 3, 5 and 10
+  years ago, the ones the record has: where the night was spent, who was there, how many photos were
+  starred, and the first sentence of that day's reflection.
 - **Photos**: how many, how many starred, the starred ones this machine holds, then the photo review.
   In the morning they are folded into the record, so *Add to today* comes straight after it.
 - **The record**: the folds, each with its summary in counts: the timeline under the day's track,
@@ -358,6 +365,60 @@ says the same, and a legend names the colours. Nothing on it weighs the plan aga
 - **Close the day** (*Add to today* in the morning and live): Reflect and Sign, the same forms as before.
 
 Every row is computed from the record. What a model wrote is in pencil, with the lines it rests on.
+
+### The morning
+
+What the morning looks ahead with, each read from a reader the record already has, through the page's
+gate, and each named in *Nothing from* when it has nothing. Through a gate, the reconnect and the
+replies owed name a person only when it reads every tier from 1 up to theirs (through tiers 1 and 3,
+nobody whose evidence reaches tier 3). None of it writes a line, and none of it is
+on a site (`logbook export site`): a site's Day is never the morning.
+
+- **Today's tasks**, from the task tool's rows `sync notion` wrote (`logbook show plan`, `docs/plan.md`),
+  tier 1 alone, so only on a page whose gate reads tier 1. A task's day is the plan's: its `Planned`
+  date, else its `Due` date, unless `policy/notion.json` names others (`docs/plan.md`). Five at most, each linked to its line (`/line/ID`) and to its page in Notion (a
+  link you follow; nothing is fetched), the rest one line: *and 4 more in Sprint 24 — open in Notion*.
+  Then the next trip as one countdown in words: *Per's wedding in Bergen — in five weeks*. A mapping
+  the page cannot read is one sentence saying why, never an error page.
+- **Who you'll see**: the attendees of the day's timed calendar entries who did not decline, by name,
+  each once, never the owner, with no count. A person the record resolves is named as it names them
+  when the page's gate reads their resolution; otherwise by the name the entry gives, or not at all.
+- **One reconnect**, on the morning only, the day itself: one person the drift rule names (`logbook
+  people drift`, its defaults: twenty days together in their best year and no real contact in over a
+  year), with the reason in words and no digit: *Per Hansen: you saw each other often the year before
+  last; the last real contact was a day together in the summer that year.* Never the same person two
+  mornings running: the pick is the day's ordinal among the people the drift rule names, in the order
+  of their ids, skipping the one the day before would pick (with one person, every other morning). A
+  birthday in the coming week comes first, and that morning has no reconnect. The drift rule reads the
+  whole record (minutes on a record of millions of lines), so the page reads it once a day and keeps it
+  for the day, whatever syncs in meanwhile.
+- **Replies owed**, in Loose ends, in the morning: a person the record names whose last word to you (a
+  direct message, a mail of theirs, a call you did not answer) is more than a week old
+  (`replies_owed`, RFC 0045 §5), said with a name and weekday words only: *Ola Nordmann wrote on a
+  Thursday in May*, *Kari Nordmann wrote on Tuesday last week*.
+- **Decisions to revisit**: a `note/v1` line labelled `decision` whose `extra.revisit` is a local day,
+  `YYYY-MM-DD`, comes back on that day's morning, in Looking back and in Loose ends: *A year ago you decided:
+  “Keep the berth in Vollen.” How did it turn out?* This is the format the close writes when you keep a
+  decision with a date to revisit:
+
+  ```json
+  {"schema": "note/v1", "text": "Keep the berth in Vollen.", "labels": ["decision"],
+   "extra": {"revisit": "2027-06-09"}}
+  ```
+
+- **The week's one proposal**: when the standing draft of the week before (written on its Sunday, so it
+  proposes for this week) made one (its `next_week` part), one line under Today, in pencil, headed with
+  the model's name and linked to the draft. Through the gate and the `dream` entry as every draft on the
+  page; never on a page built without drafts.
+
+The task tool's plan, the reconnect, the replies owed and the decisions to revisit read more than the
+day: the plan every `sync notion` line, the drift rule the whole record (minutes on a record of millions
+of lines), the replies owed the ninety days before the day, the revisits every note (seconds each). `logbook serve` reads them beside the page, on one thread it starts
+once the page is rendered, so no page waits for them: until a reading has arrived its part is not drawn
+and not named as empty, and the page is read again when it has (its tag names what arrived). The
+plan, the replies owed and the revisits are read again after a sync, and the page shows the earlier
+reading meanwhile; the drift is read once a day. On a record of five million lines the morning answers in the
+Day's usual time, and the reconnect arrives some minutes later (*Performance*, below).
 
 ## A synthetic example
 
@@ -578,6 +639,14 @@ On the synthetic records of `scripts/bench_library.py` (ten years, [docs/serve.m
 million lines and 0.67 at five million, the first time it is asked after the server starts; asked
 again at the same head it is the page the server kept, and answers in a millisecond. Fourteen
 `/days` take 0.49 and 2.3 seconds.
+
+The morning's readings beyond the day, on the same five-million-line record (a 4-CPU container, the
+plan mapped): the task tool's plan about three seconds (60,000 `sync notion` lines), the replies owed
+about five (129,000 lines of the ninety days), the decisions to revisit about one (25,000 notes), the
+drift about six minutes. Read in the request the morning would answer in 339 seconds; read beside it,
+as `logbook serve` does, it answers in 4.5 seconds cold and a millisecond warm, and its other shapes
+read none of them. While those readings run, a page the server renders beside them shares the one
+interpreter with them and takes up to twice its time.
 
 ## What it is not
 

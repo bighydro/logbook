@@ -24,12 +24,12 @@ this module but inside the lines themselves."""
 from __future__ import annotations
 
 import re
-from collections.abc import Iterable, Iterator, Mapping
+from collections.abc import Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
-from . import day_start, machine, policy, present, resolve, stays
+from . import day_start, machine, policy, present, reading, resolve, stays
 from .chain import Line, is_sealed
 from .export import parse_day
 from .index import Index
@@ -297,28 +297,35 @@ class _Word:
     theirs: bool
 
 
-def replies_owed(lb: Logbook, day: str) -> list[Owed]:
+def replies_owed(lb: Logbook, day: str, tiers: Sequence[int] | None = None) -> list[Owed]:
     """For each person the record names: over the `LOOKBACK` days ending `day`, their direct messages
     (never a group's, never an agent's), people's mail (`Rule`) and calls; when the latest word is
     theirs (a message from them, a mail they sent, a call from them not answered) and older than `WEEK`
     days before `day`, the reply is owed. A message, a mail or a call of the owner's, and a call the
-    owner answered, is the owner's word. Longest owed first."""
+    owner answered, is the owner's word. Longest owed first. Through the gate `tiers` (the Day page's,
+    RFC 0043 §4.5): a line above it is no word, either way, and a person only a resolution above it
+    names is nobody; None reads every tier."""
     end = parse_day(day)
     first = (end - timedelta(days=LOOKBACK - 1)).isoformat()
     days = day_start.of(lb.meta)
     words: dict[str, list[_Word]] = {}
+
+    def gated(found: Iterable[tuple[Line, str]]) -> Iterator[tuple[Line, str]]:
+        allowed = None if tiers is None else {int(t) for t in tiers}
+        return (pair for pair in found if allowed is None or int(pair[0].get("tier") or 0) in allowed)
+
     with lb.index() as idx:
         marks = idx.retractions()
-        rule = Rule.of(lb, marks, idx.resolutions())
+        rule = Rule.of(lb, marks, reading.crossing(idx.resolutions(), tiers))
         retracted = frozenset(retractions(marks))
-        _messages(rule, _standing(idx, "message", first, day, retracted, days), words)
-        for line, _day in _standing(idx, KIND, first, day, retracted, days):
+        _messages(rule, gated(_standing(idx, "message", first, day, retracted, days)), words)
+        for line, _day in gated(_standing(idx, KIND, first, day, retracted, days)):
             classed = rule.classify(line)
             for person in classed.people if classed.person else ():
                 words.setdefault(person, []).append(
                     _Word(classed.at, classed.id, classed.direction == RECEIVED)
                 )
-        for line, _day in _standing(idx, "call", first, day, retracted, days):
+        for line, _day in gated(_standing(idx, "call", first, day, retracted, days)):
             payload = line.get("payload") or {}
             caller = rule.person(_ref(payload.get("counterparty")))
             if caller is not None:

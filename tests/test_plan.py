@@ -669,3 +669,71 @@ def test_the_reader_reads_what_sync_notion_writes(
     _, out, _ = run(capsys, "2026-03-06")
     for never in ("Compare the two crossings", "07700 900123", "ask Ola about the car", "Ola Nordmann"):
         assert never not in out, never
+
+
+# -- a task's day: its Planned date, else its Due date (RFC 0043 §9, as #369 amends it) ---------------------
+
+# `show plan 2026-10-21` on this record, no row with a Planned date: what main prints, byte for byte
+SHOWN_WITHOUT_PLANNED = (
+    "plan  2026-10-21 · Sprint 24, 2026-10-12 to 2026-10-25  https://www.notion.so/00000202000040008000000000000202\n"
+    "  today       1  2026-10-19  Fix the bilge pump · To do · overdue  https://www.notion.so/00000800000040008000000000000800\n"
+    "              2  2026-10-21  Ask about winter storage · To do  https://www.notion.so/00000805000040008000000000000805\n"
+    "              3  2026-10-21  Book the ferry · In progress  https://www.notion.so/00000801000040008000000000000801\n"
+    "              4  2026-10-21  Check the life jackets · To do  https://www.notion.so/00000900000040008000000000000900\n"
+    "              5  2026-10-21  Clean the cabin · To do  https://www.notion.so/00000901000040008000000000000901\n"
+    "             and 3 more in Sprint 24\n"
+    "  next trip  Lofoten · 2026-11-27 to 2026-12-03 · in 37 days  https://www.notion.so/00000301000040008000000000000301\n"
+)  # fmt: skip
+
+
+def _planned(lines: list[dict[str, Any]], planned: dict[str, str]) -> list[dict[str, Any]]:
+    """The plan's lines with a `Planned` date on the tasks `planned` names (page id → day)."""
+    out = []
+    for line in lines:
+        extra = line["payload"]["extra"]
+        page = extra["page"]["id"]
+        if page in planned and isinstance(extra.get("properties"), dict):
+            line = json.loads(json.dumps(line))
+            line["payload"]["extra"]["properties"]["Planned"] = _when(planned[page])
+        out.append(line)
+    return out
+
+
+PLANNED = {
+    CHARTS: DAY,  # due tomorrow, planned for today: today's
+    FERRY: "2026-10-23",  # due today, planned for Friday: not today's
+    BILGE: DAY,  # due on Monday, planned for today: today's, and not overdue
+}
+
+
+def test_a_tasks_day_is_its_planned_date_else_its_due_date(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The default mapping, no `date` named: a task is dated by `Planned`, else by `Due`."""
+    make(tmp_path, monkeypatch, MAPPING, _planned(plan_lines(), PLANNED) + day_lines())
+    mapping = plan.read_mapping(tmp_path / "lb")
+    assert mapping is not None and mapping.date is None and mapping.dates("tasks") == ("Planned", "Due")
+    tasks = answer(capsys, DAY)["tasks"]
+    titles = [t["title"] for t in tasks["rows"]]
+    assert "Order charts" in titles, "planned for today, due tomorrow"
+    assert "Book the ferry" not in titles, "due today, planned for Friday"
+    bilge = next(t for t in tasks["rows"] if t["title"] == "Fix the bilge pump")
+    assert bilge["overdue"] is False and bilge["date"] == {"start": DAY, "end": None}, "its Planned date"
+    storage = next(t for t in tasks["rows"] if t["title"] == "Ask about winter storage")
+    assert storage["date"] == {"start": DAY, "end": None}, "no Planned date: its Due date is its day"
+
+
+def test_a_mapping_without_planned_prints_show_plan_byte_for_byte_as_main_does_now(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    make(tmp_path, monkeypatch, MAPPING)  # no row carries a Planned date
+    code, out, _ = run(capsys, DAY)
+    assert code == 0 and out == SHOWN_WITHOUT_PLANNED
+
+
+def test_an_empty_list_of_date_properties_is_refused(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    make(tmp_path, monkeypatch, {**MAPPING, "date": []})
+    code, _, err = run(capsys, DAY)
+    assert code != 0 and "plan.date" in err and "notion.json" in err
