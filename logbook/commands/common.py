@@ -96,6 +96,17 @@ def _owner_aliases(lb: Logbook, command: str) -> dict[str, list[str]]:
     return {**aliases, "emails": emails}
 
 
+def _agents(lb: Logbook, command: str) -> dict[str, str | None]:
+    """What an adapter that marks the owner's own bots (`agents`: `beeper`, `sync beeper`) is given:
+    `policy/agents.json`'s senders, by id, with the owner's name for each. A malformed file exits 2
+    naming it."""
+    try:
+        return policy.agent_senders(lb.root)
+    except policy.PolicyError as e:
+        print(f"{command}: {e}", file=sys.stderr)
+        sys.exit(2)
+
+
 def _takes(adapter: adapters.Adapter | adapters.LiveAdapter, option: str, live: bool = False) -> bool:
     """Whether the adapter's `run` (or, for `sync`, its `pull`: `live`) accepts the optional keyword:
     `counts` (a dict to tally what it skipped), `timezone` (the record's zone, for a source whose

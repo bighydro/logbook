@@ -36,7 +36,14 @@ written before `handles` existed lists none. The with module (`present.owner_of`
 `owner_id` and `owner_emails` from `logbook.json` and every resolution line that names the owner, so
 the owner is never listed as their own company. The file lives in the record, never in the
 repository; `logbook init` writes the empty one, and so does the first reading of a record made
-before it existed."""
+before it existed.
+
+`agents.json` names the owner's own agents by the sender id a source gives them: `{"senders": [{"id":
+"@telegram_900000001:beeper.local", "name": "Fyr"}]}`, the name optional. The Beeper adapters
+(`add beeper`, `sync beeper`) mark a named sender's lines as machine text and a direct chat with one
+as a conversation with an agent (docs/adapters/agents.md); nothing is hard-coded, and no line already
+written is changed when the list does. `logbook setup agents` edits it; a record without the file
+names none, and reading it writes nothing."""
 
 from __future__ import annotations
 
@@ -87,6 +94,7 @@ CIRCLE_FILE = PurePosixPath("policy/circle.json")  # name → the sharing key a 
 OWNER_FILE = PurePosixPath("policy/owner.json")
 OWNER_KEYS = ("names", "emails", "phones", "handles")
 DEFAULT_OWNER: dict[str, list[str]] = {key: [] for key in OWNER_KEYS}
+AGENTS_FILE = PurePosixPath("policy/agents.json")  # the owner's own agents, by the sender id a source gives
 
 
 class PolicyError(ValueError):
@@ -487,6 +495,67 @@ def handle(text: str) -> str | None:
     None for a blank one."""
     spelled = text.strip().removeprefix("@").strip().casefold()
     return spelled or None
+
+
+def agents_path(root: Path) -> Path:
+    return Path(root).joinpath(*AGENTS_FILE.parts)
+
+
+def agent_senders(root: Path) -> dict[str, str | None]:
+    """The owner's agents as `{sender id: name or None}`, in the file's order; empty when the file is
+    not there (nothing is written). A file that is not the documented shape raises PolicyError
+    naming it."""
+    path = agents_path(root)
+    if not path.exists():
+        return {}
+    shape = f'{path} must be {{"senders": [{{"id": "<sender id>", "name": "<optional>"}}, ...]}}'
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except ValueError as e:
+        raise PolicyError(f"{path} is not JSON: {e}") from e
+    senders = data.get("senders", []) if isinstance(data, dict) else None
+    if not isinstance(senders, list):
+        raise PolicyError(shape)
+    out: dict[str, str | None] = {}
+    for entry in senders:
+        sender = entry.get("id") if isinstance(entry, dict) else None
+        name = entry.get("name") if isinstance(entry, dict) else None
+        if not isinstance(sender, str) or not sender.strip() or not (name is None or isinstance(name, str)):
+            raise PolicyError(shape)
+        out[sender.strip()] = name.strip() if isinstance(name, str) and name.strip() else None
+    return out
+
+
+def _write_agents(root: Path, senders: dict[str, str | None]) -> None:
+    path = agents_path(root)
+    entries = [{"id": sender, **({"name": name} if name else {})} for sender, name in senders.items()]
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({"senders": entries}, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+
+
+def agent_add(root: Path, sender: str, name: str | None = None) -> bool:
+    """Name `sender` one of the owner's agents, with `name` when given; False when the file already
+    says so. A blank sender id is refused."""
+    sender = sender.strip()
+    if not sender:
+        raise PolicyError(f"{agents_path(root)}: a sender id is needed, as the source gives it")
+    known = agent_senders(root)
+    name = name.strip() if name and name.strip() else None
+    if sender in known and (name is None or known[sender] == name):
+        return False
+    known[sender] = name if name is not None else known.get(sender)
+    _write_agents(root, known)
+    return True
+
+
+def agent_remove(root: Path, sender: str) -> bool:
+    """Take `sender` off the list; False when the file does not name it."""
+    known = agent_senders(root)
+    if sender.strip() not in known:
+        return False
+    del known[sender.strip()]
+    _write_agents(root, known)
+    return True
 
 
 def circle_path(root: Path) -> Path:

@@ -139,6 +139,42 @@ what one view saw: when `sync` sees only the second photo of an album whose firs
 two views number it differently and the record holds that photo twice. Both are rare, both leave a
 line too many rather than one too few, and a duplicate can be retracted.
 
+## Your bots through Beeper
+
+A bot of yours that Beeper bridges (a Telegram bot in Beeper's Telegram account, say) reaches the record
+through the Beeper adapters too: `logbook add beeper` (the phone's cache, from an iPhone backup) and
+`logbook sync beeper` (Beeper Desktop's local API). Beeper does not say which of its senders are bots,
+and nothing in the code guesses: you name yours, by the sender id the line carries, and the record's
+settings keep the list (`policy/agents.json`).
+
+```bash
+logbook setup agents list                                                   # the senders named, and the name you gave each
+logbook setup agents add @telegram_900000001:beeper.local --name Fyr        # one of your bots
+logbook setup agents remove @telegram_900000001:beeper.local                # no longer
+```
+
+The sender id is `extra.matrix_user` on a line of the phone's cache and `extra.sender_id` on a line of
+`sync beeper` (`logbook show` and `logbook search` find the lines it wrote). The file is
+`{"senders": [{"id": "<sender id>", "name": "<optional>"}]}`, yours to edit by hand as well.
+
+From the next `add beeper` or `sync beeper` on:
+
+| On | The mark |
+|---|---|
+| a line a named sender wrote | `extra.machine: true` |
+| every line of a one-on-one chat with a named sender, yours and the bot's | `extra.counterpart: {"kind": "agent", "ref": {"kind": "handle", "value": <sender id>}, "name"?}`, the name yours from the setting, else the one Beeper shows |
+| a group a named sender is in | its own lines `extra.machine: true`; no counterpart, since the people in the group are people, and their lines stay as they are |
+
+The readers below then pass the bot over exactly as they pass a Telegram bot from the export. **A line
+already in the record keeps what it was written with**: naming a sender changes no line, and a message
+imported before is not imported again (the record's dedupe by source and `raw_id`), so name your bots
+before the first import of a store. `logbook doctor` says how many lines are marked machine, per source,
+and how many senders the file names:
+
+```
+pass  agents  lines marked machine: telegram 412, beeper-telegram 96, claude-code 31; 1 sender named in policy/agents.json
+```
+
 ## Claude Code: the sessions
 
 Claude Code keeps every session on the machine it ran on, under `~/.claude/projects/`: one folder

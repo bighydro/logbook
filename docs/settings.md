@@ -12,6 +12,7 @@ in files beside the log, each yours to edit. `logbook setup` asks about the ones
 | your own addresses | `logbook.json`, `owner_emails` | `logbook setup --step owner` |
 | whether your phone writes through the Library | `logbook.json`, `phone` (off by default) | `logbook setup phone --origin URL --login LOGIN` ([from your phone](serve.md#from-your-phone)) |
 | your other names, addresses, numbers and handles | `policy/owner.json` | `logbook setup --step owner`; `handles` by hand |
+| your own bots, by the sender id Beeper gives them | `policy/agents.json` | `logbook setup agents add SENDER --name NAME` ([your own agents](adapters/agents.md#your-bots-through-beeper)) |
 | the named places, your home | `places.json` | `logbook setup places` |
 | the assets you track | `assets.json` | `logbook setup assets` |
 | the digest's questions | `policy/questions.json` | `logbook setup questions` |

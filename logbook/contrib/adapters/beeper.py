@@ -37,17 +37,26 @@ stays under `extra.matrix_user`. Text messages (`m.text`, `m.notice`, `m.emote` 
 `m.file`, `m.sticker`, `m.location`) carry `media_kind`, with the file name and media type under
 `extra`; the bytes are not in the store. Pure: opened `mode=ro`, `immutable=1`, rooms and members
 read once, events streamed, no network.
+
+The owner's own bots are named in the record's settings, never here: `agents` maps the Matrix user
+id of each (`policy/agents.json`, `logbook setup agents`) to the name the owner gives it, and a line a
+named sender wrote carries `extra.machine` true (`logbook.core.machine`, docs/adapters/agents.md).
+Every line of a one-on-one room with a named sender, the owner's and the bot's, carries
+`extra.counterpart`, the bot as an observed entity of kind `agent` keyed by `{handle, <matrix user
+id>}`, with the setting's name, else the member row's. A group is not a conversation with an agent:
+the bot's own lines there are marked machine, and the people's beside them are left as they are.
 """
 
 from __future__ import annotations
 
 import sqlite3
-from collections.abc import Iterator
-from dataclasses import dataclass
+from collections.abc import Iterator, Mapping
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from ...core import machine
 from . import keyed_archive, phone
 
 NAME = "beeper"
@@ -116,6 +125,8 @@ class _Store:
     members: dict[tuple[str, str], Member]
     by_user: dict[str, Member]
     owner: str | None
+    agents: Mapping[str, str | None] = field(default_factory=dict)  # sender id → the owner's name for it
+    room_agents: dict[str, str] = field(default_factory=dict)  # one-on-one room → the named agent in it
 
 
 def sniff(path: Path) -> bool:
@@ -149,7 +160,10 @@ def _tables(con: sqlite3.Connection) -> set[str]:
 
 
 def run(
-    path: Path, since: str | None = None, counts: dict[str, int] | None = None
+    path: Path,
+    since: str | None = None,
+    counts: dict[str, int] | None = None,
+    agents: Mapping[str, str | None] | None = None,
 ) -> Iterator[dict[str, Any]]:
     """One message/v1 line per message in clear: the events in row order, then the last-message
     rows not already logged, streamed.
@@ -157,11 +171,12 @@ def run(
     `since` is RFC3339 UTC; messages before it are not yielded. `counts` tallies what was left out
     — `skipped_encrypted` (no decrypted copy), `skipped_reaction`, `skipped_redacted` (redacted,
     or a redaction), `skipped_system_event` (membership, bridge state, anything without a body),
-    `skipped_bad_date` — and what was noted: `from_last_message`."""
+    `skipped_bad_date` — and what was noted: `from_last_message`. `agents` is the owner's own bots
+    by Matrix user id (`policy/agents.json`): their lines are marked machine."""
     counts = counts if counts is not None else {}
     con = _open(Path(path))
     try:
-        store = _load(con)
+        store = _load(con, agents or {})
         logged: set[str] = set()
         for event_id, room_id, redacted, redaction, blob in con.execute(EVENTS):
             draft = _event_draft(event_id, room_id, redacted, redaction, blob, store, counts)
@@ -184,7 +199,7 @@ def _count(counts: dict[str, int], key: str) -> None:
     counts[key] = counts.get(key, 0) + 1
 
 
-def _load(con: sqlite3.Connection) -> _Store:
+def _load(con: sqlite3.Connection, agents: Mapping[str, str | None]) -> _Store:
     rooms = {
         str(room_id): Room(_text(name), _text(network), bool(direct))
         for room_id, name, network, direct in con.execute(ROOMS)
@@ -200,7 +215,12 @@ def _load(con: sqlite3.Connection) -> _Store:
             by_user[str(user_id)] = member
         room_count[str(user_id)] = room_count.get(str(user_id), 0) + 1
     owner = max(room_count, key=lambda u: (room_count[u], u)) if room_count else None
-    return _Store(rooms, members, by_user, owner)
+    room_agents: dict[str, str] = {}
+    for room_id, user_id in sorted(members):
+        room = rooms.get(room_id)
+        if user_id in agents and user_id != owner and room is not None and room.direct:
+            room_agents.setdefault(room_id, user_id)
+    return _Store(rooms, members, by_user, owner, agents, room_agents)
 
 
 def _event_draft(
@@ -326,7 +346,20 @@ def _payload(
                 ref["name"] = name
             payload["sender"] = ref
         extra["matrix_user"] = sender
+    agent = store.room_agents.get(room_id)
+    if agent is not None:
+        extra[machine.COUNTERPART] = machine.counterpart(
+            {"kind": "handle", "value": agent}, _agent_name(agent, room_id, store)
+        )
+    if sender is not None and not from_me and sender in store.agents:
+        extra[machine.MACHINE] = True
     return payload
+
+
+def _agent_name(agent: str, room_id: str, store: _Store) -> str | None:
+    """The owner's name for the agent, else the one its member row gives."""
+    member = store.members.get((room_id, agent)) or store.by_user.get(agent)
+    return store.agents.get(agent) or (member.name if member is not None else None)
 
 
 def _line(at: str, payload: dict[str, Any]) -> dict[str, Any]:
