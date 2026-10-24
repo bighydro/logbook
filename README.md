@@ -4,6 +4,8 @@
 >
 > — [Letter 0](docs/letters/2026-10-12-why-i-built-it.md)
 
+<p align="center"><img src="docs/the-day-signed.png" width="360" alt="The Day page of the demo record on a phone, signed: the signature, the reflection in the owner's words, and the day drawn as planned and lived."></p>
+
 **The record.** Your phone, your photos, your calendar and your messages already keep your days. Logbook gathers them once, into one folder you hold. Nothing in it is erased. A mistake is corrected by a new line.
 
 **How you live with it.** In the evening you open the day in a browser. It shows where you slept, where you went, who was there, and your photos. You write a few sentences about it. Then you sign it, to say you have read it.

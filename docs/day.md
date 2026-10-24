@@ -300,6 +300,13 @@ A day ahead of today is live: nothing lived yet, the plan so far. A static site 
 has no clock, so its Day is the evening's, or the signed day's. It also skips the two parts that read
 beyond the day for every page it writes, the promises of Loose ends and Looking back.
 
+![The Day of Tuesday 23 June of the demo record in the evening: the header, the day in two lanes and the pencil open](the-day.png)
+
+*The demo record (`logbook demo --out ~/Demo/Logbook`), Tuesday 23 June, in the evening, before it
+was signed; the same day signed leads the [README](https://github.com/bighydro/logbook#readme). The
+demo carries no real drafts, so the pencil here is a stand-in model's (`stub-model`), written for the
+picture from the day's own lines. Nothing in it is real.*
+
 ### `?shape=`
 
 `/day/2026-06-17?shape=morning` (or `live`, `evening`, `signed`) shows the same day in another shape, for

@@ -79,6 +79,13 @@ def _scheduled(capsys: pytest.CaptureFixture[str], *args: str) -> tuple[int, str
     return status, out.out, out.err
 
 
+def _built_ahead(capsys: pytest.CaptureFixture[str]) -> None:
+    """The owner's opt-in to the pages built ahead (`serve --build`, labs): only then does the close
+    build them. Its own line is read here, so the run's output is the run's alone."""
+    cli.main(["serve", "--build"])
+    capsys.readouterr()
+
+
 def _last_run(lb: Logbook) -> dict[str, Any]:
     data: dict[str, Any] = json.loads((lb.root / "state" / "last-run.json").read_text(encoding="utf-8"))
     return data
@@ -288,6 +295,7 @@ def test_the_close_syncs_then_catches_the_dream_up_then_says_one_summary_line(
     said: list[str] = []
     _fake_dream(monkeypatch, said)
     _dream_entry(lb)
+    _built_ahead(capsys)
     clock[0] = datetime(2026, 10, 8, 4, 0, 12, tzinfo=UTC)  # 06:00 in Oslo
     status, out, _err = _scheduled(capsys, "--close")
     assert status == 0
@@ -310,6 +318,7 @@ def test_the_close_without_a_dream_command_says_so_in_one_line_and_goes_on(
     monkeypatch.setenv("LOGBOOK_ALPHA_KEY", "k")
     monkeypatch.setitem(sys.modules, DREAM, None)  # this version has no dream: the import fails
     _dream_entry(lb)
+    _built_ahead(capsys)
     status, out, err = _scheduled(capsys, "--close")
     assert status == 0, "absence is not an error"
     notes = [line for line in out.splitlines() if line.startswith("dream:")]
@@ -325,6 +334,7 @@ def test_the_close_without_a_dream_entry_never_runs_the_dream(
     monkeypatch.setenv("LOGBOOK_ALPHA_KEY", "k")
     said: list[str] = []
     _fake_dream(monkeypatch, said)
+    _built_ahead(capsys)
     status, out, _err = _scheduled(capsys, "--close")
     assert status == 0 and said == []
     assert "dream: policy/crossing.json has no dream entry; nothing to catch up" in out
@@ -339,6 +349,7 @@ def test_a_dream_that_refuses_a_day_does_not_fail_the_close(
     said: list[str] = []
     _fake_dream(monkeypatch, said, status=1)
     _dream_entry(lb)
+    _built_ahead(capsys)
     status, out, _err = _scheduled(capsys, "--close")
     assert status == 0, "a draft is a proposal: the run is the sync and the doctor"
     assert "scheduled run, the close (dream --catch-up exit 1, library built): " in out
@@ -356,6 +367,7 @@ def test_the_close_builds_the_library_after_the_dream_and_before_the_doctor(
     said: list[str] = []
     _fake_dream(monkeypatch, said)
     _dream_entry(lb)
+    _built_ahead(capsys)
     clock[0] = datetime(2026, 10, 8, 4, 0, 12, tzinfo=UTC)
     status, out, _err = _scheduled(capsys, "--close")
     assert status == 0
@@ -374,6 +386,7 @@ def test_a_library_another_process_builds_does_not_fail_the_close(
     def busy(*_a: Any, **_k: Any) -> Any:
         raise library_build.Busy("the Library is being built by process 4242")
 
+    _built_ahead(capsys)
     monkeypatch.setattr(library_build, "build", busy)
     _fakes(monkeypatch, Fake("alpha", ("LOGBOOK_ALPHA_KEY",), drafts=1))
     monkeypatch.setenv("LOGBOOK_ALPHA_KEY", "k")
@@ -381,6 +394,24 @@ def test_a_library_another_process_builds_does_not_fail_the_close(
     assert status == 0
     assert "library: the Library is being built by process 4242; not built now" in out
     assert "scheduled run, the close (no dream entry, library busy): " in out
+
+
+def test_a_machine_never_built_skips_the_library_at_the_close_and_says_how_to_turn_it_on(
+    lb: Logbook, monkeypatch: pytest.MonkeyPatch, clock: list[datetime], capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Built pages are a lab (`serve --built`): the close builds them only where the owner turned them
+    on, and says so in one line where they are off; no folder is made for them."""
+    from logbook.contrib import library_build
+
+    _fakes(monkeypatch, Fake("alpha", ("LOGBOOK_ALPHA_KEY",), drafts=1))
+    monkeypatch.setenv("LOGBOOK_ALPHA_KEY", "k")
+    status, out, _err = _scheduled(capsys, "--close")
+    assert status == 0
+    assert (
+        "library: not built (built pages are off; `logbook serve --built` turns them on)" in out.splitlines()
+    )
+    assert "scheduled run, the close (no dream entry, library off): " in out
+    assert not library_build.folder_of(lb).exists()
 
 
 def test_the_runs_that_are_not_the_close_never_dream(
@@ -420,6 +451,7 @@ def test_the_installed_close_passes_no_since_so_it_reaches_back_a_week_of_calls(
     given: list[argparse.Namespace] = []
     monkeypatch.setattr(dream_command, "cmd_dream", given.append)
     _dream_entry(lb)
+    _built_ahead(capsys)
     status, out, _err = _scheduled(capsys, "--close")
     assert status == 0 and "scheduled run, the close (dream caught up, library built): " in out
     (a,) = given
