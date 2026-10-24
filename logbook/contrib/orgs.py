@@ -1168,7 +1168,7 @@ def page_rows(p: Page) -> Iterator[str]:
     if p.people or p.unplaced:
         yield "people"
         for person in p.people:
-            yield f"  {person.name}: {plural(person.days, 'day')}, last {person.last}"
+            yield f"  {person.name}, last {person.last}"  # the most days first, never their count
         if p.unplaced:
             yield f"  and {p.unplaced} not yet placed"
     for intro in p.introductions:

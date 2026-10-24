@@ -78,8 +78,8 @@ def test_show_names_the_voices_after_the_transcript_and_the_owner_only_from_from
     )
     cli.main(["show", DAY])
     rows = [row for row in capsys.readouterr().out.splitlines() if "transcript" in row]
-    assert rows[0].endswith("Samtale · you 3 min · Ola Nordmann 3 min")
-    assert rows[1].endswith("Middag · S1 31 min · S2 42 s")  # a room's first voice is not taken for the owner
+    assert rows[0].endswith("Samtale · you · Ola Nordmann")  # who spoke most first, never their minutes
+    assert rows[1].endswith("Middag · S1 · S2")  # a room's first voice is not taken for the owner
     assert rows[2].endswith("Idé") and "·" not in rows[2]  # without speakers: as before
 
 
@@ -91,7 +91,7 @@ def test_the_day_shows_the_voices_of_an_unplaced_transcript_and_its_json_shaped_
         ]
     )
     text = _day(capsys)
-    assert "Samtale · you 3 min · Ola Nordmann 3 min" in text
+    assert "Samtale · you · Ola Nordmann" in text and "min · Ola" not in text and "Ola Nordmann 3" not in text
     data = json.loads(_day(capsys, "--json"))
     call, idea = data["unplaced"]
     assert call["speakers"] == [
@@ -127,7 +127,7 @@ def test_the_day_shows_the_voices_of_a_transcript_attached_to_a_stay(lb, capsys)
         ]
     )
     text = _day(capsys)
-    assert "Middag · S1 31 min · S2 42 s" in text
+    assert "Middag · S1 · S2\n" in text
     data = json.loads(_day(capsys, "--json"))
     attached = [
         t for entry in data["timeline"] if entry.get("attached") for t in entry["attached"]["transcripts"]
@@ -159,7 +159,7 @@ def test_serve_s_day_shows_the_voices(lb):
     response = serve.Site(lb).respond(f"/day/{DAY}", "")
     assert response.status == 200
     body = response.body if isinstance(response.body, str) else response.body.decode("utf-8")
-    assert "Samtale · you 3 min · Ola Nordmann 3 min" in body
+    assert "Samtale · you · Ola Nordmann" in body and "Ola Nordmann 3 min" not in body
 
 
 def test_a_reader_shows_nothing_for_voices_it_cannot_read(lb, capsys):
@@ -192,7 +192,7 @@ def test_show_marks_the_transcript_heard_again_as_superseded_and_drops_the_write
     cli.main(["show", DAY])
     rows = [row for row in capsys.readouterr().out.splitlines() if "transcript" in row]
     assert rows[0].endswith(f"superseded by #{new['seq']}")
-    assert rows[1].endswith("Middag; 2 s · S1 31 min · S2 42 s")  # no "0 turns" beside the voices
+    assert rows[1].endswith("Middag; 2 s · S1 · S2")  # no "0 turns" beside the voices, nor their minutes
     lb.retract(new["seq"], "heard wrong")
     cli.main(["show", DAY])
     out = capsys.readouterr().out

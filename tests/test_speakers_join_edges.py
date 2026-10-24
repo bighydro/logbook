@@ -158,7 +158,9 @@ def test_several_voices_on_the_microphone_channel_are_nobodys_until_bound(
     assert [(c["person"], c["reasons"]) for c in stay["with"]["confirmed"]] == [
         (KARI_ID, ["spoke in Samtale"])
     ]
-    assert "mic.1 2 min · Kari Nordmann 50 s · system 3 min" in _transcript_row(lb, CALL_DAY, capsys)
+    assert _transcript_row(lb, CALL_DAY, capsys) == (  # who spoke most first, never a time beside a voice
+        "      transcript   Samtale · system · mic.1 · Kari Nordmann · recorded with consent: unknown"
+    )
 
 
 def test_readers_never_fail_on_payloads_they_cannot_interpret(
@@ -214,7 +216,9 @@ def test_a_voice_said_to_be_another_voice_counts_for_that_person_everywhere(
     kari = next(p for p in report.people if p.entity == KARI_ID)
     assert kari.channels["transcripts"].lines == 2
     assert kari.channels["transcripts"].spoke_s == pytest.approx(861.0 + 188.3)
-    assert "Kari Nordmann 3 min" in _transcript_row(lb, CALL_DAY, capsys)
+    assert _transcript_row(lb, CALL_DAY, capsys) == (  # named on the call, her minutes never beside her
+        "      transcript   Samtale · you · Kari Nordmann · recorded with consent: unknown"
+    )
     assert _stay(day_reader.read(lb, CALL_DAY))["with"]["confirmed"] == []
 
 
@@ -230,7 +234,7 @@ def test_the_owners_microphone_bound_to_someone_else_counts_for_them_and_is_give
     kari = next(p for p in report.people if p.entity == KARI_ID)
     assert (kari.channels["transcripts"].lines, kari.channels["transcripts"].spoke_s) == (1, 201.7)
     assert [c["person"] for c in _stay(day_reader.read(lb, CALL_DAY))["with"]["confirmed"]] == [KARI_ID]
-    assert "Kari Nordmann 3 min" in _transcript_row(lb, CALL_DAY, capsys)
+    assert _transcript_row(lb, CALL_DAY, capsys) == "      transcript   Samtale · Kari Nordmann · system"
     lb.retract(int(line["seq"]), "it was me after all")
     report = people_reader.read(lb, CALL_DAY, CALL_DAY)
     assert KARI_ID not in {p.entity for p in report.people}
@@ -239,7 +243,7 @@ def test_the_owners_microphone_bound_to_someone_else_counts_for_them_and_is_give
     assert stay["with"] == {"confirmed": [], "proposed": []}
     (call,) = stay["attached"]["transcripts"]
     assert call["speakers"][0]["owner"] is True and call["speakers"][0]["basis"] == "channel"
-    assert "you 3 min" in _transcript_row(lb, CALL_DAY, capsys)
+    assert _transcript_row(lb, CALL_DAY, capsys).endswith("Samtale · you · system")
 
 
 def test_voices_of_a_recording_at_no_stay_count_for_the_person_and_are_no_day_together(

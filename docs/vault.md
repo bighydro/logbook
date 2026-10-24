@@ -23,7 +23,7 @@ endings on every platform.
 ```
 <folder>/
   Logbook.md                      the root: years, places, people and trips, each a link
-  years/2026.md                   the year: days per country, trips, places by nights, people by days, one line per day
+  years/2026.md                   the year: days per country, trips, places by nights, people (the most days first, names only), one line per day
   days/2026/2026-06-13.md         the Day, as `logbook day` reads it
   places/Home.md                  one per place in places.json: its days, the people met there, its trips
   people/Kari Nordmann.md         one per person confirmed present by a line that crosses

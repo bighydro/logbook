@@ -186,11 +186,12 @@ test loads a model: the diarizer is a fake, as the transcription engine is.
 
 ## Reading them back
 
-`show`, the Day and `serve`'s Day name a transcript's voices after its title (and `show` drops a
-writer's `0 turns` beside them, and marks a transcript heard again `superseded by #N`):
+`show`, the Day and `serve`'s Day name a transcript's voices after its title, the one who spoke most
+first and never with their minutes, since no number stands beside a person (RFC 0043; and `show` drops
+a writer's `0 turns` beside them, and marks a transcript heard again `superseded by #N`):
 
 ```
-  09:15  transcript transcription  Samtale · you 3 min · Ola Nordmann 3 min
+  09:15  transcript transcription  Samtale · you · Ola Nordmann
 ```
 
 A voice not yet named reads as the name its source displayed, else its label; the owner reads as `you`
@@ -350,7 +351,7 @@ binding your microphone's voice to someone else wins over `from_me`: someone els
 phone), a person's, unnamed, or not yet named.
 
 - **The Day** names who spoke and says the consent you stated for the guests, when it is not `yes`:
-  `Middag · you 31 min · Kari Nordmann 14 min · 1 unnamed · recorded with consent: unknown`. In `day
+  `Middag · you · Kari Nordmann and 1 unnamed · recorded with consent: unknown`. In `day
   --json` each voice is `{label, person, name, seconds, basis, consent, owner}`: `person` your id for
   your voice and the person's for theirs, null for an unnamed voice and one not yet named; `name` the
   person's label (for a voice not yet named, the name its source displayed); `consent` as stated,
