@@ -355,6 +355,21 @@ def test_replies_owed_ignore_what_came_after_the_day(lb: Logbook) -> None:
     assert _owed(lb, "2026-03-25") == []
 
 
+def test_replies_owed_read_through_the_gate(lb: Logbook) -> None:
+    """`tiers` is the page's gate: a line above it is no word, and a person a resolution above it
+    names is nobody the reader can name, so no reply is owed through a gate of tier 1."""
+    owed = lb.append(**_message("2026-03-01T09:00:00Z", "kari-chat", False, KARI_PHONE))
+    assert [(o.person, o.lines) for o in peoples_mail.replies_owed(lb, "2026-03-20", [1, 2])] == [
+        (KARI, (owed["id"],))
+    ]
+    assert peoples_mail.replies_owed(lb, "2026-03-20", [1]) == []
+    loud = _message("2026-03-02T09:00:00Z", "kari-chat", True, KARI_PHONE)
+    loud["tier"] = 3  # the owner's answer, above a gate of 1 and 2: the gate does not see it
+    lb.append(**loud)
+    assert peoples_mail.replies_owed(lb, "2026-03-20") == []
+    assert [o.person for o in peoples_mail.replies_owed(lb, "2026-03-20", [1, 2])] == [KARI]
+
+
 def test_a_sealed_mail_this_machine_cannot_open_is_said_and_never_called_nobodys(lb: Logbook) -> None:
     """A reader without the key lists the line and says so (`Logbook.opened`): `sealed`, not `no_person`."""
     line = {

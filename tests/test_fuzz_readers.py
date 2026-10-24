@@ -19,7 +19,7 @@ import random
 import re
 import uuid
 from collections.abc import Callable, Iterator
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 from unittest import mock
@@ -457,8 +457,11 @@ def assert_reads_cleanly(label: str, args: list[str]) -> None:
 def assert_day_serves(label: str, lb: Logbook, day: str) -> None:
     for tiers in (None, (1,)):
         site = serve.Site(lb, tiers=tiers)
-        for query in ("", "open=1"):
-            response = site.respond(f"/day/{day}", query)
+        # the morning of the day itself (RFC 0043 slice A): the plan, who you'll see, the drift's one
+        # reconnect, replies owed, the decisions to revisit and the week's proposal, read from any record
+        morning = serve.Site(lb, tiers=tiers, now=lambda: datetime.fromisoformat(f"{day}T04:00:00+00:00"))
+        for each, query in ((site, ""), (site, "open=1"), (morning, "shape=morning"), (morning, "open=1")):
+            response = each.respond(f"/day/{day}", query)
             assert response.status == 200, (
                 f"{label}: /day/{day}?{query} through {tiers} answered {response.status}"
             )

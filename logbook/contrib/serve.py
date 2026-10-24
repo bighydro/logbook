@@ -269,6 +269,7 @@ PAGES_KEPT = 64  # pages the server keeps by their tag, the latest asked for las
 PAGE_BYTES_KEPT = 64 * 1024 * 1024  # and at most this many bytes of them
 SHARED_KEPT = 32  # readings `Site.shared` keeps for the record as it stands, the oldest going first
 DAY_KEPT = 48  # readings the Day keeps beside them (`Site._day_reading`): a few each for the days last read
+DAY_LATER_KEPT = 12  # the Day's readings beyond the day (`Site._day_later`): today's, and a few before
 FORM_BYTES = 64 * 1024  # the most a form may carry: a name, a reflection, the proposals accepted
 # another command holds the writer lock: every act's one answer, a 409 (the owner's word of 14 Oct 2026)
 BUSY = "Another command is writing to the record; nothing was written. Try again in a moment."
@@ -692,6 +693,7 @@ class Site:
         with_drafts: bool = True,
         library: library_build.Library | None = None,
         on_act: Callable[[], None] | None = None,
+        read_later: bool = False,
     ):
         self.lb = lb
         self.airports = airports or Airports.load()
@@ -725,6 +727,10 @@ class Site:
         self._building: dict[tuple[Any, ...], threading.Lock] = {}  # one build of each result at a time
         self._day_kept: dict[tuple[str, ...], Any] = {}  # the Day's readings, a pool of their own
         self._day_state: str | None = None
+        self.read_later = read_later  # the Day's whole-record readings on a thread (`logbook serve`)
+        self._day_later_kept: dict[tuple[str, ...], Any] = {}  # by the day they are for: None while read
+        self._day_later_threads: list[threading.Thread] = []
+        self._day_later_queue: list[tuple[tuple[str, ...], Callable[[], Any]]] = []
 
     def href(self, path: str) -> str | None:
         """The link to write for a server path: the path itself, or what `href` makes of it."""
@@ -1433,6 +1439,80 @@ class Site:
                     self._day_kept.pop(next(iter(self._day_kept)))
         return found
 
+    def _day_later(self, key: tuple[str, ...], build: Callable[[], T]) -> T | None:
+        """A reading the Day shows a part of that reads more than the day (the drift for one reconnect,
+        the replies owed, the decisions to revisit), kept by `key`: the part, the day, and for one that a
+        sync changes the head. Seconds to minutes on a record of millions of lines. With `read_later`
+        (`logbook serve`) it is read off the request, on one thread started once the page is rendered
+        (`_day_later_start`), so no page waits for it and none is slowed while it renders: until it has
+        arrived, the latest reading of the same part and day stands in (None when there is none), and
+        the Day's tag names what has arrived, so the page is read again once it has. Without it (a test,
+        a script) it is read on the request. `DAY_LATER_KEPT` at most, the oldest going first."""
+        with self._kept_lock:
+            if key in self._day_later_kept and self._day_later_kept[key] is not None:
+                kept: T = self._day_later_kept[key]
+                return kept
+            if self.read_later:
+                if key not in self._day_later_kept:
+                    self._day_later_kept[key] = None
+                    self._day_later_queue.append((key, build))
+                    self._day_later_trim()
+                earlier: T | None = next(
+                    (
+                        v
+                        for k, v in reversed(self._day_later_kept.items())
+                        if k[:2] == key[:2] and v is not None
+                    ),
+                    None,
+                )
+                return earlier
+        now = build()
+        with self._kept_lock:
+            self._day_later_kept[key] = now
+            self._day_later_trim()
+        return now
+
+    def _day_later_trim(self) -> None:
+        while len(self._day_later_kept) > DAY_LATER_KEPT:  # under `_kept_lock`
+            self._day_later_kept.pop(next(iter(self._day_later_kept)))
+
+    def _day_later_start(self) -> None:
+        """Read what the page asked to be read later (`_day_later`), one after the other, on one thread:
+        no lock held but each reading's own, as every page's (a sync appends beside it, as beside any
+        long page). A reading that fails is none for its key, not read again; its error goes to stderr."""
+        with self._kept_lock:
+            queue, self._day_later_queue = self._day_later_queue, []
+            if not queue:
+                return
+        queue.sort(key=lambda item: item[0][0] == "drift")  # the whole record last: the rest in seconds
+
+        def read() -> None:
+            for key, build in queue:
+                found: Any = ()
+                try:
+                    found = build()
+                finally:
+                    with self._kept_lock:
+                        if key in self._day_later_kept:
+                            self._day_later_kept[key] = found
+
+        thread = threading.Thread(target=read, name="day-later", daemon=True)
+        with self._kept_lock:
+            self._day_later_threads = [t for t in self._day_later_threads if t.is_alive()]
+            self._day_later_threads.append(thread)
+        thread.start()
+
+    def settle(self, timeout: float | None = None) -> None:
+        """Wait for the readings the Day started off the request (`_day_later`): for a test, the bench."""
+        with self._kept_lock:
+            threads = list(self._day_later_threads)
+        for thread in threads:
+            thread.join(timeout)
+
+    def _day_later_tag(self) -> str:
+        with self._kept_lock:
+            return ",".join(" ".join(k) for k, v in self._day_later_kept.items() if v is not None)
+
     def _state(self, meta: Mapping[str, Any]) -> str:
         """The record as the pages read it: `logbook.json`, the record's today, and the settings,
         bookkeeping and pages beside the chain that `etag` digests."""
@@ -1479,6 +1559,7 @@ class Site:
                 parts.append("-")
         if (day := DAY_PATH.match(path)) is not None:  # today's shape and its now line move with the clock
             parts.append(day_rhythm.clock_tag(day.group(1), meta, self.now()))
+            parts.append(self._day_later_tag())  # a reconnect read off the request has arrived
         parts += self._beside()
         digest = hashlib.sha256("\n".join(parts).encode("utf-8")).hexdigest()
         return f'"{str(meta.get("head") or "")[:HEAD_CHARS]}-{digest[:16]}"'
@@ -1836,25 +1917,79 @@ class Site:
             )
         )
         span = bounds.span(d)
-        ribbon = day_rhythm.ribbon(data, marks.lines, span, now if live else None)
+        morning = shown == day_rhythm.MORNING
+        empty_ahead: list[str] = []  # the morning's parts with nothing, named in Nothing from
+        # the morning's plan from the task tool, tier 1 alone as `show plan` reads it: every `sync notion`
+        # line, seconds on a record of millions, so beside the page on `logbook serve` (`_day_later`)
+        plan = (
+            self._day_later(
+                ("plan", day, str(self.lb.meta.get("head"))), lambda: day_rhythm.plan_of(self.lb, day)
+            )
+            if not self.static and morning and (self.tiers is None or 1 in self.tiers)
+            else None
+        )
+        ticks = day_rhythm.task_ticks(plan, tz)
+        ribbon = day_rhythm.ribbon(data, marks.lines, span, now if live else None, ticks)
         pieces["the-day"] = ribbon
         pieces["so-far"] = ribbon
-        if shown == day_rhythm.MORNING:
-            plan = day_rhythm.planned(data, marks.lines)
+        directory = self._day_reading(("directory",), lambda: people.directory(self.lb))
+        if morning:
+            entries = day_rhythm.planned(data, marks.lines)
             due = day_rhythm.due_on(near, day)
-            pieces["today"] = ribbon + day_rhythm.today_html(plan, due, day, tz, person)
+            today_parts = [ribbon + day_rhythm.today_html(entries, due, day, tz, person)]
+            if plan is not None:
+                said, body = day_rhythm.tasks_html(plan, tz, link)
+                if body:
+                    today_parts.append(day_rhythm.fold(day_rhythm.TASKS, said, body, True))
+                else:
+                    empty_ahead.append(day_rhythm.TASKS.lower())
+            who = day_rhythm.seeing(entries, marks.lines, directory, self.tiers)
+            if who:
+                body = '<p class="seeing">' + ", ".join(person(w) for w in who) + "</p>\n"
+                said = "from the calendar"  # the names inside, and no count
+                today_parts.append(day_rhythm.fold(day_rhythm.SEEING, said, body, True))
+            else:
+                empty_ahead.append(day_rhythm.SEEING.lower())
+            if self.with_drafts:  # a model's proposal (pencil): none on a site built without drafts (#364)
+                proposal = self._day_reading(
+                    ("proposal", day), lambda: day_rhythm.week_proposal(self.lb, day, self.tiers)
+                )
+                if proposal is not None:
+                    today_parts.append(day_rhythm.proposal_html(proposal, link))
+                else:
+                    empty_ahead.append(day_rhythm.PROPOSAL)
+            pieces["today"] = "".join(today_parts)
             found = self._day_reading(
                 ("yesterday", day), lambda: day_rhythm.yesterday(self.lb, day, self.tiers)
             )
             pieces["yesterday"] = day_rhythm.yesterday_html(
                 found, link, lambda y: self.link("Sign again", f"/day/{y}#{CLOSE}")
             )
-        directory = self._day_reading(("directory",), lambda: people.directory(self.lb))
         coming = day_rhythm.birthdays(directory, day, day_rhythm.WEEK, self.tiers)
         this_week = [b for b in coming if (b.on - d).days < day_rhythm.WEEK]
         if this_week:
             said = day_rhythm.birthday_said(this_week[0], day, person)
             pieces["one-person"] = f'<div class="card"><p class="ink">{said}</p></div>\n'
+        elif morning and d == today and not self.static:  # one reconnect, the birthday's morning aside
+            drifted = self._day_later(("drift", day), lambda: day_rhythm.drifted(self.lb, day, self.airports))
+            pick = None if drifted is None else day_rhythm.reconnect(drifted, day, self.tiers)
+            if pick is not None:
+                said = day_rhythm.reconnect_said(pick, day, person)
+                pieces["one-person"] = f'<div class="card"><p class="ink">{said}</p></div>\n'
+            elif drifted is not None:
+                empty_ahead.append("one person")
+        # the morning's replies owed and decisions to revisit, read beyond the day, so beside the page on
+        # `logbook serve` (`_day_later`), by the head a sync moves; never a site's (a site has no morning)
+        owed: Sequence[Mapping[str, Any]] | None = None
+        revisit: Sequence[Mapping[str, Any]] | None = None
+        if not self.static and morning:
+            head = str(self.lb.meta.get("head"))
+            owed = self._day_later(
+                ("owed", day, head), lambda: day_rhythm.replies_owed(self.lb, day, directory, self.tiers)
+            )
+            revisit = self._day_later(
+                ("revisit", day, head), lambda: day_rhythm.revisits(self.lb, day, self.tiers)
+            )
         if data.get("reflection"):  # the owner's words, in ink
             pieces["words"] = _reflection_html(data["reflection"], tz)
         pencil = ""  # a model's words: none on a site built without its drafts (`with_drafts`, #364)
@@ -1867,8 +2002,9 @@ class Site:
         if self.with_drafts and data.get("draft_withheld"):  # the policy no longer allows it: the row
             pencil += _withheld_html(data["draft_withheld"], heading=not data.get("draft"))
         folds, empty = self._day_folds(
-            day, data, marks, star, extras, expanded, tz, near, shown, link, person, coming
+            day, data, marks, star, extras, expanded, tz, near, shown, link, person, coming, owed, revisit
         )
+        empty[:0] = empty_ahead
         proposed = (data.get("draft") or {}).get("proposals") or ()
         confirmed = sum(1 for p in proposed if p.get("confirmed"))
         if pencil and shown in (
@@ -1905,6 +2041,7 @@ class Site:
             for name in day_rhythm.ORDER[shown]
             if pieces.get(name)
         ]
+        self._day_later_start()  # what the page asked to read beside it, once it is rendered
         return self.document(
             f"{day} {data['weekday']}", "".join(parts), script, NO_MODEL, DAY_STYLE + day_rhythm.STYLE
         )
@@ -2007,20 +2144,29 @@ class Site:
         link: Callable[[str, str], str],
         person: Callable[[Mapping[str, Any]], str],
         coming: Sequence[day_rhythm.Birthday],
+        owed: Sequence[Mapping[str, Any]] | None = None,
+        revisit: Sequence[Mapping[str, Any]] | None = None,
     ) -> tuple[dict[str, str], list[str]]:
         """The record's folds by name, each with its summary in counts, and the names of the parts
-        with nothing for the day (`day_rhythm.nothing_from`)."""
+        with nothing for the day (`day_rhythm.nothing_from`). `owed` and `revisit` are None where the
+        page does not read them (a site, a day not today), so not named as empty."""
         folds: dict[str, str] = {}
         empty: list[str] = []
         fold = day_rhythm.fold
 
         # the call syntheses' decisions are a model's (pencil): none without drafts (`with_drafts`)
         said_by_calls = data if self.with_drafts else {**data, "syntheses": []}
-        summary, body = day_rhythm.loose_ends(near, said_by_calls, day, tz, person)
+        summary, body = day_rhythm.loose_ends(
+            near, said_by_calls, day, tz, person, owed or (), revisit or (), link
+        )
         if body:
             folds["loose-ends"] = fold("Loose ends", summary, body, expanded)
         elif not self.static:  # a static day reads no promise: it cannot say there were none
             empty.append("loose ends")
+        if owed is not None and not owed:
+            empty.append("replies owed")
+        if revisit is not None and not revisit:
+            empty.append("decisions to revisit")
         who = day_rhythm.people_of_day(data, marks.lines)
         rows = [
             f'<li><span>{person(p)}<span class="sub">'
@@ -2125,7 +2271,7 @@ class Site:
                 lambda: day_rhythm.looking_back(self.lb, day, self.airports, self.tiers),
             )
         )
-        summary, body = day_rhythm.looking_back_html(found or [], link, person)
+        summary, body = day_rhythm.looking_back_html(found or [], link, person, revisit or (), day)
         if body:
             folds["looking-back"] = fold("Looking back", summary, body, expanded)
         elif found is not None:
@@ -5374,9 +5520,9 @@ def make_server(
             "and nothing here leaves it"
         )
     if not built:
-        return Server(port, Site(lb, airports, voice=voice), limit_s)
+        return Server(port, Site(lb, airports, voice=voice, read_later=True), limit_s)
     library = library_build.Library(lb)
-    site = Site(lb, airports, voice=voice, library=library)
+    site = Site(lb, airports, voice=voice, library=library, read_later=True)
     server = Server(port, site, limit_s)
     server.rebuilder = library_build.Rebuilder(lb, site, library, say).start()
     site.on_act = server.rebuilder.kick

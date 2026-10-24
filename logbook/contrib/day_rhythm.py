@@ -20,9 +20,14 @@ of the day as what it rests on, the grounds the Goals shelf reads a review by), 
 earlier day still open; **the ribbon** (`ribbon`), the day from its start to its end in two lanes,
 the calendar's timed entries planned (hollow and dashed when nothing lived is beside them: an entry
 the Day leaves unplaced) and the stays, moves and time aboard lived, calls as ticks, now on today;
-**Today**, the timed plan and the promises due; **Loose ends**, the promises made on the day and due
-on it, both ways (`promises.extract` over `PROMISE_DAYS` before the day, so a promise due on a day
-is one said in the fortnight before it), and the decisions of the day's call syntheses; **People**,
+**Today**, the timed plan and the promises due, then the morning's: the task tool's tasks of the
+day and the next trip (`plan.read`, tier 1), who you'll see (the attendees of the day's timed
+entries), and the week's one proposal (its draft's `next_week`, pencil); **One person**, a birthday,
+else one reconnect from the drift rule (`drifted`, `reconnect`); **Loose ends**, the promises made on
+the day and due on it, both ways (`promises.extract` over `PROMISE_DAYS` before the day, so a promise
+due on a day is one said in the fortnight before it), the replies owed (`peoples_mail.replies_owed`),
+the decisions of the day's call syntheses and the decisions to revisit on the day (`revisits`, a
+`note/v1` labelled `decision` whose `extra.revisit` is the day); **People**,
 who showed up, by time together; the birthdays of the coming week (`people.directory`, the
 `extra.birthday` of a resolution line); **Looking back**, this day 1, 2, 3, 5 and 10 years ago,
 the ones the record has (`looking_back`); **Nothing from**, every part with nothing for the day,
@@ -40,11 +45,26 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 from ..core import day as day_reader
-from ..core import day_start, keepers, notes, people, reading, signing, stars, stays, weather
+from ..core import (
+    day_start,
+    drafts,
+    keepers,
+    notes,
+    people,
+    peoples_mail,
+    present,
+    reading,
+    signing,
+    stars,
+    stays,
+    weather,
+)
 from ..core.chain import Line
+from ..core.export import day_range
 from ..core.flights import Airports
 from ..core.store import RETRACTION, Logbook, retractions
-from . import promises, reflect, schedule, shelf_goals
+from . import people_drift, promises, reflect, schedule, shelf_goals, week_paper
+from . import plan as plan_reader
 
 MORNING, LIVE, EVENING, SIGNED = "morning", "live", "evening", "signed"
 SHAPES = (MORNING, LIVE, EVENING, SIGNED)
@@ -56,6 +76,7 @@ OPEN_DAYS = 60  # Yesterday looks this far back for the nearest day still open
 DOT = day_reader.DOT
 RSQUO = "\u2019"
 DASH = day_reader.EN_DASH
+APART = " \u2014 "  # a time, then an entry: an em dash, never a mark a number may stand beside a name across
 NO_FOR = "No goals or chapter set yet — the page can't say what a day was for."
 NO_FOR_DAY = "No chapter holds this day and it touched no goal."
 FOOTER = "Every row is computed from the record. What a model wrote is in pencil, with the lines it rests on."
@@ -63,7 +84,43 @@ NO_PLAN = "nothing planned in the calendar"
 NO_TRACK = "no location lines for the day"
 NO_STAY = "no stay or move the day's location lines make"
 LEGEND = (("stay", "stay"), ("move", "move"), ("aboard", "aboard"), ("call", "call"))
-SINGULAR = {"promises": "promise", "decisions": "decision", "photos": "photo", "years": "year"}
+SINGULAR = {
+    "promises": "promise",
+    "decisions": "decision",
+    "photos": "photo",
+    "years": "year",
+    "replies": "reply",
+    "tasks": "task",
+    "people": "person",
+}
+TASKS, SEEING, PROPOSAL = f"Today{RSQUO}s tasks", f"Who you{RSQUO}ll see", f"the week{RSQUO}s proposal"
+DECISION = "decision"  # a kept decision's label (RFC 0043 §4.8): a `note/v1`, `extra.revisit` a local day
+REVISIT = "revisit"
+SEASONS = ("winter", "winter", "spring", "spring", "spring", "summer", "summer", "summer", "autumn", "autumn",
+           "autumn", "winter")  # fmt: skip
+MONTHS = ("January", "February", "March", "April", "May", "June", "July", "August", "September", "October",
+          "November", "December")  # fmt: skip
+WORDS = (
+    "no",
+    "one",
+    "two",
+    "three",
+    "four",
+    "five",
+    "six",
+    "seven",
+    "eight",
+    "nine",
+    "ten",
+    "eleven",
+    "twelve",
+)
+VIA = {  # a real contact in words (`people_drift`)
+    people_drift.TOGETHER: "a day together",
+    people_drift.MEETING: "a meeting",
+    people_drift.CALL: "a call",
+    people_drift.MESSAGE: "a message",
+}
 
 ORDER = {  # each shape's parts, top to bottom; a part with nothing for the day is not drawn
     MORNING: ("header", "for", "yesterday", "today", "words", "one-person", "record", "nothing-from", "add",
@@ -134,13 +191,13 @@ p.asked{{font-size:13.5px;color:var(--mute);margin:0 0 8px}}
 p.for{{margin:14px 0 10px}}p.for .ink{{font-family:var(--serif);color:var(--ink)}}
 .ink,.person,div.reflection p{{font-family:var(--serif);color:var(--ink)}}
 div.reflection p.mute{{font-family:var(--sans);color:var(--mute)}}
-.mono,span.t,svg.ribbon text,span.ev{{font-family:var(--mono)}}
+.mono,div.t,svg.ribbon text,span.ev{{font-family:var(--mono)}}
 div.card{{background:var(--card);border:1px solid var(--line);border-radius:6px;padding:14px}}
 div.card p{{margin:0 0 6px}}div.card p:last-child{{margin:0}}
 ul.rows{{list-style:none;padding:0;margin:0}}
 ul.rows li{{display:flex;gap:.7rem;padding:7px 0;border-bottom:1px solid var(--line);font-size:13.5px}}
 ul.rows li:last-child{{border-bottom:0}}
-ul.rows span.t{{flex:0 0 3.2rem;color:var(--mute);font-size:12.5px;padding-top:1px}}
+ul.rows div.t{{flex:0 0 3.2rem;color:var(--mute);font-size:12.5px;padding-top:1px}}
 ul.rows span.sub{{display:block;color:var(--mute);font-size:12.5px}}
 svg.ribbon{{display:block;width:100%;max-width:100%;height:auto;margin:4px 0 2px}}
 svg.ribbon text{{font-size:10px;fill:var(--mute)}}
@@ -151,6 +208,7 @@ svg.ribbon rect.plan.hollow{{fill:none;stroke:var(--plan);stroke-width:1.2;strok
 svg.ribbon rect.stay{{fill:var(--stay)}}svg.ribbon rect.move{{fill:var(--move)}}
 svg.ribbon rect.aboard{{fill:var(--aboard)}}
 svg.ribbon line.call{{stroke:var(--call);stroke-width:1.5}}
+svg.ribbon line.task{{stroke:var(--plan);stroke-width:2}}
 svg.ribbon line.now{{stroke:var(--accent);stroke-width:1.5}}
 p.legend{{font-size:12px;color:var(--mute);margin:0 0 4px}}
 p.legend span{{font-weight:600}}p.legend .stay{{color:var(--stay)}}p.legend .move{{color:var(--move)}}
@@ -188,6 +246,9 @@ div.paper span.kind,span.tag{{font-size:10.5px;line-height:1.4;font-family:var(-
 border:1px solid var(--rule);border-radius:999px;
 padding:0 6px;color:var(--graphite)}}
 li.decision{{color:var(--graphite);font-family:var(--serif);background:var(--paper)}}
+p.proposal{{color:var(--graphite);font-family:var(--serif);background:var(--paper);border-radius:3px;
+padding:4px 10px;margin:10px 0}}
+p.proposal .sc{{font-variant:small-caps;letter-spacing:.04em;font-family:var(--sans);font-size:12.5px}}
 li.decision small{{font-size:10.5px;font-family:var(--mono);color:var(--accent)}}
 blockquote.ink{{margin:4px 0 0;font-style:italic}}
 ul.gallery{{list-style:none;display:flex;flex-wrap:wrap;gap:.4rem;padding:0;margin:.4rem 0}}
@@ -199,7 +260,7 @@ font-weight:600;font-size:14px;font-family:var(--sans);cursor:pointer}}
 section.review button[value=pass]{{background:transparent;color:var(--ink)}}
 form.star button{{min-width:44px;min-height:44px;background:transparent;border:0;color:var(--ink)}}
 p.foot{{color:var(--mute);font-size:12.5px;margin:30px 0 10px}}
-@media (max-width:40rem){{div.fold{{padding-left:12px}}ul.rows span.t{{flex-basis:2.8rem}}}}
+@media (max-width:40rem){{div.fold{{padding-left:12px}}ul.rows div.t{{flex-basis:2.8rem}}}}
 """
 
 
@@ -401,9 +462,11 @@ def ribbon(
     lines: Mapping[str, Line],
     span: tuple[datetime, datetime],
     now: datetime | None,
+    ticks: Sequence[tuple[datetime, str]] = (),
 ) -> str:
     """The day in two lanes from its start to its end, inline: PLANNED, the calendar's timed entries
-    (filled when something lived is beside one, hollow and dashed when nothing is); LIVED, the stays,
+    (filled when something lived is beside one, hollow and dashed when nothing is) and the task
+    tool's tasks dated today with a time, as ticks (`ticks`, RFC 0043 §4.2); LIVED, the stays,
     moves and time aboard in their colours and the calls as thin ticks; the hours every three; now,
     on today. Its `aria-label` says the same in a sentence; the legend under it names the colours.
     Nothing here weighs the plan against the day."""
@@ -426,9 +489,15 @@ def ribbon(
         cls = "plan filled" if p.beside else "plan hollow"
         out.append(
             f'<rect class="{cls}" x="{a}" y="{PLAN_Y}" width="{max(b - a, 2.0):.1f}" height="{LANE}" rx="2">'
-            f"<title>{escape(p.title)} {hm(p.start)}{DASH}{hm(p.end)}</title></rect>"
+            f"<title>{hm(p.start)}{DASH}{hm(p.end)}{APART}{escape(p.title)}</title></rect>"
         )
-    if not plan:
+    tasks = sorted((t, title) for t, title in ticks if start <= t < end)
+    for t, title in tasks:
+        out.append(
+            f'<line class="task" x1="{x(t)}" y1="{PLAN_Y - 2}" x2="{x(t)}" y2="{PLAN_Y + LANE + 2}">'
+            f"<title>{hm(t)}{APART}{escape(title)}</title></line>"
+        )
+    if not plan and not tasks:
         out.append(f'<text x="0" y="{PLAN_Y + 10}">{NO_PLAN}</text>')
     out.append(f'<text class="lane" x="0" y="{LIVED_Y - 3}">LIVED</text>')
     lived: dict[str, int] = {}
@@ -447,8 +516,8 @@ def ribbon(
         what = " ".join(x for x in (kind, named(entry)) if x)
         out.append(
             f'<rect class="{kind}" x="{a}" y="{LIVED_Y}" width="{max(b - a, 1.5):.1f}" height="{LANE}">'
-            f"<title>{escape(what)} {hm(_instant(within['start']))}{DASH}"
-            f"{hm(_instant(within['end']))}</title></rect>"
+            f"<title>{hm(_instant(within['start']))}{DASH}{hm(_instant(within['end']))}{APART}"
+            f"{escape(what)}</title></rect>"
         )
     rang = [t for t in calls(data, lines) if start <= t < end]
     for t in rang:
@@ -470,7 +539,9 @@ def ribbon(
         out.append(
             f'<line class="now" x1="{x(now)}" y1="{PLAN_Y - 2}" x2="{x(now)}" y2="{LIVED_Y + LANE + 2}"/>'
         )
-    entries = [f"{p.title} {hm(p.start)}{'' if p.beside else ', nothing beside it'}" for p in plan]
+    # the time first, then the entry: a clock time never stands after a name the title holds
+    entries = [f"{hm(p.start)}{APART}{p.title}{'' if p.beside else ', nothing beside it'}" for p in plan]
+    entries += [f"{hm(t)}{APART}{title}, a task" for t, title in tasks]
     said = _ribbon_said(entries, lived, len(rang), hm(start), hm(end), why)
     said += " A line marks now." if now is not None and start <= now < end else ""
     legend = DOT.join(f'<span class="{cls}">{word}</span>' for cls, word in LEGEND)
@@ -564,12 +635,12 @@ def today_html(
     for p in plan:
         where = f"at {escape(p.where)}{DOT}" if p.where else ""
         rows.append(
-            f'<li class="plan"><span class="t">{p.start.astimezone(zone).strftime("%H:%M")}</span>'
+            f'<li class="plan"><div class="t">{p.start.astimezone(zone).strftime("%H:%M")}</div>'
             f'<span>{escape(p.title)}<span class="sub">{where}from the calendar</span></span></li>\n'
         )
     for promise in due:
         rows.append(
-            f'<li class="due"><span class="t">due</span><span>“{escape(promise.match.quote)}”'
+            f'<li class="due"><div class="t">due</div><span>“{escape(promise.match.quote)}”'
             f'<span class="sub">{promise_said(promise, day, person)}</span></span></li>\n'
         )
     if not rows:
@@ -593,11 +664,15 @@ def loose_ends(
     day: str,
     zone: ZoneInfo,
     person: Callable[[Mapping[str, Any]], str],
+    owed: Sequence[Mapping[str, Any]] = (),
+    revisit: Sequence[Mapping[str, Any]] = (),
+    link: Callable[[str, str], str] | None = None,
 ) -> tuple[str, str]:
-    """(summary, body) of Loose ends; ("", "") when the day has none. Read-only: no form."""
+    """(summary, body) of Loose ends; ("", "") when the day has none. Read-only: no form. `owed` the
+    replies the day owes (`replies_owed`), `revisit` its decisions to revisit (`revisits`)."""
     made, due = made_on(found, day), [p for p in due_on(found, day) if p.day != day]
     decided = decisions(data)
-    if not made and not due and not decided:
+    if not made and not due and not decided and not owed and not revisit:
         return "", ""
     mine = [p for p in made if p.direction == promises.OWED_BY_OWNER and p.role != promises.ASKED]
     asked_of = [p for p in made if p.role == promises.ASKED]
@@ -608,7 +683,9 @@ def loose_ends(
             (len(asked_of), "", "asked of you"),
             (len(theirs), "", "owed to you"),
             (len(due), "", "due"),
+            (len(owed), "replies", " owed"),
             (len(decided), "decisions", ""),
+            (len(revisit), "", "to revisit"),
         ]
     )
     body: list[str] = []
@@ -620,7 +697,7 @@ def loose_ends(
         for p in items:
             due_said = f"{DOT}due {_day_word(p.due, day, after=True)}" if p.due and p.due != day else ""
             body.append(
-                f'<li class="promise"><span class="t">{_local(p.at, zone)}</span><span>'
+                f'<li class="promise"><div class="t">{_local(p.at, zone)}</div><span>'
                 f"“{escape(p.match.quote)}”"
                 f'<span class="sub">{promise_said(p, day, person)}{due_said}</span></span></li>\n'
             )
@@ -628,6 +705,18 @@ def loose_ends(
 
     rows("Made on the day", made)
     rows("Due on the day", due)
+    if owed:
+        body.append('<h3>Replies owed</h3>\n<ul class="rows">\n')
+        for o in owed:
+            body.append(
+                f'<li class="owed"><div class="t">reply</div><span>{wrote_said(o, day, person)}</span></li>\n'
+            )
+        body.append("</ul>\n")
+    if revisit:
+        body.append('<h3>To revisit</h3>\n<ul class="rows">\n')
+        for r in revisit:
+            body.append(_revisit_row(r, day, link))
+        body.append("</ul>\n")
     if decided:
         body.append('<h3>Decisions</h3>\n<ul class="rows">\n')
         for block, segment in decided:
@@ -637,7 +726,7 @@ def loose_ends(
                 mark = f' <small title="line {escape(str(block["transcript"]))}">[{where or "call"}]</small>'
             unsupported = "" if segment.get("supported") else ' <span class="tag">unsupported</span>'
             body.append(
-                f'<li class="decision"><span class="t">pencil</span><span>{escape(str(segment["text"]))}'
+                f'<li class="decision"><div class="t">pencil</div><span>{escape(str(segment["text"]))}'
                 f'{mark}{unsupported}<span class="sub">from the call{RSQUO}s synthesis{DOT}'
                 f'<span class="sc">{escape(model_of(block))}</span></span>'
                 "</span></li>\n"
@@ -788,11 +877,14 @@ def looking_back_html(
     found: Sequence[Mapping[str, Any]],
     link: Callable[[str, str], str],
     person: Callable[[Mapping[str, Any]], str],
+    revisit: Sequence[Mapping[str, Any]] = (),
+    day: str = "",
 ) -> tuple[str, str]:
-    """(summary, body) of Looking back; ("", "") when the record has none of the years."""
-    if not found:
+    """(summary, body) of Looking back; ("", "") when the record has none of the years and no
+    decision to revisit on the day (`revisits`), which come first."""
+    if not found and not revisit:
         return "", ""
-    rows = []
+    rows = [_revisit_row(r, day, link) for r in revisit]
     for b in found:
         ago = f"{b['years']} year{'s' if b['years'] != 1 else ''} ago"
         bits = [f'<span class="sub">{escape(b["weekday"])} {b["day"]}</span>']
@@ -808,6 +900,7 @@ def looking_back_html(
     words = sum(1 for b in found if b["said"])
     summary = _counts(
         [
+            (len(revisit), "decisions", " to revisit"),
             (len(found), "", f"of {len(YEARS_BACK)} years"),
             (starred, "", "starred photos" if starred != 1 else "starred photo"),
             (words, "", "reflections" if words != 1 else "reflection"),
@@ -915,6 +1008,372 @@ def timeline_summary(data: Mapping[str, Any], photos: Mapping[str, str]) -> str:
     if rang:
         parts.append(_plural(rang, "call"))
     return DOT.join(parts)
+
+
+# -- the morning's plan: the task tool, who you'll see, the week's proposal ------------------------------
+
+
+def plan_of(lb: Logbook, day: str) -> plan_reader.Plan | str:
+    """The task tool's plan for `day` as `show plan` reads it (tier-1 `sync notion` lines alone), or
+    the sentence that says why the mapping cannot be read (`plan.PlanError`): never a page's error."""
+    try:
+        return plan_reader.read(lb, day)
+    except plan_reader.PlanError as e:
+        return str(e)
+
+
+def task_ticks(found: object, zone: ZoneInfo) -> list[tuple[datetime, str]]:
+    """The ribbon's ticks: each of today's tasks whose day carries a time, at that time; none for
+    anything but a plan (its mapping's error, no reading, a reading that failed)."""
+    if not isinstance(found, plan_reader.Plan) or not found.tasks:
+        return []
+    out = []
+    for t in found.tasks["rows"]:
+        at = _task_at(t, zone)
+        if at is not None and not t.get("overdue"):
+            out.append((at.astimezone(UTC), str(t.get("title") or plan_reader.UNTITLED)))
+    return out
+
+
+def _task_at(task: Mapping[str, Any], zone: ZoneInfo) -> datetime | None:
+    """When a task is, when its day (`date`, the plan's: `Planned`, else `Due`) carries a time; a time
+    with no zone is the record's."""
+    when = str((task.get("date") or {}).get("start") or "")
+    if len(when) <= 10:
+        return None
+    try:
+        at = datetime.fromisoformat(when.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return at.replace(tzinfo=zone) if at.tzinfo is None else at
+
+
+def tasks_html(found: object, zone: ZoneInfo, link: Callable[[str, str], str]) -> tuple[str, str]:
+    """(summary, body) of Today's tasks from the task tool (RFC 0043 §9): the tasks of the day, five at
+    most, each linked to its line and to its page in Notion, the rest one line; then the next trip as
+    one countdown in words. ("", "") when the plan holds neither; the mapping's error as its body."""
+    if isinstance(found, str):
+        return "the plan", f'<p class="mute">{escape(found)}</p>\n'
+    if not isinstance(found, plan_reader.Plan) or not found.mapped:
+        return "", ""  # anything else is no plan: a reading beside the page that failed holds `()`
+    tasks = found.tasks or {"rows": [], "more": 0}
+    rows = []
+    for t in tasks["rows"]:
+        at = _task_at(t, zone)
+        clock = "task" if at is None else at.astimezone(zone).strftime("%H:%M")
+        said = [escape(str(t["status"]))] if t.get("status") else []
+        if t.get("overdue"):
+            said.append("carried from an earlier day")
+        said.append(_notion(str(t["url"]), "open in Notion"))
+        name = str(t.get("title") or plan_reader.UNTITLED)
+        title = link(name, f"/line/{t['line']}") if t.get("line") else escape(name)
+        rows.append(
+            f'<li class="task"><div class="t">{clock}</div><span>{title}'
+            f'<span class="sub">{DOT.join(said)}</span></span></li>\n'
+        )
+    if tasks.get("more"):
+        sprint = found.sprint
+        where = plan_reader._in_sprint(tasks)
+        notion = f" — {_notion(str(sprint['url']), 'open in Notion')}" if sprint else ""
+        rows.append(
+            f'<li class="task more"><div class="t"></div><span>and {tasks["more"]} more'
+            f"{escape(where)}{notion}</span></li>\n"
+        )
+    if tasks.get("said"):
+        rows.append(
+            f'<li class="task said"><div class="t"></div>'
+            f'<span class="mute">{escape(tasks["said"])}</span></li>\n'
+        )
+    trip = found.trip
+    if trip is not None:
+        title = str(trip.get("title") or plan_reader.UNTITLED)
+        named = link(title, "/line/" + str(trip["line"])) if trip.get("line") else escape(title)
+        rows.append(
+            f'<li class="trip"><div class="t">trip</div><span>{named} — {in_words(int(trip["days"]))}'
+            f'<span class="sub">{_notion(str(trip["url"]), "open in Notion")}</span></span></li>\n'
+        )
+    if not rows:
+        return "", ""
+    n = len(tasks["rows"]) + int(tasks.get("more") or 0)
+    summary = _counts([(n, "tasks", "")])
+    if trip is not None:
+        summary = DOT.join(x for x in (summary, f"the next trip {in_words(int(trip['days']))}") if x)
+    return summary, '<ul class="rows">\n' + "".join(rows) + "</ul>\n"
+
+
+def _notion(url: str, text: str) -> str:
+    """A link to a page in the task tool: followed only when the owner clicks it; nothing is fetched."""
+    return f'<a class="notion" href="{escape(url)}" rel="noreferrer">{escape(text)}</a>'
+
+
+def in_words(days: int) -> str:
+    """A countdown in words, never a digit: `today`, `tomorrow`, `in three days`, `in a week`, `in five
+    weeks`, `in two months`, `in over a year`."""
+    if days <= 0:
+        return "today"
+    if days == 1:
+        return "tomorrow"
+    if days < WEEK:
+        return f"in {WORDS[days]} days"
+    weeks = round(days / WEEK)
+    if days < 8 * WEEK:
+        return "in a week" if weeks == 1 else f"in {WORDS[weeks]} weeks"
+    months = round(days / 30.4)
+    if months <= 12:
+        return f"in {WORDS[months]} months"
+    return "in over a year"
+
+
+def seeing(
+    plan: Sequence[Planned], lines: Mapping[str, Line], directory: people.Report, tiers: Sequence[int] | None
+) -> list[dict[str, Any]]:
+    """Who you'll see: the attendees of the day's timed calendar entries who did not decline, each
+    once, by name and in the order the entries come, never the owner. A person the record resolves is
+    named as it names them while the gate reads their resolution; else by the name the entry itself
+    gives, which is of its line's tier; a bare address nobody named is nobody."""
+    allowed = None if tiers is None else {int(t) for t in tiers}
+    found: dict[str, dict[str, Any]] = {}
+    for p in plan:
+        payload = (lines.get(p.line) or {}).get("payload") or {}
+        attendees = payload.get("attendees")
+        for a in attendees if isinstance(attendees, list) else []:
+            if not isinstance(a, dict) or a.get("response") == "declined":
+                continue
+            ref = _attendee_ref(a.get("ref"))
+            if ref is None or ref in directory.owner.refs:
+                continue
+            if ref[0] == "email" and present.SYSTEM_ADDRESS.search(ref[1].strip().casefold()):
+                continue
+            who = directory.identities.get(ref)
+            entity = who.entity if who is not None and who.type in present.PERSON_TYPES else None
+            if entity is not None and entity in directory.owner.entities:
+                continue
+            known = directory.known.get(entity) if entity is not None else None
+            if known is not None and (allowed is None or known.tier in allowed):
+                found.setdefault(known.entity, {"name": known.name, "person": known.entity})
+                continue
+            given = a.get("name")
+            if isinstance(given, str) and given.strip():
+                found.setdefault(given.strip().casefold(), {"name": given.strip(), "person": None})
+    return list(found.values())
+
+
+def _attendee_ref(value: object) -> tuple[str, str] | None:
+    if not isinstance(value, dict):
+        return None
+    kind, ref = value.get("kind"), value.get("value")
+    return (kind, ref) if isinstance(kind, str) and isinstance(ref, str) and ref else None
+
+
+def week_proposal(lb: Logbook, day: str, tiers: Sequence[int] | None) -> dict[str, Any] | None:
+    """The week's one proposal (RFC 0043 §3.1): the `next_week` segment of the standing draft of the
+    week before the day's (written on its Sunday, so it proposes for the day's week), through the gate
+    and the `dream` entry as every draft on the page (`drafts.for_unit`); None when it made none."""
+    before = (date.fromisoformat(day) - timedelta(days=WEEK)).isoformat()
+    week, monday, sunday = week_paper.parse_week(week_paper.week_of(before))
+    with lb.index() as idx:
+        retracted = frozenset(retractions(idx.retractions()))
+        found = drafts.by_unit(idx.by_kind(drafts.KIND), retracted, drafts.UNIT_WEEK).get(week, [])
+        if not found:
+            return None
+        on_week = {
+            str(line["id"])
+            for d in day_range(monday, sunday)
+            for line in idx.day(d)
+            if str(line["id"]) not in retracted
+        }
+    draft, _withheld = drafts.for_unit(found, on_week, tiers, drafts.allowed(lb.root), drafts.NOT_ON_WEEK)
+    if draft is None:
+        return None
+    for segment in draft["segments"]:
+        if segment.get("part") == "next_week" and segment.get("text"):
+            return {
+                "text": str(segment["text"]),
+                "supported": bool(segment.get("supported")),
+                "model": str(draft.get("model") or ""),
+                "line": str(draft["line"]),
+                "week": week,
+                "sunday": sunday,
+            }
+    return None
+
+
+def proposal_html(found: Mapping[str, Any], link: Callable[[str, str], str]) -> str:
+    """The week's one proposal, one line in pencil under Today, headed by the model that wrote it."""
+    unsupported = "" if found["supported"] else ' <span class="tag">unsupported</span>'
+    return (
+        f'<p class="proposal"><span class="sc">{escape(str(found["model"]))}</span> '
+        f"{escape(str(found['text']))}{unsupported} "
+        f'<span class="mute">{link(f"the week{RSQUO}s draft", "/line/" + str(found["line"]))}</span></p>\n'
+    )
+
+
+# -- one reconnect (RFC 0043 §4.9) ------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class Drifted:
+    """A person the drift reader names: who, the tier of what names them, their best year together
+    and the last real contact (`people_drift.verdict`). Never a count."""
+
+    name: str
+    person: str
+    tier: int
+    year: str
+    contact: people_drift.Contact | None
+
+
+def drifted(lb: Logbook, day: str, airports: Airports | None = None) -> tuple[Drifted, ...]:
+    """The people the drift rule names (`people_drift`, its defaults) with a silence counted to `day`,
+    in the order of their ids so a day's pick is stable; the open promises the CLI adds are not read.
+    It reads the whole record (`people.read_whole`, kept beside the index, and `real_contacts`, kept
+    too): the page reads it once a day, off the request."""
+    whole = reading.record_days(lb)
+    if whole is None:
+        return ()
+    report = people.read_whole(lb, airports)
+    if report is None:
+        return ()
+    until = min(whole[1], day)
+    contacts = people_drift.real_contacts(lb, report)
+    found = []
+    for p in report.people:
+        v = people_drift.verdict(p, contacts.get(p.entity), until)
+        if v.drifted and v.year is not None:
+            found.append(Drifted(p.name, p.entity, p.tier, v.year, v.contact))
+    return tuple(sorted(found, key=lambda d: d.person))
+
+
+def reads_up_to(tier: int, tiers: Sequence[int] | None) -> bool:
+    """Whether a gate reads every tier from 1 up to `tier`: a person whose evidence reaches tier 3 is
+    shown through (1, 2, 3), never through (1, 3), where what put them at 3 may rest on a tier-2 line."""
+    return tiers is None or all(t in {int(x) for x in tiers} for t in range(1, int(tier) + 1))
+
+
+def reconnect(found: Sequence[Drifted], day: str, tiers: Sequence[int] | None) -> Drifted | None:
+    """One person to reconnect with this morning, stateless: the one the day's ordinal picks among
+    those the gate reads, skipping the one the day before would pick, so never the same person two
+    mornings running; with only one, every other morning."""
+    shown = [d for d in found if reads_up_to(d.tier, tiers)]
+    n = date.fromisoformat(day).toordinal()
+    if not shown or (len(shown) == 1 and n % 2):
+        return None
+    pick = shown[n % len(shown)]
+    return pick if len(shown) == 1 or pick != shown[(n - 1) % len(shown)] else None
+
+
+def reconnect_said(d: Drifted, day: str, person: Callable[[Mapping[str, Any]], str]) -> str:
+    """`Per Hansen: you saw each other often the year before last; the last real contact was a call in
+    the spring that year.`: the reason in words, never a digit, the years said in words."""
+    often = f"you saw each other often {_year_words(int(d.year), day)}"
+    if d.contact is None:
+        last = "there has been no real contact since"
+    else:
+        then = date.fromisoformat(d.contact.day)
+        when = "that year" if str(then.year) == d.year else _year_words(then.year, day)
+        last = (
+            f"the last real contact was {VIA.get(d.contact.via, 'a word')} in the "
+            f"{SEASONS[then.month - 1]}{' ' if when == 'that year' else ', '}{when}"
+        )
+    return f"{person({'name': d.name, 'person': d.person})}: {often}; {last}."
+
+
+def _year_words(year: int, day: str) -> str:
+    gap = date.fromisoformat(day).year - year
+    if gap <= 0:
+        return "this year"
+    if gap == 1:
+        return "last year"
+    if gap == 2:
+        return "the year before last"
+    return "a few years ago" if gap < 7 else "many years ago"
+
+
+# -- replies owed and decisions to revisit (RFC 0043 §4.5, §4.8) ------------------------------------------
+
+
+def replies_owed(
+    lb: Logbook, day: str, directory: people.Report, tiers: Sequence[int] | None
+) -> list[dict[str, Any]]:
+    """The replies the day owes (`peoples_mail.replies_owed`, through the gate): who, and when their
+    last word came, longest owed first."""
+    days = day_start.of(lb.meta)
+    out = []
+    for o in peoples_mail.replies_owed(lb, day, tiers):
+        known = directory.known.get(o.person)
+        if known is None or not reads_up_to(known.tier, tiers):
+            continue  # named only when the gate reads every tier up to the person's
+        out.append({"name": known.name, "person": known.entity, "day": days.day_of(o.last_at)})
+    return out
+
+
+def wrote_said(owed: Mapping[str, Any], day: str, person: Callable[[Mapping[str, Any]], str]) -> str:
+    """`Kari Nordmann wrote on Tuesday last week`: a name and weekday words, never a date or a count."""
+    then, on = date.fromisoformat(str(owed["day"])), date.fromisoformat(day)
+    weekday = day_reader.WEEKDAYS[then.weekday()]
+    gap = (on - then).days
+    if gap < WEEK:
+        when = f"on {weekday}"
+    elif then.isocalendar()[:2] == (on - timedelta(days=WEEK)).isocalendar()[:2]:
+        when = f"on {weekday} last week"
+    elif (then.year, then.month) == (on.year, on.month):
+        when = f"on a {weekday} earlier this month"
+    else:
+        when = f"on a {weekday} in {MONTHS[then.month - 1]}"
+    return f"{person(owed)} wrote {when}"
+
+
+def revisits(lb: Logbook, day: str, tiers: Sequence[int] | None) -> list[dict[str, Any]]:
+    """The decisions to revisit on `day` (RFC 0043 §4.8): the standing `note/v1` lines labelled
+    `decision` whose `extra.revisit` is the day, a local day `YYYY-MM-DD`, through the gate; each with
+    its words and the local day it was written, the oldest first."""
+    days = day_start.of(lb.meta)
+    with lb.index() as idx:
+        lines = reading.crossing(idx.by_kind(notes.KIND, None, day), tiers)
+        retracted = retractions(idx.retractions())
+    out = []
+    for line in notes.standing(lines, DECISION, retracted):
+        payload = line.get("payload") or {}
+        extra = payload.get("extra")
+        if not isinstance(extra, dict) or extra.get(REVISIT) != day:
+            continue
+        out.append(
+            {"line": str(line["id"]), "text": str(payload.get("text") or ""), "day": days.day_of(line["at"])}
+        )
+    return out
+
+
+def _revisit_row(found: Mapping[str, Any], day: str, link: Callable[[str, str], str] | None) -> str:
+    said = escape(revisit_said(found, day))
+    line = f'<span class="sub">{link("the decision", "/line/" + str(found["line"]))}</span>' if link else ""
+    return f'<li class="revisit"><div class="t">revisit</div><span>{said}{line}</span></li>\n'
+
+
+def revisit_said(found: Mapping[str, Any], day: str) -> str:
+    """`A year ago you decided: “Keep the berth in Vollen.” How did it turn out?`"""
+    return f"{_ago(str(found['day']), day)} you decided: “{found['text']}” How did it turn out?"
+
+
+def _ago(then: str, day: str) -> str:
+    a, b = date.fromisoformat(then), date.fromisoformat(day)
+    months = (b.year - a.year) * 12 + b.month - a.month - (1 if b.day < a.day else 0)
+    if months >= 12:
+        years = months // 12
+        return (
+            "A year ago"
+            if years == 1
+            else f"{WORDS[years].capitalize()} years ago"
+            if years <= 12
+            else "Years ago"
+        )
+    if months >= 1:
+        return "A month ago" if months == 1 else f"{WORDS[months].capitalize()} months ago"
+    gap = (b - a).days
+    if gap >= 2 * WEEK:
+        return "A few weeks ago"
+    if gap >= WEEK:
+        return "A week ago"
+    return "Today" if gap == 0 else "Yesterday" if gap == 1 else "A few days ago"
 
 
 # -- small things ------------------------------------------------------------------------------------------

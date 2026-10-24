@@ -13,6 +13,7 @@ The same guard covers `verify` on the conformance sample, which must still print
 from __future__ import annotations
 
 import json
+import shutil
 import sys
 import types
 from datetime import UTC, datetime
@@ -314,6 +315,7 @@ PAGES = (
     "/day/2026-06-14",  # a Sunday: the week's draft, when its week has one
     "/week/2026-W24",  # the week page: its ribbons, the plan, Hold's census
     "/week/2026-W24?open=1",
+    "/day/2026-06-08?shape=morning",  # the plan, who you'll see, replies owed, revisits, the proposal
     LINE,
     "/search",
     "/search?q=kari",
@@ -343,6 +345,26 @@ def test_a_served_page_opens_no_connection(page: str, lb: Logbook, no_network: l
     response = serve.Site(lb).respond(path, query)
     assert response.status == 200, response.body[:200]
     assert no_network == [], f"the page {path} tried to connect: {no_network}"
+
+
+def test_the_morning_with_its_reconnect_opens_no_connection(
+    lb: Logbook, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, no_network: list[str]
+) -> None:
+    """The Day's morning on the day itself: the task tool's plan (a mapping, read from the record's
+    `sync notion` lines alone), who you'll see, the drift reader's one reconnect, replies owed, the
+    decisions to revisit and the week's proposal, each read from the record and nothing else. On a
+    copy, so the mapping is no other test's."""
+    root = tmp_path / "Demo"
+    shutil.copytree(lb.root, root)
+    monkeypatch.setenv("LOGBOOK_HOME", str(root))
+    (root / "policy" / "notion.json").write_text(
+        json.dumps({"plan": {"tasks": "00000100-0000-4000-8000-000000000100"}}), encoding="utf-8"
+    )
+    site = serve.Site(Logbook(root), now=lambda: datetime(2026, 6, 8, 3, 30, tzinfo=UTC))
+    for query in ("", "open=1"):
+        response = site.respond("/day/2026-06-08", query)
+        assert response.status == 200 and b'class="part today"' in response.body, response.body[:200]
+    assert no_network == [], f"the morning tried to connect: {no_network}"
 
 
 def test_today_redirects_to_the_day_and_opens_no_connection(lb: Logbook, no_network: list[str]) -> None:

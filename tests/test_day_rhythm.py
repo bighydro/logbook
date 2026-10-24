@@ -13,8 +13,10 @@ import html
 import json
 import re
 import shutil
+import threading
 from collections.abc import Iterable
 from datetime import UTC, date, datetime
+from itertools import pairwise
 from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -31,18 +33,21 @@ from dream_fortnight import (
     W25,
     fake,
     fortnight,
+    message,
     run_cli,
 )
-from persona import CAFE, HOME, KARI, ZURICH, attendee, dwell, event, flight, note, photo, utc
+from ideas_record import notion
+from persona import CAFE, HOME, KARI, KARI_ID, OLA, ZURICH, attendee, dwell, event, flight, note, photo, utc
 
 from logbook import cli
-from logbook.contrib import day_rhythm, notify, serve
+from logbook.contrib import day_rhythm, demo, notify, people_drift, serve
 from logbook.core import day as day_reader
 from logbook.core import drafts, people
 from logbook.core.store import Logbook
 
 TZ = ZoneInfo("Europe/Oslo")
 RSQUO = "\u2019"
+DASH = "\u2013"
 TUESDAY, WEDNESDAY, THURSDAY, FRIDAY, SATURDAY, SUNDAY = (f"2026-06-{d}" for d in (16, 17, 18, 19, 20, 21))
 MONDAY = "2026-06-15"  # to Zürich: XY 561 out at 07:05
 BEFORE = "2026-06-07"  # the Sunday before the fortnight: no location line, so nothing lived beside an entry
@@ -335,12 +340,14 @@ def test_the_ribbon_draws_the_planned_beside_the_lived(lb: Logbook) -> None:
         == "stay · move · aboard · call · dashed: planned, nothing beside it"
     )
     alone = _ribbon(_part(_page(site, BEFORE), "the-day"))
-    assert re.search(r'<rect class="plan hollow"[^>]*>\s*<title>' + PLANNED_ALONE, alone), (
+    assert re.search(r'<rect class="plan hollow"[^>]*>\s*<title>[^<]* — ' + PLANNED_ALONE, alone), (
         "nothing lived beside it"
     )
     assert PLANNED_ALONE in _label(alone) and "no location lines for the day" in alone
     tuesday = _ribbon(_part(_page(site, TUESDAY), "the-day"))
-    assert re.search(r'<rect class="plan filled"[^>]*>\s*<title>Dinner', tuesday), "a dinner at the hotel"
+    assert re.search(r'<rect class="plan filled"[^>]*>\s*<title>[^<]* — Dinner', tuesday), (
+        "a dinner at the hotel"
+    )
     friday = _ribbon(_part(_page(site, FRIDAY), "the-day"))
     assert ALL_DAY not in friday, "an all-day entry is not drawn"
     thursday = _ribbon(_part(_page(site, THURSDAY), "the-day"))
@@ -412,15 +419,31 @@ BESIDE = "[\\s(:×x#·,]*"  # what may stand between a name and a number and sti
 BREAK = "\u00b6"  # a block's end (a paragraph, a row, a cell, a summary): not a space, never crossed
 BLOCK = re.compile(
     r"</?(?:p|li|ol|ul|dl|dt|dd|div|section|main|header|footer|nav|h[1-6]|table|tr|td|th|details|summary"
-    r"|blockquote|form|svg|br)\b[^>]*>",
+    r"|blockquote|form|svg|br|title)\b[^>]*>",  # an SVG <title> is a tooltip: a text of its own
+    re.I,
+)
+
+
+# the attributes that carry words a reader is shown or read aloud: each is seen as a block of its own
+WORDS = re.compile(
+    r"""\s(?:title|aria-label|aria-description|aria-roledescription|alt|placeholder|label|summary|content"""
+    r"""|value)\s*=\s*(?:"([^"]*)"|'([^']*)')""",
     re.I,
 )
 
 
 def _seen(page: str) -> str:
-    """A page as text: its style and script dropped, every block's end a break, every other tag gone."""
+    """A page as text: its style and script dropped, every block's end a break, the words of every
+    attribute that carries them (`WORDS`) a block of their own, every other tag gone."""
     page = re.sub(r"<(style|script)\b.*?</\1>", "", page, flags=re.S | re.I)
-    return html.unescape(re.sub(r"<[^>]+>", "", BLOCK.sub(BREAK, page)))
+
+    def tag(found: re.Match[str]) -> str:
+        said = [a or b for a, b in WORDS.findall(found.group(0))]
+        return "".join(f"{BREAK}{words}{BREAK}" for words in said if words) + (
+            BREAK if BLOCK.fullmatch(found.group(0)) else ""
+        )
+
+    return html.unescape(re.sub(r"<[^>]+>", tag, page))
 
 
 def beside(text: str, names: Iterable[str]) -> list[str]:
@@ -447,6 +470,21 @@ def test_the_guard_finds_a_number_beside_a_name_and_nothing_else() -> None:
     assert beside(f"Per Hansen{RSQUO}s birthday is on Tuesday.", names) == []
     assert beside(_seen("<li>12:00</li><li>Per Hansen</li>"), names) == [], "a block's end is not crossed"
     assert beside(_seen("<li>12:00 Per Hansen</li>"), names), "within a block it is"
+    # the twenty-seventh sitting's finding: a ribbon block's words, in its `<title>` and its `aria-label`
+    assert beside(_seen('<svg aria-label="Planned: Dinner with Per Hansen 19:30."></svg>'), names)
+    assert beside(_seen("<rect><title>Dinner with Per Hansen 19:30</title></rect>"), names)
+    assert beside(_seen('<a title="Per Hansen (3)" href="/x">x</a>'), names), (
+        "any attribute that carries words"
+    )
+    assert beside(_seen('<img alt="Per Hansen, 12">'), names)
+    assert beside(_seen('<svg aria-label="19:30 — Dinner with Per Hansen."></svg>'), names) == []
+    # the review's: an entry titled by a name alone; `·` is a mark a number stands beside a name across
+    assert beside(_seen("<rect><title>19:30" + DASH + "21:30 · Per Hansen</title></rect>"), names)
+    assert beside(_seen("<li><span>16:30</span><span>Per Hansen</span></li>"), names), "a span is no block"
+    assert beside(_seen("<rect><title>19:30" + DASH + "21:30 — Per Hansen</title></rect>"), names) == []
+    assert beside(_seen('<li><div class="t">16:30</div><span>Per Hansen</span></li>'), names) == []
+    assert beside(_seen("<title>Per Hansen</title><title>08:30</title>"), names) == [], "two tooltips"
+    assert beside(_seen('<p title="12:00">Per Hansen</p>'), names) == [], "an attribute is its own block"
 
 
 def test_no_page_puts_a_number_beside_a_name_in_any_shape(lb: Logbook) -> None:
@@ -835,3 +873,392 @@ def test_a_site_without_drafts_carries_no_pencil_in_the_evening_or_signed(
         assert "<h2>Draft</h2>" in drafted and MODEL in drafted and "A day." in drafted
         assert "Pencil" in drafted and ("<summary><h2>Pencil</h2>" in drafted) == (shape == "signed")
     assert no_network == []
+
+
+def test_the_ribbon_says_the_time_before_the_entry_so_no_name_has_a_number_beside_it(lb: Logbook) -> None:
+    """The twenty-seventh sitting's finding: `Dinner with Per Hansen 19:30` in a block's `<title>` and
+    the ribbon's `aria-label` put a clock time beside a name, where the guard did not read. (The
+    timeline's own row of an entry, `Dinner with Per Hansen 19:30 to 21:30`, is main's and the
+    timeline's: not this test's.)"""
+    lb.append(**event(utc(SATURDAY, "19:30"), utc(SATURDAY, "21:30"), "Dinner with Per Hansen"))
+    names = sorted({p.name for p in people.directory(lb).known.values()})
+    for shape in day_rhythm.SHAPES:
+        ribbon = _ribbon(_page(_site(lb, SATURDAY, "09:00"), SATURDAY, f"shape={shape}"))
+        assert beside(_seen(ribbon), names) == [], shape
+        assert "<title>19:30" + DASH + "21:30 — Dinner with Per Hansen</title>" in ribbon, ribbon
+        assert "19:30 — Dinner with Per Hansen" in _label(ribbon)
+
+
+# -- the morning's computed parts (RFC 0043 slice A, the rest) ----------------------------------------------
+
+MORNING_DAY = "2026-06-09"  # a Tuesday: its ordinal is even, so the one drifted person is this morning's
+TASKS_DB, SPRINTS_DB, TRIPS_DB = (f"{n:08x}-0000-4000-8000-{n:012x}" for n in (0x100, 0x101, 0x102))
+SPRINT_24, WEDDING = "00000202-0000-4000-8000-000000000202", "00000301-0000-4000-8000-000000000301"
+TASK_TITLES = ["Book the ferry", "Buy rope", "Check the life jackets", "Clean the cabin",
+               "Varnish the tiller", "Order charts"]  # fmt: skip
+TIMES = {"Varnish the tiller": "16:00", "Order charts": "18:00"}  # the rest are dated the day, no time
+TRIP = f"Per{RSQUO}s wedding in Bergen"
+BERTH = "Keep the berth in Vollen."
+PROPOSAL = "Book the harbour crane before the weekend."
+SINCE = "Vi sees snart?"  # Ola's last word, on a Thursday in May: a reply owed
+
+
+def _task_line(n: int, title: str, due: str) -> dict[str, Any]:
+    page = f"{0x800 + n:08x}-0000-4000-8000-{0x800 + n:012x}"
+    return notion(
+        "2026-06-01T07:00:00Z",
+        page,
+        title,
+        action="created",
+        parent={"type": "database", "id": TASKS_DB},
+        path=["Plan", "Tasks"],
+        properties={"Due": {"start": due, "end": None}, "Status": "To do"},
+        relations={"Sprint": [SPRINT_24]},
+    )
+
+
+def _morning(lb: Logbook) -> None:
+    """Everything the morning of `MORNING_DAY` reads: six tasks dated the day (two with a time, the
+    later one beyond the five shown) in Sprint 24 and a trip five weeks on, from the task tool; a
+    dinner with Kari and Ola; Per Hansen, twenty days together in July 2024 and nothing since; Ola's
+    message of 28 May unanswered; a decision a year ago to revisit on the day; and the week before's
+    draft with its one proposal."""
+    tasks = [
+        _task_line(n, t, f"{MORNING_DAY}T{TIMES[t]}:00.000+02:00" if t in TIMES else MORNING_DAY)
+        for n, t in enumerate(TASK_TITLES)
+    ]
+    plan = [
+        notion("2026-06-01T06:00:00Z", SPRINT_24, "Sprint 24", action="created",
+               parent={"type": "database", "id": SPRINTS_DB}, path=["Plan", "Sprints"],
+               properties={"Dates": {"start": "2026-06-01", "end": "2026-06-14"}}),
+        notion("2026-06-01T06:05:00Z", WEDDING, TRIP, action="created",
+               parent={"type": "database", "id": TRIPS_DB}, path=["Plan", "Trips"],
+               properties={"When": {"start": "2026-07-14", "end": "2026-07-16"}}),
+        *tasks,
+    ]  # fmt: skip
+    together = []
+    for d in range(1, 21):  # twenty days with Per Hansen in July 2024, at the cafe
+        day = f"2024-07-{d:02d}"
+        together += [
+            *dwell(day, "00:00", "11:00", HOME, every_min=30),
+            *dwell(day, "11:30", "14:00", CAFE, every_min=10),
+            *dwell(day, "14:30", "24:00", HOME, every_min=30),
+        ]
+        together.append(
+            event(utc(day, "11:45"), utc(day, "13:45"), "Sailing lunch", [attendee(PER["email"])])
+        )
+    decided = note(utc("2025-06-09", "21:00"), BERTH)
+    decided["payload"]["labels"] = ["decision"]
+    decided["payload"]["extra"] = {"revisit": MORNING_DAY}
+    lb.append_many(
+        [
+            *plan,
+            *together,
+            event(
+                utc(MORNING_DAY, "18:00"),
+                utc(MORNING_DAY, "20:00"),
+                "Dinner",
+                [attendee(KARI["email"]), attendee(OLA["email"]), attendee("noreply@example.org")],
+            ),
+            message(utc("2026-05-28", "10:00"), SINCE, {**OLA, "name": "Ola"}),
+            decided,
+        ]
+    )
+    with lb.index() as idx:
+        evidence = next(str(line["id"]) for line in idx.day(BEFORE) if line["kind"] == "event")
+    lb.append(
+        utc(BEFORE, "22:00"),
+        f"{drafts.SOURCE_PREFIX}{MODEL}",
+        drafts.KIND,
+        2,
+        {
+            "schema": drafts.SCHEMA,
+            "unit": drafts.UNIT_WEEK,
+            "subject": "2026-W23",
+            "read_head": "0" * 64,
+            "read_count": 1,
+            "language": "en",
+            "segments": [{"text": PROPOSAL, "evidence": [evidence]}],
+            "extra": {
+                "prompt": "test/1",
+                "parts": ["next_week"],
+                "policy_version": "0" * 64,
+                "entry": "dream",
+            },
+        },
+    )
+    (lb.root / "policy" / "notion.json").write_text(
+        json.dumps({"plan": {"tasks": TASKS_DB, "sprints": SPRINTS_DB, "trips": TRIPS_DB}}), encoding="utf-8"
+    )
+
+
+def _names(lb: Logbook) -> list[str]:
+    return sorted({p.name for p in people.directory(lb).known.values()})
+
+
+def test_the_morning_holds_all_six(lb: Logbook) -> None:
+    _morning(lb)
+    site = _site(lb, MORNING_DAY, "07:00")
+    page = _page(site, MORNING_DAY)
+    assert _eyebrow(page) == "Tuesday · morning · 07:00"
+    today = _part(page, "today")
+    tasks = _fold(today, day_rhythm.TASKS)
+    assert [t for t in TASK_TITLES if t in tasks] == TASK_TITLES[:5], "five at most"
+    assert "and 1 more in Sprint 24 — " in tasks and "open in Notion" in tasks
+    assert '<a href="/line/' in tasks and 'href="https://www.notion.so/' in tasks, "its line, its page"
+    assert f"{TRIP} — in five weeks" in html.unescape(_text(tasks))
+    assert '<line class="task"' in _ribbon(today) and "16:00 — Varnish the tiller" in _ribbon(today)
+    seeing = _text(_fold(today, day_rhythm.SEEING))
+    assert "Kari Nordmann, Ola Nordmann" in seeing and "noreply" not in seeing
+    proposal = re.search(r'<p class="proposal">.*?</p>', today, re.S)
+    assert proposal is not None and PROPOSAL in proposal.group(0) and MODEL in proposal.group(0)
+    card = _text(_part(page, "one-person")).strip().split("\n")[-1]
+    assert card == (
+        "Per Hansen: you saw each other often the year before last; the last real contact was a day"
+        " together in the summer that year."
+    ), card
+    assert not re.search(r"\d", card), card
+    opened = _page(site, MORNING_DAY, "open=1")
+    loose = _fold(opened, "Loose ends")
+    assert "1 reply owed" in loose and "1 to revisit" in loose
+    assert "Ola Nordmann wrote on a Thursday in May" in _text(loose)
+    said = f"A year ago you decided: “{BERTH}” How did it turn out?"
+    assert said in html.unescape(_text(loose))
+    back = _fold(opened, "Looking back")
+    assert said in html.unescape(_text(back)) and "1 decision to revisit" in back
+    for shown in (page, opened):
+        assert beside(_seen(shown), _names(lb)) == []
+    assert "<form" not in loose and "<button" not in loose, "the verbs are slice C's"
+
+
+def test_the_morning_s_new_parts_name_no_digit_beside_a_name_in_any_shape(lb: Logbook) -> None:
+    _morning(lb)
+    site = _site(lb, MORNING_DAY, "07:00")
+    for shape in day_rhythm.SHAPES:
+        for query in (f"shape={shape}", f"shape={shape}&open=1"):
+            assert beside(_seen(_page(site, MORNING_DAY, query)), _names(lb)) == [], query
+
+
+def test_an_empty_morning_names_each_part_once(lb: Logbook) -> None:
+    page = _page(_site(lb, MORNING_DAY, "07:00"), MORNING_DAY)
+    said = re.findall(r'<p class="nothing">Nothing from: (.*?)</p>', page)
+    assert len(said) == 1
+    named = html.unescape(said[0]).split(" · ")
+    for part in (
+        day_rhythm.TASKS.lower(),
+        day_rhythm.PROPOSAL,
+        "one person",
+        "replies owed",
+        "decisions to revisit",
+    ):
+        assert part in named, (part, named)
+    assert day_rhythm.SEEING.lower() in named, "nothing timed with anyone on the day"
+
+
+def test_a_birthday_comes_first_and_the_reconnect_waits(lb: Logbook) -> None:
+    _morning(lb)
+    lb.append(**_resolution(("email", "kari.2@example.org"), KARI_ID, "Kari Nordmann", birthday="1990-06-12"))
+    card = _text(_part(_page(_site(lb, MORNING_DAY, "07:00"), MORNING_DAY), "one-person"))
+    assert card.strip().endswith(f"\nKari Nordmann{RSQUO}s birthday is on Friday."), card
+    assert "Per Hansen" not in card, "the birthday's morning has no reconnect"
+
+
+def test_the_reconnect_is_never_the_same_person_two_mornings_running() -> None:
+    def drifted(name: str, tier: int = 2) -> day_rhythm.Drifted:
+        return day_rhythm.Drifted(name, f"id-{name}", tier, "2022", None)
+
+    first = date(2026, 6, 1)
+    for found in ([drifted("a")], [drifted("a"), drifted("b")], [drifted(n) for n in "abc"]):
+        picks = [
+            day_rhythm.reconnect(found, date.fromordinal(first.toordinal() + k).isoformat(), None)
+            for k in range(30)
+        ]
+        assert any(picks)
+        for a, b in pairwise(picks):
+            assert a is None or a != b, (len(found), picks)
+    assert day_rhythm.reconnect([drifted("a", tier=3)], "2026-06-02", [1, 2]) is None, "through the gate"
+
+
+def test_the_reconnect_is_said_in_words() -> None:
+    for year, then, words in (
+        ("2025", "2025-12-01", "last year; the last real contact was a call in the winter that year."),
+        (
+            "2022",
+            "2023-04-02",
+            "a few years ago; the last real contact was a call in the spring, a few years ago.",
+        ),
+        (
+            "2016",
+            "2017-08-02",
+            "many years ago; the last real contact was a call in the summer, many years ago.",
+        ),
+    ):
+        d = day_rhythm.Drifted("Per Hansen", "p", 2, year, people_drift.Contact(then, people_drift.CALL, "x"))
+        said = day_rhythm.reconnect_said(d, "2026-06-09", lambda c: str(c["name"]))
+        assert said == f"Per Hansen: you saw each other often {words}", said
+        assert not re.search(r"\d", said)
+
+
+def test_a_countdown_and_the_days_ago_are_words() -> None:
+    assert [day_rhythm.in_words(n) for n in (0, 1, 3, 7, 10, 35, 60, 200, 400)] == [
+        "today", "tomorrow", "in three days", "in a week", "in a week", "in five weeks", "in two months",
+        "in seven months", "in over a year",
+    ]  # fmt: skip
+    name = lambda c: str(c["name"])  # noqa: E731
+    for then, words in (
+        ("2026-06-01", "on Monday last week"),
+        ("2026-05-28", "on a Thursday in May"),
+        ("2026-06-01", "on Monday last week"),
+    ):
+        assert day_rhythm.wrote_said({"name": "Kari Nordmann", "day": then}, "2026-06-09", name) == (
+            f"Kari Nordmann wrote {words}"
+        )
+    assert day_rhythm.wrote_said({"name": "Kari Nordmann", "day": "2026-06-10"}, "2026-06-25", name) == (
+        "Kari Nordmann wrote on a Wednesday earlier this month"
+    )
+    assert day_rhythm._ago("2025-06-09", "2026-06-09") == "A year ago"
+    assert day_rhythm._ago("2023-06-10", "2026-06-09") == "Two years ago"
+    assert day_rhythm._ago("2026-03-09", "2026-06-09") == "Three months ago"
+
+
+def test_a_tier_1_morning_names_nobody_a_tier_2_line_names(lb: Logbook) -> None:
+    _morning(lb)
+    page = _page(_site(lb, MORNING_DAY, "07:00", tiers=[1]), MORNING_DAY, "open=1")
+    ours = _part(page, "today") + "".join(
+        _fold(page, title) for title in ("Loose ends", "Looking back") if f"<summary><h2>{title}" in page
+    )  # parts 2 to 4 and the revisits: the header's with row is main's (see the pull request)
+    for name in ("Kari Nordmann", "Ola Nordmann", "Per Hansen"):
+        assert name not in ours, name
+    assert SINCE not in page and BERTH not in page and PROPOSAL not in page
+    assert TASK_TITLES[0] in _part(page, "today"), "the plan is tier 1: it shows"
+    assert "one-person" not in _parts(page)
+
+
+def test_a_site_carries_no_morning_and_no_proposal_without_drafts(
+    lb: Logbook, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, no_network: list[str]
+) -> None:
+    _morning(lb)
+    policy = lb.root / "policy" / "crossing.json"
+    data = json.loads(policy.read_text(encoding="utf-8"))
+    data["site"] = {"max_tier": 2}
+    policy.write_text(json.dumps(data), encoding="utf-8")
+    cli.main(["export", "site", str(tmp_path / "site"), "--tier", "1,2"])
+    for page in (tmp_path / "site").rglob("*.html"):
+        text = page.read_text(encoding="utf-8")
+        assert PROPOSAL not in text and 'class="proposal"' not in text, page
+        assert BERTH not in text and SINCE not in text, page
+    quiet = _site(lb, MORNING_DAY, "07:00", with_drafts=False)
+    assert PROPOSAL not in _page(quiet, MORNING_DAY), "the served page without drafts, as #364's guard"
+    assert no_network == []
+
+
+def test_the_morning_reads_nothing_over_the_network_on_the_demo_record(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, no_network: list[str]
+) -> None:
+    root = tmp_path / "Demo"
+    monkeypatch.setenv("LOGBOOK_HOME", str(root))
+    lb = demo.generate(root, days=5, seed=1)
+    last = max(str(line["at"])[:10] for line in lb.lines() if line["kind"] == "location")
+    site = _site(lb, last, "07:00")
+    for query in ("", "shape=morning", "shape=morning&open=1"):
+        page = _page(site, last, query)
+        assert _eyebrow(page).split(" · ")[1] == "morning"
+        assert beside(_seen(page), _names(lb)) == []
+    assert no_network == []
+
+
+def test_the_plan_s_error_is_one_sentence_on_the_page(lb: Logbook) -> None:
+    _morning(lb)
+    (lb.root / "policy" / "notion.json").write_text(json.dumps({"plan": {"tasks": 3}}), encoding="utf-8")
+    today = _part(_page(_site(lb, MORNING_DAY, "07:00"), MORNING_DAY), "today")
+    assert "plan.tasks must be a Notion database id" in today
+
+
+def test_an_entry_or_a_task_titled_by_a_name_alone_has_no_time_beside_it(lb: Logbook) -> None:
+    """The review's case: an entry and a task whose title is a person's name, each with a time."""
+    _morning(lb)
+    lb.append(**event(utc(MORNING_DAY, "19:30"), utc(MORNING_DAY, "21:30"), "Per Hansen"))
+    lb.append(**_task_line(20, "Per Hansen", f"{MORNING_DAY}T08:30:00.000+02:00"))
+    page = _page(_site(lb, MORNING_DAY, "07:00"), MORNING_DAY)
+    today = _part(page, "today")
+    assert "Per Hansen" in _ribbon(today) and "Per Hansen" in _fold(today, day_rhythm.TASKS)
+    assert beside(_seen(today), _names(lb)) == []
+
+
+def test_logbook_serve_reads_the_reconnect_off_the_request(lb: Logbook) -> None:
+    """`read_later`, as `logbook serve` builds its Site: the morning answers without the drift, the
+    reading runs on a thread under the lock a sync's rebuild takes, and once it has arrived the Day's
+    tag moves and the card is there; a sync after it does not read it again."""
+    _morning(lb)
+    site = serve.Site(lb, now=lambda: _at(MORNING_DAY, "07:00"), read_later=True)
+    read: list[str] = []
+    real = day_rhythm.drifted
+
+    def counted(*a: Any, **kw: Any) -> Any:
+        read.append("drift")
+        return real(*a, **kw)
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(day_rhythm, "drifted", counted)
+        try:
+            before = site.etag(f"/day/{MORNING_DAY}", "", site.current())
+            site.respond(f"/day/{MORNING_DAY}", "")
+        finally:
+            site.settle()  # no thread outlives the test: it would read the next test's environment
+        after = site.etag(f"/day/{MORNING_DAY}", "", site.current())
+        assert after != before, "the reading has arrived: the page is read again"
+        card = _text(_part(_page(site, MORNING_DAY), "one-person"))
+        assert "Per Hansen: you saw each other often" in card
+        lb.append(**note(utc(MORNING_DAY, "06:30"), "A line a sync brings."))
+        assert "Per Hansen" in _part(_page(site, MORNING_DAY), "one-person")
+        site.settle()
+    assert read == ["drift"], "read once for the day, whatever the syncs"
+
+
+def test_a_reading_beside_the_page_that_fails_is_no_plan_and_the_morning_still_answers(
+    lb: Logbook, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Under `read_later`, a reading that fails with anything but the mapping's own error holds `()`:
+    the morning reads it as no plan, says the error once on stderr's hook, and answers 200."""
+    _morning(lb)
+    heard: list[BaseException | None] = []
+    monkeypatch.setattr(threading, "excepthook", lambda args: heard.append(args.exc_value))
+
+    def broken(*_a: Any, **_kw: Any) -> Any:
+        raise RuntimeError("the plan's reading broke")
+
+    monkeypatch.setattr(day_rhythm, "plan_of", broken)
+    site = serve.Site(lb, now=lambda: _at(MORNING_DAY, "07:00"), read_later=True)
+    try:
+        first = site.respond(f"/day/{MORNING_DAY}", "")
+    finally:
+        site.settle()
+    assert first.status == 200
+    assert [type(e) for e in heard] == [RuntimeError], "the error is said, not swallowed"
+    for query in ("", "open=1"):
+        again = site.respond(f"/day/{MORNING_DAY}", query)
+        assert again.status == 200, again.body[:300]
+        today = _part(again.body.decode("utf-8"), "today")
+        assert day_rhythm.TASKS not in today and '<line class="task"' not in today
+    site.settle()
+
+
+def test_a_person_shows_only_through_a_gate_that_reads_every_tier_up_to_theirs(lb: Logbook) -> None:
+    """Through a gate of tiers (1, 3), a person whose evidence reaches tier 3 is not shown: what put
+    them there may rest on a tier-2 line the gate does not read. The reconnect and the replies owed."""
+    tier_three = day_rhythm.Drifted("Per Hansen", PER_ID, 3, "2024", None)
+    days = [date.fromordinal(date(2026, 6, 1).toordinal() + k).isoformat() for k in range(4)]
+    assert any(day_rhythm.reconnect([tier_three], d, (1, 2, 3)) for d in days)
+    assert not any(day_rhythm.reconnect([tier_three], d, (1, 3)) for d in days)
+    assert day_rhythm.reads_up_to(2, (1, 2)) and not day_rhythm.reads_up_to(2, (2,))
+    resolution = _resolution(("phone", "+447700900123"), PER_ID, "Per Hansen")
+    resolution["tier"] = 3
+    said = message(utc("2026-05-28", "10:00"), "Ses vi?", {**PER, "name": "Per"})
+    said["tier"] = 3
+    lb.append_many([resolution, said])
+    directory = people.directory(lb)
+    assert directory.known[PER_ID].tier == 3
+    assert [o["name"] for o in day_rhythm.replies_owed(lb, MORNING_DAY, directory, (1, 2, 3))] == [
+        "Per Hansen"
+    ]
+    assert day_rhythm.replies_owed(lb, MORNING_DAY, directory, (1, 3)) == []
