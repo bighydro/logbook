@@ -31,8 +31,9 @@ Readers derive and never append (ADR 0013); the same record gives the same ledge
 
 from __future__ import annotations
 
-from collections.abc import Iterator, Mapping, Sequence
-from dataclasses import dataclass
+import unicodedata
+from collections.abc import Collection, Iterable, Iterator, Mapping, Sequence
+from dataclasses import dataclass, replace
 from datetime import date, datetime, time, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -40,11 +41,24 @@ from zoneinfo import ZoneInfo
 from . import countries as country_table
 from . import present, stays, trips
 from .chain import Line
+from .index import Index
 from .reading import Reading, window_json
 from .resolve import Identity, Ref
+from .store import retractions
 
 KIND = "transaction"
 SCHEMA = "transaction/v1"
+RECEIPTS = "receipts"  # the source of a receipt's own line, `logbook review receipts` (RFC 0043 §12)
+NEAR = timedelta(days=2)  # how far apart a receipt and the payment source's line of one payment may be
+CENT = 0.005
+GENERIC = frozenset(
+    {
+        "billing", "customer", "do", "donotreply", "no", "no-reply", "noreply", "not", "notifications",
+        "order", "orders", "receipt", "receipts", "reply", "sales", "service", "shop", "store", "support",
+        "team", "the",
+        "asender",  # `a sender`, the merchant of a receipt whose sender has no name and no domain, folded
+    }
+)  # fmt: skip  # words that name no merchant
 BY_INSTANT, BY_DAY = "instant", "day"
 MERCHANTS_MAX = 4  # the merchants a Day's spend line names
 EN_DASH = "\u2013"
@@ -115,6 +129,7 @@ class Entry:
     shares: tuple[Share, ...]
     where: Where | None
     trip: str | None
+    receipt: str | None = None  # the line of the receipt this payment's evidence is (`receipts_held`)
 
     def to_json(self) -> dict[str, Any]:
         return {
@@ -134,6 +149,7 @@ class Entry:
             "shares": [s.to_json() for s in self.shares],
             "where": None if self.where is None else self.where.to_json(),
             "trip": self.trip,
+            "receipt": self.receipt,
             "lines": [self.line],
         }
 
@@ -193,12 +209,19 @@ def empty() -> dict[str, Any]:
 
 
 def ledger(reading: Reading, table: country_table.Countries | None = None) -> Ledger:
-    """The ledger of the reading's window: every transaction line standing, placed and in its trip."""
+    """The ledger of the reading's window: every transaction line standing, placed and in its trip; a
+    receipt's line a payment source's line holds is that payment's evidence, never a second one."""
     table = table or country_table.Countries.load()
     found, _warning = trips.trips(reading)
     lines = standing(reading.of_kind(KIND))
+    held = held_in(reading, lines)
+    by_payment = receipts_of(held)
+    lines = [line for line in lines if str(line["id"]) not in held]
     order = {str(line["id"]): i for i, line in enumerate(lines)}
-    entries = [_entry(line, reading, found, table) for line in lines]
+    entries = [
+        replace(e, receipt=by_payment[e.line].receipt) if e.line in by_payment else e
+        for e in (_entry(line, reading, found, table) for line in lines)
+    ]
     entries.sort(key=lambda e: (e.day, e.at, order[e.line]))
     return Ledger(reading, entries, found)
 
@@ -217,6 +240,161 @@ def standing(lines: Sequence[Line]) -> list[Line]:
         if isinstance(p := line.get("payload"), dict) and isinstance(p.get("supersedes"), str)
     }
     return [line for line in ordered(lines) if str(line.get("id")) not in superseded]
+
+
+# -- a receipt and its payment -------------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class Held:
+    """A receipt's own line (`logbook review receipts`, RFC 0043 §12) and the payment source's line that
+    holds the same payment: the source's line is the payment, the receipt's its evidence."""
+
+    receipt: str  # the receipt's line id
+    mail: str | None  # the mail it was read from
+    payment: str  # the payment source's line id
+    tiers: frozenset[int] = frozenset({3})  # the two lines' tiers: a reader shows the pair through both
+
+
+@dataclass(frozen=True)
+class _Paid:
+    line: str
+    source: str
+    tier: int
+    at: datetime
+    cents: int  # the signed amount in hundredths, as two are compared (`CENT`)
+    currency: str
+    merchant: str | None
+    mail: str | None
+
+
+def merchant_key(text: str) -> str:
+    """A merchant's name as two are compared: letters and digits alone, folded (`FJORDKIOSK AS` →
+    `fjordkioskas`)."""
+    return "".join(c for c in unicodedata.normalize("NFKC", text).casefold() if c.isalnum())
+
+
+def same_merchant(keys: Iterable[str], merchant: object) -> bool:
+    """Whether one of a receipt's folded names is in the line's merchant, or the line's in it; a name
+    shorter than three letters or a generic word (`GENERIC`) matches nothing."""
+    if not isinstance(merchant, str):
+        return False
+    other = merchant_key(merchant)
+    if len(other) < 3:
+        return False
+    return any(len(k) >= 3 and k not in GENERIC and (k in other or other in k) for k in keys)
+
+
+def receipts_held(lines: Sequence[Line]) -> dict[str, Held]:
+    """Among transaction `lines`, each receipt's line (source `RECEIPTS`) that a payment source's line
+    holds, by the receipt's line id: the same currency, the same signed amount, within `NEAR`, the same
+    merchant (`same_merchant`). One source line holds one receipt, the nearest pairs in time taken
+    first (on a tie, the earlier receipt's, then the earlier source line), so two dinners of one price
+    are two payments until the source has delivered both. A superseded line, or one the source marks
+    deleted, holds nothing and is held by nothing."""
+    found = [p for line in standing([x for x in lines if x.get("kind") == KIND]) if (p := _paid(line))]
+    paying: dict[tuple[str, int], list[_Paid]] = {}
+    for p in found:
+        if p.source != RECEIPTS:
+            paying.setdefault((p.currency, p.cents), []).append(p)
+    order = {p.line: i for i, p in enumerate(found)}  # chain order
+    candidates = []
+    for r in found:
+        if r.source != RECEIPTS:
+            continue
+        keys = (merchant_key(r.merchant),) if r.merchant else ()
+        for p in paying.get((r.currency, r.cents), ()):
+            if abs(p.at - r.at) <= NEAR and same_merchant(keys, p.merchant):
+                candidates.append((abs(p.at - r.at), order[r.line], order[p.line], r, p))
+    taken: set[str] = set()
+    held: dict[str, Held] = {}
+    for _apart, _r, _p, r, p in sorted(candidates, key=lambda c: c[:3]):
+        if r.line not in held and p.line not in taken:
+            taken.add(p.line)
+            held[r.line] = Held(r.line, r.mail, p.line, frozenset({r.tier, p.tier}))
+    return held
+
+
+_HELD: dict[tuple[str, int, str], dict[str, Held]] = {}  # the record's pairs at a head, a few records
+
+
+def held_of(idx: Index) -> dict[str, Held]:
+    """`receipts_held` over the whole record (`idx`): every standing receipt's line and every standing
+    transaction line within `NEAR` of one, so the pairs are the same whichever window a reader cuts
+    (a card that posts two days after its receipt is one payment, on the card's day, in a day's window
+    and a week's). Receipts' lines are few: they and the days about them are read through the (kind,
+    day_local) index, once per head of the record."""
+    meta = idx.lb.meta
+    key = (str(idx.lb.root), int(meta.get("seq") or 0), str(meta.get("head") or ""))
+    if key in _HELD:
+        return _HELD[key]
+    retracted = retractions(idx.retractions())
+    receipts = [x for x in idx.of_kind(KIND, source=RECEIPTS) if str(x.get("id")) not in retracted]
+    days = sorted({at.date() for x in receipts if (at := stays.instant(x.get("at")))})
+    reach = NEAR + timedelta(days=1)  # a local day is at most a day from the UTC one
+    spans: list[list[date]] = []
+    for d in days:
+        if spans and d - reach <= spans[-1][1]:
+            spans[-1][1] = d + reach
+        else:
+            spans.append([d - reach, d + reach])
+    near = {str(x.get("id")): x for x in receipts}
+    for first, last in spans:
+        for x in idx.by_kind(KIND, first.isoformat(), last.isoformat()):
+            if str(x.get("id")) not in retracted:
+                near[str(x.get("id"))] = x
+    held = receipts_held(list(near.values()))
+    if len(_HELD) >= 8:
+        _HELD.clear()
+    _HELD[key] = held
+    return held
+
+
+def held_through(held: Mapping[str, Held], tiers: Collection[int] | None) -> dict[str, Held]:
+    """The pairs a reader of `tiers` (None: every tier) sees: those whose two lines it reads both."""
+    if tiers is None:
+        return dict(held)
+    gate = {int(t) for t in tiers}
+    return {k: h for k, h in held.items() if h.tiers <= gate}
+
+
+def held_in(reading: Reading, lines: Sequence[Line]) -> dict[str, Held]:
+    """`held_of` through the reading's gate, for a reader whose window holds the transaction `lines`;
+    nothing is read when it holds none."""
+    if not any(line.get("kind") == KIND for line in lines):
+        return {}
+    with reading.lb.index() as idx:
+        return held_through(held_of(idx), reading.tiers)
+
+
+def receipts_of(held: Mapping[str, Held]) -> dict[str, Held]:
+    """The same pairs by the payment source's line id."""
+    return {h.payment: h for h in held.values()}
+
+
+def _paid(line: Mapping[str, Any]) -> _Paid | None:
+    """A transaction line as `receipts_held` compares it; None for a line with no instant, no amount or
+    no currency, or one the source marks deleted."""
+    payload = _dict(line.get("payload"))
+    at = stays.instant(line.get("at"))
+    amount = payload.get("amount")
+    currency = str(payload.get("currency") or "").strip().upper()
+    if at is None or isinstance(amount, bool) or not isinstance(amount, int | float) or not currency:
+        return None
+    extra = _dict(payload.get("extra"))
+    if extra.get("deleted") is True:
+        return None
+    merchant, mail = payload.get("merchant"), extra.get("from")
+    return _Paid(
+        str(line.get("id")),
+        str(line.get("source") or ""),
+        int(line.get("tier") or 1),
+        at,
+        round(float(amount) / (2 * CENT)),
+        currency,
+        merchant if isinstance(merchant, str) else None,
+        _text(mail) if line.get("source") == RECEIPTS else None,
+    )
 
 
 def _entry(
@@ -345,14 +523,25 @@ def totals(entries: Sequence[Entry]) -> dict[str, dict[str, float]]:
 # -- the Day's spend -----------------------------------------------------------------------------------------
 
 
-def spend(lines: Sequence[Line], tz_day: str) -> dict[str, Any] | None:
+def spend(
+    lines: Sequence[Line], tz_day: str, held: Mapping[str, Held] | None = None
+) -> dict[str, Any] | None:
     """The Day's spend from the day's transaction lines: how many count, how many are deleted, the
-    totals per currency, the merchants in order, the lines; None when the day has none."""
-    found = [line for line in lines if line.get("kind") == KIND]
+    totals per currency, the merchants in order, the lines; None when the day has none. A receipt's
+    line in `held` (`held_in`) is its payment's evidence and not a payment: on the day of the
+    payment it holds, `receipts` names it (`line`, `mail`, `of` the payment's line), a key the Day
+    has only when a receipt stands behind one of its payments."""
+    held = held or {}
+    found = [
+        line
+        for line in standing([line for line in lines if line.get("kind") == KIND])
+        if str(line.get("id")) not in held
+    ]
     if not found:
         return None
+    by_payment = receipts_of(held)
     entries = []
-    for line in standing(found):
+    for line in found:
         payload = _dict(line.get("payload"))
         extra = _dict(payload.get("extra"))
         entries.append(
@@ -376,13 +565,17 @@ def spend(lines: Sequence[Line], tz_day: str) -> dict[str, Any] | None:
                 trip=None,
             )
         )
-    return {
+    row: dict[str, Any] = {
         "count": sum(1 for e in entries if not e.deleted),
         "deleted": sum(1 for e in entries if e.deleted),
         "totals": totals(entries),
         "merchants": list(dict.fromkeys(e.merchant for e in entries if e.merchant and not e.deleted)),
         "lines": [e.line for e in entries],
     }
+    evidence = [by_payment[e.line] for e in entries if e.line in by_payment]
+    if evidence:  # only on a day a receipt stands behind a payment: the Day's object is otherwise unchanged
+        row["receipts"] = [{"line": h.receipt, "mail": h.mail, "of": h.payment} for h in evidence]
+    return row
 
 
 def spend_text(row: Mapping[str, Any]) -> str:
@@ -393,6 +586,9 @@ def spend_text(row: Mapping[str, Any]) -> str:
         parts.append(_plural(row["count"], "transaction"))
     if row["deleted"]:
         parts.append(f"{row['deleted']} deleted")
+    receipts = len(row.get("receipts") or ())
+    if receipts:
+        parts.append("1 with its receipt" if receipts == 1 else f"{receipts} with their receipts")
     merchants = row["merchants"]
     if merchants:
         names = ", ".join(merchants[:MERCHANTS_MAX])
@@ -557,6 +753,8 @@ def _entry_row(t: dict[str, Any], tz: str) -> str:
         )
     if t["deleted"]:
         parts.append("deleted")
+    if t.get("receipt"):
+        parts.append("with its receipt")
     amount = f"{t['currency']} {money(t['amount'])}"
     return f"    {clock}  {amount}  {DOT.join(parts)}"
 
