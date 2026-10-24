@@ -1,0 +1,4949 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="A diary that writes itself. Your life, in a folder.">
+      
+      
+      
+        <link rel="canonical" href="https://bighydro.github.io/logbook/rfcs/0036-goals-reviews-drafts-chapters/">
+      
+      
+        <link rel="prev" href="../0034-the-signed-day/">
+      
+      
+        <link rel="next" href="../0037-entities/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.0">
+    
+    
+      
+        <title>0036 Goals, reviews, drafts, chapters (draft) - Logbook</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.57a0d79d.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.fb2fffe2.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=IBM+Plex+Sans:300,300i,400,400i,700,700i%7CIBM+Plex+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"IBM Plex Sans";--md-code-font:"IBM Plex Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="blue-grey" data-md-color-accent="amber">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#rfc-0036-goals-reviews-drafts-and-chapters-the-days-boundary-the-freshness-of-a-signature" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="Logbook" class="md-header__button md-logo" aria-label="Logbook" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Logbook
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              0036 Goals, reviews, drafts, chapters (draft)
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="blue-grey" data-md-color-accent="amber"  aria-label="dark"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="dark" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="blue-grey" data-md-color-accent="amber"  aria-label="light"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="light" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/bighydro/logbook" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    bighydro/logbook
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="Logbook" class="md-nav__button md-logo" aria-label="Logbook" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Logbook
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/bighydro/logbook" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    bighydro/logbook
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../install/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../try-it/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Try it
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../faq/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    First questions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../first-hour/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The first hour
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tour/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The tour
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../commands/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../settings/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The record's settings
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    A life in a record
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../launch-post/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Your life in a folder
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../VISION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Vision
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../LORE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Lore
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../SPEC/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Specification v0.4
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../ARCHITECTURE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../migration-0.6/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Migrating to 0.6
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../line-to-day/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How a line becomes a Day
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../ROADMAP/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../release-notes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release notes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../audit-2026-10/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Audit — October 2026
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../PROBLEMS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Open problems
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_21" >
+        
+          
+          <label class="md-nav__link" for="__nav_21" id="__nav_21_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Decisions
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_21_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_21">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Decisions
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    About ADRs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0001-files-are-the-truth/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0001 Files are the truth
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0002-canonical-json-and-hashing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0002 Canonical JSON and hashing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0003-one-log/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0003 One log
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0004-notes-live-in-the-logbook/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0004 Notes live in the Logbook
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0005-one-evening-message/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0005 One evening message
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0006-chain-mandatory/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0006 Chain mandatory
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0007-sqlite-default-index/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0007 SQLite default index
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0008-first-adapters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0008 First adapters
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0009-the-circle-is-core/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0009 The circle is core
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0010-identity-of-the-captain/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0010 bighydro is a pen name
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0011-log-everything-cheap-judge-downstream/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0011 Log everything cheap, judge downstream
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0012-adapters-ship-in-the-package/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0012 Adapters ship in the package
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0013-downstream-interpreters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0013 Downstream interpreters
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0014-canonicalisation-is-fixed-not-versioned/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0014 Canonicalisation is fixed, not versioned
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0015-attachments-are-content-addressed/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0015 Attachments are content-addressed
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0016-tier-crossing-policy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0016 The crossing ceiling is the owner's setting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0017-backfill-and-live-share-one-mapping/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0017 Backfill and live share one mapping
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0018-assets-are-subjects/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0018 Assets are subjects, not places
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0019-trips-are-derived/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0019 Trips are derived, never written
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0020-tiers-2-3-sealed-with-age/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0020 Tiers 2–3 are sealed with age
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0021-journey-is-the-written-form/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0021 journey/v1 is the written form
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0022-the-records-home/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0022 The record's home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0023-digital-events-do-not-make-a-stay/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0023 Digital events do not make a stay
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0024-the-owners-phone-writes-through-the-library/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0024 The owner's phone writes through the Library
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0025-derived-tables/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0025 Derived tables
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_22" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_22" id="__nav_22_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    RFCs
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_22_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_22">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    RFCs
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="https://github.com/bighydro/logbook/blob/main/rfcs/README.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    About RFCs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="https://github.com/bighydro/logbook/blob/main/rfcs/0001-location-v1.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0001 location/v1
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="https://github.com/bighydro/logbook/blob/main/rfcs/0002-photo-v1.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0002 photo/v1
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../0027-reflection/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0027 Reflection: the digest's question
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../0028-story/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0028 story/v1 (draft, unfinished)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../0029-encryption-at-rest/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0029 encryption at rest for tiers 2–3
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../bench-encryption-2026-10/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Benchmark: per-line sealing (2026-10)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rfc-0025-shared-page-bundle/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0025 shared-page/v1
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../0026-weather-v1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0026 weather/v1
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../0031-profile-freeze/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0031 Profile freeze for v1.0
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../0034-the-signed-day/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0034 The signed day
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0036 Goals, reviews, drafts, chapters (draft)
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0036 Goals, reviews, drafts, chapters (draft)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#why" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-evidence-rule" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The evidence rule
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-profiles-in-one-table" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The profiles in one table
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#day_start" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        day_start
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#signed_within_days" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        signed_within_days
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-a-day-page-shows" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What a Day page shows
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#amendment-1-the-person-unit-the-writers-derived-material-follows-the-policy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Amendment 1 — the person unit, the writers, derived material follows the policy
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Amendment 1 — the person unit, the writers, derived material follows the policy">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-person-unit" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The person unit
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-writers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The writers
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#derived-material-follows-the-policy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Derived material follows the policy
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#amendment-2-days-together-reach-the-relationship-reader" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Amendment 2 — days together reach the relationship reader
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#relation-to-rfc-0037" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Relation to RFC 0037
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-this-changes-in-spec-when-adopted" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What this changes in SPEC, when adopted
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#notes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Notes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#open-questions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Open questions
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../0037-entities/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0037 Entities: orgs, ideas, places and assets (draft)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../0038-speakers/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0038 Speakers: who spoke, and who they are (draft)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../0040-videos/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0040 Videos: a recording file, its scenes, the owner's attribution (draft)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_23" >
+        
+          
+          <label class="md-nav__link" for="__nav_23" id="__nav_23_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Letters
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_23_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_23">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Letters
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../letters/2026-10-12-why-i-built-it/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Why I built it (2026-10-12)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../letters/2026-10-04-the-freeze/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The freeze (2026-10-04)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../day/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The Day
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../signed-day/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The signed day
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../dream/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The dream
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../goals/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Goals, reviews and chapters
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../dream-prompt/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The dream's prompt
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../transcript-synthesis/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The synthesis of a call
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../speakers/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Speakers: who spoke
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../synthesis-prompt/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The synthesis prompt
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../relationship/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The relationship reader
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../serve/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    In a browser
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../week/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The week
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../timeline/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The timeline
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../shelves/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The shelves: promises, goals, agents
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../acts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The acts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../gifts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Gifts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../companies/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The companies a day touched
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../rollups/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The rollups
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../labs/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The lab
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../ledger/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The ledger
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../receipts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Receipts as payments
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../trips-shared/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Shared trips
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../year/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The Year
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../print/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    On paper
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../vault/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The vault (Obsidian, Logseq)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../site/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The site (static HTML)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../world/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The world (a globe you can scrub)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../map/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The map (offline, drawn as SVG)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../crossing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The crossing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../export-notion/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Export for Notion
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../letter/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The letter
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../promises/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Promises
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tasks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tasks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../describe/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Describing keepers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../digest/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The digest
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../people/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    People
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../who-was-there/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Who was there
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../mail-people/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    People's mail
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../places/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Places
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../review/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Review
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../entities/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Entities (the profiles)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../search/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Search
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../heard/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    What you heard
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../mcp/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The MCP server
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../backup/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Backup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../schedule/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The schedule
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../home-server/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    On a home server
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../doctor/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The doctor
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../recovery/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    When verify fails
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../attachments/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The attachment store
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_74" >
+        
+          
+          <label class="md-nav__link" for="__nav_74" id="__nav_74_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Adapters
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_74_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_74">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Adapters
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adapters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adapters/voice-memos/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Voice memos and transcription
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adapters/takeout/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Google Takeout
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adapters/mail/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Mail
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adapters/takeout-tasks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Takeout: Tasks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adapters/takeout-maps/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Takeout: Maps (your places)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adapters/takeout-home/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Takeout: Home App
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adapters/takeout-fit/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Takeout: Fit
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adapters/takeout-youtube/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Takeout: YouTube
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adapter-bounties/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bounties
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adapters/passages/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Passages: a deck log as sea legs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adapters/listen/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Listening: Spotify and Apple Music
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adapters/screentime/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Screen Time
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adapters/photos/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Apple Photos: albums, favourites, faces
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adapters/weather/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Weather
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adapters/health/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Health: Apple Health, Withings, MyFitnessPal
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adapters/wallet/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Apple Wallet: boarding passes and tickets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adapters/agents/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Your own agents: Telegram bots, Claude Code and the Claude apps
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adapters/videos/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The family's videos: scenes, proposals, your answer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../conformance/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Conformance
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../CONTRIBUTING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../GOVERNANCE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Governance
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../releasing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Releasing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../SECURITY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../CHANGELOG/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Changelog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#why" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-evidence-rule" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The evidence rule
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-profiles-in-one-table" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The profiles in one table
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#day_start" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        day_start
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#signed_within_days" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        signed_within_days
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-a-day-page-shows" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What a Day page shows
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#amendment-1-the-person-unit-the-writers-derived-material-follows-the-policy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Amendment 1 — the person unit, the writers, derived material follows the policy
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Amendment 1 — the person unit, the writers, derived material follows the policy">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-person-unit" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The person unit
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-writers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The writers
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#derived-material-follows-the-policy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Derived material follows the policy
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#amendment-2-days-together-reach-the-relationship-reader" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Amendment 2 — days together reach the relationship reader
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#relation-to-rfc-0037" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Relation to RFC 0037
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-this-changes-in-spec-when-adopted" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What this changes in SPEC, when adopted
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#notes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Notes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#open-questions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Open questions
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="rfc-0036-goals-reviews-drafts-and-chapters-the-days-boundary-the-freshness-of-a-signature">RFC 0036 — Goals, reviews, drafts and chapters; the day's boundary; the freshness of a signature</h1>
+<p>Status: draft · 2026-10-13 · comment period: two weeks · amendment 1 (the person unit, the writers, derived material follows the policy) 2026-10-13 · amendment 2 (days together reach the relationship reader) 2026-10-18</p>
+<p>Four payload profiles, one record setting and one policy key, so that two implementations agree on how the owner's intentions and a model's words sit in the record. <code>goal/v1</code> is a goal in the owner's own words; <code>review/v1</code> is the owner's verdict on a goal at a date; <code>draft/v1</code> is what a model wrote about a unit of the record, every sentence pointing at the lines it rests on; <code>chapter/v1</code> is a named stretch of the record. <code>day_start</code> in <code>logbook.json</code> is where the owner's day begins, applied by every reader that groups by day and by nothing that writes. <code>signed_within_days</code> on a <code>policy/crossing.json</code> entry lets only days with a fresh signature cross through it. Nothing in the envelope (SPEC §2–3) changes, nothing is rewritten, and the conformance samples are untouched.</p>
+<p>The four profiles are new and not among RFC 0031's freezes: their schemas may change while this RFC is a draft, and each freezes only by RFC 0031's process (a reader, a fixture in both implementations, a schema pass, one dated amendment). Each has a page of its own beside the other profiles, with its field table, its example and the reasoning for its tier: <a href="../../rfcs/0036-goal-v1.md">goal/v1</a>, <a href="../../rfcs/0036-review-v1.md">review/v1</a>, <a href="../../rfcs/0036-draft-v1.md">draft/v1</a>, <a href="../../rfcs/0036-chapter-v1.md">chapter/v1</a>. This document is the one that says why, and how the parts fit.</p>
+<p>RFC 0035 is <code>people-review/v1</code>, merged on 2026-10-10; this RFC takes the next number.</p>
+<h2 id="why">Why</h2>
+<p>The record holds what happened: the sources write the lines, the readers derive the days, the owner signs a day and only signed days cross (RFC 0034). Three things it does not hold yet. What the owner is <em>for</em> (a goal, and later the verdict on it) lives in a notes app or nowhere, so a reader that asks "how is the year going" has nothing to read. What a model <em>said</em> about a day lives in a chat window, so the Day page an orchestrator builds cannot be rebuilt from the record, and a sentence the model made up looks like a sentence the record supports. And the record has no word for a stretch of life the owner names, a sabbatical, a passage, the year after a move, so a reader groups by calendar alone.</p>
+<p>Each of the three is an act, so each is a line (SPEC §3: a correction is a new line; ADR 0004, ADR 0013). A goal reworded is a new goal line carrying <code>supersedes</code>; a verdict is a review line on the date it is about; a model's words are a draft line that names the head it read; a chapter renamed or re-bounded is a new chapter line. Nothing is edited, and every reader shows the latest by <code>supersedes</code>, as it does for an imported note (RFC 0010 rule 2).</p>
+<p>The two mechanisms come from the same week. A day that ends at midnight is the calendar's day, not the owner's: a line at 02:00 belongs to the evening before, and the signed day should cover the day as lived. And the crossing has one gate for <em>whether</em> the owner read a day; a destination that should see only what the owner has looked at lately needs one for <em>how recently</em>.</p>
+<h2 id="the-evidence-rule">The evidence rule</h2>
+<p>ADR 0022 says it in one sentence: <em>orchestrators reach the record only through the crossing: read tools under the ceiling, and the few write tools the owner allows by name.</em> This RFC adds the sentence for what an orchestrator's model may leave behind when it does write:</p>
+<p><strong>Every sentence of model output stored in the record points at the line ids it rests on, or is marked unsupported; a reader never shows an unsupported sentence as fact.</strong></p>
+<p>A <code>draft/v1</code> line is text in segments, each with <code>evidence</code>, a non-empty list of line ids, or <code>"unsupported": true</code> and no evidence. There is no third shape. A reader prints a supported segment with its evidence reachable (the ids, or links to the lines) and an unsupported one set apart and marked, never as plain prose between two supported ones. The draft as a whole is a proposal: nothing in it is a fact of the record until the owner confirms it through an act of their own, a signed day whose <code>confirmed</code> names the lines the segment rests on (RFC 0034), a note (RFC 0010), a review (<code>review/v1</code>), or a star (a <code>keeper/v1</code> line, RFC 0024). The draft is never that confirmation, whoever ran the model and however many times it agrees with itself. This is RFC 0034's rule, <em>agents draft; the owner signs</em>, applied to the agent's text.</p>
+<h2 id="the-profiles-in-one-table">The profiles in one table</h2>
+<table>
+<thead>
+<tr>
+<th>Profile</th>
+<th>What it is</th>
+<th><code>source</code></th>
+<th>Tier</th>
+<th>Dedupe key</th>
+<th>Standing</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>goal/v1</code></td>
+<td>a goal in the owner's own words: <code>text</code>, <code>horizon</code>, <code>from</code>, <code>until</code>?</td>
+<td><code>manual</code></td>
+<td>2, MUST</td>
+<td>none from a source: one line is one goal</td>
+<td>the latest line not retracted and not named in a later goal's <code>supersedes</code></td>
+</tr>
+<tr>
+<td><code>review/v1</code></td>
+<td>a verdict on a goal at a date: <code>goal</code>, <code>disposition</code>, <code>period</code>, <code>note</code>?</td>
+<td><code>manual</code></td>
+<td>2, MUST</td>
+<td><code>(goal, period, at)</code></td>
+<td>the latest review of a goal by <code>at</code>, then <code>seq</code>, not retracted</td>
+</tr>
+<tr>
+<td><code>draft/v1</code></td>
+<td>a model's text about a unit: <code>unit</code>, <code>subject</code>, <code>window</code>?, <code>read_head</code>, <code>read_count</code>, <code>language</code>, <code>segments</code></td>
+<td><code>model:&lt;name&gt;</code></td>
+<td>the highest tier among the lines it read</td>
+<td><code>(source, unit, subject, read_head)</code>; <code>(source, unit, subject, window, read_head)</code> for a person (amendment 1); and the entry it read under when it names one (<code>draft/v1</code> rule 7)</td>
+<td>the latest draft of a unit not retracted and not named in a later draft's <code>supersedes</code></td>
+</tr>
+<tr>
+<td><code>chapter/v1</code></td>
+<td>a named stretch: <code>name</code>, <code>from</code>, <code>to</code>?, <code>rules</code></td>
+<td><code>manual</code></td>
+<td>2, MUST</td>
+<td><code>(name, from)</code></td>
+<td>as <code>goal/v1</code></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Tier.</strong> SPEC §4 puts <em>notes, decisions, confirmations</em> at tier 2 and makes <code>note/v1</code> MUST 2 (RFC 0010): a note is the owner's words, and the owner's words are tier 2 whatever they say, because a sentence about a goal, a verdict or a stretch of life is as private as a sentence about a day. A goal, a review and a chapter are the owner's words, so each is tier 2 and MUST, as <code>note/v1</code> is: a writer never lowers it, and no import option raises or lowers it. A draft is not the owner's words; it is derived from lines, and §4 says <em>derived data inherits the highest tier of its evidence</em>. Its evidence is every line the model read, not only the lines it cited, because a model that read a tier-3 line may have written from it without citing it; so a draft's tier is the highest tier among the lines on the unit at the moment it read, under the ceiling it read under. A draft written through the <code>mcp</code> door at a ceiling of 1 is tier 1 and crosses as tier 1 does; one written on the home machine over a day with a health line is tier 3 and is sealed as tier 3 is (RFC 0029).</p>
+<p><strong><code>at</code>.</strong> A goal's <code>at</code> is when the owner wrote it; <code>from</code> is when it starts, and the two differ when a goal is written in January for the year or written down in March for a year that began in January. A review's <code>at</code> is the date the verdict is about, and <code>recorded_at</code> says when it was written: goals let go in August and reviewed in October carry an <code>at</code> in August and a <code>recorded_at</code> in October, and the Day of the August date lists them, as it lists every line whose <code>at</code> falls on it (SPEC §3.2.1). A draft's <code>at</code> is when the model wrote it. A chapter's <code>at</code> is when the owner named it, and <code>from</code> is where it starts.</p>
+<h2 id="day_start"><code>day_start</code></h2>
+<p><code>logbook.json</code> MAY carry <code>"day_start": "HH:MM"</code>, a clock in the 24-hour form; absent, it is <code>"00:00"</code>, the calendar day, which is what every record written so far has. The lines do not change: a line's <code>at</code> is the instant the thing happened, as always, and the setting is a reader's.</p>
+<p><strong>The rule.</strong> The <strong>local day</strong> of an instant is its calendar date in the record's zone (SPEC §3.2, the record's zone), except that an instant whose local clock is before <code>day_start</code> belongs to the date before. With <code>day_start</code> <code>06:00</code>, a line at <code>02:00</code> on the 13th is on the 12th, a line at <code>06:00</code> is on the 13th, and a line at <code>23:30</code> is on the 13th as it always was. The comparison is on the wall clock after localising, so a change of offset in the night moves no line: the day is what the owner's clock said.</p>
+<p><strong>Who applies it.</strong> Everything that puts a line on a day: <code>day_local</code> in the index (ADR 0007; the index is derived and disposable, records the <code>day_start</code> it was built with, and is rebuilt when the setting differs, as it is rebuilt when the head does not match), <code>show</code> (SPEC §3.2.1), the Day and <code>days</code> (§3.2.7), the digest, <code>promises</code>, the readiness window of RFC 0034, the page of a signed day (RFC 0034: <em>every line whose <code>at</code> falls on the local day</em>, which this RFC reads as the local day so defined), the window of a crossing where it is given in days, and the <code>day</code> arguments of the MCP tools. The night window of <code>policy/stays.json</code> (22:00 to 08:00 by default) is unchanged and independent: it finds the night's stay; <code>day_start</code> says which day a line is on. A day's span in a reader is from <code>day_start</code> on the date to <code>day_start</code> on the next, so the §3.2 window of a reader that reads "the first day's local midnight" reads "the first day's start".</p>
+<p><strong>Who does not.</strong> <code>verify</code> and <code>add</code>, which never group by day; the month file a line is written to (SPEC §1: by the month of <code>at</code>, in UTC, unchanged); <code>at</code>, <code>end</code>, <code>recorded_at</code> and the hash of every line.</p>
+<p><strong>A reader that does not understand it.</strong> A reader that reads <code>logbook.json</code>, finds <code>day_start</code>, and either does not implement this RFC or cannot parse the value (not <code>HH:MM</code>, or outside <code>00:00</code>–<code>23:59</code>) MUST say so and MUST NOT group by day as if the key were absent: it refuses the command that groups, naming the key and the value, as SPEC §2 has it refuse a zone it does not know rather than substitute one. A reader that does not read <code>logbook.json</code> at all cannot meet the key; <code>verify</code> is one. The conformance samples (<code>conformance/</code>) carry no <code>day_start</code>, so a conformant implementation that has not implemented this RFC is unaffected by it and passes as before; a record that sets the key states its own boundary, and a reader of that record has implemented the rule or says it has not.</p>
+<p><strong>The signature.</strong> The page of a day (RFC 0034) is the lines on the day so defined, and the signed day covers the day so defined. Changing <code>day_start</code> on a record with signed days moves lines between pages, so every signature whose page changed reads as <code>page_matches</code> false, exactly as it does when a line is appended to a signed day; the owner reads again and signs again, or does not. Set it once, early. The <code>page</code> digest does not name the boundary; whether it should is an open question below.</p>
+<h2 id="signed_within_days"><code>signed_within_days</code></h2>
+<p>An entry of <code>policy/crossing.json</code> MAY carry <code>"signed_within_days": N</code>, N a positive integer. Absent, there is no restriction: the entry crosses what RFC 0034 lets cross today (signed days by default, every day under <code>--unsigned</code>). Present, only the lines of days whose <strong>standing signature</strong> (RFC 0034 rule 3) was written on one of the local days from N days before today through today cross through that entry, today being the day of the export or the tool call in the record's zone. A day that is unsigned, or whose standing signature is older, crosses nothing but its header: the day, and whether and when it was signed, which is what <code>show</code> prints above a day's lines and what RFC 0034 rule 6 puts in the Day's header. Re-signing a day refreshes it: the owner read the page again, and the new signature is today's.</p>
+<div class="highlight"><pre><span></span><code><span class="p">{</span><span class="nt">"hermes"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">"max_tier"</span><span class="p">:</span><span class="w"> </span><span class="mi">2</span><span class="p">},</span>
+<span class="w"> </span><span class="nt">"mcp"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">"max_tier"</span><span class="p">:</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="nt">"write"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"sign_day"</span><span class="p">,</span><span class="w"> </span><span class="s2">"note_day"</span><span class="p">],</span><span class="w"> </span><span class="nt">"write_window_days"</span><span class="p">:</span><span class="w"> </span><span class="mi">60</span><span class="p">},</span>
+<span class="w"> </span><span class="nt">"cloud-model"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">"max_tier"</span><span class="p">:</span><span class="w"> </span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="nt">"until"</span><span class="p">:</span><span class="w"> </span><span class="s2">"2026-12-31"</span><span class="p">,</span><span class="w"> </span><span class="nt">"signed_within_days"</span><span class="p">:</span><span class="w"> </span><span class="mi">14</span><span class="p">}}</span>
+</code></pre></div>
+<p><strong>How it composes.</strong> The three keys are three gates on one entry, each independent and each the owner's (ADR 0016), and a line crosses when it passes all of them:</p>
+<ul>
+<li><code>max_tier</code> is on the line: a line above the ceiling never crosses, whatever its day's signature says, and a request above the ceiling is refused naming the file (ADR 0016 rule 2).</li>
+<li><code>until</code> is on the entry: past that day the entry counts as <code>max_tier</code> 0 (ADR 0022 rule 6) and nothing crosses, the header included; <code>signed_within_days</code> on an expired entry has nothing left to gate.</li>
+<li><code>signed_within_days</code> is on the day: it decides which days' lines may cross at all, and <code>max_tier</code> then decides which of those lines. It never lets a line cross that <code>max_tier</code> holds back, and <code>max_tier</code> never lets a day cross that it holds back.</li>
+</ul>
+<p>The rule is the entry's, not the command's, so every crossing that reads the entry obeys it: the crossing package (RFC 0005), the shared page (RFC 0025; a page of a day the entry does not allow is refused naming the key), the trip bundle (RFC 0030), the vault, the site and the MCP read tools (<code>docs/mcp.md</code>), including the ones RFC 0034 rule 5 leaves ungated by default. <code>--unsigned</code> lifts RFC 0034's default, which is the command's; it does not lift the entry's rule, and a day the entry holds back stays home under it, counted and said. The MCP door's write tools (<code>write</code>) are not crossings out of the record and are not gated by it: <code>sign_day</code> must reach an unsigned day to sign it, and <code>write_window_days</code> is the window on writes.</p>
+<p><strong>What a reader says.</strong> The crossing package's manifest <code>policy</code> carries <code>signed_within_days</code> beside <code>signed_days</code> when the entry sets it, and <code>counts.held_back_unsigned</code> counts the lines held back by either gate; the <code>crossing/v1</code> line's <code>policy</code> carries the same key (RFC 0011, additive). <code>doctor</code> prints it on the entry's crossing line, as it prints <code>write</code>. An MCP answer's <code>gate</code> carries it beside <code>max_tier</code>.</p>
+<h2 id="what-a-day-page-shows">What a Day page shows</h2>
+<p>The Day (<code>logbook day</code>, <code>/day/YYYY-MM-DD</code> in <code>serve</code>, <code>show</code>) gains four things, each from the standing lines of the record and nothing else, in this order:</p>
+<ol>
+<li><strong>The chapter, in the header.</strong> After the weekday and the signed state: <code>· chapter &lt;name&gt;</code>, the standing chapter whose <code>from</code> is on or before the day and whose <code>to</code> is absent or on or after it. A day in no chapter prints nothing. JSON: <code>chapter</code>, <code>null</code> or <code>{ name, line, from, to }</code>.</li>
+<li><strong>The draft, above the owner's note, marked as a draft.</strong> Before the first <code>note/v1</code> line of the day (and before the timeline when the day has no note): the standing <code>draft/v1</code> line whose <code>unit</code> is <code>day</code> and whose <code>subject</code> is this day, headed <code>draft · &lt;source&gt; · read at &lt;read_head, 8 hex&gt; · &lt;read_count&gt; lines</code>, then its segments in order. A supported segment prints with its evidence reachable: the line ids in text, links to the lines in <code>serve</code>. An unsupported segment prints set apart and marked <code>unsupported</code>, and is never run into the prose around it. A draft is listed as a line on its day too, as every line is (SPEC §3.2.1), with the mark <code>draft</code>. A draft of another unit (a week, a journey, a chapter) is for that unit's page and is not on the Day. JSON: <code>draft</code>, <code>null</code> or the payload's fields with <code>line</code> and <code>source</code>.</li>
+<li><strong>Goal reviews, on the day they were made.</strong> A <code>reviews</code> row per standing review whose <code>at</code> falls on the day: the goal's text (from the goal line, the standing one by <code>supersedes</code>), the disposition, the period, the note, and <code>written &lt;recorded_at, local&gt;</code> when <code>recorded_at</code> is on a later day than <code>at</code>, so a backfilled verdict says it was. JSON: <code>reviews</code>, a list of <code>{ line, goal, goal_text, disposition, period, note, recorded_at }</code>.</li>
+<li><strong>Goals and chapters as lines.</strong> A <code>goal/v1</code> or <code>chapter/v1</code> line is listed on the day its <code>at</code> falls on, as any line is, with its text; nothing else is derived from it on the Day. Where goals are read as a whole (open goals, the year's verdicts) is a reader of its own and a later RFC.</li>
+</ol>
+<p>The signature is unchanged by all four: the page digest is over the hashes of the page's lines (RFC 0034), and a draft, a review, a goal or a chapter whose <code>at</code> is on the day is one of them. <code>days</code>, <code>digest</code>, <code>year</code> and the printed pages are unchanged by this RFC.</p>
+<h2 id="amendment-1-the-person-unit-the-writers-derived-material-follows-the-policy">Amendment 1 — the person unit, the writers, derived material follows the policy</h2>
+<p>Dated 2026-10-13, after an outside reading of this RFC before anything builds on it. It found two gaps and a missing rule. <code>draft/v1</code> had no unit for a person, so a question asked across time about one person, "what matters to Ola lately?", had no unit whose evidence was defined, and a model asked it could read anything. The writers of <code>goal/v1</code>, <code>review/v1</code> and <code>chapter/v1</code> were not named: who writes them, through which path, under which lock. And nothing said what a reader does with a draft once the policy it was read under changes. The amendment adds one unit and one field to <code>draft/v1</code>, names four commands, and extends one rule for readers: <code>draft/v1</code> rule 7, <em>a draft follows the policy, not the head</em>, which <code>fix/derived-invalidation-on-policy</code> (#273) wrote while the amendment was open, and whose names it uses. Nothing in the envelope changes, no line already written changes meaning, and the conformance samples are untouched.</p>
+<h3 id="the-person-unit">The <code>person</code> unit</h3>
+<p><code>unit</code> gains <code>person</code>. A person draft is a model's text about one person over a stretch of days, for the person page (<code>logbook person</code>, <code>docs/people.md</code>), as a day draft is for the Day.</p>
+<ul>
+<li><strong><code>subject</code></strong> is one canonical person id, as a string: the <code>entity.id</code> of <code>type</code> <code>person</code> and <code>registry</code> <code>logbook</code> (RFC 0006) that the record's resolution lines resolve the person to at <code>read_head</code>; after a merge (<code>people merge</code>), the primary's. A writer refuses anything else in one sentence and writes nothing: an id no standing resolution line names, a merged-away id, a place or a company, and the owner's <code>owner_id</code>, who is never a person of their own record (<code>docs/people.md</code>).</li>
+<li><strong><code>window</code></strong>, a new field, is <code>{ from, to }</code>, two local days (<code>YYYY-MM-DD</code>, by <code>day_start</code> above), both inclusive: the stretch the model read. It is MUST on a person draft and absent on every other unit, whose <code>subject</code> already bounds it. A writer refuses a <code>from</code> after <code>to</code>, and a <code>to</code> after the local day of the draft's own <code>at</code>.</li>
+<li><strong>The authorized input set</strong> is exactly the lines on which the person is a counterpart, an attendee or a speaker, whose <code>at</code> falls on a local day in the window, that are not retracted, and that are at or under the ceiling the writer reads under:</li>
+<li><em>counterpart</em>: a <code>message/v1</code> they sent (<code>sender</code> resolves to them), or that the owner sent in a direct chat with them; a <code>call/v1</code> whose <code>counterparty</code> resolves to them; a <code>mail/v1</code> from them or addressed to them (<code>to</code>, <code>cc</code>, <code>bcc</code>), by address;</li>
+<li><em>attendee</em>: an <code>event/v1</code> with an attendee who resolves to them and did not decline;</li>
+<li><em>speaker</em>: a <code>transcript/v1</code> they are a participant of, by email, phone or provider id, else by the spoken name when the record labels exactly one person by it.</li>
+</ul>
+<p>These are the person page's channels <code>messages</code>, <code>calls</code>, <code>mail</code>, <code>calendar</code> and <code>transcripts</code>, read as <code>docs/people.md</code> reads them, and nothing else. A line that merely mentions the person is never in the set: a note that says "with Ola", a mail that names them and is neither from nor to them, a message someone else sent in a group they are in, a photo with their face tagged, a promise that names them, a stay they were found at (the with module's days together are derived; the lines behind them are in the set only when they are one of the five above; amendment 2 sends the days themselves beside the set), the resolution and <code>people-review/v1</code> lines about them, and every <code>draft/v1</code> line of any unit: a model does not read a model.
+- <strong>What the model reads</strong> is the set and the person's label, nothing else of the record. <code>read_count</code> is the size of the set as read. The line the label comes from counts toward the draft's tier as any line read does, and is never evidence.
+- <strong>Evidence outside the set is invalid.</strong> Every id in a segment's <code>evidence</code> MUST be a line of the set the draft read; <code>draft/v1</code> rule 6 reads "a line of the unit" as "a line of the set". A writer never writes such a segment: it refuses the line, or marks the segment unsupported before writing it, as <code>dream day</code> does with an id the day does not have. A reader that holds the record and meets one anyway shows the segment as unsupported and says the id is not one of the person's lines in the window.
+- <strong>Dedupe and standing.</strong> The dedupe key of a person draft is <code>(source, unit, subject, window, read_head)</code>, and the entry it read under when it names one (<code>draft/v1</code> rules 1 and 7): another window at the same head is another reading. The standing person draft is the latest person draft of that subject not retracted and not named in a later one's <code>supersedes</code>, whatever its window; a later one carries <code>supersedes</code> naming it, and a reader prints the window beside it, so "lately" says how late.
+- <strong>Where it shows.</strong> On the person page, after the numbers and before the shared days, headed <code>draft · &lt;source&gt; · read at &lt;read_head, 8 hex&gt; · &lt;read_count&gt; lines · &lt;from&gt; – &lt;to&gt;</code>, its segments printed as the Day prints a draft's; never on the Day, whose draft is the standing draft of unit <code>day</code> alone. JSON: <code>draft</code>, as the Day's, with <code>window</code>. It follows the policy as the Day's draft does (<code>draft/v1</code> rule 7, below): above the entry it was read under, as that entry counts today, the person page says <code>superseded by policy</code> and why in one row (<code>draft_withheld</code> in JSON) and nothing of its text, and a reader through a crossing hides it. Its line, listed among the lines of the day of its <code>at</code> as every draft line is, sits behind the same gate: the door holds back every <code>draft</code> line above the entry, of any unit, and counts it.</p>
+<p>What writes a person draft is not fixed here, as this RFC left the day's writer open (open question 2) until <code>dream day</code> wrote one; a writer that does is held to the set above and to the rules of <code>draft/v1</code>. The example is on the <a href="../../rfcs/0036-draft-v1.md">draft/v1</a> page.</p>
+<h3 id="the-writers">The writers</h3>
+<p>Each of the owner's three profiles has its writers, commands on the home machine, and nothing else writes them: no adapter, no import, no model, and no tool through the door (below).</p>
+<div class="highlight"><pre><span></span><code>logbook goal add TEXT [--horizon life|year|quarter] [--from YYYY-MM-DD] [--until YYYY-MM-DD] [--supersedes ID]
+logbook goal review GOAL DISPOSITION --period day|week|month|quarter|year [--note TEXT] [--at YYYY-MM-DD|RFC3339]
+logbook chapter open NAME --from YYYY-MM-DD [--to YYYY-MM-DD] [--rules TEXT]
+logbook chapter close [NAME] --to YYYY-MM-DD
+</code></pre></div>
+<p><strong>One path, one lock.</strong> Each command writes <code>source</code> <code>manual</code> at the tier its profile fixes (2), appends one line through <code>Logbook.append</code>, and touches nothing else. Each holds the record's writer lock from its first read of the record to the append, as <code>day sign</code> does (RFC 0034 amendment 3): it waits for another writer as every command does, and refuses under the global <code>--no-wait</code>. It reads the head again before it appends, and when another writer moved it the command is refused with <code>HeadMoved</code>, one sentence, exit 2, and nothing is written; run it again. What each reads under the lock is what its refusals check: the standing goals, the reviews of a goal, the standing chapters. Every refusal is one sentence, exit 2, nothing written.</p>
+<ul>
+<li><strong><code>goal add</code></strong> writes one <code>goal/v1</code> line, <code>at</code> now. <code>--horizon</code> is required and <code>from</code> is today's local day unless <code>--from</code> says otherwise, except that with <code>--supersedes</code>, which names a goal line by id or <code>seq</code>, every field not given is taken from the line it supersedes, so the new line carries every field again. TEXT is always given, even when only the bounds change: the owner reads what they are writing again. Refused: an empty text; no horizon, or one outside the three; <code>--until</code> before <code>from</code>; a <code>--supersedes</code> that names no goal line, a retracted one, or one a later goal already supersedes. There is no dedupe (<code>goal/v1</code> rule 1): the same text twice is two goals, and the command says the text is a standing goal's too.</li>
+<li><strong><code>goal review</code></strong> writes one <code>review/v1</code> line. GOAL is a goal line by id or <code>seq</code>, superseded or not; DISPOSITION is one of the five, as one argument (<code>'let go'</code>). <strong>A review's <code>at</code> may be backfilled</strong>, as <code>review/v1</code> rule 4 has it: without <code>--at</code> it is now; <code>--at YYYY-MM-DD</code> is 23:59 of that local day in the record's zone, as <code>note_day</code> dates an earlier day; <code>--at</code> with an RFC 3339 moment is that moment, stored in UTC (SPEC §2). <code>recorded_at</code> is the moment of writing, as for every line, so a backfilled verdict says when it was written without a field of its own. Refused: a GOAL that is not a goal line, or is retracted; a disposition outside the five; an <code>at</code> more than five minutes ahead of the writer's clock (RFC 0034 amendment 2's rule) or on a local day before the goal's <code>from</code>. A review the key <code>(goal, period, at)</code> already holds writes nothing and says so.</li>
+<li><strong><code>chapter open</code></strong> writes one <code>chapter/v1</code> line, <code>at</code> now, <code>rules</code> empty when not given. Without <code>--to</code> the chapter is open; with it, the stretch is already lived and is written closed in one line, as a chapter is usually named once the owner knows it was one. Refused: <code>--to</code> before <code>--from</code>; a stretch that overlaps a standing chapter's, naming it (<code>chapter/v1</code> rule 4), which includes opening one while another is open, since an open chapter runs on: close it first. A chapter the key <code>(name, from)</code> already holds writes nothing and says so.</li>
+<li><strong><code>chapter close</code></strong> writes one <code>chapter/v1</code> line that supersedes the standing open chapter, with <code>to</code> set and every other field again. NAME, when given, must be the open chapter's; when the record holds two open chapters anyway (rule 4's clash), NAME is required and names which. Refused: no open chapter; a NAME that is not an open chapter's; a <code>to</code> before the chapter's <code>from</code>.</li>
+</ul>
+<p>Renaming a chapter, moving its <code>from</code> or reopening a closed one is a <code>chapter/v1</code> line with <code>supersedes</code>, as the profile allows; no command writes one yet.</p>
+<p><strong>The door.</strong> None of the four is a write tool. The <code>mcp</code> entry's <code>write</code> names <code>sign_day</code> and <code>note_day</code> and nothing else (ADR 0022, <code>docs/mcp.md</code>), and a policy that names another is still an error naming the file. A later amendment MAY add <code>review_goal</code> to that list: a tool with no implementation of its own that calls the writer <code>goal review</code> calls, as <code>sign_day</code> calls the one <code>day sign</code> calls, refused until the owner names it, holding the lock without waiting; that amendment says whether the door's write window bounds a backfilled <code>at</code>. This one does not add it. Until then an orchestrator that carries the owner's verdict on a goal writes it as a <code>note_day</code> with <code>kind</code> <code>proposal</code>, and the owner runs <code>goal review</code>. <code>goal add</code> and the chapter commands stay off the door: what the owner is for, and what a stretch of their life is called, are said at home.</p>
+<h3 id="derived-material-follows-the-policy">Derived material follows the policy</h3>
+<p><strong>A draft follows the policy, not the head.</strong> This is <code>draft/v1</code> rule 7 and ADR 0016's paragraph of that name, written by <code>fix/derived-invalidation-on-policy</code> (#273) while this amendment was open; the amendment takes them as they stand, with their names, and adds to them. A writer that reads under a crossing entry records the entry's version under <code>extra.policy_version</code>: the SHA-256, lowercase hex, of the RFC 8785 JSON of the entry's <code>{"max_tier", "model", "until"}</code> (<code>null</code> for one it does not set), so the same three values are the same version however the file spells them and whatever else the entry says (<code>docs/dream.md</code>, <em>When the entry changes</em>). There is no second field. A reader shows a draft only while that entry, as it counts today, allows the draft's tier: its <code>max_tier</code> today, and 0 past its <code>until</code> or with the entry removed, never the ceiling the draft was read under. An owner who lowers an entry, or lets it lapse, has lowered it for every draft already written. A draft above it is withheld whatever the head: the reader that holds the record says so in one row, <code>superseded by policy</code> and why (<code>draft_withheld</code> in JSON), and shows nothing of the text; the line stays in the record; <code>doctor</code> names the days; and <code>dream --catch-up</code> dreams such a day again under the entry as it is, superseding the draft, as it does a day whose draft was dreamed under another version. A draft that names no version, every one written before #273, is held to the entry by its tier alone.</p>
+<p><strong>Amendment 1 adds two things.</strong> The rule holds for a draft of every unit: a person draft is withheld on the person page as a day's is on the Day, with the same row. And a reader through a crossing MUST hold a draft to that crossing's own ceiling as well, as it counts at the moment the reader serves (ADR 0022 rule 6). Hidden there is what a line above the ceiling is: the draft is left out of the unit's page through that crossing, with no row, its line is left out of the day's lines and counted where the crossing counts what it holds back (<code>above_ceiling</code> through the door, <code>counts.held_back</code> in the crossing package's manifest), and nothing of it crosses, not its id and not its evidence. Both hold for every crossing a draft can reach: the <code>mcp</code> door, the crossing package, the shared page, the trip bundle, the vault and the site. The owner reading at home crosses nothing, so at home the entry alone holds a draft back, and the page says so.</p>
+<p>For example, the draft of 13 June on the <a href="../../rfcs/0036-draft-v1.md">draft/v1</a> page is tier 2, dreamed under a <code>dream</code> entry of <code>{"max_tier": 2}</code>. With the <code>mcp</code> entry at <code>{"max_tier": 2}</code> the door's <code>day</code> tool shows it; with the <code>mcp</code> entry lowered to <code>{"max_tier": 1}</code>, the same call answers with no draft and <code>day_lines</code> counts the draft line in <code>above_ceiling</code>, with no line written and no draft re-dreamed, and <code>day</code> at home shows the draft as before. Lower the <code>dream</code> entry to <code>{"max_tier": 1}</code> instead, and the door holds the draft back and counts it the same way, while <code>day</code> at home prints <code>superseded by policy: tier 2, above max_tier 1 of the 'dream' entry</code> and why, in place of the draft and with nothing of its text; <code>dream --catch-up</code> then dreams the day again under the entry as it is.</p>
+<p>What does not change: the envelope, the four profiles' other fields, the tier rule, the page digest of a signed day, and the hash of every line already written. The four profiles are, with this amendment, still new and not frozen: their schemas may change while this RFC is a draft, and each becomes frozen only by RFC 0031's process.</p>
+<h2 id="amendment-2-days-together-reach-the-relationship-reader">Amendment 2 — days together reach the relationship reader</h2>
+<p>Dated 2026-10-18, the owner's decision (open question 1 of the relationship reader's slice 1, #328). Amendment 1 kept "a stay they were found at" out of a person's set, because the with module's days together rest on location lines. The owner wants them in: time spent together is most of what passes between two people, and a reader that sees only the chat does not know it. A person's set for <code>people ask</code> and <code>dream person</code> now adds <strong>the days together in the window</strong>: each day the with module counts as a day together (its confirmed set, <code>docs/people.md</code>: an attendee of a timed entry held at the owner's stay, a speaker of a recording made there, a note written there that says "with <name>"), with its date, <strong>the named place of each stay they shared</strong>, the <code>places.json</code> name only (a stay at no named place says <code>a place with no name</code>, never coordinates, never "near" a place), and <strong>the line ids it rests on</strong> as its evidence, so a sentence about time together cites them and a reader resolves the citation against them. Nothing else of the stay crosses: no coordinate, no location line, and no words of a line it rests on that is not a line of the set (a note's day, not its text).</p>
+<p>The gate is every other line's: a day together counts only on the lines of it at or under the <code>relationship</code> entry's <code>max_tier</code>, on days the owner has signed unless the entry lifts that (<code>include_unsigned</code>), and nothing at all without the entry or after its <code>until</code>. A day whose every line the gate refuses is not sent and is counted as held back. Each day goes as references (<code>L…</code>) like the other lines, a line already in the set keeping its reference, never an id; the answer's JSON counts them (<code>days_together: {sent, held_back}</code>), and a person draft keeps the number under <code>extra.days_together</code>. The prompts that say so are <code>relationship-ask/2</code> and <code>dream-person/2</code>. <code>read_count</code> stays the size of the set, the lines; a line a day together rests on counts toward the draft's tier as any line read does.</p>
+<p>What does not change: the envelope, <code>draft/v1</code>, the five channels of the set, the store's files (a day together is read again from the record each time, never kept in the store), and every line already written.</p>
+<p><em>19 October 2026, the owner's answer to #332's open question:</em> a day together's place name takes the tier of what it rests on, the highest tier of the owner's location lines behind the stay and of the line that names the company, so a day whose stay rests on location lines above the entry's <code>max_tier</code> is not sent and is counted as held back, never its name alone.</p>
+<h2 id="relation-to-rfc-0037">Relation to RFC 0037</h2>
+<p>RFC 0037 (entities, a draft at this writing) was written before this RFC merged and cites nothing from it; the cross-reference is made here, from the side that merged first (amendment 1).</p>
+<ul>
+<li><strong><code>goal/v1</code> and <code>review/v1</code> are the general status pattern.</strong> Something the owner holds, said once in a line of its own, and the owner's verdict on it at a date, in another line that a later verdict stands over; anything may propose, only the owner disposes, and every line is <code>source</code> <code>manual</code>. RFC 0037's <code>status/v1</code> specialises that pattern for orgs and ideas: its <code>entity</code> is what a review's <code>goal</code> is, its dispositions (six for an org, five for an idea) are the kind's own words where a goal has <code>advancing</code>, <code>stalled</code>, <code>done</code>, <code>let go</code> and <code>superseded</code>, and its <code>proposal</code> keeps a draft's proposal beside the owner's answer. One difference is for the comment period of either RFC: a late verdict here is dated by its <code>at</code>, with <code>recorded_at</code> saying when it was written, and a late status there by <code>since</code>. 0037's open question 11 asks which RFC specifies the goal review: this one, <code>review/v1</code>. A goal is not a sixth kind of <code>status/v1</code>, and RFC 0034's four dispositions are a commitment's, not a goal's.</li>
+<li><strong><code>review KIND</code> is one loop.</strong> A proposal, the owner's answer as a line, and the next proposal only when the record moves: that is 0037's review sitting for identities and statuses, and it is this RFC's for goals. When 0037 lands, <code>review goal</code> MAY be one more kind of the sitting, listing the standing open goals with no review in their current period, and answering through the writer <code>goal review</code> uses: one writer, not two.</li>
+</ul>
+<h2 id="what-this-changes-in-spec-when-adopted">What this changes in SPEC, when adopted</h2>
+<p>Nothing in §2–3. In §1, <code>logbook.json</code> gains <code>day_start</code> as an optional key, with the rule above. In §3.2, the sentence on the record's zone gains the day's boundary, and §3.2.1 and §3.2.7 gain the four items above. The four profiles join the §4 table (tier 2, MUST, for three; <em>the highest tier of its evidence</em> for <code>draft/v1</code>) and the draft list of <code>rfcs/README.md</code>. ADR 0016's file gains the key <code>signed_within_days</code>, and RFC 0034 rule 5 gains the sentence that the entry's rule applies where the command's default does not. Each profile freezes by RFC 0031's process, with a fixture under <code>conformance/profiles/</code>, once a second reader exists.</p>
+<p>Amendment 1 changes nothing in SPEC: the person unit and <code>window</code> are <code>draft/v1</code>'s own, <code>extra.policy_version</code> is rule 7's, and the hiding rule is ADR 0016's ceiling applied to a derived line, as ADR 0016's paragraph <em>Derived material follows the policy, not the head</em> already has it. ADR 0022's list of write tools is unchanged.</p>
+<h2 id="notes">Notes</h2>
+<ul>
+<li><strong>Why one line per goal and a new line to reword.</strong> The log is not edited (SPEC §3), and a goal reworded is a decision in itself: the owner wanted something else, or wanted to say it better, and the record keeps both. <code>supersedes</code> is the mechanism every edited thing in the record already uses (RFC 0010 rule 2, RFC 0034 rule 3).</li>
+<li><strong>Why a review is on the date it is about.</strong> <code>at</code> is when the thing happened (SPEC §2), and the thing is the verdict on a stretch that ended then. The record's own <code>recorded_at</code> says when it was written; a second field would say the same twice.</li>
+<li><strong>Why a draft names the head and the count it read.</strong> A draft is a reading of the record at a moment. The head says which record it read; the count says how much of the unit, so a reader can tell a draft written from four lines from one written from forty, and a draft written under a ceiling of 1 from one written on the home machine. When the unit grows, the standing draft is of a smaller unit than the page now shows, and a reader can say so.</li>
+<li><strong>Why every segment has evidence or a mark.</strong> A model's sentence with no line behind it is the one kind of content the record has never held: not observed, not the owner's. It is allowed in, because the owner wants to read it, on the one condition that it never looks like the rest.</li>
+<li><strong>Why the draft's tier is what it read, not what it cited.</strong> A tier is what a line may give away. A model that read a tier-3 line may have been shaped by it in a sentence that cites a tier-1 line, and no reader can tell. The ceiling the model read under is the only bound that holds.</li>
+<li><strong>Why <code>day_start</code> is a setting and not a line.</strong> It is the owner's habit, not an event; it has no <code>at</code>. It belongs with <code>timezone</code>, which is the same kind of thing: how the owner's clock maps onto the record's instants. And <code>logbook.json</code> already requires writers to preserve keys they do not know (SPEC §1), so a record that sets it is read by an old writer without losing it.</li>
+<li><strong>Why refuse rather than guess.</strong> A reader that groups by calendar day on a record whose owner set <code>06:00</code> would sign, cross and digest the wrong days, silently. SPEC §2 made the same choice for an unknown zone.</li>
+<li><strong>Why the window is on the signature's day and not the day signed.</strong> The point is how recently the owner looked. A rule on the gap between a day and its signature would make a day whose page grew after N days uncrossable for good, since no later signature could close the gap; a rule on the signature's recency is refreshed by signing again, which is what RFC 0034 asks the owner to do when a page changes.</li>
+<li><strong>Why <code>--unsigned</code> does not lift it.</strong> <code>--unsigned</code> is the owner at the console lifting the command's default for one run. A policy key is a ceiling (ADR 0016): the command cannot exceed it, which is what makes an unattended destination safe to give a fixed command line.</li>
+<li><strong>Why a person's set is contact and not mention (amendment 1).</strong> "What matters to Ola lately" is a question about what passed between the owner and Ola, and the lines where Ola is on the other end are that. A mention is someone's word about Ola, often a third person's, and finding one takes a match on text that no two implementations would make alike; the five channels are found by refs and resolution lines, the same way everywhere. And a model asked about one person that may read every note naming them has, in practice, read the record.</li>
+<li><strong>Why the window is on the line (amendment 1).</strong> A day draft's unit bounds itself; a person does not, and "lately" means a different stretch on each run. Without the window a reader could not tell a draft of three weeks from one of three years, nor check that the evidence is in the set.</li>
+<li><strong>Why the writers are commands and not tools (amendment 1).</strong> A goal, a verdict and a chapter are the owner's words, tier 2, and the door's ceiling is usually 1: an orchestrator could write a goal it cannot read back. <code>sign_day</code> went through the door because the owner's reading of a page happens where the page is shown; a verdict on a goal can follow the same road when the owner wants it to, by name, and not before.</li>
+<li><strong>Why the ceiling that counts is today's (amendment 1).</strong> A ceiling is the owner's statement of what a destination may see now (ADR 0016). A draft is derived, and derived material that kept the ceiling it was made under would be the one thing in the record a lowered ceiling did not reach. Hiding costs nothing: the line is still in the record, and raising the ceiling again shows it.</li>
+</ul>
+<h2 id="open-questions">Open questions</h2>
+<ol>
+<li><strong>Should the signed day's <code>page</code> name the boundary?</strong> RFC 0034's page digest is over <code>day</code>, <code>tz</code> and the line hashes. A record that changes <code>day_start</code> makes every signature read as not matching, which is correct and loud, but a reader cannot tell a page that changed because a line was appended from one that changed because the boundary moved. Adding <code>day_start</code> to the pre-image is one field; it is also a change to a profile that is already in the conformance sample. Left for RFC 0034's own amendment.</li>
+<li><strong>What writes a draft.</strong> This RFC fixes the line and not the writer. <code>note_day</code> through the door writes a <code>note/v1</code> with <code>labels: ["proposal"]</code> today (<code>docs/mcp.md</code>); whether a <code>draft_day</code> tool joins <code>write</code>, or a command on the home machine runs the model, is the agent layer's to decide, under ADR 0022. (Since answered for the day: <code>dream day</code>, <code>docs/dream.md</code>, runs the model on the home machine under the <code>dream</code> entry. Amendment 1 adds the <code>person</code> unit and its input set, and leaves its writer open; it names the writers of goals, reviews and chapters, none of them a door tool yet.)</li>
+<li><strong>A star on a draft.</strong> "A star" here is a <code>keeper/v1</code> line, the one mark the owner makes today, and it marks a photo. A mark on a draft segment, "this sentence is right", does not exist and is not invented here; the owner confirms a segment by confirming the lines it rests on, in a signed day.</li>
+<li><strong>Overlapping chapters.</strong> The rule on the chapter page is that chapters do not overlap and a writer refuses one that would; a reader that meets two standing chapters open on one day shows the later by <code>from</code>, then <code>seq</code>, and marks the clash. Whether an owner wants nested stretches (a passage inside a sabbatical) is not decided.</li>
+<li><strong>A review of nothing.</strong> A review names a goal. A verdict on a period with no goal behind it, "the quarter went badly", is a note today, and stays one.</li>
+<li><strong><code>period</code> and <code>at</code>.</strong> The period is the stretch that ends on, or holds, the review's <code>at</code>; which of the two is left to the writer and the owner's habit (a week reviewed on its Sunday, a month on its last day or its first). A reader shows the period as written and derives nothing from it.</li>
+</ol>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.sections", "navigation.top", "content.code.copy", "toc.follow"], "search": "../../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.c21346df.min.js"></script>
+      
+    
+  </body>
+</html>

@@ -1,0 +1,324 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>2017-10-12 Thursday · Logbook</title>
+<style>
+:root{color-scheme:light dark;--fg:#1c1c1c;--bg:#fff;--mute:#6a6a6a;--line:#ddd;--accent:#2f5d7c}
+@media (prefers-color-scheme:dark){
+:root{--fg:#e8e8e8;--bg:#141414;--mute:#9b9b9b;--line:#333;--accent:#8fb8d6}}
+body{margin:0;font:15px/1.45 system-ui,sans-serif;color:var(--fg);background:var(--bg)}
+header{border-bottom:1px solid var(--line);padding:.6rem 1rem}
+nav{display:flex;flex-wrap:wrap;row-gap:.3rem}
+nav a{margin-right:1rem;color:var(--accent);text-decoration:none}
+nav a:first-child{font-weight:600}
+main{max-width:66rem;margin:0 auto;padding:1rem}
+footer{color:var(--mute);font-size:.85rem;padding:1rem;border-top:1px solid var(--line)}
+a{color:var(--accent)}
+h1{margin:.2rem 0 .6rem}
+h1 small{color:var(--mute);font-weight:400;font-size:.6em}
+h2{font-size:1.1rem;margin:1.4rem 0 .5rem}
+table{border-collapse:collapse;width:100%}
+th,td{text-align:left;padding:.3rem .5rem;border-bottom:1px solid var(--line);vertical-align:top}
+th{color:var(--mute);font-weight:500}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+td.day{white-space:nowrap}
+dl.header{display:grid;grid-template-columns:max-content 1fr;gap:.2rem 1rem;margin:0 0 1rem}
+dl.header dt{color:var(--mute)}
+dl.header dd{margin:0}
+ol.timeline,ol.inside,ul.attached,ul.unplaced,ul.plain,ul.proposals{list-style:none;padding:0;margin:0}
+li.proposal{padding:.15rem 0}
+.row{padding:.4rem 0;border-bottom:1px solid var(--line)}
+.clock{display:inline-block;min-width:7.5rem;font-variant-numeric:tabular-nums;color:var(--mute)}
+.kind{display:inline-block;min-width:5.5rem;font-size:.78rem;text-transform:uppercase;letter-spacing:.05em;color:var(--mute)}
+.row.stay>.kind{color:#2e8b57}
+.row.move>.kind{color:#3a6ec4}
+.row.flight>.kind{color:#c0652a}
+.row.aboard>.kind{color:#1f7f9a}
+.row.gap>.kind{color:#c43b3b}
+ol.inside{margin:.3rem 0 0 2rem}
+ol.inside .row{border:0;padding:.15rem 0}
+details{margin:.3rem 0 0 7.5rem}
+summary{cursor:pointer;color:var(--accent)}
+ul.attached{margin:.3rem 0 0 1rem}
+details.synthesis,p.synthesis{margin:.2rem 0 .3rem 1.5rem;font-size:.92rem}
+details.synthesis p.segment{margin:.15rem 0}
+ul.attached li,ul.unplaced li{padding:.15rem 0}
+p.with{margin:.3rem 0 0 1rem;color:var(--mute)}
+form.window{display:flex;gap:.6rem;align-items:center;flex-wrap:wrap;margin:0 0 1rem}
+input,button{font:inherit;padding:.2rem .4rem;background:var(--bg);color:var(--fg);
+border:1px solid var(--line);border-radius:3px}
+p.pager,p.mute,.mute{color:var(--mute)}
+a.name{font-size:.8rem;margin-left:.5rem}
+form.star{display:inline;margin:0 0 0 .3rem}
+form.star button{border:0;padding:0 .15rem;background:none;color:var(--mute);cursor:pointer;
+font-size:1rem;line-height:1}
+form.star button[aria-pressed=true],.star.on{color:#c9a227}
+form.with{display:inline-flex;gap:.4rem;align-items:center;flex-wrap:wrap;margin-left:.6rem}
+form.with input[type=text]{min-width:12rem}
+ul.starred{list-style:none;padding:0;margin:0}
+ul.starred li{padding:.2rem 0}
+ol.timeline li:target,ul.attached li:target,ul.attached span:target,ul.unplaced li:target,
+dt#with:target{background:color-mix(in srgb,var(--accent) 10%,var(--bg))}
+ol.queue{list-style:none;padding:0;margin:0}
+li.cluster{display:grid;grid-template-columns:10rem 1fr;gap:.2rem 1rem;padding:.8rem 0;
+border-bottom:1px solid var(--line)}
+li.cluster:target{background:color-mix(in srgb,var(--accent) 10%,var(--bg))}
+li.cluster svg{grid-row:1/4;width:10rem;height:6.5rem;border:1px solid var(--line);border-radius:3px}
+li.cluster svg text{font:11px system-ui,sans-serif;fill:var(--mute)}
+li.cluster svg circle.spot{fill:var(--accent)}
+li.cluster svg circle.ring,li.cluster svg circle.near{fill:none;stroke:var(--mute);stroke-dasharray:3 2}
+li.cluster svg line{stroke:var(--mute)}
+li.cluster p.facts{margin:0}
+li.cluster p.facts b{font-variant-numeric:tabular-nums}
+ul.evidence{list-style:none;padding:0;margin:0;color:var(--mute);font-size:.9rem}
+li.cluster details{margin:0;font-size:.9rem}
+form.name{display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;margin:.3rem 0 0}
+form.name input[type=text]{min-width:16rem;flex:1}
+a.skip{display:inline-block;padding:.2rem .4rem;border:1px solid var(--line);border-radius:3px;
+text-decoration:none}
+@media (max-width:40rem){li.cluster{grid-template-columns:1fr}li.cluster svg{grid-row:auto}}
+section.close form{margin:.6rem 0 1rem}
+section.close textarea{display:block;width:100%;box-sizing:border-box;min-height:7rem;font:inherit;
+padding:.4rem;background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:3px}
+section.close button{padding:.35rem .9rem;margin:.4rem .4rem 0 0}
+section.close details{margin:.4rem 0}
+section.close label{overflow-wrap:anywhere}
+section.close input[type=file]{max-width:100%}
+ol.proposals,ol.sentences{padding:0;margin:.3rem 0}
+ol.proposals{list-style:none}
+ol.sentences{padding-left:2rem}
+ol.proposals li{padding:.35rem 0;border-bottom:1px solid var(--line)}
+ol.proposals label{display:flex;gap:.6rem;align-items:baseline;cursor:pointer}
+ol.proposals input{flex:none;width:1.1rem;height:1.1rem}
+ul.signed{color:var(--mute);margin:.4rem 0}
+code.sha{overflow-wrap:anywhere}
+footer .footnote{display:inline-block;margin-top:.3rem}
+@media (max-width:40rem){details{margin-left:1rem}.clock{min-width:0;margin-right:.5rem}
+table{display:block;overflow-x:auto}}
+ol.shelf{list-style:none;padding:0;margin:0}
+ol.shelf>li{padding:.55rem 0;border-bottom:1px solid var(--line);overflow-wrap:anywhere}
+ol.shelf>li:target{background:color-mix(in srgb,var(--accent) 10%,var(--bg))}
+ol.shelf p{margin:.1rem 0}
+p.head{display:flex;flex-wrap:wrap;gap:.1rem .8rem;align-items:baseline}
+p.head .mute{font-size:.9rem;font-variant-numeric:tabular-nums}
+details.evidence,details.draft{margin:.25rem 0 0}
+details.evidence>summary{color:var(--mute);font-size:.85rem}
+details.evidence ul.evidence{font-size:.85rem;margin:.2rem 0 0 .8rem}
+details.evidence details{margin:0 0 0 .8rem}
+span.id{font:.78rem ui-monospace,monospace;color:var(--mute)}
+details.draft>summary{font-size:.9rem}
+div.draft p.segment{margin:.3rem 0}
+p.segment.unsupported{border-left:2px solid var(--line);padding-left:.5rem}
+.dates{white-space:nowrap}
+svg.stays{display:block;width:100%;max-width:30rem;height:auto;margin:.5rem 0;
+border:1px solid var(--line);border-radius:3px}
+svg.stays circle{fill:var(--accent);fill-opacity:.85;stroke:var(--bg)}
+svg.stays text{font:11px system-ui,sans-serif;fill:var(--fg)}
+svg.stays line{stroke:var(--mute)}
+li.proposal form{display:flex;flex-wrap:wrap;gap:.5rem;margin:.3rem 0 0}
+
+p.tiers{color:var(--mute);font-size:.9rem;margin:0 0 1rem}
+a.raw{font-size:.75rem;margin-left:.35rem;color:var(--mute);text-decoration:none;font-variant-numeric:tabular-nums}
+ul.strip{list-style:none;display:flex;flex-wrap:wrap;gap:.4rem;padding:0;margin:.35rem 0 0 7.5rem}
+ul.strip li{display:flex;flex-direction:column;align-items:flex-start;max-width:8rem;font-size:.85rem}
+ul.strip img,ul.review img{display:block;max-width:100%;width:8rem;height:auto;border-radius:3px;
+border:1px solid var(--line)}
+ul.strip li.mute{align-self:center}
+ul.strip span.name,ul.review span.name{overflow-wrap:anywhere}
+section.review ul.review{list-style:none;display:flex;flex-wrap:wrap;gap:.8rem;padding:0;margin:.5rem 0 1rem}
+ul.review li{display:flex;flex-direction:column;gap:.3rem;width:8.5rem;min-width:0}
+form.keep{display:block;margin:0}
+form.keep button{padding:.2rem .4rem}
+svg.track{display:block;width:100%;max-width:30rem;height:auto;margin:.5rem 0;
+border:1px solid var(--line);border-radius:3px}
+svg.track circle{fill:var(--accent);fill-opacity:.85;stroke:var(--bg)}
+svg.track line{stroke:var(--mute);stroke-width:1.5}
+svg.track line.gap{stroke-dasharray:4 3}
+svg.track text{font:11px system-ui,sans-serif;fill:var(--fg)}
+ul.week{color:var(--mute);font-size:.9rem;margin:.3rem 0 1rem}
+div.outside ul.strip{margin-left:0}
+ul.conversations,ol.messages{list-style:none;padding:0;margin:.2rem 0 0 .8rem}
+ol.messages li{padding:.1rem 0;overflow-wrap:anywhere}
+ol.messages .clock{min-width:3.2rem}
+section.held td{overflow-wrap:anywhere;vertical-align:baseline}
+section.held td.at{white-space:nowrap;font-variant-numeric:tabular-nums;color:var(--mute)}
+details.conversation,details.all{margin:.2rem 0 0}
+section.held details.held{margin:1.5rem 0 0}
+section.held h3{font-size:1rem;margin:.8rem 0 .2rem}
+span.way{font-size:.78rem;color:var(--mute)}
+@media (max-width:40rem){ul.strip{margin-left:1rem}}
+
+:root{--bg:#fbfaf7;--fg:#22252a;--ink:#1c1a17;--mute:#666a71;--line:#e6e2d8;--accent:#2f5d7c;--paper:#f4efe3;--rule:#e8dfcc;--graphite:#47433c;--gfaint:#746e62;--star:#9a760f;--stay:#2e7d4f;--move:#3a62b0;--aboard:#1f6f88;--call:#a35a16;--plan:#868b93;--card:#ffffff;--serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;--sans:system-ui,-apple-system,"Segoe UI",sans-serif;--mono:ui-monospace,SFMono-Regular,Menlo,monospace}
+@media (prefers-color-scheme:dark){:root{--bg:#121315;--fg:#e6e6e3;--ink:#f3f0e9;--mute:#a4a7ac;--line:#2c2e32;--accent:#8fb8d6;--paper:#1d1c19;--rule:#2b2924;--graphite:#dcd6c8;--gfaint:#a8a295;--star:#e2bf52;--stay:#6cc08a;--move:#88a8ea;--aboard:#6fc2da;--call:#e39a55;--plan:#8d9299;--card:#1b1c1f}}
+body{font-size:15px;line-height:1.5;font-family:var(--sans);background:var(--bg);color:var(--fg)}
+main a{color:var(--accent)}
+section.part{margin:0}
+section.part>h2,p.eyebrow,div.paper p.eyebrow{font-weight:600;font-size:11px;line-height:1.4;
+font-family:var(--sans);letter-spacing:.13em;
+text-transform:uppercase;color:var(--mute);margin:26px 0 8px}
+section.part>h2 small,p.eyebrow small{text-transform:none;letter-spacing:0;font-weight:400;float:right}
+section.header p.eyebrow{margin:18px 0 4px}
+section.header h1{font-weight:500;font-size:31px;line-height:1.1;font-family:var(--serif);color:var(--ink);
+margin:0 0 6px}
+section.header h1 small{font-weight:400;font-size:15px;line-height:1.5;font-family:var(--sans);
+color:var(--mute)}
+p.meta{margin:0 0 10px;color:var(--fg)}
+p.asked{font-size:13.5px;color:var(--mute);margin:0 0 8px}
+p.for{margin:14px 0 10px}p.for .ink{font-family:var(--serif);color:var(--ink)}
+.ink,.person,div.reflection p{font-family:var(--serif);color:var(--ink)}
+div.reflection p.mute{font-family:var(--sans);color:var(--mute)}
+.mono,div.t,svg.ribbon text,span.ev{font-family:var(--mono)}
+div.card{background:var(--card);border:1px solid var(--line);border-radius:6px;padding:14px}
+div.card p{margin:0 0 6px}div.card p:last-child{margin:0}
+ul.rows{list-style:none;padding:0;margin:0}
+ul.rows li{display:flex;gap:.7rem;padding:7px 0;border-bottom:1px solid var(--line);font-size:13.5px}
+ul.rows li:last-child{border-bottom:0}
+ul.rows div.t{flex:0 0 3.2rem;color:var(--mute);font-size:12.5px;padding-top:1px}
+ul.rows span.sub{display:block;color:var(--mute);font-size:12.5px}
+svg.ribbon{display:block;width:100%;max-width:100%;height:auto;margin:4px 0 2px}
+svg.ribbon text{font-size:10px;fill:var(--mute)}
+svg.ribbon text.lane{letter-spacing:.13em}
+svg.ribbon line.hour{stroke:var(--line)}
+svg.ribbon rect.plan.filled{fill:var(--plan)}
+svg.ribbon rect.plan.hollow{fill:none;stroke:var(--plan);stroke-width:1.2;stroke-dasharray:3 2}
+svg.ribbon rect.stay{fill:var(--stay)}svg.ribbon rect.move{fill:var(--move)}
+svg.ribbon rect.aboard{fill:var(--aboard)}
+svg.ribbon line.call{stroke:var(--call);stroke-width:1.5}
+svg.ribbon line.task{stroke:var(--plan);stroke-width:2}
+svg.ribbon line.now{stroke:var(--accent);stroke-width:1.5}
+p.legend{font-size:12px;color:var(--mute);margin:0 0 4px}
+p.legend span{font-weight:600}p.legend .stay{color:var(--stay)}p.legend .move{color:var(--move)}
+p.legend .aboard{color:var(--aboard)}p.legend .call{color:var(--call)}
+p.nothing,p.quiet{color:var(--mute);font-size:13.5px;margin:14px 0}
+section.record details.fold{margin:0;padding:0;border-top:1px solid var(--line)}
+section.record{border-bottom:1px solid var(--line)}
+details.fold>summary{list-style:none;cursor:pointer;display:flex;flex-wrap:wrap;align-items:center;
+column-gap:.5rem;min-height:44px}
+details.fold>summary::marker{content:""}
+details.fold>summary::before{content:"\25B8";font-size:11px;color:var(--mute);display:inline-block;
+transition:transform .15s}
+details.fold[open]>summary::before{transform:rotate(90deg)}
+details.fold>summary h2{display:inline;font-weight:600;font-size:15px;line-height:1.3;
+font-family:var(--sans);
+margin:0;letter-spacing:0;
+text-transform:none;color:var(--fg)}
+details.fold>summary span.sum{color:var(--mute);font-size:13.5px}
+div.fold{padding:0 0 12px 20px;font-size:13.5px}
+div.fold h3{font-weight:600;font-size:11px;line-height:1.4;font-family:var(--sans);letter-spacing:.13em;
+text-transform:uppercase;color:var(--mute);
+margin:12px 0 4px}
+div.fold ol.timeline>li,div.fold ul.unplaced>li{border-bottom:1px solid var(--line);padding:4px 0}
+section.record section.held details.held{margin:0;min-height:44px}
+div.paper{background-color:var(--paper);background-image:repeating-linear-gradient(to bottom,
+transparent 0,transparent 27px,var(--rule) 27px,var(--rule) 28px);border-radius:3px;color:var(--graphite);
+font-size:16px;line-height:28px;font-family:var(--serif);padding:0 14px 1px}
+div.paper p{margin:0 0 28px}div.paper p.eyebrow{margin:0;padding-top:0;line-height:28px}
+div.paper h2{display:none}
+div.paper .sc{font-variant:small-caps;text-transform:none;letter-spacing:.04em}
+div.paper p.mute,div.paper .mute{color:var(--mute)}
+div.paper p.segment.unsupported{font-style:italic}
+div.paper span.id{font-size:10.5px;font-family:var(--mono);color:var(--accent)}
+div.paper span.kind,span.tag{font-size:10.5px;line-height:1.4;font-family:var(--sans);
+border:1px solid var(--rule);border-radius:999px;
+padding:0 6px;color:var(--graphite)}
+li.decision{color:var(--graphite);font-family:var(--serif);background:var(--paper)}
+p.proposal{color:var(--graphite);font-family:var(--serif);background:var(--paper);border-radius:3px;
+padding:4px 10px;margin:10px 0}
+p.proposal .sc{font-variant:small-caps;letter-spacing:.04em;font-family:var(--sans);font-size:12.5px}
+li.decision small{font-size:10.5px;font-family:var(--mono);color:var(--accent)}
+blockquote.ink{margin:4px 0 0;font-style:italic}
+ul.gallery{list-style:none;display:flex;flex-wrap:wrap;gap:.4rem;padding:0;margin:.4rem 0}
+ul.gallery img{display:block;width:8rem;max-width:100%;height:auto;border-radius:3px}
+ul.gallery li.starred{outline:2px solid var(--star);border-radius:3px}
+section.close button,section.review button,section.add button,form.with button{min-height:44px;
+border-radius:22px;background:var(--ink);color:var(--bg);border:1px solid var(--ink);padding:0 18px;
+font-weight:600;font-size:14px;font-family:var(--sans);cursor:pointer}
+section.review button[value=pass]{background:transparent;color:var(--ink)}
+form.star button{min-width:44px;min-height:44px;background:transparent;border:0;color:var(--ink)}
+p.foot{color:var(--mute);font-size:12.5px;margin:30px 0 10px}
+@media (max-width:40rem){div.fold{padding-left:12px}ul.rows div.t{flex-basis:2.8rem}}
+</style>
+</head>
+<body>
+<header><nav><a href="../index.html">Logbook</a><a href="../trips.html">trips</a><a href="../places.html">places</a><a href="../people.html">people</a><a href="../years/2017.html">2017</a><a href="2017.html">days of 2017</a></nav></header>
+<main>
+<section class="part header">
+<p class="eyebrow">Thursday · evening</p>
+<h1>2017-10-12 <small>Thursday</small></h1>
+<p class="meta">the Copenhagen flat · with <span class="person">Bjørn Aas</span>, <span class="person">Freja Lund</span></p>
+<p class="pager"><a href="2017.html#2017-10-11">← 2017-10-11</a> · <a href="2017.html#2017-10-06">the fortnight around</a> · <a href="2017.html#2017-10-13">2017-10-13 →</a></p>
+<dl class="header">
+<dt>night before</dt><dd>the Copenhagen flat · home</dd>
+<dt>night after</dt><dd>the Copenhagen flat · home</dd>
+<dt>country</dt><dd>DK (place the Copenhagen flat)</dd>
+<dt>signature</dt><dd>unsigned</dd>
+<dt id="with">with</dt><dd>Bjørn Aas, Freja Lund</dd>
+</dl>
+</section><!--part-->
+<section class="part for">
+<p class="for mute">No goals or chapter set yet — the page can't say what a day was for. Goals</p>
+</section><!--part-->
+<section class="part tiers">
+<p class="tiers">Where you were (tier 1) may travel; what was said (tier 2) stays home unless a policy entry names where it may go, and money and health (tier 3) never leave without one.</p>
+</section><!--part-->
+<section class="part the-day">
+<h2>The day</h2>
+<svg class="ribbon" viewBox="0 0 360 84" role="img" aria-label="The day from 00:00 to 00:00. Planned: 09:00 — Weekly planning. Lived: 3 stays, 2 moves."><text class="lane" x="0" y="9">PLANNED</text><rect class="plan filled" x="135.0" y="12" width="11.2" height="14" rx="2"><title>09:00–09:45 — Weekly planning</title></rect><text class="lane" x="0" y="41">LIVED</text><rect class="stay" x="0.0" y="44" width="125.0" height="14"><title>00:00–08:20 — stay the Copenhagen flat</title></rect><rect class="move" x="125.0" y="44" width="1.5" height="14"><title>08:20–08:20 — move</title></rect><rect class="stay" x="125.0" y="44" width="127.5" height="14"><title>08:20–16:50 — stay the Copenhagen office</title></rect><rect class="move" x="252.5" y="44" width="1.5" height="14"><title>16:50–16:50 — move</title></rect><rect class="stay" x="252.5" y="44" width="107.5" height="14"><title>16:50–00:00 — stay the Copenhagen flat</title></rect><line class="hour" x1="0.0" y1="60" x2="0.0" y2="69"/><text x="0.0" y="78" text-anchor="start">00</text><line class="hour" x1="45.0" y1="60" x2="45.0" y2="69"/><text x="45.0" y="78" text-anchor="middle">03</text><line class="hour" x1="90.0" y1="60" x2="90.0" y2="69"/><text x="90.0" y="78" text-anchor="middle">06</text><line class="hour" x1="135.0" y1="60" x2="135.0" y2="69"/><text x="135.0" y="78" text-anchor="middle">09</text><line class="hour" x1="180.0" y1="60" x2="180.0" y2="69"/><text x="180.0" y="78" text-anchor="middle">12</text><line class="hour" x1="225.0" y1="60" x2="225.0" y2="69"/><text x="225.0" y="78" text-anchor="middle">15</text><line class="hour" x1="270.0" y1="60" x2="270.0" y2="69"/><text x="270.0" y="78" text-anchor="middle">18</text><line class="hour" x1="315.0" y1="60" x2="315.0" y2="69"/><text x="315.0" y="78" text-anchor="middle">21</text><line class="hour" x1="360.0" y1="60" x2="360.0" y2="69"/><text x="360.0" y="78" text-anchor="end">24</text></svg>
+<p class="legend"><span class="stay">stay</span> · <span class="move">move</span> · <span class="aboard">aboard</span> · <span class="call">call</span> · dashed: planned, nothing beside it</p>
+</section><!--part-->
+<section class="part record">
+<h2>The record</h2>
+<details class="fold" open><summary><h2>People</h2> <span class="sum">2 people</span></summary>
+<div class="fold">
+<ul class="rows">
+<li><span><span class="person">Bjørn Aas</span><span class="sub">at the Copenhagen office</span></span></li>
+<li><span><span class="person">Freja Lund</span><span class="sub">at the Copenhagen office</span></span></li>
+</ul>
+</div>
+</details><!--fold-->
+<details class="fold" open><summary><h2>Timeline</h2> <span class="sum">3 stays · 2 moves · 2 km</span></summary>
+<div class="fold">
+<svg class="track" viewBox="0 0 320 171" role="img" aria-label="the day's track"><line x1="24" y1="18" x2="302" y2="153"/><line x1="302" y1="153" x2="18" y2="23"/><circle cx="24" cy="18" r="5"/><circle cx="302" cy="153" r="5"/><circle cx="18" cy="23" r="5"/><text x="32" y="22" text-anchor="start">1</text><text x="294" y="157" text-anchor="end">2</text><text x="26" y="27" text-anchor="start">3</text><line x1="8" y1="163" x2="67.4" y2="163"/><text x="8" y="159">0.2 km</text></svg>
+<ol class="timeline">
+<li class="row stay"><span class="clock">00:00–08:20</span> <span class="kind">stay</span> the Copenhagen flat · 8 h 20 min</li>
+<li class="row move"><span class="clock">08:20–08:20</span> <span class="kind">move</span> 1.1 km · &lt; 1 min · mode unknown</li>
+<li class="row stay"><span class="clock">08:20–16:50</span> <span class="kind">stay</span> the Copenhagen office · 8 h 30 min
+<details open><summary>1 event, 2 messages · with 2</summary>
+<ul class="attached">
+<li id="l-015f0f61-f980-7bd7-bd7a-3ac57b082f4c" title="1 line: 015f0f61-f980-7bd7-bd7a-3ac57b082f4c"><span class="kind">event</span> Weekly planning 09:00–09:45</li>
+<li title="2 lines: 015f1056-6ba0-7101-83f5-401b32097c0e 015f1070-0e20-7f3f-875b-8a868199b387"><span class="kind">messages</span> 2 messages</li>
+</ul>
+<p class="with">with Bjørn Aas (calendar), Freja Lund (calendar)</p>
+</details></li>
+<li class="row move"><span class="clock">16:50–16:50</span> <span class="kind">move</span> 1.0 km · &lt; 1 min · mode unknown</li>
+<li class="row stay"><span class="clock">16:50–24:00</span> <span class="kind">stay</span> the Copenhagen flat · 7 h 10 min</li>
+</ol>
+</div>
+</details><!--fold-->
+<details class="fold" open><summary><h2>Sources</h2> <span class="sum">5 sources · 9 lines</span></summary>
+<div class="fold">
+<table>
+<thead><tr><th>source</th><th class="num">lines</th><th>first</th><th>last</th></tr></thead>
+<tbody>
+<tr><td>dawarich</td><td class="num">4</td><td>2017-10-12 00:00</td><td>2017-10-12 16:50</td></tr>
+<tr><td>whatsapp</td><td class="num">2</td><td>2017-10-12 13:27</td><td>2017-10-12 13:55</td></tr>
+<tr><td>google-takeout</td><td class="num">1</td><td>2017-10-12 21:21</td><td>2017-10-12 21:21</td></tr>
+<tr><td>ios-calendar</td><td class="num">1</td><td>2017-10-12 09:00</td><td>2017-10-12 09:00</td></tr>
+<tr><td>shazam</td><td class="num">1</td><td>2017-10-12 13:16</td><td>2017-10-12 13:16</td></tr>
+</tbody>
+</table>
+</div>
+</details><!--fold-->
+</section><!--part-->
+<section class="part nothing-from">
+<p class="nothing">Nothing from: health · weather · the circle · photos</p>
+</section><!--part-->
+<section class="part foot">
+<p class="foot">Every row is computed from the record. What a model wrote is in pencil, with the lines it rests on.</p>
+</section><!--part-->
+</main>
+<footer>exported from the record · tier 1,2 · Europe/Oslo · nothing here is fetched<br><span class="footnote">No model touched this page. What a model drafted is marked as a draft.</span></footer>
+</body>
+</html>

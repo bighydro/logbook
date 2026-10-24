@@ -1,0 +1,5392 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="A diary that writes itself. Your life, in a folder.">
+      
+      
+      
+        <link rel="canonical" href="https://bighydro.github.io/logbook/home-server/">
+      
+      
+        <link rel="prev" href="../schedule/">
+      
+      
+        <link rel="next" href="../doctor/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.0">
+    
+    
+      
+        <title>On a home server - Logbook</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.57a0d79d.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.fb2fffe2.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=IBM+Plex+Sans:300,300i,400,400i,700,700i%7CIBM+Plex+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"IBM Plex Sans";--md-code-font:"IBM Plex Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="blue-grey" data-md-color-accent="amber">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#running-logbook-on-a-home-server" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="Logbook" class="md-header__button md-logo" aria-label="Logbook" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Logbook
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              On a home server
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="blue-grey" data-md-color-accent="amber"  aria-label="dark"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="dark" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="blue-grey" data-md-color-accent="amber"  aria-label="light"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="light" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/bighydro/logbook" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    bighydro/logbook
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="Logbook" class="md-nav__button md-logo" aria-label="Logbook" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Logbook
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/bighydro/logbook" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    bighydro/logbook
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../install/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../try-it/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Try it
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../faq/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    First questions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../first-hour/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The first hour
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tour/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The tour
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../commands/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../settings/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The record's settings
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    A life in a record
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../launch-post/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Your life in a folder
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../VISION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Vision
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../LORE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Lore
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../SPEC/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Specification v0.4
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ARCHITECTURE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../migration-0.6/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Migrating to 0.6
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../line-to-day/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How a line becomes a Day
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ROADMAP/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../release-notes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release notes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../audit-2026-10/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Audit — October 2026
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../PROBLEMS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Open problems
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_21" >
+        
+          
+          <label class="md-nav__link" for="__nav_21" id="__nav_21_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Decisions
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_21_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_21">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Decisions
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    About ADRs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0001-files-are-the-truth/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0001 Files are the truth
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0002-canonical-json-and-hashing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0002 Canonical JSON and hashing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0003-one-log/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0003 One log
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0004-notes-live-in-the-logbook/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0004 Notes live in the Logbook
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0005-one-evening-message/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0005 One evening message
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0006-chain-mandatory/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0006 Chain mandatory
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0007-sqlite-default-index/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0007 SQLite default index
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0008-first-adapters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0008 First adapters
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0009-the-circle-is-core/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0009 The circle is core
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0010-identity-of-the-captain/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0010 bighydro is a pen name
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0011-log-everything-cheap-judge-downstream/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0011 Log everything cheap, judge downstream
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0012-adapters-ship-in-the-package/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0012 Adapters ship in the package
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0013-downstream-interpreters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0013 Downstream interpreters
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0014-canonicalisation-is-fixed-not-versioned/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0014 Canonicalisation is fixed, not versioned
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0015-attachments-are-content-addressed/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0015 Attachments are content-addressed
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0016-tier-crossing-policy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0016 The crossing ceiling is the owner's setting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0017-backfill-and-live-share-one-mapping/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0017 Backfill and live share one mapping
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0018-assets-are-subjects/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0018 Assets are subjects, not places
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0019-trips-are-derived/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0019 Trips are derived, never written
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0020-tiers-2-3-sealed-with-age/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0020 Tiers 2–3 are sealed with age
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0021-journey-is-the-written-form/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0021 journey/v1 is the written form
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0022-the-records-home/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0022 The record's home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0023-digital-events-do-not-make-a-stay/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0023 Digital events do not make a stay
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0024-the-owners-phone-writes-through-the-library/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0024 The owner's phone writes through the Library
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0025-derived-tables/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0025 Derived tables
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_22" >
+        
+          
+          <label class="md-nav__link" for="__nav_22" id="__nav_22_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    RFCs
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_22_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_22">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    RFCs
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="https://github.com/bighydro/logbook/blob/main/rfcs/README.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    About RFCs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="https://github.com/bighydro/logbook/blob/main/rfcs/0001-location-v1.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0001 location/v1
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="https://github.com/bighydro/logbook/blob/main/rfcs/0002-photo-v1.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0002 photo/v1
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rfcs/0027-reflection/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0027 Reflection: the digest's question
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rfcs/0028-story/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0028 story/v1 (draft, unfinished)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rfcs/0029-encryption-at-rest/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0029 encryption at rest for tiers 2–3
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rfcs/bench-encryption-2026-10/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Benchmark: per-line sealing (2026-10)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rfcs/rfc-0025-shared-page-bundle/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0025 shared-page/v1
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rfcs/0026-weather-v1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0026 weather/v1
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rfcs/0031-profile-freeze/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0031 Profile freeze for v1.0
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rfcs/0034-the-signed-day/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0034 The signed day
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rfcs/0036-goals-reviews-drafts-chapters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0036 Goals, reviews, drafts, chapters (draft)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rfcs/0037-entities/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0037 Entities: orgs, ideas, places and assets (draft)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rfcs/0038-speakers/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0038 Speakers: who spoke, and who they are (draft)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rfcs/0040-videos/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    0040 Videos: a recording file, its scenes, the owner's attribution (draft)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_23" >
+        
+          
+          <label class="md-nav__link" for="__nav_23" id="__nav_23_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Letters
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_23_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_23">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Letters
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../letters/2026-10-12-why-i-built-it/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Why I built it (2026-10-12)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../letters/2026-10-04-the-freeze/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The freeze (2026-10-04)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../day/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The Day
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../signed-day/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The signed day
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../dream/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The dream
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../goals/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Goals, reviews and chapters
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../dream-prompt/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The dream's prompt
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../transcript-synthesis/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The synthesis of a call
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../speakers/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Speakers: who spoke
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../synthesis-prompt/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The synthesis prompt
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../relationship/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The relationship reader
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../serve/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    In a browser
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../week/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The week
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../timeline/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The timeline
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../shelves/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The shelves: promises, goals, agents
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../acts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The acts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../gifts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Gifts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../companies/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The companies a day touched
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rollups/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The rollups
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../labs/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The lab
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ledger/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The ledger
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../receipts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Receipts as payments
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../trips-shared/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Shared trips
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../year/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The Year
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../print/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    On paper
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../vault/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The vault (Obsidian, Logseq)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../site/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The site (static HTML)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../world/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The world (a globe you can scrub)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../map/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The map (offline, drawn as SVG)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../crossing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The crossing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../export-notion/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Export for Notion
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../letter/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The letter
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../promises/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Promises
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tasks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tasks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../describe/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Describing keepers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../digest/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The digest
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../people/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    People
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../who-was-there/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Who was there
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../mail-people/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    People's mail
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../places/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Places
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../review/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Review
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../entities/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Entities (the profiles)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../search/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Search
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../heard/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    What you heard
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../mcp/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The MCP server
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../backup/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Backup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../schedule/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The schedule
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    On a home server
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    On a home server
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#before-you-start" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Before you start
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#1-two-users-and-why-5-minutes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Two users, and why (5 minutes)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-install-logbook-as-records-5-minutes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Install Logbook as records (5 minutes)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-where-the-record-lives-5-minutes-a-move-adds-the-copy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Where the record lives (5 minutes; a move adds the copy)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-the-env-file-for-secrets-5-minutes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. The env file for secrets (5 minutes)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-where-your-day-begins-2-minutes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Where your day begins (2 minutes)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-the-pages-and-the-schedule-as-system-daemons-10-minutes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. The pages and the schedule as system daemons (10 minutes)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="6. The pages and the schedule as system daemons (10 minutes)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-pages-serve-install-service-system" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The pages: serve --install-service --system
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-schedule-sync-install-schedule-system" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The schedule: sync --install-schedule --system
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-the-local-model-and-the-dream-10-minutes-and-the-models-download" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. The local model, and the dream (10 minutes, and the model's download)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#8-one-writer-and-read-only-checkouts-5-minutes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. One writer, and read-only checkouts (5 minutes)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#9-backups-and-the-monthly-restore-test-5-minutes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9. Backups and the monthly restore test (5 minutes)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#10-the-library-on-your-phone-over-a-private-network-5-minutes-once-the-network-exists" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        10. The Library on your phone, over a private network (5 minutes, once the network exists)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#11-what-doctor-shows-when-everything-is-right" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        11. What doctor shows when everything is right
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#troubleshooting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Troubleshooting
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#keeping-it-current" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Keeping it current
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#on-a-mac" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        On a Mac
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../doctor/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The doctor
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../recovery/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    When verify fails
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../attachments/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The attachment store
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_74" >
+        
+          
+          <label class="md-nav__link" for="__nav_74" id="__nav_74_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Adapters
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_74_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_74">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Adapters
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/voice-memos/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Voice memos and transcription
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/takeout/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Google Takeout
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/mail/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Mail
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/takeout-tasks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Takeout: Tasks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/takeout-maps/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Takeout: Maps (your places)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/takeout-home/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Takeout: Home App
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/takeout-fit/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Takeout: Fit
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/takeout-youtube/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Takeout: YouTube
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapter-bounties/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bounties
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/passages/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Passages: a deck log as sea legs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/listen/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Listening: Spotify and Apple Music
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/screentime/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Screen Time
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/photos/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Apple Photos: albums, favourites, faces
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/weather/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Weather
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/health/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Health: Apple Health, Withings, MyFitnessPal
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/wallet/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Apple Wallet: boarding passes and tickets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/agents/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Your own agents: Telegram bots, Claude Code and the Claude apps
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/videos/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The family's videos: scenes, proposals, your answer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../conformance/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Conformance
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../CONTRIBUTING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../GOVERNANCE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Governance
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../releasing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Releasing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../SECURITY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../CHANGELOG/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Changelog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#before-you-start" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Before you start
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#1-two-users-and-why-5-minutes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Two users, and why (5 minutes)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-install-logbook-as-records-5-minutes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Install Logbook as records (5 minutes)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-where-the-record-lives-5-minutes-a-move-adds-the-copy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Where the record lives (5 minutes; a move adds the copy)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-the-env-file-for-secrets-5-minutes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. The env file for secrets (5 minutes)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-where-your-day-begins-2-minutes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Where your day begins (2 minutes)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-the-pages-and-the-schedule-as-system-daemons-10-minutes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. The pages and the schedule as system daemons (10 minutes)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="6. The pages and the schedule as system daemons (10 minutes)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-pages-serve-install-service-system" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The pages: serve --install-service --system
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-schedule-sync-install-schedule-system" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The schedule: sync --install-schedule --system
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-the-local-model-and-the-dream-10-minutes-and-the-models-download" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. The local model, and the dream (10 minutes, and the model's download)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#8-one-writer-and-read-only-checkouts-5-minutes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. One writer, and read-only checkouts (5 minutes)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#9-backups-and-the-monthly-restore-test-5-minutes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9. Backups and the monthly restore test (5 minutes)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#10-the-library-on-your-phone-over-a-private-network-5-minutes-once-the-network-exists" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        10. The Library on your phone, over a private network (5 minutes, once the network exists)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#11-what-doctor-shows-when-everything-is-right" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        11. What doctor shows when everything is right
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#troubleshooting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Troubleshooting
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#keeping-it-current" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Keeping it current
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#on-a-mac" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        On a Mac
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="running-logbook-on-a-home-server">Running Logbook on a home server</h1>
+<p>This page sets up the record's home (<a href="../adr/0022-the-records-home/">ADR 0022</a>): one small machine at
+home, always on, that holds the only writable copy of the record, runs the pages and the schedule as
+system daemons, runs a local model for the dream, and is reached from a laptop by <code>ssh</code> and from a
+phone over your own private network. It is a runbook: do the steps in order, check each one where it
+says so, and the whole takes about an hour. Every <code>logbook</code> command on it is the CLI as it is, and the
+commands shown as printed are what it prints.</p>
+<p>The names are synthetic. The server is <code>server.example</code>, the laptop <code>laptop.example</code>, the record
+belongs to Ines Nordmann of Oslo, who does not exist, and the two accounts on the server are <code>owner</code>
+and <code>records</code>.</p>
+<div class="highlight"><pre><span></span><code>laptop.example ── ssh as records ──▶ server.example ◀── private network ── phone
+  development,                         records: the record, serve, the     the pages, read
+  a read-only checkout                 schedule; the local model beside
+</code></pre></div>
+<p><strong>Nothing cloud-synced holds the record.</strong> Not the record folder, not a backup, not a read-only
+checkout on the laptop. The phone reaches the pages, never the files.</p>
+<h2 id="before-you-start">Before you start</h2>
+<ul>
+<li><strong>The server</strong>: Linux with systemd, always on, a disk with room for the record and its attachments,
+  and a second disk for backups, mounted at <code>/mnt/backup</code>. A Mac works too; what differs is at the end
+  (<a href="#on-a-mac">On a Mac</a>).</li>
+<li><strong>An administrator account</strong> on it, <code>owner</code>, that can <code>sudo</code> and that you reach by <code>ssh</code> from the
+  laptop.</li>
+<li><strong>The laptop</strong>, with an <code>ssh</code> key (<code>~/.ssh/id_ed25519.pub</code>).</li>
+<li><strong>A Logbook with the dream and the system daemons</strong>: the release after 0.6.1. <code>logbook --help</code>
+  lists <code>dream</code> under <em>derive</em>, and <code>logbook sync --help</code> lists <code>--system</code>. Until that release is out,
+  install from <code>main</code> (step 2 says how).</li>
+</ul>
+<p>Each block of commands starts with a comment saying who runs it and where; a block without one is
+what a command printed.</p>
+<h2 id="1-two-users-and-why-5-minutes">1. Two users, and why (5 minutes)</h2>
+<table>
+<thead>
+<tr>
+<th>account</th>
+<th>what it is</th>
+<th>what it may do</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>owner</code></td>
+<td>you, the administrator</td>
+<td><code>sudo</code>; runs the commands Logbook prints for the system; holds nothing of the record</td>
+</tr>
+<tr>
+<td><code>records</code></td>
+<td>the record's own user</td>
+<td>holds the record and runs the pages, the schedule and every command that writes; no password, no desktop login, no <code>sudo</code>; reached by <code>ssh</code> with a key</td>
+</tr>
+</tbody>
+</table>
+<p>Why two:</p>
+<ul>
+<li>The daemons run as the user who installed them, and never as root: <code>--system</code> refuses to run as
+  root, since the daemon would run as root with root's home. They need an account, and it should be
+  one that does nothing else.</li>
+<li><code>records</code>'s home is closed (mode 700), so nothing that runs as <code>owner</code> (a browser, a build, a tool
+  you are trying) can read the record, and nothing that runs as <code>records</code> can become root.</li>
+<li>The commands that install a daemon need an administrator. Logbook never runs <code>sudo</code>; it writes the
+  file in <code>records</code>'s home and prints the commands, and <code>owner</code> runs them after reading what they
+  copy.</li>
+<li>A collaborator, one day, is a third account on this machine, after sealing at rest
+  (<a href="../adr/0022-the-records-home/">ADR 0022</a>, point 5), never a copy of the folder.</li>
+</ul>
+<div class="highlight"><pre><span></span><code><span class="c1"># as owner, on server.example</span>
+sudo<span class="w"> </span>useradd<span class="w"> </span>--create-home<span class="w"> </span>--shell<span class="w"> </span>/bin/bash<span class="w"> </span>records<span class="w">    </span><span class="c1"># no password is set: no console or desktop login</span>
+sudo<span class="w"> </span>chmod<span class="w"> </span><span class="m">700</span><span class="w"> </span>/home/records
+</code></pre></div>
+<p>Let the laptop's key in as <code>records</code> (the account has no password, so <code>ssh-copy-id</code> cannot do it):</p>
+<div class="highlight"><pre><span></span><code><span class="c1"># on laptop.example</span>
+scp<span class="w"> </span>~/.ssh/id_ed25519.pub<span class="w"> </span>owner@server.example:laptop.pub
+</code></pre></div>
+<div class="highlight"><pre><span></span><code><span class="c1"># as owner, on server.example</span>
+sudo<span class="w"> </span>install<span class="w"> </span>-d<span class="w"> </span>-m<span class="w"> </span><span class="m">700</span><span class="w"> </span>-o<span class="w"> </span>records<span class="w"> </span>-g<span class="w"> </span>records<span class="w"> </span>/home/records/.ssh
+sudo<span class="w"> </span>install<span class="w"> </span>-m<span class="w"> </span><span class="m">600</span><span class="w"> </span>-o<span class="w"> </span>records<span class="w"> </span>-g<span class="w"> </span>records<span class="w"> </span>~/laptop.pub<span class="w"> </span>/home/records/.ssh/authorized_keys
+rm<span class="w"> </span>~/laptop.pub
+</code></pre></div>
+<p><strong>Check:</strong> <code>ssh records@server.example whoami</code> on the laptop prints <code>records</code>. From here on, "as
+records" means that <code>ssh</code> session, or <code>sudo -iu records</code> from <code>owner</code>'s.</p>
+<p>Set the server's clock to the record's timezone. The schedule's timers fire at 00:00, 06:00, 12:00
+and 18:00 by the system's clock, and the 06:00 run is the one that closes your day:</p>
+<div class="highlight"><pre><span></span><code><span class="c1"># as owner, on server.example</span>
+sudo<span class="w"> </span>timedatectl<span class="w"> </span>set-timezone<span class="w"> </span>Europe/Oslo
+timedatectl<span class="w">          </span><span class="c1"># Time zone: Europe/Oslo (…)</span>
+</code></pre></div>
+<h2 id="2-install-logbook-as-records-5-minutes">2. Install Logbook as records (5 minutes)</h2>
+<div class="highlight"><pre><span></span><code><span class="c1"># as records, on server.example</span>
+curl<span class="w"> </span>-LsSf<span class="w"> </span>https://astral.sh/uv/install.sh<span class="w"> </span><span class="p">|</span><span class="w"> </span>sh
+<span class="nb">exit</span><span class="w">                 </span><span class="c1"># then log in as records again, so ~/.local/bin is on the path</span>
+</code></pre></div>
+<div class="highlight"><pre><span></span><code><span class="c1"># as records, on server.example</span>
+uv<span class="w"> </span>tool<span class="w"> </span>install<span class="w"> </span><span class="s2">"openlogbook[ais,crypto,sealed,speakers,transcribe]"</span>
+<span class="c1"># until the release after 0.6.1:</span>
+<span class="c1"># uv tool install "openlogbook[ais,crypto,sealed,speakers,transcribe] @ git+https://github.com/bighydro/logbook"</span>
+logbook<span class="w"> </span>--version
+</code></pre></div>
+<p>The five extras are the ones <code>doctor</code> checks (<code>extra:ais</code>, <code>extra:crypto</code>, <code>extra:sealed</code>,
+<code>extra:speakers</code>, <code>extra:transcribe</code>); one missing is a standing warn, which makes no scheduled run clean
+and, with the message set up (step 4), is a message every run until it is fixed. On Linux, <code>transcribe</code>
+is <code>faster-whisper</code> and <code>speakers</code> is pyannote.audio on the CPU (it brings torch); <code>describe</code> and
+<code>judge</code> are Apple silicon only and install nothing here
+(<a href="../install/#optional-extras">install</a>).</p>
+<p>The server runs a released package, installed for <code>records</code>, not a checkout of the repository. The
+development checkout lives on the laptop and never points at the record: the tests pin <code>LOGBOOK_HOME</code>
+and the home directory to a temporary folder, and <code>init</code> refuses a code checkout as a record folder.</p>
+<h2 id="3-where-the-record-lives-5-minutes-a-move-adds-the-copy">3. Where the record lives (5 minutes; a move adds the copy)</h2>
+<p>The record is <code>/home/records/Logbook</code>, which is <code>records</code>'s <code>~/Logbook</code>: the place <code>logbook init</code> makes
+by default and <code>logbook</code> finds without <code>LOGBOOK_HOME</code>. A plain folder on a local disk.</p>
+<p><strong>Never a synced folder.</strong> No file-sync client, peer-to-peer sync tool or network share may hold the
+record, its backups or a read-only checkout. A sync client rewrites <code>logbook.json</code> and the month files
+underneath the writer, evicts files and fetches them back, and keeps the record on someone else's
+server; two machines syncing one record are two writers on one chain, which the format has no merge
+for. <code>doctor</code>'s <code>folder</code> line fails a record under iCloud Drive, Dropbox, OneDrive or Google Drive by
+name, and <code>backup</code> refuses them as a destination; any other sync tool it cannot see, so the rule is
+yours to keep.</p>
+<p><strong>A new record:</strong></p>
+<div class="highlight"><pre><span></span><code><span class="c1"># as records, on server.example</span>
+logbook<span class="w"> </span>setup<span class="w">        </span><span class="c1"># the guided first run (docs/first-hour.md); or: logbook init --timezone Europe/Oslo</span>
+</code></pre></div>
+<p><strong>Moving the record from the laptop</strong>, where it lived until now. Home moves by copying the record
+once, never by syncing it, and the old copy stops writing. On the laptop, stop its schedule and its
+pages first, then take a snapshot:</p>
+<div class="highlight"><pre><span></span><code><span class="c1"># on laptop.example</span>
+logbook<span class="w"> </span>sync<span class="w"> </span>--uninstall-schedule
+logbook<span class="w"> </span>serve<span class="w"> </span>--uninstall-service
+logbook<span class="w"> </span>backup<span class="w"> </span>~/Transfer<span class="w">          </span><span class="c1"># a verified snapshot, ~/Transfer/&lt;owner_id&gt;/&lt;timestamp&gt;/</span>
+scp<span class="w"> </span>-r<span class="w"> </span>~/Transfer/&lt;owner_id&gt;/&lt;timestamp&gt;<span class="w"> </span>records@server.example:snapshot
+</code></pre></div>
+<div class="highlight"><pre><span></span><code><span class="c1"># as records, on server.example</span>
+logbook<span class="w"> </span>backup<span class="w"> </span>restore<span class="w"> </span>~/snapshot<span class="w"> </span>~/Logbook<span class="w">     </span><span class="c1"># copied, verified, its head printed</span>
+rm<span class="w"> </span>-r<span class="w"> </span>~/snapshot
+</code></pre></div>
+<p>A snapshot leaves <code>state/</code> out, so every live source is new to the server. A <code>sync</code> by hand reads each
+from its start, and the record refuses what it already holds, so nothing doubles. The schedule's first
+run reads each source's last 14 days (<a href="../schedule/#a-sources-first-scheduled-run">a source's first scheduled
+run</a>): the record already holds what came before the snapshot,
+and <code>doctor</code> names each source as <code>first run bounded to 14 days; history not read</code> until a <code>logbook sync
+&lt;source&gt; --since &lt;date&gt;</code> from before the snapshot's day reads the days between and clears it (when the
+snapshot is from today, there are none, and the record refuses all it reads). If the record seals tiers 2
+and 3 (<code>logbook key show</code> says so, and where the identity is), the identity file goes to the server too,
+by <code>scp</code>, to the same place under <code>records</code>'s <code>~/.config/logbook/identities/</code>, at mode 600. Write nothing
+more to the laptop's record folder; once the server's first backup has passed a restore test (step 9),
+delete it, and the snapshot in <code>~/Transfer</code> with it. A read-only checkout (step 8) takes its place if you
+want one there.</p>
+<p><strong>Check:</strong> <code>logbook verify</code> as records prints <code>valid</code> and the head.</p>
+<h2 id="4-the-env-file-for-secrets-5-minutes">4. The env file for secrets (5 minutes)</h2>
+<p>The schedule reads every key your sources need from <code>~/.config/logbook/sync.env</code>, one <code>KEY=value</code>
+per line, mode 600, <code>records</code>'s. Logbook never writes it and never prints a value from it. The system
+units name it by its path (<code>EnvironmentFile=-/home/records/.config/logbook/sync.env</code>), so nothing
+else needs to know where it is.</p>
+<p>Write each secret with <code>read -s</code>, which takes what you type without showing it; <code>printf</code> is a shell
+builtin, so the value is never on a command line, in the history or in the process list:</p>
+<div class="highlight"><pre><span></span><code><span class="c1"># as records, on server.example</span>
+install<span class="w"> </span>-d<span class="w"> </span>-m<span class="w"> </span><span class="m">700</span><span class="w"> </span>~/.config/logbook
+touch<span class="w"> </span>~/.config/logbook/sync.env<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>chmod<span class="w"> </span><span class="m">600</span><span class="w"> </span>~/.config/logbook/sync.env
+<span class="nb">read</span><span class="w"> </span>-rs<span class="w"> </span>-p<span class="w"> </span><span class="s1">'LOGBOOK_IMMICH_KEY: '</span><span class="w"> </span>v<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="nb">printf</span><span class="w"> </span><span class="s1">'LOGBOOK_IMMICH_KEY=%s\n'</span><span class="w"> </span><span class="s2">"</span><span class="nv">$v</span><span class="s2">"</span><span class="w"> </span>&gt;&gt;<span class="w"> </span>~/.config/logbook/sync.env<span class="p">;</span><span class="w"> </span><span class="nb">unset</span><span class="w"> </span>v<span class="p">;</span><span class="w"> </span><span class="nb">echo</span>
+<span class="nb">read</span><span class="w"> </span>-rs<span class="w"> </span>-p<span class="w"> </span><span class="s1">'LOGBOOK_DAWARICH_KEY: '</span><span class="w"> </span>v<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="nb">printf</span><span class="w"> </span><span class="s1">'LOGBOOK_DAWARICH_KEY=%s\n'</span><span class="w"> </span><span class="s2">"</span><span class="nv">$v</span><span class="s2">"</span><span class="w"> </span>&gt;&gt;<span class="w"> </span>~/.config/logbook/sync.env<span class="p">;</span><span class="w"> </span><span class="nb">unset</span><span class="w"> </span>v<span class="p">;</span><span class="w"> </span><span class="nb">echo</span>
+</code></pre></div>
+<p>Values that are not secret go in the same way without <code>-s</code>, or with an editor:</p>
+<div class="highlight"><pre><span></span><code><span class="c1"># as records, on server.example</span>
+<span class="nb">printf</span><span class="w"> </span><span class="s1">'%s\n'</span><span class="w"> </span><span class="s1">'LOGBOOK_IMMICH_URL=http://127.0.0.1:2283'</span><span class="w"> </span><span class="s1">'LOGBOOK_DAWARICH_URL=http://127.0.0.1:3000'</span><span class="w"> </span>&gt;&gt;<span class="w"> </span>~/.config/logbook/sync.env
+</code></pre></div>
+<p>What goes in it: each live source's variables (<code>logbook sync --help</code> names them; <code>doctor</code>'s <code>sync:</code>
+lines say which are missing), <code>LOGBOOK_IDENTITY_FILE=&lt;path&gt;</code> for a record that seals (the monthly
+restore test needs it, or it is skipped), the dream's two variables (step 7), and, if you want one
+message when something is wrong, <code>LOGBOOK_NOTIFY_TELEGRAM_TOKEN</code> and <code>LOGBOOK_NOTIFY_TELEGRAM_CHAT</code>
+(<a href="../schedule/#what-it-tells-you-and-when">the schedule</a>).</p>
+<p><strong>Check</strong>, names only, never values:</p>
+<div class="highlight"><pre><span></span><code><span class="c1"># as records, on server.example</span>
+cut<span class="w"> </span>-d<span class="o">=</span><span class="w"> </span>-f1<span class="w"> </span>~/.config/logbook/sync.env<span class="w">          </span><span class="c1"># the names</span>
+stat<span class="w"> </span>-c<span class="w"> </span><span class="s1">'%a %U'</span><span class="w"> </span>~/.config/logbook/sync.env<span class="w">      </span><span class="c1"># 600 records</span>
+</code></pre></div>
+<p>Never <code>cat</code> the file, never paste a key into a command, never put the file in a repository or a synced
+folder. The serve daemon does not read it: the pages need no secret.</p>
+<h2 id="5-where-your-day-begins-2-minutes">5. Where your day begins (2 minutes)</h2>
+<p>If your day does not end at midnight, say so before the schedule runs and before you sign a day
+(<a href="../settings/#where-your-day-begins-day_start">settings</a>). Moving the boundary later moves lines
+between days, and a signed day whose page changed reads as changed.</p>
+<div class="highlight"><pre><span></span><code><span class="c1"># as records, on server.example</span>
+logbook<span class="w"> </span>setup<span class="w"> </span>day_start<span class="w"> </span><span class="m">06</span>:00
+</code></pre></div>
+<div class="highlight"><pre><span></span><code>day_start: 00:00 → 06:00 in logbook.json; a line before 06:00 now belongs to the day before. No line changed
+index: rebuilt, 48,213 lines in 1.6s, each on its day under 06:00
+</code></pre></div>
+<p>The schedule's close runs at 06:00 by the server's clock (step 1 set it to the record's timezone). With
+<code>day_start</code> at 06:00 or earlier, the close finds yesterday ended and the dream catches it up; with a
+later <code>day_start</code>, the day that has not ended waits for the next morning.</p>
+<h2 id="6-the-pages-and-the-schedule-as-system-daemons-10-minutes">6. The pages and the schedule as system daemons (10 minutes)</h2>
+<p>Both are installed the same way: as <code>records</code>, the command writes the unit files into <code>records</code>'s
+home, prints them, and prints the commands an administrator runs; as <code>owner</code>, you read the files and
+run those commands. Nothing needs a login session, and no <code>loginctl enable-linger</code>: that is what
+<code>--system</code> is for.</p>
+<h3 id="the-pages-serve-install-service-system">The pages: <code>serve --install-service --system</code></h3>
+<div class="highlight"><pre><span></span><code><span class="c1"># as records, on server.example</span>
+logbook<span class="w"> </span>serve<span class="w"> </span>--install-service<span class="w"> </span>--system
+</code></pre></div>
+<div class="highlight"><pre><span></span><code>writing /home/records/logbook-serve.service:
+[Unit]
+Description=logbook serve: the record's pages at http://127.0.0.1:8765/, from this machine only
+
+[Service]
+User=records
+Environment=LOGBOOK_HOME=/home/records/Logbook
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/home/records/.local/share/uv/tools/openlogbook/bin/python -m logbook.cli serve --port 8765
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+
+written: a systemd system service running `logbook serve --port 8765` as records from boot, started again when it fails; nothing runs until you install it, as an administrator:
+  sudo cp /home/records/logbook-serve.service /etc/systemd/system/logbook-serve.service
+  sudo systemctl enable --now logbook-serve.service
+then http://127.0.0.1:8765/ (/today is today's page); its output: journalctl -u logbook-serve.service; `logbook serve --status` says whether it answers
+the server binds 127.0.0.1 and nothing else; reaching it from another device: docs/serve.md
+</code></pre></div>
+<div class="highlight"><pre><span></span><code><span class="c1"># as owner, on server.example: the two lines it printed</span>
+sudo<span class="w"> </span>cp<span class="w"> </span>/home/records/logbook-serve.service<span class="w"> </span>/etc/systemd/system/logbook-serve.service
+sudo<span class="w"> </span>systemctl<span class="w"> </span><span class="nb">enable</span><span class="w"> </span>--now<span class="w"> </span>logbook-serve.service
+</code></pre></div>
+<p>The unit carries paths and nothing secret: the Python that installed it, the record, and
+<code>LOGBOOK_IDENTITY_FILE</code> when it was set in the shell that ran the install. It never carries <code>--host</code>;
+the server binds 127.0.0.1 and refuses anything else (<a href="../serve/#three-rules">serve</a>).</p>
+<h3 id="the-schedule-sync-install-schedule-system">The schedule: <code>sync --install-schedule --system</code></h3>
+<div class="highlight"><pre><span></span><code><span class="c1"># as records, on server.example</span>
+logbook<span class="w"> </span>sync<span class="w"> </span>--install-schedule<span class="w"> </span>--system
+</code></pre></div>
+<p>It writes four files to <code>/home/records</code> and prints each: <code>logbook-sync.service</code> and <code>.timer</code>
+(<code>sync --scheduled</code> at 00:00, 12:00 and 18:00) and <code>logbook-sync-close.service</code> and <code>.timer</code>
+(<code>sync --scheduled --close</code> at 06:00). Each service is <code>Type=oneshot</code>, <code>User=records</code>,
+<code>EnvironmentFile=-/home/records/.config/logbook/sync.env</code> and <code>LOGBOOK_HOME=/home/records/Logbook</code>;
+each timer is <code>Persistent=true</code>, so a run missed while the machine was off happens when it is back.
+Then:</p>
+<div class="highlight"><pre><span></span><code>written: 4 files for the system domain, running as records from boot: `logbook sync --scheduled` (`sync --all`, then `doctor`) runs at 00:00, 12:00 and 18:00 local, and at 06:00 as `sync --scheduled --close`, which then runs the dream's catch-up when this version has it and policy/crossing.json has a dream entry; nothing runs until you install them, as an administrator:
+  sudo cp /home/records/logbook-sync.service /home/records/logbook-sync.timer /home/records/logbook-sync-close.service /home/records/logbook-sync-close.timer /etc/systemd/system
+  sudo systemctl enable --now logbook-sync.timer logbook-sync-close.timer
+to be told when something is wrong, put LOGBOOK_NOTIFY_TELEGRAM_TOKEN and LOGBOOK_NOTIFY_TELEGRAM_CHAT in the same file: one Telegram message when a source fails or doctor warns, and the week's counts on Sunday evening (docs/schedule.md); with them, the daily loop: the Day page after the close, and the evening question at LOGBOOK_NOTIFY_EVENING_HOUR (docs/digest.md)
+the variables your live sources need go in ~/.config/logbook/sync.env, one KEY=value per line, mode 600; a source whose variables are not set is skipped
+home: this machine (server) is the record's home since 2026-10-13; state/home.json
+</code></pre></div>
+<div class="highlight"><pre><span></span><code><span class="c1"># as owner, on server.example: the two lines it printed</span>
+sudo<span class="w"> </span>cp<span class="w"> </span>/home/records/logbook-sync.service<span class="w"> </span>/home/records/logbook-sync.timer<span class="w"> </span>/home/records/logbook-sync-close.service<span class="w"> </span>/home/records/logbook-sync-close.timer<span class="w"> </span>/etc/systemd/system
+sudo<span class="w"> </span>systemctl<span class="w"> </span><span class="nb">enable</span><span class="w"> </span>--now<span class="w"> </span>logbook-sync.timer<span class="w"> </span>logbook-sync-close.timer
+</code></pre></div>
+<p>The last line it printed matters: installing the schedule names this machine the record's home, and
+<code>doctor</code> on any other machine says writers belong here.</p>
+<p>Run either install again later (a new Python, a moved record, a new release that changes the unit) and
+it prints the replacing commands instead: the same <code>sudo cp</code>, then <code>sudo systemctl daemon-reload</code> and
+<code>sudo systemctl restart</code> of the service or the two timers. <code>--uninstall-service --system</code> and
+<code>--uninstall-schedule --system</code> remove the copies in the home directory and print the commands that
+stop the daemons and remove the system's copies.</p>
+<p><strong>Check:</strong></p>
+<div class="highlight"><pre><span></span><code><span class="c1"># as records, on server.example</span>
+logbook<span class="w"> </span>serve<span class="w"> </span>--status<span class="w">                        </span><span class="c1"># installed: a systemd system service (/etc/systemd/system/logbook-serve.service), port 8765</span>
+<span class="w">                                              </span><span class="c1"># answering at http://127.0.0.1:8765/</span>
+systemctl<span class="w"> </span>list-timers<span class="w"> </span><span class="s1">'logbook-sync*'</span><span class="w">         </span><span class="c1"># the next 00:00, 06:00, 12:00 or 18:00 of each timer</span>
+<span class="o">(</span><span class="nb">set</span><span class="w"> </span>-a<span class="p">;</span><span class="w"> </span>.<span class="w"> </span>~/.config/logbook/sync.env<span class="p">;</span><span class="w"> </span>logbook<span class="w"> </span>sync<span class="w"> </span>--scheduled<span class="o">)</span><span class="w">    </span><span class="c1"># one run now, as the timer runs it</span>
+</code></pre></div>
+<p><code>--status</code> exits 0 when the server answers, 1 when it is installed and silent, 3 when none is
+installed. The run by hand needs the keys, which the timer reads from the env file and your shell does
+not; the parentheses read them in a subshell, so they leave with it. The run is <code>sync --all</code>, then
+<code>doctor</code>, and its last line is <code>scheduled run: clean; state/last-run.json</code>.</p>
+<h2 id="7-the-local-model-and-the-dream-10-minutes-and-the-models-download">7. The local model, and the dream (10 minutes, and the model's download)</h2>
+<p>The dream sends a day to a model and writes the draft back as one line (<a href="../dream/">the dream</a>). Here
+the model runs on this machine, as a daemon of its own, beside Logbook and not inside it:</p>
+<ul>
+<li>it takes minutes to load and gigabytes of memory, so it stays up and answers the 06:00 close at once;</li>
+<li>it never needs the record's files, so it runs as no user that can read them;</li>
+<li>it listens on 127.0.0.1 only, so a day never leaves the machine;</li>
+<li>it is replaced by changing two variables, never code.</li>
+</ul>
+<p>Any OpenAI-compatible chat completions server will do; <code>llama-server</code> from llama.cpp is the one the
+dream's docs use. Put the model file where any user can read it (<code>/srv/models</code> here), then a unit of
+your own, which Logbook neither writes nor reads; the two paths in it are wherever you put the server
+and the model:</p>
+<div class="highlight"><pre><span></span><code><span class="c1"># /etc/systemd/system/local-model.service, written by owner</span>
+<span class="k">[Unit]</span>
+<span class="na">Description</span><span class="o">=</span><span class="s">local model for the dream, at http://127.0.0.1:8080/ only</span>
+<span class="na">After</span><span class="o">=</span><span class="s">network.target</span>
+
+<span class="k">[Service]</span>
+<span class="na">DynamicUser</span><span class="o">=</span><span class="s">yes</span>
+<span class="na">ExecStart</span><span class="o">=</span><span class="s">/usr/local/bin/llama-server --model /srv/models/qwen2.5-7b-instruct-q4_k_m.gguf --alias qwen2.5-7b-instruct --host 127.0.0.1 --port 8080</span>
+<span class="na">Restart</span><span class="o">=</span><span class="s">on-failure</span>
+<span class="na">RestartSec</span><span class="o">=</span><span class="s">5</span>
+
+<span class="k">[Install]</span>
+<span class="na">WantedBy</span><span class="o">=</span><span class="s">multi-user.target</span>
+</code></pre></div>
+<div class="highlight"><pre><span></span><code><span class="c1"># as owner, on server.example</span>
+sudo<span class="w"> </span>systemctl<span class="w"> </span>daemon-reload
+sudo<span class="w"> </span>systemctl<span class="w"> </span><span class="nb">enable</span><span class="w"> </span>--now<span class="w"> </span>local-model.service
+curl<span class="w"> </span>-sS<span class="w"> </span>http://127.0.0.1:8080/health<span class="w">          </span><span class="c1"># ok once the model has loaded</span>
+</code></pre></div>
+<p><code>DynamicUser=yes</code> runs it as a throwaway account made for it, which cannot read <code>/home/records</code>.
+<code>--alias</code> is the name the server answers to; the policy and the variable below use the same one.</p>
+<p><strong>The policy entry.</strong> Sending a day to a model is a crossing like any other, so the dream does nothing
+until <code>policy/crossing.json</code> has a <code>dream</code> entry. Add it by hand beside the entries already there:</p>
+<div class="highlight"><pre><span></span><code><span class="p">{</span>
+<span class="w">  </span><span class="nt">"hermes"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">"max_tier"</span><span class="p">:</span><span class="w"> </span><span class="mi">2</span><span class="p">},</span>
+<span class="w">  </span><span class="nt">"mcp"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">"max_tier"</span><span class="p">:</span><span class="w"> </span><span class="mi">1</span><span class="p">},</span>
+<span class="w">  </span><span class="nt">"dream"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">"max_tier"</span><span class="p">:</span><span class="w"> </span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="nt">"until"</span><span class="p">:</span><span class="w"> </span><span class="s2">"2027-03-31"</span><span class="p">,</span><span class="w"> </span><span class="nt">"model"</span><span class="p">:</span><span class="w"> </span><span class="s2">"qwen2.5-7b-instruct"</span><span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div>
+<p><code>max_tier</code> 2 lets the model read notes and messages; 3 would add health and money. <code>until</code> is the last
+day the entry holds; after it the dream refuses and <code>doctor</code> names the entry, so a model you stop
+thinking about stops by itself. <code>model</code> is the only model the day may go to; a <code>LOGBOOK_DREAM_MODEL</code>
+that names another is refused.</p>
+<p><strong>The endpoint</strong>, in the env file (step 4). A local server needs no key, so there is no
+<code>LOGBOOK_DREAM_KEY</code>:</p>
+<div class="highlight"><pre><span></span><code><span class="c1"># as records, on server.example</span>
+<span class="nb">printf</span><span class="w"> </span><span class="s1">'%s\n'</span><span class="w"> </span><span class="s1">'LOGBOOK_DREAM_ENDPOINT=http://127.0.0.1:8080'</span><span class="w"> </span><span class="s1">'LOGBOOK_DREAM_MODEL=qwen2.5-7b-instruct'</span><span class="w"> </span>&gt;&gt;<span class="w"> </span>~/.config/logbook/sync.env
+</code></pre></div>
+<p>A hosted model that refuses any temperature (HTTP 400, "temperature is deprecated for this model") needs
+<code>LOGBOOK_DREAM_TEMPERATURE=none</code> in the same file; unset, the request carries <code>0.2</code>, and a number from 0
+to 2 is sent as given (<a href="../dream/#the-endpoint">the endpoint</a>).</p>
+<p><strong>Check</strong>, one day, nothing written:</p>
+<div class="highlight"><pre><span></span><code><span class="c1"># as records, on server.example</span>
+<span class="nv">LOGBOOK_DREAM_ENDPOINT</span><span class="o">=</span>http://127.0.0.1:8080<span class="w"> </span><span class="nv">LOGBOOK_DREAM_MODEL</span><span class="o">=</span>qwen2.5-7b-instruct<span class="w"> </span>logbook<span class="w"> </span>dream<span class="w"> </span>day<span class="w"> </span>yesterday<span class="w"> </span>--dry-run
+</code></pre></div>
+<p>From now on the 06:00 close runs <code>dream --catch-up</code> after the sync and ends with <code>scheduled run, the
+close (dream caught up): clean; state/last-run.json</code>. A draft is a proposal: a refused day never makes
+the run unclean, and the next close tries it again.</p>
+<p><strong>Transcripts and descriptions</strong> are the other local models, and they are not daemons: <code>derive
+transcripts</code> and <code>derive descriptions</code> load their model in the command's own process, offline, and run
+when you run them, not on the schedule. Fetch the model once, the only time either uses the network:</p>
+<div class="highlight"><pre><span></span><code><span class="c1"># as records, on server.example</span>
+logbook<span class="w"> </span>derive<span class="w"> </span>transcripts<span class="w"> </span>voice-memos<span class="w"> </span>--fetch-model<span class="w">    </span><span class="c1"># the first time: download the Whisper model, then transcribe</span>
+logbook<span class="w"> </span>derive<span class="w"> </span>transcripts<span class="w"> </span>voice-memos<span class="w">                  </span><span class="c1"># after each import of voice memos</span>
+logbook<span class="w"> </span>derive<span class="w"> </span>descriptions<span class="w"> </span>keepers<span class="w">                     </span><span class="c1"># Apple silicon only: elsewhere it names the extra and exits 2</span>
+</code></pre></div>
+<p>(<a href="../adapters/voice-memos/">Voice memos</a>, <a href="../describe/">describing keepers</a>.)</p>
+<h2 id="8-one-writer-and-read-only-checkouts-5-minutes">8. One writer, and read-only checkouts (5 minutes)</h2>
+<p>The record on the server is the only copy anything writes to. The schedule, the dream, the Places
+form and every command you type that appends run there, as <code>records</code>, one at a time under the writer
+lock (<code>state/writer.lock</code>; a second writer waits, saying who holds it). Every other copy is a
+<strong>read-only checkout</strong>: a snapshot taken to another machine to read, never written to, replaced whole
+and never brought up to date. A write to a copy forks it from the home, and nothing merges it back
+(<a href="../adr/0022-the-records-home/">ADR 0022</a>).</p>
+<p><strong>The alias.</strong> On the laptop, run every command on the home over <code>ssh</code>:</p>
+<div class="highlight"><pre><span></span><code><span class="c1"># on laptop.example, in ~/.zshrc or ~/.bashrc</span>
+<span class="nb">alias</span><span class="w"> </span><span class="nv">lb</span><span class="o">=</span><span class="s1">'ssh records@server.example .local/bin/logbook'</span>
+</code></pre></div>
+<div class="highlight"><pre><span></span><code><span class="c1"># on laptop.example</span>
+lb<span class="w"> </span>day<span class="w"> </span><span class="m">2026</span>-10-12
+lb<span class="w"> </span>digest
+lb<span class="w"> </span>add<span class="w"> </span><span class="s2">"'Rowed out to the island with Ola.'"</span>
+</code></pre></div>
+<p><code>ssh</code> joins the words it is given into one line for the shell at the far end, so a word with a space,
+a <code>*</code> or a quote in it needs a second pair of quotes, as the note above has. A command that asks you
+things (<code>setup</code>, <code>day reflect</code>) wants a terminal: <code>ssh -t records@server.example .local/bin/logbook
+setup</code>. A command that needs the sources' keys reads them as the schedule does:</p>
+<div class="highlight"><pre><span></span><code><span class="c1"># on laptop.example</span>
+ssh<span class="w"> </span>records@server.example<span class="w"> </span><span class="s1">'set -a; . ~/.config/logbook/sync.env; set +a; .local/bin/logbook sync immich'</span>
+</code></pre></div>
+<p><strong>A read-only checkout</strong> for reading on the laptop away from home: copy a snapshot from the backup
+disk, check it, and take its write permission away. Keep it out of <code>~/Logbook</code>, so a bare <code>logbook</code> on
+the laptop finds no record at all.</p>
+<div class="highlight"><pre><span></span><code><span class="c1"># on laptop.example</span>
+lb<span class="w"> </span>backup<span class="w"> </span>list<span class="w"> </span>/mnt/backup/Logbook<span class="w">                                  </span><span class="c1"># the newest snapshot is the last</span>
+scp<span class="w"> </span>-r<span class="w"> </span>records@server.example:/mnt/backup/Logbook/&lt;owner_id&gt;/&lt;timestamp&gt;<span class="w"> </span>~/Records/Logbook-copy
+logbook<span class="w"> </span>verify<span class="w"> </span>--root<span class="w"> </span>~/Records/Logbook-copy<span class="w">                        </span><span class="c1"># valid — …</span>
+chmod<span class="w"> </span>-R<span class="w"> </span>a-w<span class="w"> </span>~/Records/Logbook-copy
+<span class="nb">alias</span><span class="w"> </span>lb-copy<span class="o">=</span><span class="s1">'LOGBOOK_HOME="$HOME/Records/Logbook-copy" logbook'</span>
+lb-copy<span class="w"> </span>day<span class="w"> </span><span class="m">2026</span>-06-13
+</code></pre></div>
+<p>The readers keep their index in your cache directory, not in the record folder, so <code>day</code>, <code>show</code>,
+<code>search</code>, <code>people</code>, the rollups, the Year and <code>doctor</code> read a checkout without write permission as
+they read any record, and a writer started on it by mistake cannot write a line. <code>digest</code> is the
+exception: it keeps the questions it has asked in the record (<code>state/questions.json</code>, and the default
+<code>policy/questions.json</code> when there is none), so read the digest on the home, <code>lb digest</code>. On a record
+that seals, the checkout opens tiers 2 and 3 only on a machine that holds the identity; without it the
+days list their sealed lines as sealed, which is the right state for a laptop that travels. A snapshot
+carries no <code>state/</code>, so the checkout names no home and runs no schedule; keep it that way. To bring it
+up to date, <code>chmod -R u+w</code>, delete it, copy a newer snapshot.</p>
+<h2 id="9-backups-and-the-monthly-restore-test-5-minutes">9. Backups and the monthly restore test (5 minutes)</h2>
+<p>A snapshot a night to the backup disk, by a timer of your own, as <code>records</code>. This is
+<a href="../backup/">backup</a>'s user timer written as a system unit, since <code>records</code> has no session:</p>
+<div class="highlight"><pre><span></span><code><span class="c1"># as owner, on server.example</span>
+sudo<span class="w"> </span>install<span class="w"> </span>-d<span class="w"> </span>-m<span class="w"> </span><span class="m">700</span><span class="w"> </span>-o<span class="w"> </span>records<span class="w"> </span>-g<span class="w"> </span>records<span class="w"> </span>/mnt/backup/Logbook
+</code></pre></div>
+<div class="highlight"><pre><span></span><code><span class="c1"># /etc/systemd/system/logbook-backup.service, written by owner</span>
+<span class="k">[Unit]</span>
+<span class="na">Description</span><span class="o">=</span><span class="s">logbook backup: one verified snapshot, keep fourteen</span>
+<span class="na">ConditionPathIsMountPoint</span><span class="o">=</span><span class="s">/mnt/backup</span>
+
+<span class="k">[Service]</span>
+<span class="na">Type</span><span class="o">=</span><span class="s">oneshot</span>
+<span class="na">User</span><span class="o">=</span><span class="s">records</span>
+<span class="na">Environment</span><span class="o">=</span><span class="s">LOGBOOK_HOME=/home/records/Logbook</span>
+<span class="na">ExecStart</span><span class="o">=</span><span class="s">/home/records/.local/bin/logbook backup /mnt/backup/Logbook --keep 14</span>
+</code></pre></div>
+<div class="highlight"><pre><span></span><code><span class="c1"># /etc/systemd/system/logbook-backup.timer, written by owner</span>
+<span class="k">[Unit]</span>
+<span class="na">Description</span><span class="o">=</span><span class="s">logbook backup at 03:00 local</span>
+
+<span class="k">[Timer]</span>
+<span class="na">OnCalendar</span><span class="o">=</span><span class="s">*-*-* 03:00:00</span>
+<span class="na">Persistent</span><span class="o">=</span><span class="s">true</span>
+<span class="na">Unit</span><span class="o">=</span><span class="s">logbook-backup.service</span>
+
+<span class="k">[Install]</span>
+<span class="na">WantedBy</span><span class="o">=</span><span class="s">timers.target</span>
+</code></pre></div>
+<div class="highlight"><pre><span></span><code><span class="c1"># as owner, on server.example</span>
+sudo<span class="w"> </span>systemctl<span class="w"> </span>daemon-reload
+sudo<span class="w"> </span>systemctl<span class="w"> </span><span class="nb">enable</span><span class="w"> </span>--now<span class="w"> </span>logbook-backup.timer
+</code></pre></div>
+<p>03:00 sits between the schedule's runs, so the schedule appends nothing while the copy runs (a line
+appended mid-copy makes the copy fail to verify, and the command says to run it again).
+<code>ConditionPathIsMountPoint</code> skips a night the disk is not there rather than filling the system disk.
+Run the first one by hand, as records, and look at what it printed:</p>
+<div class="highlight"><pre><span></span><code><span class="c1"># as records, on server.example</span>
+logbook<span class="w"> </span>backup<span class="w"> </span>/mnt/backup/Logbook<span class="w"> </span>--keep<span class="w"> </span><span class="m">14</span><span class="w">     </span><span class="c1"># four lines; the third is `valid — N lines, head …`</span>
+logbook<span class="w"> </span>backup<span class="w"> </span>list<span class="w"> </span>/mnt/backup/Logbook
+</code></pre></div>
+<p><strong>The monthly restore test</strong> is part of the schedule: on the first Sunday of the month the scheduled
+run restores the latest snapshot into a temporary folder, verifies it, compares it with what the record
+said when the backup was taken, and deletes it; <code>doctor</code>'s <code>restore-test</code> line passes for 35 days after
+a test that passed. By hand, any time: <code>logbook backup --restore-test</code>. A record that seals needs
+<code>LOGBOOK_IDENTITY_FILE</code> in the env file, or the test is skipped and <code>doctor</code> warns. A second backup disk
+that lives somewhere else, carried home now and then, covers what one disk in one house cannot.</p>
+<p>When a test fails, or <code>verify</code> says anything but <code>valid</code>, <a href="../recovery/">When verify fails</a> has the one
+command for each message.</p>
+<h2 id="10-the-library-on-your-phone-over-a-private-network-5-minutes-once-the-network-exists">10. The Library on your phone, over a private network (5 minutes, once the network exists)</h2>
+<p>The pages bind 127.0.0.1 and nothing else, as a service as by hand, and no flag changes that
+(<a href="../serve/#reaching-it-from-another-device">serve</a>). The phone reaches them through something you put
+in front, on this machine's terms. The pattern, whatever product you use for it:</p>
+<ol>
+<li><strong>A private network of your own devices.</strong> The server and the phone are members; nothing else is.
+   Traffic between them is encrypted end to end, and no relay in between can read it.</li>
+<li><strong>A proxy on the server</strong> that listens on the server's address in that network only (never on all
+   interfaces, never on the home network's address, never a port opened on the router), serves HTTPS
+   with a certificate for the server's private name, and forwards to <code>http://127.0.0.1:8765</code>.</li>
+<li><strong>The phone</strong> bookmarks the private name and <code>/today</code>: <code>https://server.example/today</code>, which is
+   today's page by the record's clock and <code>day_start</code>, whatever the phone's clock says.</li>
+</ol>
+<p>What it means:</p>
+<ul>
+<li><strong>Every tier is on the pages.</strong> The server reads them all because nothing it serves leaves the
+  machine; whoever reaches the proxy reads everything. Keep the private network to your own devices:
+  no shared or borrowed ones, and never a cloud machine between the phone and the pages.</li>
+<li><strong>The forms are read-only behind the proxy</strong>, unless it is Tailscale Serve and <code>logbook setup phone</code>
+  names your phone (<a href="../serve/#from-your-phone">from your phone</a>). A naming is accepted only from
+  127.0.0.1 with the server's own origin, so from the phone the Places page reads and its buttons
+  are refused. To name places from the laptop, use a tunnel, through which the form works:</li>
+</ul>
+<div class="highlight"><pre><span></span><code><span class="c1"># on laptop.example</span>
+ssh<span class="w"> </span>-N<span class="w"> </span>-L<span class="w"> </span><span class="m">8765</span>:127.0.0.1:8765<span class="w"> </span>records@server.example<span class="w">     </span><span class="c1"># then http://127.0.0.1:8765/places here</span>
+</code></pre></div>
+<ul>
+<li><strong>A reload is cheap.</strong> A page whose head has not moved is a <code>304</code> with no body, so a phone that
+  reloads <code>/today</code> all day costs the server next to nothing.</li>
+</ul>
+<h2 id="11-what-doctor-shows-when-everything-is-right">11. What doctor shows when everything is right</h2>
+<p>Run it as the schedule does, with the env file read, so the <code>sync:</code> lines see the keys:</p>
+<div class="highlight"><pre><span></span><code><span class="c1"># as records, on server.example</span>
+<span class="o">(</span><span class="nb">set</span><span class="w"> </span>-a<span class="p">;</span><span class="w"> </span>.<span class="w"> </span>~/.config/logbook/sync.env<span class="p">;</span><span class="w"> </span>logbook<span class="w"> </span>doctor<span class="o">)</span>
+</code></pre></div>
+<div class="highlight"><pre><span></span><code>pass  record            48,213 lines, head 5b0c9e1d2f3a…, verified; /home/records/Logbook
+pass  index             index.sqlite is current with logbook.json
+pass  day-start         the day begins at 06:00: a line before 06:00 belongs to the day before (logbook.json day_start)
+pass  owner             policy/owner.json names 1 names, 1 emails
+pass  places            4 place(s), home: Home
+pass  assets            1 asset(s): nordlys
+pass  dates             every line is dated inside its source's plausible range (policy/plausible.json)
+pass  extra:ais         websockets is installed
+pass  extra:crypto      cryptography is installed
+pass  extra:sealed      pyrage is installed
+pass  extra:speakers    pyannote.audio is installed
+pass  extra:transcribe  faster-whisper is installed
+pass  sync:immich       configured (LOGBOOK_IMMICH_URL, LOGBOOK_IMMICH_KEY)
+pass  sync:dawarich     configured (LOGBOOK_DAWARICH_URL, LOGBOOK_DAWARICH_KEY)
+pass  crossing          hermes 2, mcp 1, dream 2 until 2027-03-31 model qwen2.5-7b-instruct
+pass  home              this machine (server) is the record's home since 2026-10-13
+pass  last-run          2026-10-14 06:00 (2 h ago): immich 12, dawarich 214 lines; doctor 21 pass, 0 warn, 0 fail
+pass  restore-test      passed 2026-10-04 (2026-10-03T010000Z, 48,190 lines)
+pass  serve             systemd system service (/etc/systemd/system/logbook-serve.service) answering at http://127.0.0.1:8765/
+pass  disk              412.6 GiB free on the record's volume
+pass  folder            a plain local folder, no sync client
+21 checks: 21 pass, 0 warn, 0 fail
+</code></pre></div>
+<p>The lines that say this page worked: <code>day-start</code> names your boundary; <code>crossing</code> lists the <code>dream</code> entry
+with its <code>until</code>; <code>home</code> names this machine; <code>last-run</code> is less than 26 hours old and clean; <code>restore-test</code>
+passed within 35 days; <code>serve</code> is the system service, answering; <code>folder</code> is a plain local folder. Your
+sources, places and counts are your own. The same command without the env file warns on each <code>sync:</code>
+line for the keys your shell does not have; that is the shell, not a fault.</p>
+<h2 id="troubleshooting">Troubleshooting</h2>
+<table>
+<thead>
+<tr>
+<th>You see</th>
+<th>What it means</th>
+<th>What to do</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>logbook serve --status</code> exits 1: <code>nothing answers at http://127.0.0.1:8765/; its output: journalctl -u logbook-serve.service</code>; <code>doctor</code> warns on <code>serve</code></td>
+<td>the service is installed and not running: it exits as it starts</td>
+<td><code>sudo journalctl -u logbook-serve.service -n 50</code> as owner says why. The record moved, or the Python the unit names is gone (a reinstall with another Python): run <code>logbook serve --install-service --system</code> again as records, and as owner the three commands it prints (<code>sudo cp …</code>, <code>sudo systemctl daemon-reload</code>, <code>sudo systemctl restart logbook-serve.service</code>). Another program holds port 8765: install again with <code>--port 8080</code>, and tell the proxy</td>
+</tr>
+<tr>
+<td><code>logbook serve --status</code> exits 3: <code>no serve service installed</code></td>
+<td>the system's copy is not in <code>/etc/systemd/system</code></td>
+<td>the two <code>sudo</code> lines of step 6 were not run, or were run for another file; run <code>logbook serve --install-service --system</code> again and run what it prints</td>
+</tr>
+<tr>
+<td>The schedule ran twice: <code>doctor</code> warns <code>the schedule is installed twice, as systemd user timers and as systemd system timers: every run happens twice</code>, and the journal shows a run waiting: <code>another logbook command is writing to this record (…); waiting</code></td>
+<td>a <code>sync --install-schedule</code> without <code>--system</code> was run as records too; every source is asked twice. The lock keeps the chain whole; the waste and the double messages are the fault</td>
+<td>as records, <code>logbook sync --uninstall-schedule</code> removes the user's timers and keeps the system's. Two runs back to back just after boot are the runs missed while the machine was off (<code>Persistent=true</code>), not this. A schedule left on the laptop does not run here twice; it keeps writing a second record there: <code>logbook sync --uninstall-schedule</code> on the laptop (step 3)</td>
+</tr>
+<tr>
+<td><code>the record's head moved from seq N to seq M while this command ran, so the batch it computed would not chain; the batch was not written</code> (exit 2), or the dream's <code>the record's head moved from … to … while the model read the day, …; nothing was written, dream the day again</code></td>
+<td>something wrote to the record without the writer lock while the command ran: a copy written to and copied back, a version older than the lock, a hand edit. Nothing was written, so the record is whole</td>
+<td>find the other writer and stop it; there is one writer, here. Then <code>logbook verify</code>: <code>valid</code> and the same command again (for the dream, <code>logbook dream day DAY</code>, or wait for the next close). Anything else: <a href="../recovery/">When verify fails</a>; two chains from one head is <code>logbook repair fork</code>, then <code>--apply</code></td>
+</tr>
+<tr>
+<td>The 06:00 close ends <code>scheduled run, the close (dream --catch-up exit 1): clean</code>, and <code>sudo journalctl -u logbook-sync-close.service</code> shows a day <code>refused</code> with <code>the endpoint could not be reached in 2 attempts (HTTP 500 Internal Server Error); nothing was written</code></td>
+<td>the model's server answered 500 twice, two seconds apart: it ran out of memory, or the day's material is longer than the context it was started with. <code>TimeoutError</code> in place of <code>HTTP 500</code> is the same with a reply slower than two minutes</td>
+<td><code>systemctl status local-model.service</code> and <code>sudo journalctl -u local-model.service -n 50</code> say which. Then the diagnostic of <a href="../doctor/">the doctor</a>: <code>logbook doctor</code> as records, whose <code>crossing</code> line must list <code>dream</code> with no <code>expired</code>. Then the day by hand, with the two variables as in step 7: <code>logbook dream day DAY --dry-run --show-prompt</code> shows what is sent. Start the server with a larger context or a smaller model. Nothing was written; the next close catches the day up</td>
+</tr>
+<tr>
+<td><code>doctor</code> on the server warns <code>this machine is not the record's home (…); writers belong on the home</code></td>
+<td>the server's hostname changed, or the record was copied with its <code>state/</code> folder from the machine that was its home (a snapshot leaves <code>state/</code> out; a plain copy does not)</td>
+<td>as records, <code>logbook sync --install-schedule --system</code> again: it names this machine (<code>(it was …)</code>) and prints the replacing commands, which change nothing that runs</td>
+</tr>
+<tr>
+<td><code>doctor</code> warns <code>last-run … more than 26 h ago: is the schedule still installed?</code></td>
+<td>the timers have not run: the machine was off, or they are not enabled</td>
+<td><code>systemctl list-timers 'logbook-sync*'</code>; when they are not listed, the second <code>sudo</code> line of step 6 again</td>
+</tr>
+<tr>
+<td><code>doctor</code> warns <code>restore-test  skipped …</code></td>
+<td>the restore test could not run: no backup recorded yet, or a record that seals without <code>LOGBOOK_IDENTITY_FILE</code> in the env file</td>
+<td>run <code>logbook backup /mnt/backup/Logbook</code> once, or add the identity's path to the env file (step 4); then <code>logbook backup --restore-test</code></td>
+</tr>
+</tbody>
+</table>
+<h2 id="keeping-it-current">Keeping it current</h2>
+<div class="highlight"><pre><span></span><code><span class="c1"># as records, on server.example</span>
+uv<span class="w"> </span>tool<span class="w"> </span>upgrade<span class="w"> </span>openlogbook
+logbook<span class="w"> </span>--version
+</code></pre></div>
+<div class="highlight"><pre><span></span><code><span class="c1"># as owner, on server.example</span>
+sudo<span class="w"> </span>systemctl<span class="w"> </span>restart<span class="w"> </span>logbook-serve.service
+</code></pre></div>
+<p>The timers run the new version at their next run; the pages need the restart. When the release notes
+say a unit changed, run both installs of step 6 again and the replacing commands they print.</p>
+<h2 id="on-a-mac">On a Mac</h2>
+<p>The same steps hold on a Mac mini kept at home, with these differences:</p>
+<ul>
+<li><code>--system</code> writes launchd daemons, not units. The pages: <code>org.logbook.serve.plist</code> in the home
+  directory, installed with the two lines it prints,
+  <code>sudo cp /Users/records/org.logbook.serve.plist /Library/LaunchDaemons/org.logbook.serve.plist</code> and
+  <code>sudo launchctl bootstrap system /Library/LaunchDaemons/org.logbook.serve.plist</code>. The schedule:
+  <code>org.logbook.sync.plist</code> and <code>org.logbook.sync.close.plist</code>, copied to <code>/Library/LaunchDaemons</code> and
+  bootstrapped the same way. Their output goes to <code>~/Library/Logs/logbook-serve.log</code> and
+  <code>logbook-sync.log</code> in <code>records</code>'s home, not the journal.</li>
+<li><code>records</code> is a standard account that no one logs in to at the screen, with Remote Login allowed for
+  it; set the clock's timezone in System Settings.</li>
+<li>On Apple silicon, <code>transcribe</code> is <code>mlx-whisper</code> (it needs <code>ffmpeg</code> on the path) and <code>describe</code> works:
+  install <code>openlogbook[describe]</code> too, and run <code>logbook derive descriptions keepers</code> with <code>--photos</code>
+  naming a folder of the photo files that <code>records</code> can read.</li>
+<li>The model's daemon is a launchd daemon of your own in <code>/Library/LaunchDaemons</code> with the same
+  <code>llama-server</code> arguments, run as an account that cannot read <code>records</code>'s home.</li>
+<li>The backup disk is under <code>/Volumes</code>; <a href="../backup/#a-schedule">backup</a> has the launchd job, which on the
+  home becomes a daemon with <code>UserName</code> <code>records</code>.</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.sections", "navigation.top", "content.code.copy", "toc.follow"], "search": "../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.c21346df.min.js"></script>
+      
+    
+  </body>
+</html>
