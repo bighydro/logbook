@@ -446,10 +446,12 @@ for all of it); the threads (each chat, mail subject, calendar title and recordi
 clipped to the week); the nights that ended on the week's days as the Day counts them (Monday's began
 the Sunday before, whose evening's sleep lines are read for it), their mean asleep hours, and the
 workouts. The week keeps them under `extra.numbers`, each with its line ids, but for the people: the
-counts by person are the model's to read and never a reader's, so `extra.numbers.people` keeps each
-person's name, id and lines only, in order (the most contacts first), and every reader (`day`, `show`,
-the Day page, `export site`, letters, `dream week`) prints them as a `with` row of names, never a count
-beside a name. A week written before kept the counts; the readers drop them (`drafts.names_only`).
+counts by person are the model's to read and never a reader's to print, so `extra.numbers.people`
+keeps each person's name, id, lines and contacts only, in order (the most contacts first; the week
+page compares the contacts with the week before's to name who moved, and prints none), and every
+reader (`day` and `day --json`, `show`, the Day page, the week page, `export site`, letters, `dream
+week`) prints them as a `with` row of names, never a count beside a name (`drafts.names_only`), a week
+written before included.
 And, since `dream-week/2`, no number stands beside a person in the week's pencil either, as for a day,
 a month and a chapter: a sentence that names a canonical person and writes a figure is **held**
 (`dream.hold_names`), its words dropped, counted under `extra.marked` as `a number beside a person`.

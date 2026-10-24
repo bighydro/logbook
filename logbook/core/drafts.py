@@ -758,9 +758,9 @@ def unit_json(payload: Mapping[str, Any]) -> dict[str, Any]:
     `proposed` the name and the photos to star a journey's draft proposes (`name`, `star`) and the
     review a week's proposes for each goal (`goals`: `{goal, text, disposition, segment}`) and its
     one stale question (`question`: `{entity, label, status, status_line, since, text}`); under
-    `numbers` what the code computed from the lines for a week (each figure with its line ids, the
-    people by name only, `names_only`); and `dropped` and `marked`, by why. Only the keys the draft
-    has."""
+    `numbers` what the code computed from the lines for a week (each figure with its line ids: a
+    reader that prints them prints its people by name only, `names_only`); and `dropped` and `marked`,
+    by why. Only the keys the draft has."""
     extra = payload.get("extra")
     if not isinstance(extra, dict):
         return {}
@@ -770,19 +770,20 @@ def unit_json(payload: Mapping[str, Any]) -> dict[str, Any]:
         out["proposed"] = proposed
     for key in ("numbers", "dropped", "marked"):
         if isinstance(extra.get(key), dict) and extra[key]:
-            out[key] = names_only(extra[key]) if key == "numbers" else extra[key]
+            out[key] = extra[key]
     return out
 
 
-PERSON_KEYS = ("name", "id", "lines")  # what a reader carries of a draft's person: never a count
+PERSON_KEYS = ("name", "id", "lines")  # what a reader prints of a draft's person: never a count
 CHAT = "chat"  # a thread that is a chat, named by its counterpart: a person, or people
 
 
 def names_only(numbers: Mapping[str, Any]) -> dict[str, Any]:
-    """A draft's numbers as a reader carries them: its people as `PERSON_KEYS` alone and its chats
-    (`CHAT`, named by their counterpart) without their count, in the draft's order (the most first),
-    whatever counts a week written before RFC 0043's rule kept beside them; no number stands beside a
-    person (VISION: no metrics near people)."""
+    """A draft's numbers as a reader prints them, in text or in its JSON: its people as `PERSON_KEYS`
+    alone and its chats (`CHAT`, named by their counterpart) without their count, in the draft's order
+    (the most first), whatever counts the line keeps beside them; no number stands beside a person
+    (VISION: no metrics near people). The week page computes who moved from the line's `contacts` and
+    prints none of them (`week_page._moved`)."""
     out = dict(numbers)
     people = numbers.get("people")
     if isinstance(people, list):

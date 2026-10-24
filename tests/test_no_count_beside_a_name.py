@@ -80,11 +80,12 @@ def test_a_week_s_people_are_names_only_in_the_draft_s_order_wherever_a_draft_is
     for found in (drafts.extra_rows(payload, ""), drafts.extra_rows(drafts.unit_json(payload), "")):
         rows = list(found)
         assert "  with      Kari Nordmann · Ola Nordmann" in rows and beside(rows) == [], rows
-    people = drafts.unit_json(payload)["numbers"]["people"]
-    assert people == [
+    carried = drafts.unit_json(payload)["numbers"]
+    assert carried["people"][0]["contacts"] == 12, "the week page computes who moved from it, unprinted"
+    assert drafts.names_only(carried)["people"] == [
         {"name": "Kari Nordmann", "id": "e-kari", "lines": ["l1", "l2"]},
         {"name": "Ola Nordmann", "id": "e-ola", "lines": ["l3"]},
-    ], "a reader's JSON carries no count beside a person, in the draft's order"
+    ], "what a reader prints, in text or JSON: no count beside a person, in the draft's order"
     assert WEEK_BEFORE["people"][0]["contacts"] == 12, "the line is never rewritten"
 
 
@@ -200,8 +201,10 @@ def test_a_week_holds_a_figure_beside_a_person_and_keeps_its_people_by_name_only
     assert dream.HELD in texts and not any("contacts with" in t for t in texts), "its words are dropped"
     people = payload["extra"]["numbers"]["people"]
     assert [p["name"] for p in people] == [p["name"] for p in material["time"]["people"]], "the draft's order"
-    assert all(set(p) == set(drafts.PERSON_KEYS) for p in people), people
-    assert beside(json.dumps(payload["extra"]["numbers"], ensure_ascii=False)) == []
+    assert all(set(p) == set(dream_week.KEPT_PERSON) for p in people), "no count by channel, no days"
+    assert people[0]["contacts"] == material["time"]["people"][0]["contacts"], "for the week page's movers"
+    chats = [t for t in payload["extra"]["numbers"]["threads"] if t["kind"] == drafts.CHAT]
+    assert chats and all("count" not in t for t in chats), "a chat is a person: named without its count"
     prompt = next(p for p in seen["prompts"] if "one week of a personal record" in p)
     assert "Never a number beside a person" in prompt and "4 contacts" not in prompt
 
@@ -243,6 +246,12 @@ def test_no_reader_of_the_week_prints_a_number_beside_a_name(
     code, out, err = run_cli("show", "trip", "2026-06-16")
     assert code == 0 and "Ola Nordmann" in out, out + err
     assert beside(out) == [], beside(out)
+
+    week = serve.Site(lb).respond(f"/week/{W25}", "")  # the week page: who moved, computed, by name only
+    assert week.status == 200
+    body = week.body.decode("utf-8")
+    assert "against the week before, names only" in body and "Kari Nordmann" in body, "the movers"
+    assert beside(body) == [], beside(body)
 
     page = serve.Site(lb).respond(f"/day/{SUNDAY}", "")
     assert page.status == 200
