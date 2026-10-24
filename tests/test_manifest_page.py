@@ -209,7 +209,7 @@ def test_every_manifest_page_is_one_document_that_fetches_nothing(lb: Logbook) -
             assert target.startswith("/") and not target.startswith("//"), (path, target)
         assert site.respond(path, "", if_none_match=response.etag).status == 304
     assert site.respond("/org/nobody", "").status == 404
-    front = _get(site, "/")
+    front = _get(site, "/shelves")  # the shelves listed, under the old navigation
     assert (
         'href="/manifest"' in front
         and '<a href="/people">people</a><a href="/manifest">manifest</a>' in front

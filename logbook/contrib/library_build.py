@@ -67,6 +67,7 @@ LOCK = "building.lock"
 # the doors and shelves of the Library today (RFC 0047 §9 maps each to its door)
 DOORS = (
     "/",
+    "/shelves",
     "/days",
     "/trips",
     "/journeys",

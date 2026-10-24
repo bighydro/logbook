@@ -153,6 +153,8 @@ def rules(css: str, origin: int = 1) -> list[Rule]:
         if prelude.startswith("@media"):
             for inner, declarations in _blocks(body):
                 out.extend(_rule(inner, declarations, origin, len(out), prelude[len("@media") :].strip()))
+        elif prelude == "@font-face":
+            continue  # a face the page loads: it names a typeface and lays out nothing (CHAR_EM holds for it)
         elif prelude.startswith("@"):
             raise ValueError(f"the width check does not read {prelude!r}")
         else:

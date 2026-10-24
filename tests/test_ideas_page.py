@@ -193,7 +193,7 @@ def test_every_ideas_page_is_one_document_that_fetches_nothing(lb: Logbook) -> N
             assert target.startswith("/") and not target.startswith("//"), (path, target)
         assert site.respond(path, "", if_none_match=response.etag).status == 304
     assert site.respond("/idea/nobody", "").status == 404
-    front = _get(site, "/")
+    front = _get(site, "/shelves")  # the shelves listed, under the old navigation
     assert 'href="/ideas"' in front and '<a href="/manifest">manifest</a><a href="/ideas">ideas</a>' in front
 
 
