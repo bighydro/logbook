@@ -173,6 +173,8 @@ READERS: tuple[tuple[str, ...], ...] = (
     ("doctor", "--packet", "--out", OUT),
     ("search", "cabin"),
     ("search", "cabin", "--json"),
+    ("show", "heard", "--day", "2026-06-08"),  # RFC 0046: the texts `sync heard` stored, none in the demo
+    ("show", "heard", "--since", "2026-06-06", "--until", "2026-06-12", "--json"),
     ("import", "inbox", "list"),
     ("import", "inbox", "list", "--json"),
     ("import", "inbox", "clean", "--delete", "--dry-run"),
@@ -310,7 +312,12 @@ PAGES = (
     "/world",
     "/world?from=2026-06-15&to=2026-06-20",
     "/day/2026-06-14",  # a Sunday: the week's draft, when its week has one
+    "/week/2026-W24",  # the week page: its ribbons, the plan, Hold's census
+    "/week/2026-W24?open=1",
     LINE,
+    "/search",
+    "/search?q=kari",
+    "/search?q=kari&kind=note&year=2026",
 )
 
 

@@ -111,6 +111,7 @@ nav:
   - The synthesis prompt: synthesis-prompt.md
   - The relationship reader: relationship.md
   - In a browser: serve.md
+  - The week: week.md
   - "The shelves: promises, goals, agents": shelves.md
   - The acts: acts.md
   - Gifts: gifts.md
@@ -140,6 +141,7 @@ nav:
   - Review: review.md
   - Entities (the profiles): entities.md
   - Search: search.md
+  - What you heard: heard.md
   - The MCP server: mcp.md
   - Backup: backup.md
   - The schedule: schedule.md

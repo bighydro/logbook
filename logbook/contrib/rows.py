@@ -14,7 +14,20 @@ from datetime import datetime
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from ..core import apps, chapter, drafts, events, flights, goals, keepers, signing, speakers, stars, story
+from ..core import (
+    apps,
+    chapter,
+    drafts,
+    events,
+    flights,
+    goals,
+    heard,
+    keepers,
+    signing,
+    speakers,
+    stars,
+    story,
+)
 from ..core.chain import Line, is_sealed, number_text
 from ..core.resolve import Ref
 from . import trip_bundle
@@ -151,6 +164,8 @@ def _line_text(
         text = _highlight_text(p)
     elif line["kind"] == "voice-memo" and p.get("schema") == "voice-memo/v1":
         text = _voice_memo_text(p)
+    elif line["kind"] == heard.KIND and p.get("schema") == heard.SCHEMA:
+        text = heard.row_text(p)
     elif line["kind"] == "video" and p.get("schema") == "video/v1":
         text = _video_text(p)
     elif line["kind"] == "attribution" and p.get("schema") == "attribution/v1":
