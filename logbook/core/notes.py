@@ -1,13 +1,15 @@
 """A note on a day: one `note/v1` line (RFC 0010) in the owner's words, put on a given local day, its
 kind in the profile's `labels`. The one note path for a write that names a day: the MCP tool
 `note_day` (ADR 0022), `logbook day reflect`, a journey's name (`logbook.contrib.journeys.name`) and
-who was there's notes (`logbook.contrib.who_was_there`) append through `write`, and nowhere else.
+who was there's notes (`logbook.contrib.who_was_there`) and the week's intention
+(`logbook.contrib.week_close`) append through `write`, and nowhere else.
 
 The line is what RFC 0010 says a note is: kind `note`, tier 2 whoever writes it, the text as given
 and never filtered, the kind as the one label (`note`, `proposal` or `reflection` through the door;
-`reflection` and `delegation` from `day reflect`, `name` from `add --trip` and the Journeys page), and
-`extra` when the writer has something to add. `source` is the writer's: `mcp` through the door,
-`reflect` from the command, `manual` for a journey's name. `at` is checked by the
+`reflection`, `delegation` and `intention` from `day reflect`, `name` from `add --trip` and the
+Journeys page), `supersedes` when the note takes the place of an earlier one (RFC 0010: the week's
+intention kept again), and `extra` when the writer has something to add. `source` is the writer's:
+`mcp` through the door, `reflect` from the command, `manual` for a journey's name. `at` is checked by the
 rules of `day sign --at` (`signing.moment`: an RFC 3339 moment with an offset or Z, not ahead of this
 clock, not before the day) and must fall on the day as the record defines it, its zone and its
 `day_start` (RFC 0036), since a note on a day is written during it; without it the note is now when
@@ -34,6 +36,7 @@ SCHEMA = "note/v1"
 TIER = 2  # RFC 0010: a note/v1 line is tier 2, whoever writes it
 NOTE, PROPOSAL, REFLECTION, DELEGATION = "note", "proposal", "reflection", "delegation"
 NAME = "name"  # the captain names a journey (ADR 0019): `add --trip`, the Journeys page
+INTENTION = "intention"  # the week's proposal kept on its Sunday (RFC 0043 §8): `day reflect --intention`
 # who was there (RFC 0043 §11, §12): `people not-with`, `people lives-with`, `people lives-in`
 NOT_WITH, LIVES_WITH, LIVES_IN = "not-with", "lives-with", "lives-in"
 
@@ -73,15 +76,18 @@ def write(
     at: str | None = None,
     today: str | None = None,
     extra: Mapping[str, Any] | None = None,
+    supersedes: str | None = None,
 ) -> Line:
     """One note/v1 line on `day` through `Logbook.append`: `text` as given, `label` its one label,
-    `extra` when given, tier 2, at `moment(day, tz, at, today)`; `today` is the record's today unless
-    the caller knows better."""
+    `supersedes` and `extra` when given, tier 2, at `moment(day, tz, at, today)`; `today` is the
+    record's today unless the caller knows better."""
     day = parse_day(day).isoformat()
     tz = str(lb.meta["timezone"])
     days = day_start.of(lb.meta)
     stamp = moment(day, tz, at, today if today is not None else today_in(days), days)
     payload: dict[str, Any] = {"schema": SCHEMA, "text": text, "labels": [label]}
+    if supersedes is not None:
+        payload["supersedes"] = supersedes
     if extra:
         payload["extra"] = dict(extra)
     return lb.append(at=stamp, source=source, kind=KIND, tier=TIER, payload=payload)

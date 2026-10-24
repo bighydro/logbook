@@ -1,6 +1,6 @@
 """The week page of `logbook serve` (RFC 0043 §8, slice D, part 1): `/week/YYYY-Www`, the Sunday's week
-draft (`dream week`, RFC 0036 unit `week`) grown into a page. Read-only: no form, no act, no script;
-closing the week is part 2.
+draft (`dream week`, RFC 0036 unit `week`) grown into a page, and closed there (part 2): one form, no
+script.
 
 Each part is one fold with a summary line complete in its counts, every reader through the page's gate
 (`tiers`), and a part with nothing in it is no heading: the empty ones share one muted row (`Nothing
@@ -19,10 +19,10 @@ from`, as on the Day):
 3. **Goals**: each goal open on the Sunday or touched in the week (`shelf_goals.read`, as the Day reads
    it on the Sunday; `day_rhythm.touched` for each day), the days the week touched it, your latest
    verdict, the verdict the week's draft proposes (pencil), the five verdicts of `goal review` and the
-   command that gives one (no form yet), and the two honest moves in words: change the days (the
-   week's one proposal) or change the sentence (reword it, `goal add --supersedes`, or let it go).
-4. **Next week**: the draft's one proposal (`next_week`), in pencil, headed with the model's name, with
-   its lines.
+   command that gives one, and the two honest moves in words: change the days (the week's one
+   proposal) or change the sentence (reword it, `goal add --supersedes`, or let it go).
+4. **Next week**: the intention kept on the Sunday (`week_close.kept`), in ink, when one was; and the
+   draft's one proposal (`next_week`), in pencil, headed with the model's name, with its lines.
 5. **The question**: the draft's one stale question (`extra.question`, code's), asked once.
 6. **People who moved**: the people whose contacts in this week's draft differ from the week before's
    draft (`numbers.people` of each, through the same gate), the largest change first, five at most;
@@ -36,13 +36,24 @@ from`, as on the Day):
    when the owner runs it: a page never imports it (the import arrow) and never runs it. On the week
    page only.
 
+Then **Close the week** (`close_html`), on `logbook serve` only (a static site carries no form) and only
+where the page reads tier 2 (the goals and the intention are the owner's words): one form posting to
+`/week/YYYY-Www/close`, which the server answers through `week_close.close` behind the write gate of
+every act. Each goal open on the Sunday, begun by it and not reviewed on a day of the week yet, with
+the five verdicts as one choice (none chosen: no verdict), your words on it, the command that writes
+the same line beside it, and the two honest moves when it stalls, the second the `goal add
+--supersedes` command written out for that goal, linked to its page; a goal the week has a verdict on
+already says it, with no choice. Then next week's intention: the words kept already, in ink, above an
+empty field; else the proposal's in the field when it is shown and supported; written only when Keep
+is ticked, with the command beside it. A week whose Sunday is ahead says when it closes and carries no form.
+
 The draft's parts (2, 4, 5, 6 and the proposed verdicts of 3) are behind `with_drafts`: a static site
 built without its drafts (`export site`, #364) reads no draft and says so in one line. A model's
 sentence, a thread's title or the question that would put a digit beside a person's name (`beside`) is
 withheld, its row saying so and naming the line as written.
 
 Left for later, and said on the page: time by project, the sprint's done, rolled and let go (slice C's
-dispositions in the crossing), the pile untouched for 90 days, and closing the week (part 2)."""
+dispositions in the crossing) and the pile untouched for 90 days."""
 
 from __future__ import annotations
 
@@ -56,10 +67,10 @@ from typing import TYPE_CHECKING, Any
 from urllib.parse import quote
 
 from ..core import day as day_reader
-from ..core import day_start, drafts, goals, people
+from ..core import day_start, drafts, goals, notes, people
 from ..core.export import day_range
 from ..core.store import retractions
-from . import day_rhythm, plan, shelf_goals, week_paper
+from . import day_rhythm, plan, shelf_goals, week_close, week_paper
 
 if TYPE_CHECKING:  # the Site passes itself; serve imports this module, never the other way at import
     from .serve import Site
@@ -83,10 +94,9 @@ NO_DRAFTS = (
     " who moved are in the week's draft, left out."
 )
 WITHHELD_BESIDE = "Withheld here: it sets a number beside a person's name."
-LATER = (
-    "Later: time by project, the sprint's done, rolled and let go, the pile untouched for 90 days, and"
-    " closing the week."
-)
+LATER = "Later: time by project, the sprint's done, rolled and let go, and the pile untouched for 90 days."
+CLOSE = "close"  # the anchor of Close the week, where its form sends the owner back
+NO_VERDICT = "no verdict"  # the choice a goal starts at: nothing written for it
 BESIDE = "[\\s(:×x#·,]*"  # what may stand between a name and a number and still be beside it
 WEEK_STYLE = """
 ol.week{list-style:none;padding:0;margin:0}
@@ -97,6 +107,13 @@ p.ids{margin:0;font-size:11.5px;color:var(--mute);overflow-wrap:anywhere}div.pap
 code.cmd{font-family:var(--mono);font-size:12.5px;overflow-wrap:anywhere;white-space:normal}
 ul.plain{list-style:none;padding:0;margin:0 0 6px}ul.plain>li{padding:2px 0;overflow-wrap:anywhere}
 p.later{color:var(--mute);font-size:12.5px;margin:18px 0 6px}
+fieldset.verdict{border:0;border-top:1px solid var(--line);padding:8px 0 4px;margin:0;min-width:0}
+fieldset.verdict legend{padding:0;font-weight:600;overflow-wrap:anywhere;max-width:100%}
+p.choices{display:flex;flex-wrap:wrap;gap:0 14px;margin:4px 0}
+p.choices label,label.keep{display:inline-flex;align-items:center;gap:6px;min-height:44px}
+p.choices input,label.keep input{width:1.2rem;height:1.2rem;margin:0}
+section.close input[type=text]{width:100%;box-sizing:border-box}
+p.ink.kept{margin:4px 0}
 """  # what the week page adds to the Day's stylesheet; every rule keeps to the column
 
 
@@ -237,12 +254,22 @@ def page_week(site: Site, week: str, expanded: bool = False) -> str:
         )
         tier = max(tier, shelf.tier)
     add("Goals", *_goals(site, shelf, days, draft, sunday, names))
+    intention = None
+    if _reads(site.tiers, notes.TIER):
+        intention = site._day_reading(
+            ("intention", sunday), lambda: week_close.kept(site.lb, sunday, site.tiers)
+        )
+        if intention is not None:
+            tier = max(tier, int(intention.get("tier") or 0))
+    if draft is not None or intention is not None:
+        add("Next week", *_next_week(site, draft, intention, sunday, names))
+    else:
+        empty.append("next week")
     if draft is not None:
-        add("Next week", *_next_week(site, draft, names))
         add("The question", *_question(draft, names))
         add("People who moved", *_moved(site, week, monday, draft))
     else:
-        empty += ["next week", "the question", "people who moved"]
+        empty += ["the question", "people who moved"]
     add("The plan", *_plan(site, monday, sunday, today, names))
     held, hold_body, hold_tier = _hold(site)
     add("Hold", held, hold_body)
@@ -274,10 +301,12 @@ def page_week(site: Site, week: str, expanded: bool = False) -> str:
             f'<p class="mute">From {written}, by <span class="sc">{model}</span>: its numbers are the'
             " code's, its sentences pencil.</p>\n"
         )
+    closing = close_html(site, shelf, draft, intention, week, monday, sunday, today, names)
     body = [
         day_rhythm.part("header", "".join(head)),
         day_rhythm.part("record", "".join(folds)),
         day_rhythm.nothing_from(empty),
+        *([day_rhythm.part("close", closing)] if closing else []),
         f'<p class="later">{escape(LATER)}</p>\n',
         f'<p class="foot">{escape(day_rhythm.FOOTER)}</p>\n',
     ]
@@ -495,13 +524,138 @@ def proposal_html(site: Site, draft: Mapping[str, Any], names: Sequence[str]) ->
     return f'<div class="paper"><p class="eyebrow">Pencil <span class="sc">{model}</span></p>\n{said}</div>\n'
 
 
-def _next_week(site: Site, draft: Mapping[str, Any], names: Sequence[str]) -> tuple[str, str]:
-    body = proposal_html(site, draft, names)
+def kept_html(site: Site, intention: Mapping[str, Any], sunday: str, names: Sequence[str]) -> str:
+    """The intention kept on the Sunday, in ink, with its Sunday and its line; withheld when it sets a
+    number beside a person's name, the line as written named."""
+    text = str((intention.get("payload") or {}).get("text") or "")
+    href = site.href(f"/line/{quote(str(intention.get('id')), safe='')}")
+    line = f'{DOT}<a href="{escape(href)}">the line</a>' if href is not None else ""
+    on = escape(sunday_text(sunday))
+    if beside(text, names):
+        return f'<p class="mute">Kept on {on}: {escape(WITHHELD_BESIDE)}{line}</p>\n'
+    return (
+        f'<p class="ink kept">{escape(text)}</p>\n'
+        f'<p class="mute">Kept on {on}: next week\'s intention, in your words{line}</p>\n'
+    )
+
+
+def sunday_text(sunday: str) -> str:
+    """`Sunday 21 June`."""
+    when = date.fromisoformat(sunday)
+    return f"Sunday {when.day} {MONTHS[when.month - 1]}"
+
+
+def close_html(
+    site: Site,
+    shelf: shelf_goals.Shelf | None,
+    draft: Mapping[str, Any] | None,
+    intention: Mapping[str, Any] | None,
+    week: str,
+    monday: str,
+    sunday: str,
+    today: str,
+    names: Sequence[str],
+) -> str:
+    """Close the week: the one form (the module's docstring), or the sentence that says when the week
+    closes; nothing on a static site or a page that does not read tier 2. Every control has the command
+    that writes the same line beside it."""
+    if site.static or shelf is None or not _reads(site.tiers, notes.TIER):
+        return ""
+    out = [f'<section class="close">\n<h2 id="{CLOSE}">Close the week</h2>\n']
+    if sunday > today:
+        out.append(
+            f'<p class="mute">The week closes on its Sunday, {escape(sunday)}: its verdicts and next'
+            " week's intention are written on it or after it.</p>\n</section>\n"
+        )
+        return "".join(out)
+    out.append(
+        '<p class="mute">Give each goal its verdict for the week, and keep next week\'s intention: both'
+        f" are written on {escape(sunday_text(sunday))}. Nothing is written until you press Close the"
+        " week, and if anything is refused, nothing is written at all.</p>\n"
+        f'<form class="close-week" method="post" action="{escape(week_path(week))}/close">\n'
+    )
+    rows = []
+    for g in shelf.goals:
+        if g.state != "open" or not g.start or g.start > sunday:
+            continue
+        text = escape(g.text) if not beside(g.text, names) else escape(WITHHELD_BESIDE)
+        linked = site.link(text, shelf_goals.goal_path(g.line))
+        given = [r for r in g.reviews if monday <= r.day <= sunday]
+        if given:
+            r = given[0]  # the newest first
+            rows.append(
+                f'<fieldset class="verdict"><legend>{linked}</legend>\n'
+                f"<p>Your verdict for the week: {escape(r.disposition)}, {escape(r.day)}.</p>\n</fieldset>\n"
+            )
+            continue
+        field = escape(f"verdict-{g.line}")
+        choices = [
+            f'<label><input type="radio" name="{field}" value="" checked> {NO_VERDICT}</label>',
+            *(f'<label><input type="radio" name="{field}" value="{v}"> {v}</label>' for v in VERDICTS),
+        ]
+        command = f"logbook goal review {g.line} {'|'.join(VERDICTS)} --period week --at {sunday}"
+        reword = f'logbook goal add "…" --horizon {g.horizon} --supersedes {g.line}'
+        rows.append(
+            f'<fieldset class="verdict"><legend>{linked}</legend>\n'
+            f'<p class="choices">{"".join(choices)}</p>\n'
+            f'<input type="text" name="{escape(f"note-{g.line}")}" placeholder="your words on it, if any"'
+            ' aria-label="your words on the verdict" autocomplete="off">\n'
+            f'<p class="ids"><code class="cmd">{escape(command)} --note "…"</code></p>\n'
+            "<p>When it stalls: <b>change the days</b>, keep next week's intention below; or <b>change"
+            f" the sentence</b>, {site.link('reword it', shelf_goals.goal_path(g.line))}:"
+            f' <code class="cmd">{escape(reword)}</code>.</p>\n'
+            "</fieldset>\n"
+        )
+    if rows:
+        out.append("<h3>Goals</h3>\n" + "".join(rows))
+    out.append("<h3>Next week's intention</h3>\n")
+    prefill = ""
+    if intention is not None:
+        out.append(kept_html(site, intention, sunday, names))
+        what = "To change it, write other words below and keep them: they take the place of this one."
+    else:
+        segment = next((x for x in (draft or {}).get("segments") or [] if x.get("part") == "next_week"), None)
+        said = str((segment or {}).get("text") or "")
+        if site.with_drafts and segment is not None and segment.get("supported") and not beside(said, names):
+            prefill = said
+            what = "The week's proposal is in the field, pencil until you keep it; change the words first if"
+            what += " they need it."
+        else:
+            what = "No proposal to keep: say the week ahead in a sentence of your own."
+    command = f'logbook day reflect {sunday} --intention "…"'
+    out.append(
+        f'<p class="mute">{escape(what)}</p>\n'
+        f'<textarea name="intention" rows="3" aria-label="next week\'s intention"'
+        f' spellcheck="true">{escape(prefill, quote=False)}</textarea>\n'
+        '<label class="keep"><input type="checkbox" name="keep" value="1"> Keep these words as next'
+        " week's intention</label>\n"
+        f'<p class="ids"><code class="cmd">{escape(command)}</code></p>\n'
+        '<button name="act" value="close">Close the week</button>\n</form>\n</section>\n'
+    )
+    return "".join(out)
+
+
+def _next_week(
+    site: Site,
+    draft: Mapping[str, Any] | None,
+    intention: Mapping[str, Any] | None,
+    sunday: str,
+    names: Sequence[str],
+) -> tuple[str, str]:
+    pencil = proposal_html(site, draft, names) if draft is not None else ""
+    summary = []
+    body = ""
+    if intention is not None:
+        body = kept_html(site, intention, sunday, names)
+        summary.append("the intention kept")
+    if pencil:
+        body += pencil
+        summary.append("one proposal, pencil")
+        if intention is None:
+            body += '<p class="mute">A proposal only: kept, it is yours; ignored, nothing happens.</p>\n'
     if not body:
         return "", ""
-    return "one proposal, pencil", body + (
-        '<p class="mute">A proposal only: kept, it is yours; ignored, nothing happens.</p>\n'
-    )
+    return DOT.join(summary), body
 
 
 def _question(draft: Mapping[str, Any], names: Sequence[str]) -> tuple[str, str]:

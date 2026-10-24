@@ -400,6 +400,7 @@ FORM_PAGES = {
     "/ideas/status": ("/ideas", "/idea/"),
 }
 DAY_FORM = re.compile(r"^/day/(\d{4}-\d{2}-\d{2})/")
+WEEK_FORM = re.compile(r"^(/week/\d{4}-W\d{2})/close$")  # Close the week, on its week's page
 
 
 def _under(path: str, prefix: str) -> bool:
@@ -416,9 +417,9 @@ def touched(pages: Iterable[str], act: str, status: int, back: str, form: Mappin
     was older than the record (409): the page the form was on, which the reload then renders as it
     stands. Any other refusal changed nothing."""
     if status == 409:
-        day = DAY_FORM.match(act)
+        day, week = DAY_FORM.match(act), WEEK_FORM.match(act)
         on = day.group(1) if day else form.get("day", "") if act in ("/star", "/with") else ""
-        prefixes = (f"/day/{on}",) if on else FORM_PAGES.get(act, ())
+        prefixes = (f"/day/{on}",) if on else (week.group(1),) if week else FORM_PAGES.get(act, ())
         return [t for t in pages if any(_under(t.partition("?")[0], p) for p in prefixes)]
     if status >= 400:
         return []

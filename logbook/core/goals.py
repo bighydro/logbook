@@ -322,18 +322,21 @@ def review(
     period: str | None = None,
     note: str | None = None,
     at: str | None = None,
+    dry_run: bool = False,
 ) -> Reviewed:
     """One `review/v1` line: the verdict `word` on the goal line `goal` names (by id or seq; any line
     of the chain, not retracted), for `period` (the goal's horizon's by default: a year for a life or
     a year goal, a quarter for a quarter goal), with `note` when given, at `at` (`moment`). Nothing is
     written, and `Reviewed.existing` says why, when the goal already has a review for that period on
     that local day (rule 1). `GoalError` says why a review is refused; `HeadMoved` when another
-    writer moved the head under it."""
+    writer moved the head under it. `dry_run` checks all of it and writes nothing, and takes no lock
+    (a caller that checks several before it writes any holds the lock around them all):
+    `Reviewed.line` is None then, `existing` as it would be."""
     value = disposition(word)
     if period is not None and period not in PERIODS:
         raise GoalError(f"--period {period!r} is not one of {', '.join(PERIODS)}")
     said = (note or "").strip() or None
-    with lb.writer():
+    with contextlib.nullcontext() if dry_run else lb.writer():  # a dry run reads, and a reader never locks
         meta = lb.meta
         days, instant = day_start.of(meta), now()
         with lb.index() as idx:
@@ -368,6 +371,8 @@ def review(
         problems = validate_review(payload)
         if problems:
             raise GoalError(f"the review would not be a {REVIEW_SCHEMA}: {problems[0]}; nothing was written")
+        if dry_run:
+            return Reviewed(None, None, current)
         same_head(lb, meta, "the goal and its reviews were read")
         line = lb.append(
             at=when, source=SOURCE, kind=REVIEW, tier=TIER, payload=payload, recorded_at=stamp(instant)
