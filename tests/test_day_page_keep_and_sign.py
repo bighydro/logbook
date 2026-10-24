@@ -105,6 +105,12 @@ def _text(markup: str) -> str:
     return " ".join(html.unescape(re.sub(r"<[^>]+>", " ", markup)).split())
 
 
+def _said(response: serve.Response) -> str:
+    """The one sentence of a refusal, as the page says it."""
+    found = re.search(r"<h1>\d{3}</h1>\n<p>(.*?)</p>", response.body.decode("utf-8"), re.S)
+    return "" if found is None else _text(found.group(1))
+
+
 def _seq(lb: Logbook) -> int:
     return int(Logbook(lb.root).meta["seq"])
 
@@ -448,10 +454,10 @@ def test_only_this_machine_and_the_owners_named_phone_may_post(closing: Logbook)
     assert other.status == 403, "a login the setting does not name"
     framed = _post(site, fields, origin=phones.ORIGIN, asked=phones._asked(dest="iframe"))
     assert framed.status == 403, "a form posted from inside a frame"
-    assert _seq(closing) == seq + 1, "nothing written but the setting"
+    assert _seq(closing) == seq, "nothing written"
     named = _post(site, fields, origin=phones.ORIGIN, asked=phones._asked())
     assert named.status == 303, named.body[:400]
-    kinds = [(x["kind"], _labels(x)) for x in _after(closing, seq + 1)]
+    kinds = [(x["kind"], _labels(x)) for x in _after(closing, seq)]
     assert kinds == [("note", ["learned"]), ("note", ["word"]), ("note", ["task"]), ("signed-day", [])]
 
 
@@ -479,11 +485,8 @@ def test_dream_the_day_so_far_writes_the_evening_draft_in_pencil_above_the_form(
     evening: Logbook, monkeypatch: pytest.MonkeyPatch, no_network: list[str]
 ) -> None:
     def answer(material: dict[str, Any]) -> dict[str, Any]:
-        _stays, notes_, _photos = dreams._refs(material)
-        return {
-            "story": [{"text": "The crew list took the evening.", "evidence": notes_[:1]}],
-            "learned": [{"text": "Saturday needs four crew.", "evidence": notes_[:1]}],
-        }
+        learned = [{"text": "Saturday needs a full crew.", "evidence": dreams._refs(material)[1][:1]}]
+        return dreams._answer(material, learned=learned)
 
     seen = dreams._fake(monkeypatch, answer)
     site = _site(evening, EVENING)
@@ -493,16 +496,17 @@ def test_dream_the_day_so_far_writes_the_evening_draft_in_pencil_above_the_form(
     assert f'action="/day/{DAY}/reflect"' in button and "Dream the day so far" in button
     seq = _seq(evening)
     response = _post(site, {"act": "dream"}, to="reflect")
-    assert response.status == 303 and response.location == f"/day/{DAY}#pencil", response.body[:400]
+    assert response.status == 303, _said(response)
+    assert response.location == f"/day/{DAY}#pencil"
     assert no_network == [] and len(seen["calls"]) == 1
     (draft,) = _after(evening, seq)
     assert draft["kind"] == drafts.KIND and draft["payload"]["extra"]["evening"] is True
     page = _page(site)
-    pencil = page.index("Saturday needs four crew.")
+    pencil = page.index("Saturday needs a full crew.")
     assert pencil < page.index('<form class="sign"'), "the pencil above the form"
     assert page.rfind('<div class="paper"', 0, pencil) != -1, "in pencil"
     sign = _form(page, "sign")
-    assert "Saturday needs four crew." in sign and _hidden(sign)["draft"] == draft["id"]
+    assert "Saturday needs a full crew." in sign and _hidden(sign)["draft"] == draft["id"]
 
 
 def test_without_a_dream_entry_there_is_no_button_and_nothing_is_sent(

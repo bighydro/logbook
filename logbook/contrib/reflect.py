@@ -62,7 +62,7 @@ from ..core import notes, sealing, signing
 from ..core.chain import Line
 from ..core.drafts import KIND as DRAFT_KIND
 from ..core.export import parse_day
-from ..core.store import RETRACTION, Logbook, retractions
+from ..core.store import RETRACTION, HeadMoved, Logbook, retractions
 from . import dream_events, keep, promises
 
 SOURCE = "reflect"  # the `source` of the lines `day reflect` writes
@@ -811,9 +811,11 @@ def close(
     accepted events as event lines (`dream_events.write`), what is kept (`keep.write`), then the
     signature through `signing.sign` with what `signature` says, never a draft line confirmed (`ink`),
     at `at` or now. `say` hears what the command prints as it goes. HeadMoved and another writer are
-    the store's own errors; nothing is retried."""
+    the store's own errors; nothing is retried. A head moved while all of it was read and checked (by
+    a writer that did not take the lock) is HeadMoved before the first line, and nothing is written."""
     zone = ZoneInfo(str(lb.meta["timezone"]))
     with lb.writer():
+        read = lb.meta
         lines, retracted = day_lines(lb, day)
         page = on_page(lines, retracted)
         gone = [p for p in accepted if p.kind == DISPOSITION and p.line not in page]
@@ -823,6 +825,13 @@ def close(
         items = keep.prepared(lb, day, keeping) if keeping else []
         with lb.index() as idx:
             earlier = signing.signature_of(idx, day, str(lb.meta["owner_id"]))
+        now = lb.meta
+        if now["head"] != read["head"]:
+            raise HeadMoved(
+                f"the record's head moved from seq {read['seq']} to seq {now['seq']} while the close of"
+                f" {day} was read and checked, so what it would write is not what was read; nothing was"
+                " written"
+            )
         note = r.note
         if note is None:
             note = write(lb, day, r, at, today)
