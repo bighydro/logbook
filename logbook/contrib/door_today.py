@@ -43,7 +43,7 @@ from ..core import day as day_reader
 from ..core import day_start, keepers, notes, people, reading, signing, stars, weather
 from ..core.chain import Line
 from ..core.store import retractions
-from . import day_rhythm, ideas, journeys, promises, reflect, shelf_promises
+from . import day_rhythm, entities, ideas, journeys, promises, reflect, shelf_promises
 from . import plan as plan_reader
 
 if TYPE_CHECKING:  # the Site passes itself; serve imports this module, never the other way at import
@@ -359,10 +359,11 @@ def year_ago(site: Site, day: str, signed: frozenset[str]) -> dict[str, Any] | N
     a starred photo or a journey; None when no year does. Through the gate: a count on the index for each
     year, the lines of a year with any, and one reading of the day chosen."""
     lb, tiers = site.lb, site.tiers
-    whole = site._record_days()
-    if whole is None:
+    with lb.index() as idx:
+        _total, earliest, _latest = idx.totals()
+    if earliest is None:
         return None
-    first = whole[0]
+    first = day_start.of(lb.meta).day_of(earliest)  # the record's first line, tracked or not
     with lb.index() as idx:
         retracted = retractions(idx.retractions())
         named = journeys.names_in(reading.crossing(idx.by_kind(notes.KIND), tiers), frozenset(retracted))
@@ -666,8 +667,8 @@ def _words(
     )
     company = day_reader.company_of_day(data)
     with_ = ", ".join(person(c) for c in company) if company else "Nobody the record saw yet."
-    touched = _ideas_touched(site, day)
-    moved = ", ".join(escape(t) for t in touched) if touched else "No idea touched yet today."
+    touched = site._day_reading(("ideas moved", day), lambda: ideas_moved(site, day))
+    moved = "; ".join(escape(t) for t in touched) if touched else "No idea moved yet today."
     out.append(
         '<dl class="questions">\n'
         f"<dt>What did I promise?</dt><dd>{escape(promised)}</dd>\n"
@@ -681,17 +682,21 @@ def _words(
     return "".join(out)
 
 
-def _ideas_touched(site: Site, day: str) -> list[str]:
-    """The ideas the day's lines touched (the Ideas shelf's touches, `ideas.read`), by name; none read
-    when the record names no idea."""
-    if not site._day_reading(("ideas named",), lambda: bool(ideas.named(site.lb, site.tiers))):
+def ideas_moved(site: Site, day: str) -> list[str]:
+    """How the ideas moved on `day`: each idea the record names whose status the owner set on the day
+    (`status idea`, the Ideas shelf's act), by name and the stage it moved to, through the gate. The
+    status lines of the day, by kind on the index: never the Ideas shelf's whole-record reading."""
+    named = ideas.named(site.lb, site.tiers)
+    if not named:
         return []
-    rec = site._idea_record()
-    seen: dict[str, str] = {}
-    for t in rec.touches:
-        if t.day == day and t.idea in rec.ideas:
-            seen.setdefault(t.idea, rec.ideas[t.idea].label)
-    return list(seen.values())
+    with site.lb.index() as idx:
+        lines = reading.crossing(idx.by_kind(entities.STATUS, day, day), site.tiers)
+        marks = idx.retractions()
+    moved: dict[str, str] = {}
+    for (kind, idea), history in entities.statuses([*marks, *lines]).items():
+        if kind == entities.IDEA and idea in named and history:
+            moved[idea] = f"{named[idea].label}, now {history[-1].status}"
+    return list(moved.values())
 
 
 def _acts(site: Site, day: str) -> str:

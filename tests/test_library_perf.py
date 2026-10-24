@@ -170,3 +170,41 @@ def test_an_index_built_before_its_new_indexes_is_given_them_by_the_library(
             for row in idx.db.execute("EXPLAIN QUERY PLAN SELECT file FROM lines WHERE id = ?", ("x",))
         )
         assert "lines_id" in plan
+
+
+@pytest.mark.parametrize("lines", SIZES)
+def test_today_reads_the_days_it_shows_and_once_a_head(
+    lines: int, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Today (RFC 0047 §4.1) reads today, the night before it, the days it looks back to and ahead,
+    and the readings the Day keeps (the fortnight's promises, the replies owed): never the whole
+    record, and nothing again at the same head."""
+    lb, _built = _record(tmp_path, monkeypatch, lines)
+    site = serve.Site(lb, now=lambda: bench.NOW)
+    site.respond("/favicon.ico")
+    reads = Reads(monkeypatch)
+    first = site.respond("/")
+    assert first.status == 200
+    assert reads.folds <= 24, reads.folds
+    assert "message" not in reads.whole, dict(reads.whole)
+    marks = {"resolution", "retraction", "signed-day", "star", "keeper", "chapter", "goal", "review"}
+    most = sorted(reads.lines.items(), key=lambda kv: -kv[1])[:12]
+    assert sum(n for (kind, _source), n in reads.lines.items() if kind not in marks) < lines / 10, most
+    reads.clear()
+    again = site.respond("/")
+    assert again.body == first.body and reads.read == 0, dict(reads.lines)
+
+
+@pytest.mark.parametrize("lines", SIZES)
+def test_the_shelves_behind_the_gear_read_once_a_head(
+    lines: int, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`/shelves`, the front page as it was: a count on the index and the record's first and last day."""
+    lb, _built = _record(tmp_path, monkeypatch, lines)
+    site = serve.Site(lb, now=lambda: bench.NOW)
+    site.respond("/favicon.ico")
+    reads = Reads(monkeypatch)
+    first = site.respond("/shelves")
+    assert first.status == 200 and reads.read <= 2, dict(reads.lines)
+    reads.clear()
+    assert site.respond("/shelves").body == first.body and reads.read == 0, dict(reads.lines)
