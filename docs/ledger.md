@@ -70,7 +70,9 @@ calendar month, clipped to them; a month with none says so.
 ## The Day
 
 When a day has a transaction line, `logbook day` gains one line after the health line: the totals
-per currency, how many transactions, the merchants.
+per currency, how many transactions, the merchants. A receipt you accepted in `review receipts` whose
+payment a payment source has since delivered is that payment's evidence, never a second payment: the
+day says `1 with its receipt`, and its JSON names the pair under `spend.receipts` ([receipts](receipts.md)).
 
 ```
   health        sleep 7.2 h · 8,412 steps · resting 55 bpm

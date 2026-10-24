@@ -14,8 +14,9 @@ the record does not name as a person (RFC 0006: an address a `resolution/v1` lin
 person, or the owner's own, is never one), at an order or no-reply address (`ROLES`) or on a domain
 an org of the Manifest binds (`entities.bindings`); an org there is a plus to the confidence, and its
 name the merchant's. Else the merchant is the display name, the generic words out, else the first
-label of the sender's registered domain. The queue names a merchant by its domain (the sender's
-registered domain) and never shows a sender's address: not in its rows, not in its JSON.
+label of the sender's registered domain, else `a sender` (a host with no registered domain, an
+address with no domain). The queue names a merchant by its domain (the sender's registered domain)
+and never shows a sender's address: not in its rows, not in its JSON, not as a merchant.
 
 **The amount** is read by rules, never by a model (`amounts`): a currency code or symbol (`CODES`,
 `SYMBOLS`) before or after a number in the common forms (`CHF 1'234.50`, `€ 12,90`, `$12.90`, `NOK
@@ -32,8 +33,10 @@ signs them, a purchase negative and a refund positive. Every rule is linear in t
 `transaction/v1` line within `NEAR` (two days) of the mail, its merchant naming the line's or the
 line's naming its, is shown as already in the record with the line that holds it, never numbered and
 never written. A receipt's own accepted line is matched the same way against the other sources: when
-a payment source later delivers the same payment, the queue lists the pair as covered; the source's
-line wins, and the receipt's line is the one to take back, `logbook repair retract SEQ`, which the
+a payment source later delivers the same payment, the queue lists the pair as covered (one source
+line covers one receipt, paired as `ledger.receipts_held` pairs them for every reader that sums the
+ledger, which counts the pair once already); the source's line wins, and the receipt's line is the
+one to take back, `logbook repair retract SEQ`, which the
 row prints (a superseding line would be a second payment; docs/receipts.md says what an amendment of
 RFC 0021 would do instead).
 
@@ -57,7 +60,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
-from ..core import day_start, policy, present, resolve, sealing, stays
+from ..core import day_start, ledger, policy, present, resolve, sealing, stays
 from ..core.chain import Line, is_sealed
 from ..core.index import Index
 from ..core.store import Logbook, now_utc, retractions
@@ -73,8 +76,8 @@ NOT_A_PAYMENT = "not-a-payment"  # the no's label
 NO_TEXT = "not a payment"  # the no's words: no amount, no currency, no merchant
 TIER = 3  # RFC 0021: money, always
 SINCE_DAYS = 90
-NEAR = timedelta(days=2)
-CENT = 0.005
+NEAR = ledger.NEAR  # the rule a reader that sums the ledger holds a receipt to (`ledger.same_payment`)
+CENT = ledger.CENT
 
 CODES = ("CHF", "EUR", "NOK", "USD", "GBP", "SEK", "DKK", "ISK", "PLN", "CAD", "AUD", "NZD", "JPY")
 SYMBOLS = {"€": "EUR", "$": "USD", "US$": "USD", "£": "GBP"}
@@ -85,13 +88,8 @@ ROLES = frozenset(
         "receipt", "receipts", "sales", "shop", "store",
     }
 )  # fmt: skip
-GENERIC = frozenset(
-    {
-        "billing", "customer", "do", "donotreply", "no", "no-reply", "noreply", "not", "notifications",
-        "order", "orders", "receipt", "receipts", "reply", "sales", "service", "shop", "store", "support",
-        "team", "the",
-    }
-)  # fmt: skip
+GENERIC = ledger.GENERIC
+NO_SENDER = "a sender"  # the merchant of a sender whose name and domain give none
 MARKERS = (  # each from a word's start; `reçu` to its end too, so `recurring` is none
     r"receipt", r"your order", r"order (?:#|no\.?|number|confirmation|confirmed)", r"thank(?:s| you) for your"
     r" (?:order|purchase)", r"invoice", r"payment (?:received|confirmation|confirmed)", r"kvittering",
@@ -391,7 +389,8 @@ def role(email: str) -> bool:
 
 def merchant_of(sender: Mapping[str, Any], org: str | None = None, suffixes: Iterable[str] = ()) -> str:
     """The merchant's name: the Manifest's org on the domain, else the display name with the generic
-    words out, else the first label of the sender's registered domain."""
+    words out, else the first label of the sender's registered domain, else `a sender` (`x@localhost`,
+    an address with no domain): a label shown to a reader, never the address."""
     if org:
         return org
     name = sender.get("name")
@@ -399,25 +398,13 @@ def merchant_of(sender: Mapping[str, Any], org: str | None = None, suffixes: Ite
         kept = [w for w in name.split() if entities.fold(w).strip(".,:;") not in GENERIC and "@" not in w]
         if kept:
             return " ".join(kept)
-    email = str(sender.get("email") or "")
-    registered = entities.registered_domain(domain_of(email), suffixes) or domain_of(email)
-    label = registered.split(".", 1)[0]
-    return label[:1].upper() + label[1:] if label else email
+    registered = entities.registered_domain(domain_of(str(sender.get("email") or "")), suffixes)
+    label = registered.split(".", 1)[0] if registered else ""
+    return label[:1].upper() + label[1:] if label else NO_SENDER
 
 
-def fold(text: str) -> str:
-    """Letters and digits alone, folded: `FJORDKIOSK AS` → `fjordkioskas`."""
-    return "".join(c for c in entities.fold(text) if c.isalnum())
-
-
-def same_merchant(keys: Iterable[str], merchant: object) -> bool:
-    """Whether one of a candidate's folded names is in the line's merchant, or the line's in it."""
-    if not isinstance(merchant, str):
-        return False
-    other = fold(merchant)
-    if len(other) < 3:
-        return False
-    return any(len(k) >= 3 and k not in GENERIC and (k in other or other in k) for k in keys)
+fold = ledger.merchant_key  # letters and digits alone, folded: `FJORDKIOSK AS` → `fjordkioskas`
+same_merchant = ledger.same_merchant  # a candidate's folded name in the line's merchant, or the line's in it
 
 
 # -- the reading -------------------------------------------------------------------------------------------
@@ -466,6 +453,8 @@ def read(
         money = _money(lb, idx, retracted, _day_before(first, NEAR.days))
         noes = _noes(lb, idx, retracted)
         mails = list(_opened(lb, _standing(idx, MAIL, retracted, first, source=None)))
+        pairs = ledger.held_through(ledger.held_of(idx), tiers)  # as every reader that sums the ledger
+        payers = idx.by_ids({h.payment for h in pairs.values()})
     own = {m.mail for m in money if m.source == SOURCE and m.mail}
     report.accepted = len({m for m in own if m in {str(line["id"]) for line in mails}})
     report.rejected = len({m for m in noes if m in {str(line["id"]) for line in mails}})
@@ -485,11 +474,16 @@ def read(
             found.append(candidate)
     report.proposals = [_with(c, n, None) for n, c in enumerate(found, start=1)]
     for m in money:
-        if m.source != SOURCE:
-            continue
-        keys = (fold(m.merchant),) if m.merchant else ()
-        held = _held(keys, m.amount, m.currency, m.at, [o for o in money if o.source != SOURCE], m.mail)
-        if held is not None:
+        pair = pairs.get(m.line) if m.source == SOURCE else None
+        payer = payers.get(pair.payment) if pair is not None else None
+        if payer is not None:
+            merchant = _dict(payer.get("payload")).get("merchant")
+            held = Held(
+                str(payer["id"]),
+                int(payer["seq"]),
+                str(payer.get("source") or ""),
+                merchant if isinstance(merchant, str) else None,
+            )
             report.covered.append(
                 Covered(
                     m.line, m.seq, m.mail, days.day(m.at).isoformat(), m.merchant, m.amount, m.currency, held
@@ -658,7 +652,8 @@ def _candidate(
     if body is None:
         why.append("subject only: the line keeps no body")
     merchant = merchant_of(sender, org, suffixes)
-    keys = tuple(dict.fromkeys(k for k in (fold(merchant), fold(registered.split(".", 1)[0])) if k))
+    names = (merchant if merchant != NO_SENDER else "", registered.split(".", 1)[0])
+    keys = tuple(dict.fromkeys(k for k in map(fold, names) if k))
     return Candidate(
         None,
         str(line["id"]),
@@ -757,7 +752,8 @@ def accept(lb: Logbook, report: Report, chosen: Iterable[Candidate]) -> list[Wri
             )
         first: dict[tuple[str, str, str, float], Candidate] = {}
         for c in chosen:
-            key = (fold(c.merchant), c.day, c.currency, round(c.amount, 2))
+            who = fold(c.merchant) if c.merchant != NO_SENDER else f"@{c.domain}"  # two unnamed are two
+            key = (who, c.day, c.currency, round(c.amount, 2))
             if key in first:
                 written.append(Written("duplicate", c, None, first[key].number))
                 continue

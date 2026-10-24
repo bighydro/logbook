@@ -218,6 +218,26 @@ def test_the_merchant_is_the_display_name_else_the_domain() -> None:
     assert receipts.merchant_of({"email": "no-reply@bokhylla.example.org", "name": "No-Reply"}) == "Bokhylla"
 
 
+@pytest.mark.parametrize(
+    ("sender", "label"),
+    [
+        ({"email": "noreply@example.org"}, "Example"),  # the registered domain's first label
+        ({"email": "noreply@example.org", "name": "noreply@example.org"}, "Example"),
+        ({"email": "x@localhost"}, "a sender"),  # a host with no registered domain
+        ({"email": "x@localhost", "name": "No Reply"}, "a sender"),
+        ({"email": "x"}, "a sender"),  # an address with no domain
+        ({"email": "x@"}, "a sender"),
+        ({"email": ""}, "a sender"),
+        ({}, "a sender"),
+    ],
+)
+def test_a_sender_s_label_is_never_its_address(sender: dict[str, str], label: str) -> None:
+    """The fallback after the org and the name: the registered domain's first label, else `a sender`."""
+    found = receipts.merchant_of(sender)
+    assert found == label
+    assert "@" not in found and found.casefold() not in {"x", "x@", "x@localhost", "localhost"}
+
+
 # -- the queue ---------------------------------------------------------------------------------------------
 
 

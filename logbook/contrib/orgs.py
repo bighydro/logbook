@@ -43,13 +43,13 @@ import json
 import os
 import re
 from collections import Counter
-from collections.abc import Iterator, Mapping, Sequence
+from collections.abc import Collection, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import date
 from typing import Any
 from urllib.parse import urlsplit
 
-from ..core import day_start, kept, notes, present, stays
+from ..core import day_start, kept, ledger, notes, present, stays
 from ..core.chain import Line
 from ..core.index import Index
 from ..core.resolve import Identity, Ref
@@ -554,6 +554,7 @@ def shelf_of(lb: Logbook, rec: Record, year: str | None = None, portfolio: str |
     with lb.index() as idx:
         lines = idx.by_seqs({t.seq for t in rec.touches if t.kind in DOCUMENT_KINDS or t.kind == TRANSACTION})
         lines.update(idx.by_seqs({t.seq for t in lasts.values() if t is not None}))
+        pairs = ledger.held_through(ledger.held_of(idx), rec.gate.tiers) if rec.gate.money else {}
     rows: list[Row] = []
     for org in rec.orgs.values():
         mine = by_org.get(org.id, [])
@@ -562,7 +563,7 @@ def shelf_of(lb: Logbook, rec: Record, year: str | None = None, portfolio: str |
         current = rec.current(org.id)
         stale, stale_since = _staleness(rec, current, last)
         ordered = [lines[t.seq] for t in sorted(mine, key=lambda t: t.seq) if t.seq in lines]
-        figures = money_of(ordered, {t.seq: t for t in mine}) if rec.gate.money else None
+        figures = money_of(ordered, {t.seq: t for t in mine}, pairs) if rec.gate.money else None
         rows.append(
             Row(
                 org,
@@ -900,12 +901,17 @@ def page_of(lb: Logbook, rec: Record, org_id: str) -> Page:
     shown = [t for t in mine if rec.shown(t)]
     with lb.index() as idx:
         lines = idx.by_seqs(t.seq for t in mine)
+        pairs = ledger.held_through(
+            ledger.held_of(idx), rec.gate.tiers
+        )  # a receipt is its payment's evidence
     by_seq = {t.seq: t for t in mine}
+    evidence = ledger.receipts_of(pairs)
     timeline = []
     for t in sorted(shown, key=lambda t: (t.day, str(lines[t.seq].get("at")), t.seq), reverse=True):
         text = what(lines[t.seq], rec.gate)
-        if text is not None:
+        if text is not None and t.line not in pairs:
             line = lines[t.seq]
+            text += " · with its receipt" if t.line in evidence else ""
             timeline.append(Item(t.day, str(line.get("at")), t.kind, t.source, t.line, text, t.via, t.tier))
     ordered = [lines[s] for s in sorted(lines)]
     current = rec.current(org_id)
@@ -935,7 +941,7 @@ def page_of(lb: Logbook, rec: Record, org_id: str) -> Page:
         len({u for t in shown for u in t.unplaced}),
         introductions([lines[t.seq] for t in sorted(shown, key=lambda t: t.seq)], by_seq, rec),
         documents(ordered, shown),
-        money_of(ordered, by_seq) if rec.gate.money else None,
+        money_of(ordered, by_seq, pairs) if rec.gate.money else None,
         stale,
         stale_since,
         rec.on.isoformat(),
@@ -1045,12 +1051,16 @@ def _repository(url: str) -> str | None:
     return f"{host}/{segments[0]}/{segments[1].removesuffix('.git')}"
 
 
-def money_of(lines: Sequence[Line], by_seq: Mapping[int, Touch]) -> dict[str, dict[str, dict[str, float]]]:
+def money_of(
+    lines: Sequence[Line], by_seq: Mapping[int, Touch], held: Collection[str] = ()
+) -> dict[str, dict[str, dict[str, float]]]:
     """The ledger's in, out and net per year and currency, derived at read time from the ledger
-    lines that touch the org (its `merchant` refs); a line the source marks deleted is not counted."""
+    lines that touch the org (its `merchant` refs); a line the source marks deleted is not counted,
+    nor a receipt's line in `held` (`ledger.held_of`: a payment source's line holds it, and the
+    payment is that line's, counted once wherever it is)."""
     out: dict[str, dict[str, dict[str, float]]] = {}
     for line in lines:
-        if line.get("kind") != TRANSACTION or int(line["seq"]) not in by_seq:
+        if line.get("kind") != TRANSACTION or int(line["seq"]) not in by_seq or str(line["id"]) in held:
             continue
         payload = line.get("payload") or {}
         amount, currency = payload.get("amount"), payload.get("currency")
