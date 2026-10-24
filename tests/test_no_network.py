@@ -315,6 +315,9 @@ PAGES = (
     "/week/2026-W24",  # the week page: its ribbons, the plan, Hold's census
     "/week/2026-W24?open=1",
     LINE,
+    "/search",
+    "/search?q=kari",
+    "/search?q=kari&kind=note&year=2026",
 )
 
 
