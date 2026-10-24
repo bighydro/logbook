@@ -268,11 +268,7 @@ def row(
     raw_id = payload.get("raw_id")
     if raw_id is not None and sealed:
         raw_id = None if blind is None else blind(str(raw_id))
-    media = (
-        _field(payload.get("media"), "sha256")
-        or _field(payload.get("content"), "sha256")
-        or _field(_field(payload.get("extra"), "media"), "sha256")
-    )
+    media = media_of(payload)
     lat, lon = _coordinate(payload.get("lat")), _coordinate(payload.get("lon"))
     if lat is None or lon is None:
         lat = lon = None
@@ -307,6 +303,16 @@ def text_row(line: Line, root: Path, line_row: Row) -> TextRow | None:
     if body is None:
         return None
     return (line_row[0], body, line_row[4], line_row[6], line_row[3])
+
+
+def media_of(payload: dict[str, Any]) -> str | None:
+    """The digest of the one attachment a line points at, as the `media` column keeps it:
+    `payload.media`, else `payload.content`, else `extra.media` (SPEC §1.1)."""
+    return _string(
+        _field(payload.get("media"), "sha256")
+        or _field(payload.get("content"), "sha256")
+        or _field(_field(payload.get("extra"), "media"), "sha256")
+    )
 
 
 def _field(obj: object, key: str) -> object:

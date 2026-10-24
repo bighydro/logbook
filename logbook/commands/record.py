@@ -886,6 +886,12 @@ def doctor_arguments(sub: Subparsers) -> None:
         " policy/plausible.json overrides per source); nothing is changed",
     )
     which.add_argument(
+        "--attachments",
+        action="store_true",
+        help="list the lines whose attachment the store lacks, by source: id, kind, time and the file's"
+        " digest; nothing is changed (docs/attachments.md)",
+    )
+    which.add_argument(
         "--packet",
         action="store_true",
         help="a diagnostic to send a collaborator: this machine, the versions, the record's line count and"
@@ -914,6 +920,11 @@ def cmd_doctor(a: argparse.Namespace) -> None:
         lb = None
     if getattr(a, "packet", False):
         _doctor_packet(lb, out)
+        return
+    if getattr(a, "attachments", False):
+        if lb is None:
+            sys.exit("no logbook found; run `logbook init`, or set LOGBOOK_HOME")
+        doctor_checks.report_attachments(lb, sys.stdout)
         return
     if getattr(a, "implausible", False):
         if lb is None:
