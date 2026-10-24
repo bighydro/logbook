@@ -8,6 +8,7 @@ import contextlib
 import json
 import os
 import sys
+from collections import Counter
 from collections.abc import Callable, Iterable, Iterator, Mapping
 from datetime import UTC, date, datetime
 from pathlib import Path, PurePosixPath
@@ -1273,6 +1274,76 @@ def _inside(path: Path, folder: Path) -> bool:
     except ValueError:
         return False
     return True
+
+
+def pickup_arguments(sub: Subparsers) -> None:
+    """`logbook import pickup FOLDER [--write] [--source NAME] [--tier N] [--keep]` (docs/crossing.md)."""
+    v = sub.add_parser(
+        "pickup",
+        help="a folder of call transcripts collected from the receiving side, moved into the record;"
+        " a dry run unless --write",
+        description="every transcript file under FOLDER (transcript/v1 JSON, WebVTT, SRT, Markdown) becomes"
+        " a transcript line with its own source, through the transcript adapter; a file already taken is"
+        " skipped by its hash. A dry run unless --write, which stores each call's text, appends its line"
+        " and removes the file from the folder (--keep leaves it). docs/crossing.md, The pickup",
+    )
+    v.add_argument("path", metavar="FOLDER", help="the folder the Purser filled; outside the record")
+    v.add_argument("--write", action="store_true", help="take them: store, append, then move the files out")
+    v.add_argument(
+        "--source", help="the provider of a file that names none (a .vtt, .srt or .md): granola, fireflies, …"
+    )
+    v.add_argument(
+        "--tier", type=int, choices=(1, 2, 3), help="the tier of every line (default: the file's, else 3)"
+    )
+    v.add_argument("--keep", action="store_true", help="with --write: leave the files where they are")
+    v.set_defaults(fn=cmd_pickup)
+
+
+def cmd_pickup(a: argparse.Namespace) -> None:
+    """`import pickup`: what each file under the folder is to be (`logbook/contrib/pickup.py`), counted;
+    with `--write` the files to take are taken, and moved out of the folder unless `--keep`."""
+    from ..contrib import pickup
+
+    lb = Logbook.find()
+    folder = Path(a.path).expanduser()
+    try:
+        found = pickup.survey(lb, folder, source=a.source, tier=a.tier)
+    except pickup.PickupError as e:
+        print(f"import pickup: {e}", file=sys.stderr)
+        sys.exit(2)
+    statuses = Counter(f.status for f in found)
+    print(f"pickup {_under_home(folder)}: {_plural(len(found), 'file')}")
+    listed = ", ".join(f"{source} {n}" for source, n in pickup.by_source(found))
+    print(f"  {statuses[pickup.TAKE]} to take{f': {listed}' if listed else ''}")
+    phrases = (
+        (pickup.TAKEN, "already taken (by hash)"),
+        (pickup.IN_RECORD, "already in the record (same source and raw_id), left in the folder"),
+        (pickup.NO_SOURCE, "without a source (name it with --source)"),
+        (pickup.NO_START, "without a start"),
+        (pickup.NOT_TRANSCRIPT, "not a transcript"),
+    )
+    skipped = [f"{statuses[status]} {phrase}" for status, phrase in phrases if statuses[status]]
+    if skipped:
+        print("  skipped: " + ", ".join(skipped))
+    if not a.write:
+        print("dry run: nothing written; --write takes them")
+        return
+    done = pickup.take(lb, found, keep=a.keep)
+    moved = (
+        "the files kept where they are"
+        if a.keep
+        else f"{_plural(done.removed, 'file')} removed from the folder"
+    )
+    print(
+        f"took {_plural(statuses[pickup.TAKE], 'file')}: {_plural(done.appended, 'line')} appended"
+        f"{f' ({listed})' if listed else ''}; {moved}"
+    )
+    if done.removed_before:
+        print(f"  {done.removed_before} already taken, removed from the folder")
+    for text in done.failed:
+        print(f"  could not remove {text}", file=sys.stderr)
+    if done.failed:
+        sys.exit(1)
 
 
 def attach_arguments(sub: Subparsers) -> None:

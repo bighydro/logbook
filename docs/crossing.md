@@ -109,3 +109,52 @@ that more than one export was written into may hold files its manifest does not 
 `trip.json` among the listed files, and takes `--force` too. `logbook export notion`
 ([export for Notion](export-notion.md)) writes its folder the same way, its own manifest listing its
 files, and replaces only an earlier folder of its own.
+
+## The pickup
+
+What crosses can come back. The receiving side keeps the calls it was handed or recorded itself
+(Granola's, Fireflies'), and the Purser, a separate program on your Mac, collects them into a folder of
+its own. Until they are moved in, they wait outside the record. `logbook import pickup` moves them:
+
+```bash
+logbook import pickup ~/Purser/pickup                       # what it would take; nothing written
+logbook import pickup ~/Purser/pickup --write               # take them: store, append, move out
+logbook import pickup ~/Purser/pickup --write --source granola   # the provider of the files that name none
+logbook import pickup ~/Purser/pickup --write --keep        # take them, leave the files where they are
+```
+
+```
+pickup ~/Purser/pickup: 61 files
+  58 to take: granola 31, fireflies 27
+  skipped: 2 already taken (by hash), 1 without a source (name it with --source)
+took 58 files: 58 lines appended (granola 31, fireflies 27); 58 files removed from the folder
+```
+
+Every file below the folder, in path order, subfolders included, is read by the `transcript` adapter,
+the one mapping every transcript source shares, and so takes what `logbook add transcript` takes: a
+transcript/v1 JSON, a WebVTT, an SRT or a Markdown file. Hidden files, and an `attachments/` folder where an export
+keeps the files its JSON references, are passed over. Each call becomes one `transcript/v1` line:
+
+- **Its source is its own.** A transcript/v1 JSON names its source (its `source`, else its payload's
+  `provider`), and the line keeps it, `--source` or not. A WebVTT, SRT or Markdown file names none:
+  `--source` names its provider, and without it the file is left in the folder, counted `without a
+  source`. Nothing is taken as `manual` by default.
+- **Its tier is the file's**, else 3, as for any transcript (it carries other people's words in full);
+  `--tier` sets one for every line.
+- **Its text is stored** in the attachment store before the line that points at it (SPEC §1.1, ADR 0015).
+- **It says where it came from**: `payload.extra.picked_up` is `{"sha256", "file"}`, the SHA-256 of the
+  file's bytes and its path below the folder.
+
+**A file already taken is skipped by its hash**: the same bytes again, under any name, in any later run,
+are `already taken`, never a second line. A file whose call the record already holds by the same source
+and `raw_id` (the same Granola note pulled by `sync granola`, say) is `already in the record`: no line is
+written, its text is stored if the store lacks it, and the file is left for you to look at. A file the
+adapter does not read, or one with no start, is counted and left.
+
+**A dry run unless `--write`.** Without it nothing is written, stored or removed. With it, the files taken
+are removed from the folder once their lines are in the record, and so is a file found already taken (a
+move an earlier run left half done, say by a crash between the append and the removal); `--keep` leaves
+every file where it is. A file that cannot be removed is named on stderr and the command exits 1; its line
+is in the record, and the next run finds it taken. The folder is never the record or a part of it, told
+apart by the disk and not by the name (exit 2), and nothing is fetched from anywhere: the files are on this
+machine.
