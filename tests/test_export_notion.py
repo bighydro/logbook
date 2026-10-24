@@ -334,9 +334,18 @@ def test_the_body_shape(lb: Logbook, tmp_path: Path):
         {"kind": "phone", "value": OLA["phone"]},
     ]
     facts = ola["facts"]
-    assert set(facts) == {"last_contact", "days_together", "promises"}
+    assert set(facts) == {
+        "last_contact",
+        "days_together",
+        "first_together",
+        "last_together",
+        "promises",
+        "promises_more",
+    }
     assert facts["last_contact"] == {"date": "2026-09-12", "kind": "message"}
     assert facts["days_together"] == 1
+    assert facts["first_together"] == facts["last_together"] == "2026-09-10"
+    assert facts["promises_more"] == {"owed_by_owner": 0, "owed_to_owner": 0}
     owed_by, owed_to = facts["promises"]["owed_by_owner"], facts["promises"]["owed_to_owner"]
     assert [p["sentence"] for p in owed_by] == [CALL]
     assert [p["sentence"] for p in owed_to] == [DRAWINGS], "the one naming money is left out"
@@ -345,7 +354,8 @@ def test_the_body_shape(lb: Logbook, tmp_path: Path):
     )
     assert all(isinstance(text, str) for text in ola["page"])
     page = "\n".join(ola["page"])
-    assert "Letzter Kontakt: 12.09.2026 (Nachricht)" in page and "Tage zusammen" in page
+    assert "Letzter Kontakt: 12.09.2026 (Nachricht)" in page
+    assert "Tage zusammen: 1 (zuerst 10.09.2026, zuletzt 10.09.2026)" in page
     assert f"„{CALL}“" in page and f"„{DRAWINGS}“" in page, "the sentence quoted as written"
 
     [kiosk] = _read(out, "ideas.json")["ideas"]

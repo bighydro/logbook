@@ -597,6 +597,7 @@ class Proposal:
     disposition: signing.Disposition | None = None  # what the signed day says became of its line
     role: str | None = None  # `promise` (the owner's), `request` (to the owner), `theirs`, None
     counterpart: str | None = None  # whom it is with, as the record names them
+    parties: tuple[str, ...] = ()  # the people the line is directly between the owner and (`_parties`)
 
     @property
     def status(self) -> str:
@@ -818,6 +819,7 @@ def _extract(
             )
         title = payload.get("title") if kind in (TRANSCRIPT, NOTE) else payload.get("subject")
         day = days.day_of(str(line["at"]))
+        parties = _parties(kind, payload, spoken_by, identities, owner)
         names = _names(humans, spoken_by, identities, owner, owner_label)
         names = tuple(sorted({*names, *with_names}))
         said = [
@@ -869,6 +871,7 @@ def _extract(
                         else _transcript_counterpart(
                             speaker, spoken_by, participants, identities, owner, owner_label
                         ),
+                        parties=parties,
                     )
                 )
             at_sentence += len(own)
@@ -1015,6 +1018,61 @@ def _mail_parties(
     if owner_label:
         names.add(owner_label)
     return author, counterpart, tuple(sorted(names))
+
+
+def _parties(
+    kind: str,
+    payload: Mapping[str, Any],
+    spoken_by: Mapping[str | None, Speaker],
+    identities: Mapping[Ref, Identity],
+    owner: present.Owner,
+) -> tuple[str, ...]:
+    """The people the record resolves whom a line is directly between the owner and, by their person
+    ids: in a message, the one person of a direct chat (`chat.type` `direct`), never a group's; in a
+    mail, everyone on its `from`, `to`, `cc` and `bcc` when the owner is on it too and it did not come
+    through a mailing list (`extra.list`, as the mail adapter marks one); in a transcript, everyone
+    who has a turn in it. A note is between nobody. A reader that wants a promise only from a
+    conversation the person was part of (`export notion`) asks this, not the counterpart."""
+    found: set[str] = set()
+    if kind == MESSAGE:
+        chat = payload.get("chat")
+        if not isinstance(chat, dict) or chat.get("type") != "direct":
+            return ()
+        if payload.get("from_me") is True:
+            chat_id = chat.get("id")
+            ref = chat_ref(chat_id) if isinstance(chat_id, str) and chat_id else None
+        else:
+            sender = payload.get("sender")
+            ref_kind, value = (
+                (sender.get("kind"), sender.get("value")) if isinstance(sender, dict) else ("", "")
+            )
+            ref = (
+                (ref_kind, value) if isinstance(ref_kind, str) and isinstance(value, str) and value else None
+            )
+        person = None if ref is None else present.resolve_ref(ref, identities)[0]
+        found = {person} if person is not None else set()
+    elif kind == MAIL:
+        extra = payload.get("extra")
+        if isinstance(extra, Mapping) and extra.get("list"):
+            return ()
+        owner_on = payload.get("direction") == "sent"
+        for header in ("from", "to", "cc", "bcc"):
+            value = payload.get(header)
+            for address in value if isinstance(value, list) else [value]:
+                email = address.get("email") if isinstance(address, dict) else None
+                if not isinstance(email, str) or not email.strip():
+                    continue
+                ref = ("email", email.strip().casefold())
+                person = None if ref in owner.refs else present.resolve_ref(ref, identities)[0]
+                if ref in owner.refs or person in owner.entities:
+                    owner_on = True
+                elif person is not None:
+                    found.add(person)
+        if not owner_on:
+            return ()
+    elif kind == TRANSCRIPT:
+        found = {who.person for who in spoken_by.values() if who.person and not who.owner}
+    return tuple(sorted(found - set(owner.entities)))
 
 
 _WHATSAPP_DIRECT = re.compile(r"^(\d{6,15})@s\.whatsapp\.net$")
@@ -1529,6 +1587,7 @@ def _proposal_json(p: Proposal) -> dict[str, Any]:
         "names": list(p.names),
         "role": p.role,
         "counterpart": p.counterpart,
+        "parties": list(p.parties),
     }
 
 
@@ -1552,4 +1611,5 @@ def _proposal_from(d: Mapping[str, Any]) -> Proposal:
         tuple(d["names"]),
         role=d["role"],
         counterpart=d["counterpart"],
+        parties=tuple(d["parties"]),
     )

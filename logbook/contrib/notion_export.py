@@ -13,7 +13,8 @@ signed-day gate (RFC 0034): only the lines of days the owner has signed, unless 
 `"include_unsigned": true` and the owner types `--include-unsigned`. A retracted line counts for
 nothing. Every event rests on lines written in the window (from the start of `--since`, default the
 record's first day, to the read time) that pass the gate; an idea's current status is a state, read
-from every status line the gate lets through, whatever its day. The lines that bind a name to a ref,
+from every status line the gate lets through, whatever its day, and a person's days together are a
+total, read over the whole record to the read time through the same gate. The lines that bind a name to a ref,
 `resolution/v1` and `entity/v1`, are the crossing's overlay (RFC 0005): from any day, held to the
 ceiling, not to the signature, as `export crossing` ships them. A day together rests on its evidence
 line, and a promise's speaker and counterpart are resolved through the same gate
@@ -27,11 +28,13 @@ the other files. Three sections, one file each, each matched on the Notion side 
 - `persons.json`: every person the record names who had any contact in the window (`people`: a
   message, a call, a mail, a calendar entry, a recording, a tagged face or a day together), by the
   record's person id, with the `identities` the resolution lines hold (email, phone, handle) and the
-  `facts`: the last contact (its date and kind), the days together in the window, and the promises
-  open both ways said in the window (`promises`: the sentence as it quotes it, its date, the line it
-  was read in). No
-  message, mail or transcript text but that one sentence. The person's `page` is the facts as German
-  lines, emitted whole: the writer replaces the page, never merges it.
+  `facts`: the last contact (its date and kind), the days together over the whole record
+  (`days_together`, `first_together`, `last_together`), and the promises open both ways said in the
+  window and in the 365 days before the read time, in a conversation the person is a direct party to
+  (`Proposal.parties`), newest first, ten a side (`promises`: the sentence as it quotes it, its date,
+  the line it was read in), the rest counted (`promises_more`). No message, mail or transcript text
+  but that one sentence. The person's `page` is the facts as German lines, emitted whole: the writer
+  replaces the page, never merges it.
 - `ideas.json`: every idea whose entity has a Notion page ref (`page`, `notion:<id>`), with its
   current status (tier 2), the reason note for it when there is one, and a dated entry in German per
   status line written in the window, superseded or not, the owner's own words quoted as written.
@@ -42,7 +45,8 @@ the other files. Three sections, one file each, each matched on the Notion side 
   export, never through Notion.
 
 Anything without a key (a person with no email, phone or handle; an idea with no Notion page; an org
-with no domain) is left out and counted. A quoted sentence that names money is left out and counted.
+with no domain) is left out and counted. A quoted sentence that names money is left out and counted;
+a promise that talks of money without a figure (a payment, an invoice, a transfer, a price) too.
 No model runs: every German word is a template here, and the owner's words are quoted, never
 paraphrased.
 
@@ -59,8 +63,8 @@ import json
 import re
 from collections import Counter
 from collections.abc import Iterator, Mapping
-from dataclasses import dataclass, field
-from datetime import UTC, date, datetime
+from dataclasses import dataclass, field, replace
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -103,6 +107,8 @@ STATUS_WORDS = {  # an idea's dispositions (RFC 0037 §10.3) in German, the word
     "built": "gebaut",
     "killed": "verworfen",
 }
+PROMISE_DAYS = 365  # a promise on a page was said in the year before the read time
+PROMISES_SHOWN = 10  # a side of a page lists the newest ten; the rest are counted ("und N weitere")
 DASH = "\u2014"  # between an entry's date and its text
 EN_DASH = "\u2013"  # a bullet on a person's page, and a span of days
 OPEN_QUOTE, CLOSE_QUOTE = "\u201e", "\u201c"  # German quotes, low then high
@@ -120,6 +126,30 @@ MONEY = re.compile(
     rf"|\d[\d.,']*\s?(?:{_MAGNITUDE}){_LETTER_AFTER}",
     re.IGNORECASE,
 )
+# Talk of money with no figure in it, which `MONEY` cannot see: a payment, an invoice, a transfer, a
+# price, in German and English, each word in the forms a sentence gives it ("Ich überweise dir das
+# morgen", "send me the invoice"). Money stays out of Notion: that is the owner's rule. A promise that
+# holds one of these words is left out of a person's page and facts and counted under
+# `sentences_with_money`, as one with a sum is (`talks_money`); an idea's reason is held to `MONEY`
+# alone. A word may close a longer one where German builds one (`Anzahlung`, `Kaufpreis`).
+MONEY_WORDS = (
+    r"(?:an|aus|be|ein|ge|nach|zurück)?zahl(?:e|en|st|t|te|ten|test|tet)",  # zahlen, bezahle, gezahlt
+    r"\w*zahlung(?:en|s\w*)?",  # Zahlung, Anzahlung, Zahlungsfrist
+    r"(?:ab|end|gut|schluss|teil|vor)?rechnung(?:en|s\w*)?",  # Rechnung, Abrechnung; not Berechnung
+    r"überw(?:eis|ies)\w*",  # überweisen, überweise, Überweisung, überwiesen
+    r"\w*preis(?:e|en|es|liste\w*)?",  # Preis, Kaufpreis, Preisliste
+    r"geld(?:er|es)?",
+    r"kost(?:en|et|est)",
+    r"(?:pre|re)?pay(?:s|ing|ment|ments|able|back|out|pal)?",
+    r"(?:pre|re|un)?paid",
+    r"invoic(?:e|es|ed|ing)",
+    r"transfer(?:s|red|ring)?",
+    r"wir(?:e|es|ed|ing)",
+    r"pric(?:e|es|ed|ing)",
+    r"money",
+    r"cost(?:s|ing)?",
+)
+MONEY_TALK = re.compile(rf"{_LETTER_BEFORE}(?:{'|'.join(MONEY_WORDS)}){_LETTER_AFTER}", re.IGNORECASE)
 
 
 class NotionError(ValueError):
@@ -147,6 +177,12 @@ def quoted(text: str) -> str:
 
 def names_money(text: str) -> bool:
     return MONEY.search(text) is not None
+
+
+def talks_money(text: str) -> bool:
+    """A sum or a currency (`names_money`), or a word of `MONEY_WORDS`: a promise either way stays
+    home."""
+    return names_money(text) or MONEY_TALK.search(text) is not None
 
 
 # -- the request -----------------------------------------------------------------------------------------
@@ -324,7 +360,8 @@ def build(lb: Logbook, req: Request, airports: Airports | None = None) -> Built:
         "sentences_with_money": 0,
     }
     report = people.read(lb, req.since, req.until, airports, admit=g.admit)
-    persons = _persons(lb, req, g, report, left)
+    together = _together(lb, req, g, report, airports)
+    persons = _persons(lb, req, g, report, together, left)
     with lb.index() as idx:
         marks = idx.retractions()
         bound = [line for line in [*idx.resolutions(), *idx.by_kind(entities.ENTITY)] if g.overlay(line)]
@@ -334,32 +371,82 @@ def build(lb: Logbook, req: Request, airports: Airports | None = None) -> Built:
     return Built(persons, ideas, orgs, left, g.counts(), g.lines())
 
 
+def _together(
+    lb: Logbook, req: Request, g: Gate, report: people.Report, airports: Airports | None
+) -> dict[str, list[str]]:
+    """The days together of everyone heard in the window, over their whole history in the record (from
+    its first day to the read time, through the same gate), oldest first: a total, as an idea's status
+    is a state, so a narrow window never blanks it. A day together rests on its evidence lines, which
+    the gate counts as crossed; nothing else the longer read lets through informs a fact, so nothing
+    else of it is counted."""
+    span = reading.record_span(lb)
+    first = span[0] if span is not None else req.since
+    heard = {person.entity for person in report.people}
+    if first >= req.since:
+        return {p.entity: p.days for p in report.people if p.days}
+    wide = replace(g, passed={}, bound=set(), above_tier=set(), unsigned=set(), overlay_held=set())
+    whole = people.read(lb, first, req.until, airports, admit=wide.admit)
+    out: dict[str, list[str]] = {}
+    for entity in sorted(heard):
+        person = whole.known.get(entity)
+        if person is None or not person.days:
+            continue
+        out[entity] = person.days
+        for shared in person.shared.values():
+            for line_id in shared.lines:
+                if line_id in wide.passed:
+                    g.passed[line_id] = wide.passed[line_id]
+    return out
+
+
 def _persons(
-    lb: Logbook, req: Request, g: Gate, report: people.Report, left: dict[str, int]
+    lb: Logbook,
+    req: Request,
+    g: Gate,
+    report: people.Report,
+    together: Mapping[str, list[str]],
+    left: dict[str, int],
 ) -> list[dict[str, Any]]:
+    """Everyone heard in the window who has a key, with the facts of their page: the last contact in
+    the window, the days together over the whole record, and the open promises said in the window and
+    in the `PROMISE_DAYS` before the read time, in a conversation the person is a direct party to
+    (`Proposal.parties`: a direct chat, a mail both are on and no list sent, a call they spoke in; a
+    mail's quoted part is never read), newest first, `PROMISES_SHOWN` a side and the rest counted."""
     heard = list(report.people)
-    owed = people_drift.promises_with(lb, heard, admit=g.admit, since=req.since, until=req.until)
+    cutoff = datetime.fromisoformat(req.as_of.replace("Z", "+00:00")) - timedelta(days=PROMISE_DAYS)
+    since = max(req.since, g.days.day(cutoff).isoformat())
+    owed = people_drift.promises_with(lb, heard, admit=g.admit, since=since, until=req.until)
+    sides = (promise_reader.OWED_BY_OWNER, promise_reader.OWED_TO_OWNER)
     out = []
     for person in sorted(heard, key=lambda p: p.entity):
         identities = sorted({ref for ref in person.refs if ref[0] in IDENTITY_KINDS})
         if not identities:
             left["persons_without_identity"] += 1
             continue
-        promises: dict[str, list[dict[str, str]]] = {
-            promise_reader.OWED_BY_OWNER: [],
-            promise_reader.OWED_TO_OWNER: [],
-        }
+        found: dict[str, list[tuple[datetime, int, dict[str, str]]]] = {side: [] for side in sides}
         for proposal, mine in owed.get(person.entity, []):
+            at = stays.instant(proposal.at)
+            if at is None or at < cutoff or person.entity not in proposal.parties:
+                continue
             sentence = proposal.match.quote
-            if names_money(sentence):
+            if talks_money(sentence):
                 left["sentences_with_money"] += 1
                 continue
             side = promise_reader.OWED_BY_OWNER if mine else promise_reader.OWED_TO_OWNER
-            promises[side].append({"sentence": sentence, "date": proposal.day, "line": proposal.line})
+            said = {"sentence": sentence, "date": proposal.day, "line": proposal.line}
+            found[side].append((at, proposal.seq, said))
+        newest = {
+            side: [said for *_, said in sorted(found[side], key=lambda f: f[:2], reverse=True)]
+            for side in sides
+        }
+        days = together.get(person.entity, [])
         facts = {
             "last_contact": _last_contact(person),
-            "days_together": len(person.days),
-            "promises": promises,
+            "days_together": len(days),
+            "first_together": days[0] if days else None,
+            "last_together": days[-1] if days else None,
+            "promises": {side: newest[side][:PROMISES_SHOWN] for side in sides},
+            "promises_more": {side: max(0, len(newest[side]) - PROMISES_SHOWN) for side in sides},
         }
         out.append(
             {
@@ -392,7 +479,11 @@ def _person_page(req: Request, facts: Mapping[str, Any]) -> Iterator[str]:
         yield f"Letzter Kontakt: keiner seit {german(req.since)}"
     else:
         yield f"Letzter Kontakt: {german(contact['date'])} ({CONTACT_WORDS[contact['kind']]})"
-    yield f"Tage zusammen seit {german(req.since)}: {facts['days_together']}"
+    if facts["days_together"]:
+        yield (
+            f"Tage zusammen: {facts['days_together']}"
+            f" (zuerst {german(facts['first_together'])}, zuletzt {german(facts['last_together'])})"
+        )
     for side, title in (
         (promise_reader.OWED_BY_OWNER, "Offene Versprechen von mir"),
         (promise_reader.OWED_TO_OWNER, "Offene Versprechen an mich"),
@@ -404,6 +495,9 @@ def _person_page(req: Request, facts: Mapping[str, Any]) -> Iterator[str]:
         yield f"{title}:"
         for promise in found:
             yield f"{EN_DASH} {quoted(promise['sentence'])} ({german(promise['date'])})"
+        more = facts["promises_more"][side]
+        if more:
+            yield f"und {more} weitere"
 
 
 def _ideas(
