@@ -2,7 +2,8 @@
 
 The words of every line that carries any — a note, a message, a mail, a calendar entry, a
 transcript (its text read from the attachment store), a task, a highlight, a voice memo, a page
-browsed, something watched or listened to, a trip — sit in one FTS5 table of `index.sqlite`
+browsed, something watched or listened to, a trip, what a podcast or a video said (`heard`, its
+text read from the store as a transcript's is) — sit in one FTS5 table of `index.sqlite`
 (`index.SEARCH`), written beside the line's row when the line is appended and rebuilt with it by
 `logbook index`; a location point, a photo, a health sample or a call has no words and no row. The
 table is a cache like the rest of the index (ADR 0007): the files are the record, and deleting it
@@ -64,6 +65,7 @@ KINDS = (
     "trip",
     "journey",  # RFC 0031: `trip/v1` renamed for new lines; either kind asked for searches both
     "story",
+    "heard",  # RFC 0046: a podcast's or a video's words, read from the attachment store
 )
 # One profile under two kinds (RFC 0031): asking for either searches both.
 ALIASES = {"trip": ("trip", "journey"), "journey": ("trip", "journey")}
@@ -317,6 +319,13 @@ def body_of(line: Mapping[str, Any], root: Path | None) -> str | None:
     if not isinstance(payload, dict):
         return None
     parts: list[str] = []
+    if line.get("kind") == "heard":  # its title and show, then its text; never its ids, digest or URL
+        if root is not None:
+            parts.extend(_heard_text(line, root))
+        elif isinstance(payload.get("title"), str):
+            parts.append(payload["title"])
+        body = "\n".join(" ".join(part.split()) for part in parts if part.strip())
+        return body or None
     _gather(payload, parts)
     if line.get("kind") == "transcript" and root is not None:
         parts.extend(_transcript_text(line, root))
@@ -335,6 +344,13 @@ def _gather(value: object, out: list[str]) -> None:
     elif isinstance(value, list):
         for inner in value:
             _gather(inner, out)
+
+
+def _heard_text(line: Mapping[str, Any], root: Path) -> Iterable[str]:
+    from . import heard  # a function-level import, as for a transcript's text
+    from .store import Logbook
+
+    return heard.body_of(dict(line), Logbook(root))
 
 
 def _transcript_text(line: Mapping[str, Any], root: Path) -> Iterable[str]:

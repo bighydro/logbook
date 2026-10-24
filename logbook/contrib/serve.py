@@ -189,10 +189,12 @@ from . import (
     phone,
     places_review,
     reflect,
+    search_page,
     shelf_agents,
     shelf_goals,
     shelf_promises,
     trip_page,
+    week_page,
     week_paper,
     world,
 )
@@ -222,6 +224,7 @@ RECORD_PAGES = frozenset(
     {"/", "/days", "/trips", "/places", "/world", "/journeys", "/people", "/manifest", "/manifest/people"}
     | {"/ideas"}
     | {"/promises", "/goals", "/agents"}  # the shelves' lists
+    | {"/search"}  # the record's words (`search_page`)
 )
 JOURNEY_PATH = re.compile(r"^/journeys/(\d{4}-\d{2}-\d{2})/(\d{4}-\d{2}-\d{2})$")  # its first and last day
 PERSON_PATH = re.compile(r"^/people/([^/]+)$")  # a canonical person, by entity id
@@ -250,6 +253,7 @@ PHOTOS = "photos"  # the Day page's anchor of its photo review, where the review
 WEEK = "week"  # the anchor of a Sunday's week draft (`dream week`), which the other six days link to
 LINE_PATH = re.compile(r"^/line/([^/]+)$")  # one line as written, read-only, through the gate
 PHOTO_PATH = re.compile(r"^/photo/([^/]+)$")  # a photo line's pixels from the attachment store, likewise
+WEEK_PATH = re.compile(r"^/week/(\d{4}-W\d{2})$")  # the week page (RFC 0043 §8, `week_page`), read-only
 CLOSE = "close"  # the Day page's anchor of Reflect and sign, where a write sends the owner back
 # pages the record's today moves too (this year, anniversaries, drift, the stale orgs and ideas): in the tag
 # /goals: a goal goes past; /world: its window ends on today, whatever the calendar holds after it
@@ -280,6 +284,7 @@ AUDIO_BYTES = 64 * 1024 * 1024  # the most a recording may carry: half an hour o
 STATE_FILES = (
     places_review.STATE_FILE,
     day_photos.STATE_FILE,
+    *week_page.HOLD_FILES,  # Hold's reports, whose counts the week page reads
 )  # record-relative bookkeeping the pages read, in the tag
 NO_MODEL = "No model touched this page. What a model drafted is marked as a draft."  # the Day's footer
 TIERS_SAID = (  # under the Day's header: what crosses where (SPEC §4), in the Library's words
@@ -538,6 +543,7 @@ dl.header dd{overflow-wrap:anywhere}
 
 NAV = (
     '<a href="/">Logbook</a><a href="/today">today</a><a href="/days">days</a>'
+    '<a href="/search">search</a>'
     '<a href="/journeys">journeys</a><a href="/people">people</a><a href="/manifest">manifest</a>'
     '<a href="/ideas">ideas</a><a href="/promises">promises</a><a href="/goals">goals</a>'
     '<a href="/agents">agents</a><a href="/places">places</a><a href="/assets">assets</a>'
@@ -753,7 +759,7 @@ class Site:
     def still_reading(self, path: str, query: str, limit_s: float) -> Response:
         """The page a reading over the limit is answered with (503): what happened and when the page
         will be there, in one sentence each, never a spinner. With the build, the page is being
-        built in the background; without it (`--live`), the reading was stopped."""
+        built in the background; without it (live, the default), the reading was stopped."""
         target = path + (f"?{query}" if query else "")
         again = f'<a href="{escape(target)}">this page again</a>'
         if self.library is not None:
@@ -765,8 +771,8 @@ class Site:
         else:
             said = (
                 f"This page took longer than {limit_s:g} s to read, so the reading was stopped and this"
-                " machine is free for the other pages. Without `--live`, `logbook serve` builds every"
-                f" page ahead and answers it at once. Try {again}, or the front page."
+                " machine is free for the other pages; `logbook serve` without `--limit` reads every page"
+                f" to its end. Try {again}, or the front page."
             )
         body = f'<h1>Still reading</h1>\n<p class="busy">{said}</p>\n<p><a href="/">The front page</a></p>\n'
         return Response(503, self.document("still reading", body).encode("utf-8"))
@@ -1455,10 +1461,16 @@ class Site:
             and ORG_PATH.match(path) is None
             and IDEA_PATH.match(path) is None
             and LINE_PATH.match(path) is None
+            and WEEK_PATH.match(path) is None
         ):
             return None
         parts = [self._started, path, query, json.dumps(meta, sort_keys=True)]
-        if DAY_PATH.match(path) is not None or path.startswith(CLOCK_PAGES):
+        # a week's plan, and its trip's days to go, move with the record's today
+        if (
+            DAY_PATH.match(path) is not None
+            or WEEK_PATH.match(path) is not None
+            or path.startswith(CLOCK_PAGES)
+        ):
             # a Day's forms are there from the day the owner is in; this year, the coming
             # anniversaries and a silence move with it too
             try:
@@ -1616,12 +1628,16 @@ class Site:
             return shelf_goals.page_goal(self, unquote(m.group(1)))
         if path == "/agents":
             return shelf_agents.page_agents(self, params.get("page") or "1", params.get("day") or None)
+        if path == "/search":
+            return search_page.page_search(self, params)
         if path == "/assets":
             return self.page_assets()
         if path == "/gaps":
             return self.page_gaps(params.get("since") or None)
         if path == "/world":
             return self.page_world(params.get("from") or None, params.get("to") or None)
+        if (m := WEEK_PATH.match(path)) is not None:
+            return week_page.page_week(self, m.group(1), expanded=params.get("open") == "1")
         raise NotFound(f"no page at {path}")
 
     def _error(self, status: int, message: str) -> Response:
@@ -1725,6 +1741,7 @@ class Site:
             f"<li>{self.link('Goals', '/goals')}: the goals you wrote, by horizon, and the chapter today is"
             " in.</li>\n"
             f"<li>{self.link('Agents', '/agents')}: the sessions with an agent, day by day.</li>\n"
+            f"<li>{self.link('Search', '/search')}: the record's words, as logbook search finds them.</li>\n"
         )
         parts.append(
             '<ul class="plain">\n'
@@ -1934,7 +1951,8 @@ class Site:
             f"<h1>{day} <small>{escape(data['weekday'] + held)}</small></h1>\n",
             "<!--meta-->",
             f'<p class="pager">{self.link(f"← {before}", f"/day/{before}")}{DOT}'
-            f"{self.link('the fortnight around', f'/days?from={a}&to={b}')}{DOT}{toggle}{close}"
+            f"{self.link('the fortnight around', f'/days?from={a}&to={b}')}{DOT}"
+            f"{week + DOT if (week := week_page.link_html(self, day)) else ''}{toggle}{close}"
             f"{self.link(f'{after} →', f'/day/{after}')}</p>\n",
             "" if self.static or data["sources"] else self._nothing_held(day),
             '<dl class="header">\n',
@@ -2471,6 +2489,8 @@ class Site:
             link = said if href is None else f'<a href="{escape(href)}#{WEEK}">{said}</a>'
             return f'<p class="mute week">The week {escape(week)} has a draft: {link}.</p>\n'
         out = [f'<h2 id="{WEEK}">The week {escape(week)}</h2>\n']
+        if page := week_page.link_html(self, day):
+            out.append(f'<p class="mute">{page}: its ribbons, goals and proposal</p>\n')
         if draft is not None:
             href = self.href(f"/line/{quote(str(draft['line']), safe='')}")
             if href is not None:
@@ -5345,8 +5365,9 @@ def make_server(
 ) -> Server:
     """The server, bound and ready to `serve_forever`. `HostError` for any host but 127.0.0.1,
     before a socket is opened; OSError when the port is taken. `voice`: how a Day hears a recording.
-    `built`: answer from the pages built ahead (`library_build`; `logbook serve` does by default),
-    rebuilt in the background after every act; False renders every page as it is asked for."""
+    `built`: answer from the pages built ahead (`library_build`; `logbook serve --built`, labs),
+    rebuilt in the background after every act; False, the default, renders every page as it is asked
+    for. `limit_s`: a page read longer is stopped and said so; `math.inf` reads every page to its end."""
     if host != HOST:
         raise HostError(
             f"serve binds {HOST} only, never {host!r}: the record is read from this machine, "
@@ -5371,11 +5392,12 @@ def serve(
     airports: Airports | None = None,
     announce: Callable[[str], None] = print,
     voice: Voice | None = None,
-    built: bool = True,
+    built: bool = False,
     limit_s: float = LIMIT_S,
 ) -> None:
-    """Serve the record until Ctrl-C, from the pages built ahead unless `built` is False (`--live`),
-    a page read longer than `limit_s` stopped and said so. `HostError` and OSError as `make_server`."""
+    """Serve the record until Ctrl-C, every page rendered as it is asked for, or with `built`
+    (`--built`, labs) from the pages built ahead; a page read longer than `limit_s` stopped and said so
+    (`math.inf`: none). `HostError` and OSError as `make_server`."""
     server = make_server(lb, host, port, airports, voice, built=built, say=announce, limit_s=limit_s)
     if sys.platform != "win32":  # `kill -USR1 <pid>`: every stack to the log, the server running on
         with contextlib.suppress(AttributeError, ValueError, OSError):  # a stderr with no file under it

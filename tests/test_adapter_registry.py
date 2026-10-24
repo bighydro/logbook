@@ -22,6 +22,7 @@ PACKAGE = ROOT / "logbook" / "contrib" / "adapters"
 UNREGISTERED = {
     "takeout.calendar": "reached through `ics`, which sniffs every iCalendar file, folder or not",
     "drive_videos": "reached through `sync drive --videos`, a flag of drive's; `sync --all` never lists it",
+    "heard": "loaded from `adapters.UNLISTED` after the table (RFC 0046 §10); the release lists it",
 }
 
 
@@ -84,4 +85,5 @@ def test_the_installed_package_reports_the_table() -> None:
 
 def test_all_adapters_tries_the_built_ins_in_the_table_order() -> None:
     names = [a.__name__ for a in adapters.all_adapters() if a.__name__.startswith(adapters.BUILT_IN_PREFIX)]
-    assert names == list(_table().values())
+    unlisted = [f"{adapters.BUILT_IN_PREFIX}{name}" for name in adapters.UNLISTED]  # after the table
+    assert names == [*_table().values(), *unlisted]

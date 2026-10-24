@@ -43,7 +43,11 @@ SEEDS = (
 )  # fmt: skip
 LINK = re.compile(r"""href\s*=\s*["']([^"'#]*)""")
 MOST = 500  # pages a record's crawl renders at most; the order is fixed, so the same pages every run
-EACH = {"day": 60, "line": 12}  # pages of one section a crawl renders at most (the first, in its order)
+EACH = {
+    "day": 60,
+    "line": 12,
+    "week": 8,  # a week's pager links only the record's weeks, but four years of them would crowd the rest
+}  # pages of one section a crawl renders at most (the first, in its order)
 EACH_OTHER = 30  # the same for every other section: `/days?from=…`, `/people/…`, `/places?page=…`
 NOT_PAGES = ("/photo/", "/favicon.ico")
 
