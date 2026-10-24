@@ -46,7 +46,12 @@ Wispr Flow draft offered prefilled, a recording heard through `day reflect --aud
 command wired one in, `Voice`), and the proposals the rules read in it are checkboxes whose form
 posts to `/day/YYYY-MM-DD/sign`, which signs the day through `reflect.close`, the code `day reflect
 --sign` runs: `signing.sign` with the lines confirmed, the accepted dispositions and the reflection,
-a signed day signed again superseding its signature. The Day also carries the owner's two acts on
+a signed day signed again superseding its signature. In the evening and when signed again that form
+is Keep and sign (RFC 0043 §5): the pencil's sentences kept, a decision's revisit day, the day in a
+word and the day's tasks answered, parsed by `keep.asked` and written through `keep.prepared` and
+`keep.write` inside `reflect.close`, the lines `day sign --keep` writes; and today's evening offers
+*Dream the day so far*, `dream day TODAY --evening`, posted to the reflect route under the owner's
+`dream` entry alone (`Site._dream`). The Day also carries the owner's two acts on
 lines already in the record: a star on every row that is a line, posting to `/star` (`Site._star`:
 `stars.star` and `stars.unstar`, the lines `logbook star` and `unstar` write; the photo review at the
 Day's foot posts there too, its Star a star and its Not a keeper `day_photos.pass_over`, the review's
@@ -467,7 +472,7 @@ section.close button,section.close input[type=text],section.close input[type=dat
 box-sizing:border-box}
 section.close details>summary{min-height:44px;display:flex;align-items:center}
 section.close code{overflow-wrap:anywhere}
-ol.proposals label{min-height:44px;align-items:center}
+ol.proposals label{min-height:44px;align-items:flex-start;padding:.3rem 0;box-sizing:border-box}
 fieldset.keep{border:0;padding:0;margin:.9rem 0;min-width:0}
 fieldset.keep legend{padding:0;font-weight:600;font-size:11px;letter-spacing:.13em;text-transform:uppercase;
 color:var(--mute)}
@@ -476,8 +481,8 @@ ol.keep{list-style:none;padding:0;margin:.3rem 0}
 ol.keep>li{padding:.3rem 0;border-bottom:1px solid var(--line)}
 ol.keep label.pick{display:flex;gap:.6rem;align-items:flex-start;min-height:44px;cursor:pointer;
 padding:.3rem 0;box-sizing:border-box}
-ol.keep input[type=checkbox],ol.keep input[type=radio],ol.proposals input{flex:none;width:1.25rem;
-height:1.25rem;margin:.15rem 0 0}
+ol.keep input[type=checkbox],ol.keep input[type=radio],ol.proposals input{flex:none;width:1.5rem;
+height:1.5rem;margin:0}
 ol.keep span.head{display:block;font-size:11px;letter-spacing:.08em;text-transform:uppercase;
 color:var(--mute)}
 ol.keep li.pencil span.words{font-family:var(--serif);color:var(--graphite);background:var(--paper);
@@ -489,7 +494,7 @@ ol.keep span.answers{display:flex;flex-wrap:wrap;gap:.4rem;margin:.3rem 0 0}
 ol.keep span.answers label{display:inline-flex;align-items:center;gap:.4rem;min-height:44px;
 padding:0 .8rem;border:1px solid var(--line);border-radius:999px;cursor:pointer;box-sizing:border-box}
 ol.keep span.answers input{margin:0}
-form.dream{display:flex;flex-wrap:wrap;align-items:center;gap:.2rem .8rem;margin:.6rem 0 1rem}
+form.dream{display:flex;flex-wrap:wrap;align-items:center;gap:.6rem .8rem;margin:.6rem 0 1rem}
 form.dream p{margin:0;flex:1 1 16rem}
 code.sha{overflow-wrap:anywhere}
 footer .footnote{display:inline-block;margin-top:.3rem}
@@ -2540,8 +2545,9 @@ class Site:
             f'<input type="hidden" name="reflection" value="{escape(str(note["id"]))}">\n'
             f'<input type="hidden" name="proposals" value="{escape(found.digest)}">\n'
         ]
-        if keeping:
+        if keeping:  # the delegations follow the kept lines, under their own head (RFC 0043 §4.14)
             out.append(self._keep_html(day, found))
+            out.append('<fieldset class="keep">\n<legend>Asked of you</legend>\n')
         if found.proposals:
             out.append(
                 '<p class="mute">proposals, by rules alone; each is a guess until you accept it:</p>\n'
@@ -2560,6 +2566,8 @@ class Site:
                 '<p class="mute">no proposals: the rules read no commitment, delegation or disposition in'
                 " it</p>\n"
             )
+        if keeping:
+            out.append("</fieldset>\n")
         sentences = "".join(f"<li>{escape(text)}</li>" for text in reflect.sentences(r.text))
         out.append(
             f'<details><summary>the reflection, a sentence a line</summary><ol class="sentences">{sentences}'
@@ -2581,10 +2589,11 @@ class Site:
         out.append(f'<p class="mute">{escape(said)}</p>\n')
         if keeping:
             out.append(
-                '<p class="mute">The same at the command line: <code>logbook day reflect'
+                '<details class="cli"><summary>the same at the command line</summary><p class="mute">'
+                "<code>logbook day reflect"
                 f" {day} --sign --keep N,N --revisit N=YYYY-MM-DD --word WORD --done T,T --tomorrow T,T"
                 " --let-go T,T --accept N,N</code>; or <code>logbook day sign"
-                f" {day}</code> with the same flags but <code>--accept</code>.</p>\n"
+                f" {day}</code> with the same flags but <code>--accept</code>.</p></details>\n"
             )
         out.append(f'<button name="act" value="{SIGN}">{button}</button>\n</form>\n')
         return "".join(out)

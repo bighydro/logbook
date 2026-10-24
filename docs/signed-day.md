@@ -324,6 +324,10 @@ page's Sign and the door's `sign_day`; `--confirm` or a disposition that names i
 digest still covers it, so you signed what you were shown. A day signed before this rule that confirmed
 its draft loses it on its next signature.
 
+The Day page keeps and signs the same from one form, *Keep and sign*, in its evening shape and when a
+signed day is signed again: every box, field and choice is one of these flags, and the page writes
+these lines byte for byte ([serve](serve.md#keep-and-sign)). `--mend` stays at the command line.
+
 `--keep` sits one letter from `--kept`, the disposition: `--kept` says what became of a commitment on
 the page, `--keep` keeps the dream's pencil in ink. The door's `sign_day` takes neither `--keep` nor
 any of these: agents propose, you keep.
