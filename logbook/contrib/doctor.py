@@ -17,6 +17,12 @@ The checks, in the order they print:
   with an index that agrees, has no such line.
 - `owner`: `policy/owner.json` is there and names at least one alias, so the owner is never listed
   as their own company (`present.owner_of`). Missing or empty is a warn, not JSON is a fail.
+- `agents`: the lines marked machine text (docs/adapters/agents.md), per source: a message an agent
+  wrote (`extra.machine`) and a transcript with a machine participant, standing; and how many
+  senders `policy/agents.json` names, the owner's own bots the Beeper adapters mark. Only the
+  sources that write the mark are read (`AGENT_SOURCES`, every transcript), from the index when it is
+  current, else from the month files; a sealed line this machine cannot open is counted, not read. A
+  pass; a file that is not the shape is a fail naming it; a record with neither has no line.
 - `places`: `places.json` names at least one place of kind `home`, which the night rule needs
   (`trips`, `rollup nights`). None is a warn, not a places file is a fail.
 - `assets`: `assets.json` is a registry when it exists (ADR 0018). Absent is fine.
@@ -134,6 +140,7 @@ from ..core import (
     day_start,
     drafts,
     index,
+    machine,
     places,
     plausible,
     policy,
@@ -199,6 +206,8 @@ CLOUD_REASON = (
     " move it to a plain local folder and point LOGBOOK_HOME at it"
 )
 ONEDRIVE_ENV = "OneDrive"  # Windows sets it to the folder OneDrive syncs
+#: the message sources that write the machine mark, `beeper-<network>` among them; every transcript is read
+AGENT_SOURCES = ("telegram", "beeper")
 
 
 @dataclass(frozen=True)
@@ -349,6 +358,75 @@ def owner_check(root: Path) -> Check:
         return Check("owner", "warn", f"{name} is empty: {hint}")
     listed = ", ".join(f"{n} {key}" for key, n in counts.items())
     return Check("owner", "pass", f"{name} names {listed}")
+
+
+def _agent_source(source: object) -> bool:
+    return isinstance(source, str) and (source in AGENT_SOURCES or source.startswith("beeper-"))
+
+
+def _marked(line: Line) -> bool:
+    """Whether the line is machine text: a message an agent wrote, a transcript with an agent in it."""
+    payload = line.get("payload") or {}
+    if line.get("kind") == "transcript":
+        parts = payload.get("participants")
+        return isinstance(parts, list) and any(machine.is_machine_participant(p) for p in parts)
+    return machine.is_machine(payload)
+
+
+def agent_lines(lb: Logbook, state: str) -> Iterator[Line]:
+    """The transcripts and the messages of `AGENT_SOURCES`, one at a time, opened where this machine
+    has the identity: from the index when it is `current` (read-only), else from the month files."""
+    if state != "current":
+        for line in lb.lines_unsorted():
+            kind = line.get("kind")
+            if kind == "transcript" or (kind == "message" and _agent_source(line.get("source"))):
+                yield _opened(lb, line)
+        return
+    db = sqlite3.connect(f"{lb.index_path.resolve().as_uri()}?mode=ro", uri=True)
+    try:
+        places = db.execute(
+            "SELECT file, offset FROM lines WHERE kind = 'transcript' OR (kind = 'message' AND"
+            f" (source IN ({', '.join('?' * len(AGENT_SOURCES))}) OR source LIKE 'beeper-%')) ORDER BY seq",
+            AGENT_SOURCES,
+        ).fetchall()
+    finally:
+        db.close()  # before anything could unlink it: Windows refuses to delete an open file
+    for file, offset in places:
+        with (lb.root / str(file)).open("rb") as fh:
+            yield _opened(lb, read_line_at(fh, int(offset)))
+
+
+def agents_check(lb: Logbook, state: str) -> Check | None:
+    """None unless a standing line is marked machine or `policy/agents.json` names a sender."""
+    try:
+        named = policy.agent_senders(lb.root)
+    except policy.PolicyError as e:
+        return Check("agents", "fail", str(e))
+    retracted = retractions(kind_lines(lb, state, (RETRACTION,)))
+    per_source: dict[str, int] = {}
+    sealed = 0
+    for line in agent_lines(lb, state):
+        if str(line.get("id")) in retracted:
+            continue
+        if is_sealed(line):
+            sealed += 1
+        elif _marked(line):
+            source = str(line.get("source"))
+            per_source[source] = per_source.get(source, 0) + 1
+    if not per_source and not named:
+        return None
+    path = policy.AGENTS_FILE.as_posix()
+    senders = f"{len(named)} sender{'s' if len(named) != 1 else ''} named in {path}"
+    if per_source:
+        ranked = sorted(per_source.items(), key=lambda kv: (-kv[1], kv[0]))
+        detail = (
+            "lines marked machine: " + ", ".join(f"{source} {n:,}" for source, n in ranked) + f"; {senders}"
+        )
+    else:
+        detail = f"no line marked machine yet; {senders}: the next `add beeper` or `sync beeper` marks theirs"
+    if sealed:
+        detail += f"; {sealed:,} sealed line{'s' if sealed != 1 else ''} not opened here (no identity)"
+    return Check("agents", "pass", detail)
 
 
 def places_check(root: Path) -> Check:
@@ -1527,6 +1605,9 @@ def run(
     if boundary is not None:
         checks.append(boundary)
     checks.append(owner_check(lb.root))
+    agents = agents_check(lb, state)
+    if agents is not None:
+        checks.append(agents)
     checks.append(places_check(lb.root))
     checks.append(assets_check(lb.root))
     prints = voiceprints_check(lb, state)

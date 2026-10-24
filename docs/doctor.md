@@ -20,6 +20,20 @@ pass  record  1,204 lines, head 4dc18fde900d…, verified; 3 attachments missing
 Their bytes are not hashed here, nor a sealed one opened: the doctor runs four times a day, and a store of
 photos is read by `logbook verify` by hand, or by `logbook backup --verify`.
 
+## Agents
+
+A record with a line marked machine text, or a `policy/agents.json` that names a sender, gets an `agents`
+line after `owner` ([your own agents](adapters/agents.md)): the standing lines marked machine per source
+(a message an agent wrote, a transcript with an agent among its participants), the most first, and how
+many senders the file names, the owner's own bots the Beeper adapters mark.
+
+```
+pass  agents  lines marked machine: telegram 412, beeper-telegram 96, claude-code 31; 1 sender named in policy/agents.json
+```
+
+It reads the transcripts and the messages of the sources that write the mark (`telegram`, `beeper`,
+`beeper-<network>`), from the index when it is current. A file that is not the shape is a **fail** naming it.
+
 ## Voiceprints
 
 A record whose transcripts carry voices, or that keeps a voiceprint registry, gets a `voiceprints`

@@ -21,6 +21,7 @@ from ..core.store import Logbook, now_utc, retractions
 from .common import (
     EN_DASH,
     Subparsers,
+    _agents,
     _disabled,
     _is_rfc3339,
     _owner_aliases,
@@ -842,6 +843,8 @@ def _sync_one(a: argparse.Namespace) -> None:
         options["owner_emails"] = list(lb.meta.get("owner_emails") or [])
     if _takes(adapter, "owner_aliases", live=True):
         options["owner_aliases"] = _owner_aliases(lb, "sync")
+    if _takes(adapter, "agents", live=True):
+        options["agents"] = _agents(lb, "sync")
     cache: dict[str, Any] | None = None  # what the source looked up and need not ask again; not the record
     cache_path = state_path.with_name(f"{a.name}-cache.json")
     if _takes(adapter, "cache", live=True):
