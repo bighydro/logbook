@@ -121,9 +121,10 @@ Close the week
   names the first, so one intention stands for a week, never two. Next week's mornings show it under
   *For*, in ink, with its Sunday, in place of the pencil ([the Day](day.md#the-morning)); this page shows
   it under *Next week*.
-- **One press, all or nothing.** Every verdict and the intention are checked before the first line is
+- **One press, every item checked first.** Every verdict and the intention are checked before the first line is
   written, under one writer lock: a sixth word, a goal that is no goal, your words on a goal given no
-  verdict, an empty intention, a second verdict for the week, or a sealed record on a machine without
+  verdict, an empty intention, a second verdict for the week (or the same one in other words), or a
+  sealed record on a machine without
   its identity each refuse the whole press (a 400, its sentence naming what and why), and nothing is
   written. Another command writing the record is the 409 of every act, your words kept in its form.
 - **The gate** is every act's ([serve](serve.md)): from this machine, through the server's own pages,

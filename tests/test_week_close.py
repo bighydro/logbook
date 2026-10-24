@@ -383,3 +383,53 @@ def test_the_record_still_verifies_after_a_close(lb: Logbook) -> None:
     code, out, err = run_cli("verify")
     assert code == 0, out + err
     assert json.loads(json.dumps(lb.meta))["seq"] > 0
+
+
+# -- from the independent review -------------------------------------------------------------------------
+
+
+def test_an_intention_kept_as_the_sunday_turns_to_monday_stays_on_the_sunday(
+    lb: Logbook, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Kept while the record's today is the Sunday, written after midnight: the line is the Sunday's,
+    its last minute, so the week finds it and the next Keep supersedes it rather than adding one."""
+    monkeypatch.setattr(notes, "now_utc", lambda: "2026-06-21T22:00:30Z")  # 00:00:30 Monday in Oslo
+    done = week_close.keep(lb, SUNDAY, MINE, today=SUNDAY)
+    assert done.line is not None and done.line["at"] == "2026-06-21T21:59:00Z"
+    assert week_close.kept(lb, SUNDAY) is not None
+    again = week_close.keep(lb, SUNDAY, KEPT, today=SUNDAY)
+    assert again.line is not None and again.line["payload"]["supersedes"] == done.line["id"]
+
+
+def test_the_same_verdict_with_other_words_is_refused_not_dropped(lb: Logbook) -> None:
+    sail = _ids(lb)[GOAL_SAIL]
+    assert _post(_site(lb), {f"verdict-{sail}": "stalled", f"note-{sail}": "On land."}).status == 303
+    files = walk._files(lb.root)
+    response = _post(_site(lb), {f"verdict-{sail}": "stalled", f"note-{sail}": "Still on land."})
+    said = html.unescape(response.body.decode("utf-8"))
+    assert response.status == 400 and GOAL_SAIL in said and "nothing was written" in said
+    assert walk._files(lb.root) == files
+    assert _post(_site(lb), {f"verdict-{sail}": "stalled"}).status == 303, "the same verdict: nothing"
+    assert walk._files(lb.root) == files
+
+
+def test_words_without_a_verdict_name_the_goal(lb: Logbook) -> None:
+    sail = _ids(lb)[GOAL_SAIL]
+    response = _post(
+        _site(lb), {f"verdict-{sail}": "", f"note-{sail}": "On land.", "keep": "1", "intention": MINE}
+    )
+    said = html.unescape(response.body.decode("utf-8"))
+    assert response.status == 400 and GOAL_SAIL in said and "nothing was written" in said
+    assert _intentions(lb) == []
+
+
+def test_two_lines_of_one_goal_s_chain_are_one_goal(lb: Logbook) -> None:
+    sail = _ids(lb)[GOAL_SAIL]
+    code, _out, err = run_cli("goal", "add", "Sail to Lofoten and back in July.", "--horizon", "year",
+                              "--from", "2026-06-01", "--supersedes", sail)  # fmt: skip
+    assert code == 0, err
+    later = _ids(lb)["Sail to Lofoten and back in July."]
+    files = walk._files(lb.root)
+    response = _post(_site(lb), {f"verdict-{sail}": "stalled", f"verdict-{later}": "advancing"})
+    assert response.status == 400 and "two verdicts" in html.unescape(response.body.decode("utf-8"))
+    assert walk._files(lb.root) == files

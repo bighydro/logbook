@@ -18,7 +18,9 @@ Two acts, both the owner's words, tier 2, each on the week's Sunday:
 
 `close` is the week page's one POST: every item checked first under one writer lock (each verdict
 through `goals.review`'s own checks, `dry_run`; the intention through `keep`'s), and only then written,
-under the same lock, so any refusal writes nothing. A week is closed on its Sunday or after it, never
+each line through its writer, under the same lock: every refusal comes before the first line, so a
+refusal writes nothing. (A disk that fails between two appends is the store's to report, as for any
+writer that appends more than one line.) A week is closed on its Sunday or after it, never
 before: a Sunday ahead of today is refused."""
 
 from __future__ import annotations
@@ -31,7 +33,7 @@ from datetime import date, timedelta
 from ..core import day_start, goals, notes
 from ..core.chain import Line
 from ..core.export import parse_day
-from ..core.store import Logbook, retractions
+from ..core.store import Logbook, retractions, utc
 from . import week_paper
 
 INTENTION = notes.INTENTION
@@ -157,15 +159,18 @@ def keep(lb: Logbook, sunday: str, text: str, today: str | None = None, dry_run:
         earlier = kept(lb, day)
         if earlier is not None and (earlier.get("payload") or {}).get("text") == said:
             return Kept(None, earlier, None)
-        notes.moment(day, str(lb.meta["timezone"]), None, on, days)
+        stamp = notes.moment(day, str(lb.meta["timezone"]), None, on, days)
+        if days.day_of(stamp) != day:  # kept as the Sunday turned to Monday: the Sunday's last minute
+            stamp = utc((days.span(date.fromisoformat(day))[1] - timedelta(minutes=1)).isoformat())
         if dry_run:
             return Kept(None, None, earlier)
-        line = notes.write(
+        line = notes.write(  # at the moment taken once: a slow write never moves the line off its Sunday
             lb,
             day,
             said,
             INTENTION,
             SOURCE,
+            at=stamp,
             today=on,
             supersedes=None if earlier is None else str(earlier["id"]),
         )
@@ -181,9 +186,10 @@ def close(
 ) -> Closed:
     """The week page's one POST: each verdict on a goal, and the intention when one is told, every one
     checked before the first line is written and all of it under one writer lock, so a refusal
-    (`CloseError`, naming the item) writes nothing. Nothing told is refused too."""
+    (`CloseError`, naming the item) writes nothing. A verdict told with no word is no verdict, and your
+    words on it are refused; nothing told is refused too."""
     week, monday, sunday = week_paper.parse_week(week)
-    if not verdicts and intention is None:
+    if not any(v.word.strip() or v.note for v in verdicts) and intention is None:
         raise CloseError("nothing to write: give a goal its verdict, or keep the intention")
     with lb.writer():
         days = day_start.of(lb.meta)
@@ -202,6 +208,11 @@ def close(
             if str(current["id"]) in seen:
                 raise CloseError(f"goal “{text}” is given two verdicts; give it one; nothing was written")
             seen.add(str(current["id"]))
+            if not v.word.strip():
+                raise CloseError(
+                    f"goal “{text}”: your words on it go with a verdict; choose one of the five, or leave"
+                    " the words out; nothing was written"
+                )
             try:
                 checked = goals.review(lb, v.goal, v.word, PERIOD, v.note, at=sunday, dry_run=True)
             except goals.GoalError as e:
@@ -212,9 +223,14 @@ def close(
                 for r in reviews
                 if str(r["payload"]["goal"]) in chain and monday <= days.day_of(str(r["at"])) <= sunday
             ]
-            same = checked.existing is not None and checked.existing["payload"].get(
-                "disposition"
-            ) == goals.disposition(v.word)
+            existing = (checked.existing or {}).get("payload") or {}
+            same = existing.get("disposition") == goals.disposition(v.word)
+            if same and v.note is not None and v.note.strip() != existing.get("note"):
+                raise CloseError(
+                    f"goal “{text}” has the verdict {existing.get('disposition')} for {week} already, in"
+                    " other words; a second verdict writes nothing, so your words would be lost; nothing"
+                    " was written"
+                )
             if earlier and not same:
                 said = checked.existing or earlier[-1]
                 raise CloseError(
@@ -224,5 +240,5 @@ def close(
                 )
         if intention is not None:
             keep(lb, sunday, intention, on, dry_run=True)
-        written = [goals.review(lb, v.goal, v.word, PERIOD, v.note, at=sunday) for v in verdicts]
+        written = [goals.review(lb, v.goal, v.word, PERIOD, v.note, at=sunday) for v in verdicts if v.word]
         return Closed(written, keep(lb, sunday, intention, on) if intention is not None else None)

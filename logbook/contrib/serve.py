@@ -1145,26 +1145,20 @@ class Site:
         and the `intention` when `keep` is ticked, through `week_close.close`, the writers `goal review
         GOAL VERDICT --period week --at SUNDAY` and `day reflect SUNDAY --intention` run: every item
         checked before the first line, under one writer lock, so a refusal (a 400) writes nothing.
-        Your words on a goal given no verdict are refused, as `review goal`'s `--note` is. Done, a 303
-        to the week at Close the week."""
+        Your words on a goal given no verdict are refused, naming it, as `review goal`'s `--note` is.
+        Done, a 303 to the week at Close the week."""
         if form.get("act", "") != "close":
             return self._error(400, "the form names an act: close")
         try:
             week = week_paper.parse_week(week)[0]
         except ValueError as e:
             return self._error(400, str(e))
-        verdicts, unsaid = [], []
+        verdicts = []
         for name, value in form.items():
             goal = name.removeprefix("verdict-")
             said = form.get(f"note-{goal}", "").strip() or None
-            if goal != name and value.strip():
-                verdicts.append(week_close.Verdict(goal, value, said))
-            elif goal != name and said is not None:
-                unsaid.append(goal)
-        if unsaid:
-            return self._error(
-                400, "your words on a goal go with its verdict: choose one of the five; nothing was written"
-            )
+            if goal != name and (value.strip() or said is not None):  # words with no verdict: `close` refuses
+                verdicts.append(week_close.Verdict(goal, value.strip(), said))
         intention = form.get("intention", "") if form.get("keep") == "1" else None
         with self._write_lock:
             try:
