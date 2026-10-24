@@ -312,8 +312,8 @@ under it, one kept already, a photo starred already, `--mend` or `--revisit` for
 keep, a revisit that is not a later day, a word that is two words or a number, a second word on the day,
 a task given two answers, one `show plan` does not list, one answered already. Then, under one hold of
 the writer lock, the lines are written in that order (the sentences, the links, the photo, the word,
-the answers), after the events you `--accept` and, under `day reflect`, after the reflection and its
-delegations; then the signature, which confirms them. Signing again keeps them, as it keeps any line it
+the answers), after the events you `--accept` and, under `day reflect`, after the reflection and before
+its delegations (RFC 0043 §5); then the signature, which confirms them. Signing again keeps them, as it keeps any line it
 confirmed, and never writes them twice. A busy record (another command writing) is said in one
 sentence and nothing is written. Bare `logbook day DAY` refuses these flags; `day reflect` takes them
 only with `--sign`.
@@ -323,6 +323,10 @@ dream of the day, is left out of `confirmed` by `day sign`, `--confirm all`, `da
 page's Sign and the door's `sign_day`; `--confirm` or a disposition that names it is refused. The page
 digest still covers it, so you signed what you were shown. A day signed before this rule that confirmed
 its draft loses it on its next signature.
+
+The Day page keeps and signs the same from one form, *Keep and sign*, in its evening shape and when a
+signed day is signed again: every box, field and choice is one of these flags, and the page writes
+these lines byte for byte ([serve](serve.md#keep-and-sign)). `--mend` stays at the command line.
 
 `--keep` sits one letter from `--kept`, the disposition: `--kept` says what became of a commitment on
 the page, `--keep` keeps the dream's pencil in ink. The door's `sign_day` takes neither `--keep` nor

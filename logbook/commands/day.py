@@ -1101,8 +1101,8 @@ def _reflect_sign(
     of the writer lock, the page read again (a disposition's line retracted while the owner answered
     is refused, nothing written), the proposed events accepted read again and made into their lines
     (`dream_events.prepared`) and what the owner keeps checked (`keep.prepared`), the reflection
-    written when it is new, the accepted delegations written as notes, the accepted events as event
-    lines, what is kept (`keep.write`), then the signature through `signing.sign`, never confirming a
+    written when it is new, the accepted events as event lines, what is kept (`keep.write`), the
+    accepted delegations written as notes, then the signature through `signing.sign`, never confirming a
     draft line; each step printed as it is done. HeadMoved and another writer are the store's own
     errors, said by `cli.main`; nothing is retried."""
     closed = reflect.close(

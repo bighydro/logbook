@@ -600,8 +600,9 @@ has it. Afterwards the section opens with the signature as `day sign` prints it,
 *signature* row says when, which line, how many lines it confirmed of the page's, and the page
 digest whole (`page sha256 …`), with `, the page has changed since` once a line is added to the day.
 
-**One path, this machine only.** The forms post to `/day/YYYY-MM-DD/reflect` and
-`/day/YYYY-MM-DD/sign`, held to the Places page's rule: a loopback client and, when the browser sends
+**One path, this machine only.** The forms post to `/day/YYYY-MM-DD/reflect` (Reflect, the recording,
+and the evening's *Dream the day so far*) and `/day/YYYY-MM-DD/sign` (Sign, and Keep and sign below),
+held to the Places page's rule: a loopback client and, when the browser sends
 one, an `Origin` of `127.0.0.1` or `[::1]`, else `403` and nothing written; a GET of either is a
 `405`. Nothing is written without the click: reading the page offers the draft and shows the boxes,
 and writes nothing. A form older than the record is refused, `409` and nothing written: a Sign whose
@@ -612,8 +613,10 @@ command refuses (an empty reflection, a number no proposal has) is a `400` with 
 never waits for another writer: while a sync holds the record it says so (`409`, the one answer
 [above](#three-rules)), keeps your words, and you click *Try again*. Every write in the server is one at a time.
 
-**Not the door.** The page never reads `policy/crossing.json`: this is not the MCP door (ADR 0022),
-and its `write` list may stay empty. The Library is your own Sign path, on your own machine. The
+**Not the door.** The page reads `policy/crossing.json` for the entries that say which drafts it shows
+(`dream`, and `relationship` for a person's) and whether *Dream the day so far* is offered, never its
+`write` list: this is not the MCP door
+(ADR 0022), and that list may stay empty. The Library is your own Sign path, on your own machine. The
 Purser, the orchestrator that builds the Day page elsewhere and carries your verdict back through
 `sign_day`, remains an alternative front door, open only when you name the tool in that list
 ([the signed day](signed-day.md#signing-through-the-door)).
@@ -622,6 +625,52 @@ Purser, the orchestrator that builds the Day page elsewhere and carries your ver
 draft.* It is true because the rows are computed by the readers and the proposals by rules, and the
 one thing a model writes about a day, the dream's draft, is headed *Draft* with the model's name and
 every unsupported sentence marked.
+
+## Keep and sign
+
+In the evening shape of a Day (today after the evening hour, or a past day not yet signed) and when a
+signed day is signed again, the Sign form is Keep and sign (RFC 0043 §5): what you keep of the day,
+answered in one form and written in one POST to `/day/YYYY-MM-DD/sign`, under one hold of the writer
+lock, before the signature. Every control is a flag of the command, and the page and the command write
+the same lines, byte for byte, but for the line ids and the clock:
+
+| On the page | At the command line | What it writes |
+|---|---|---|
+| a box on a sentence or a link of the pencil, numbered `keep N` | `--keep N,N` | a `note/v1` labelled `learned`, `decision` or `idea`; a link's `entity/v1`; the photo of the day's star and its note |
+| *revisit on* beside a decision | `--revisit N=YYYY-MM-DD` | the kept decision's `extra.revisit`, a day after the day signed |
+| *the day in a word* | `--word WORD` | a `note/v1` labelled `word`, one on a day |
+| *done*, *tomorrow* or *let go* on a task of the day | `--done T,T`, `--tomorrow T,T`, `--let-go T,T` | a `note/v1` labelled `task` for each task answered |
+| a box on a delegation (the proposals, as above) | `--accept N,N` (`day reflect --sign`) | the delegation's `note/v1` |
+| *Sign*, *Sign again* | `logbook day reflect DAY --sign` | the `signed-day/v1` line, the kept lines among those it confirms, never the draft |
+
+So `logbook day reflect 2026-10-20 --sign --keep 2,3,4 --revisit 4=2026-11-20 --word calm --done 1
+--let-go 2 --accept 1` is the same click, and `logbook day sign 2026-10-20 --keep 2,3,4 --revisit
+4=2026-11-20 --word calm --done 1 --let-go 2` the same without the delegation. The numbers are the
+command's: `logbook day DAY` prints `keep N` at the end of each keepable row and `logbook show plan DAY`
+numbers the day's tasks. A sentence of the pencil is in pencil (graphite on paper) until you keep it,
+then in ink with the line it became, and no box: a re-sign keeps it and never writes it twice. A task
+answered already says how; the day's word, once kept, stands. Nothing chosen writes nothing: a task
+with no answer is no line, an empty word no word. The tasks are the plan's as `show plan` reads them
+(tier 1 alone), read beside the page on `logbook serve`; until they are read the form says so.
+
+Every item is checked before the first line is written, by the code `--keep` runs (`keep.prepared`),
+and any refusal writes nothing and is a `400` in one sentence: a number the pencil does not give, an
+event (`--accept` writes those), a sentence that rests on no line, a revisit day that is not a later
+day or not on a kept decision, two words or a number for the word, a task that is not the day's. A
+form older than the record is a `409` with nothing written: a pencil dreamed again since the page was
+read (the form carries the draft's id), or the day's tasks changed (it carries their ids, digested),
+so a number never answers a task the page did not show. A head that moved while the close was read
+and checked is `HeadMoved`, before the first line.
+
+**Dream the day so far.** Today's evening opens with a button that runs `logbook dream day TODAY
+--evening` (`dream.dream`, under the writer lock): the draft of the day so far, written as the
+command writes it, comes back in pencil above the form, and nothing of it is kept until you keep it.
+The button is there only while the owner's `dream` entry in `policy/crossing.json` stands ([the
+dream](dream.md#the-policy-entry)); without one, the page says in one sentence how to add it, and
+nothing of the day is sent. The dream holds the record's writer lock while the model answers, as the command does, and
+the server's other forms wait for it. An expired entry, an endpoint not set, a day with nothing to dream: the
+dream's own sentence, and nothing sent. A past day is dreamed whole at the command line, `logbook
+dream day DAY`.
 
 ## The Day — Star and With
 
@@ -946,8 +995,8 @@ than the column on some days, scrolls inside its own box.
 
 ## What it is not
 
-Not an editor: the pages write nothing but the namings, the reviews, an org's or an idea's status, the reflection
-and the signature, the stars and the company said above, and the captain's other words — a note, a
+Not an editor: the pages write nothing but the namings, the reviews, an org's or an idea's status, the reflection,
+the notes kept at the close, the signature, the stars and the company said above, and the captain's other words — a note, a
 confirmation of a line — go through the CLI as lines in the record, which the next page reads. Not a
 web application: no framework, no build step, no
 state but the record, and two inline scripts, a dozen lines for three keys and a score for one
