@@ -1591,8 +1591,8 @@ class Site:
         if (day := DAY_PATH.match(path)) is not None:  # today's shape and its now line move with the clock
             parts.append(day_rhythm.clock_tag(day.group(1), meta, self.now()))
             parts.append(self._day_later_tag())  # a reconnect read off the request has arrived
-        if path == "/":  # Today's promises, plan and replies owed, read off the request, have arrived
-            parts.append(self._day_later_tag())
+        if path == "/" and self.read_later:  # Today's promises, plan and replies owed, read off the
+            parts.append(self._day_later_tag())  # request, have arrived (on it, the page holds them)
         parts += self._beside()
         digest = hashlib.sha256("\n".join(parts).encode("utf-8")).hexdigest()
         return f'"{str(meta.get("head") or "")[:HEAD_CHARS]}-{digest[:16]}"'
@@ -1703,7 +1703,7 @@ class Site:
     def _page(self, path: str, params: Mapping[str, str]) -> str:
         if path == "/":
             return door_today.page_today(self)
-        if path == SHELVES:
+        if path == "/shelves":  # SHELVES, the shelves listed
             return self.page_index()
         if (m := DAY_PATH.match(path)) is not None:
             return self.page_day(m.group(1), expanded=params.get("open") == "1", shape=params.get("shape"))

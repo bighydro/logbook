@@ -94,7 +94,7 @@ text-decoration:none}
 ul.open a.what.pencil{color:var(--pencil);text-decoration:underline dotted var(--pencil-rule);
 text-underline-offset:.22em}
 ul.open span.sub{display:block;margin-top:.15rem;color:var(--pencil);font-size:.85rem}
-ul.open li.more{color:var(--pencil);font-size:.85rem}
+ul.open li.more{display:block;color:var(--pencil);font-size:.85rem}
 p.said{margin:0;color:var(--pencil)}
 a.memory{display:block;padding:1.1rem 1.2rem;border-radius:14px;background:var(--card-dark);
 color:var(--card-dark-text);text-decoration:none;overflow-wrap:anywhere}
@@ -404,7 +404,6 @@ def memory(lb: Logbook, today: str, airports: Airports, tiers: Sequence[int] | N
     held: list[tuple[int, str, list[Line]]] = []
     with lb.index() as idx:
         retracted = retractions(idx.retractions())
-        signed = signing.standing(idx, owner)
         for years in range(1, MEMORY_YEARS + 1):
             then = same_day(today, years)
             if then < first:
@@ -412,6 +411,8 @@ def memory(lb: Logbook, today: str, airports: Airports, tiers: Sequence[int] | N
             if idx.source_days(then, then, tiers)[0] == 0:
                 continue
             held.append((years, then, reading.crossing(idx.day(then), tiers)))
+        reflected_on = any(notes.standing(on_day, notes.REFLECTION, retracted) for _y, _t, on_day in held)
+        signed = signing.standing(idx, owner) if reflected_on else {}  # the signatures, when it matters
     if not held:
         return NO_YEAR_BACK
     reads = 0

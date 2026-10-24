@@ -332,7 +332,6 @@ def test_an_empty_record_is_kind_sentences_and_no_error(
 def test_today_keeps_its_tag_through_the_day_and_moves_with_it(lb: Logbook) -> None:
     clock = [_at(TODAY, "07:00")]
     site = serve.Site(lb, now=lambda: clock[0])
-    site.respond("/")  # the first reading: what it read beside the page is in the tag from now on
     morning = site.respond("/")
     clock[0] = _at(TODAY, "12:00")
     noon = site.respond("/")
@@ -341,6 +340,23 @@ def test_today_keeps_its_tag_through_the_day_and_moves_with_it(lb: Logbook) -> N
     clock[0] = _at("2026-06-20", "07:00")
     tomorrow = site.respond("/")
     assert tomorrow.etag != morning.etag and "Saturday 20 June" in tomorrow.body.decode("utf-8")
+
+
+def test_live_what_reads_beyond_the_day_is_read_beside_the_page_and_said_until_it_is_here(
+    lb: Logbook,
+) -> None:
+    site = _site(
+        lb, read_later=True
+    )  # `logbook serve`: never a reading of the record while the browser waits
+    first = site.respond("/")
+    said = _text(_section(first.body.decode("utf-8"), "open"))
+    assert "Still reading the promises, the replies owed and the plan" in said and NOTE_HOME not in said
+    assert len(re.findall(r"\. ", said.strip())) == 0, "one sentence"
+    site.settle()
+    second = site.respond("/", "", if_none_match=first.etag)
+    assert second.status == 200 and second.etag != first.etag, "the tag names what has arrived"
+    said = _text(_section(second.body.decode("utf-8"), "open"))
+    assert NOTE_HOME in said and TASK in said and "Still reading" not in said
 
 
 def test_the_shelves_listed_move_to_their_own_address_and_the_old_pages_keep_their_look(lb: Logbook) -> None:
