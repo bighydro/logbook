@@ -69,6 +69,7 @@ if TYPE_CHECKING:
     from .serve import Site
 
 LABELS_MOST = 8  # the globe names at most this many places
+LABEL_CHAR, LABEL_HIGH = 11.0, 20.0  # a label's letter and line, in the SVG's units, at its phone size
 HOME_M = 400.0  # a night this close to a home is a night at home (the trips reader's home region)
 AWAY_KM = 50.0  # an entry ahead this far from home is a trip or a visit; an airport nearer is home's
 AHEAD_DAYS = 365  # what the calendar holds this far ahead is read
@@ -106,6 +107,8 @@ NO_PLACES = (
 NOBODY = "Nobody yet. People appear here once the calendar, a photo or your own words put them here with you."
 NO_DAYS = "No day here yet. A day appears once one of your stays is at this place."
 NO_TRIPS = "No trip through it yet. A trip appears once you spend a night away from home here."
+FROM_HOME = "Every trip starts here; each shows on the places it reaches."
+QUIET = "Nothing recorded in {year} yet: the globe fills in as the record reaches back."
 
 STYLE = """
 .door-places{background:var(--paper,#F4F1EA);color:var(--ink,#16181D);border-radius:22px;
@@ -142,7 +145,9 @@ stroke-linejoin:round}
 .door-places svg.globe .arc.next{stroke:#F2A27E;stroke-width:1.8}
 .door-places svg.globe .end{fill:#C9C4B8}
 .door-places svg.globe .end.next{fill:#F2A27E}
-.door-places svg.globe text{font-family:Inter,system-ui,sans-serif;font-size:16px;fill:#C9C4B8}
+.door-places svg.globe text{font-family:Inter,system-ui,sans-serif;font-size:16px;fill:#C9C4B8;
+paint-order:stroke;stroke:#0E141B;stroke-width:4px;stroke-linejoin:round}
+.door-places svg.globe text.faint{opacity:.4}
 .door-places svg.globe text.home{fill:#F4F1EA}
 .door-places svg.globe text.next{fill:#F2A27E}
 .door-places .scrub-years,.door-places .globe-card .pencil-line,.door-places form.scrub{padding:0 8px}
@@ -171,6 +176,7 @@ gap:2px 12px;padding:10px 0}
 line-height:1.2;min-height:44px;
 display:inline-block;line-height:44px}
 .door-places .what{font-size:13px;color:var(--ink,#16181D)}
+.door-places .lead .what,.door-places .lead .pencil{font-size:18px}
 .door-places .empty{color:var(--pencil,#62666D);margin:0}
 .door-places p.crumb{margin:0 0 12px;font-size:13px}
 .door-places p.crumb a{color:var(--pencil,#62666D);display:inline-block;min-height:44px;line-height:44px}
@@ -180,7 +186,7 @@ display:inline-block;line-height:44px}
 font-size:12px;
 color:var(--pencil,#62666D)}
 .door-places svg.days{display:block;flex:1 1 10rem;min-width:0;max-width:100%;height:22px}
-.door-places svg.days rect{fill:var(--ink,#16181D)}
+.door-places svg.days rect{fill:var(--pencil-rule,#8C8F95)}
 .door-places svg.days rect.base{fill:var(--tint,#EDE8DE)}
 .door-places ul.people{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:8px}
 .door-places ul.people a{display:inline-block;min-height:44px;line-height:44px;padding:0 18px;
@@ -194,7 +200,9 @@ align-items:start}
 .door-places .card{padding:28px}
 .door-places .globe-card{padding:20px}
 }
-@media (max-width:40rem){.door-places{border-radius:18px}}
+@media (max-width:40rem){.door-places{border-radius:18px}
+.door-places svg.globe text{font-size:22px}
+.door-places .scrub-years a.half{display:none}}
 """
 
 
@@ -861,7 +869,8 @@ def globe_svg(reading: Reading, year: int | None) -> str:
         coming = list(reading.ahead)
     else:
         coming = [t for t in reading.ahead if t.first[:4] <= str(year) <= t.last[:4]]
-    labels: list[tuple[float, float, str, str]] = []
+    lived = [t for t in lived if not any(n.first <= t.last and t.first <= n.last for n in coming)]
+    labels: list[tuple[float, float, str, str]] = []  # the point, the words, the class
     if home is not None:
         start = g.at(home.lat, home.lon)
         for trip, cls in [*((t, "past") for t in lived), *((t, "next") for t in coming[:ARCS_MOST])]:
@@ -902,11 +911,14 @@ def globe_svg(reading: Reading, year: int | None) -> str:
         else:
             dots.append(f'<g class="{cls}"><circle class="dot" cx="{x:.1f}" cy="{y:.1f}" r="3"/></g>')
         if p is home or there or year is None:
-            labels.append((x, y, p.name, "home" if p is home else "place"))
-    labels = _placed(sorted(labels, key=lambda lab: {"home": 0, "next": 1}.get(lab[3], 2)))
+            faint = " faint" if year is not None and not there else ""
+            labels.append((x, y, p.name, ("home" if p is home else "place") + faint))
+    placed = _placed(sorted(labels, key=lambda lab: {"home": 0, "next": 1}.get(lab[3].split()[0], 2)))
     texts = [
-        f'<text class="label {cls}" x="{x + 9:.1f}" y="{y + 4:.1f}">{escape(words)}</text>'
-        for x, y, words, cls in labels
+        f'<text class="label {cls}" x="{x:.1f}" y="{y:.1f}"'
+        + (' text-anchor="end"' if anchor == "end" else "")
+        + f">{escape(words)}</text>"
+        for x, y, anchor, words, cls in placed
     ]
     turned = f"turned to {home.name}" if home else "with no home named yet"
     when = f" in {year}" if year is not None else ""
@@ -917,16 +929,28 @@ def globe_svg(reading: Reading, year: int | None) -> str:
     )
 
 
-def _placed(labels: Sequence[tuple[float, float, str, str]]) -> list[tuple[float, float, str, str]]:
-    """At most `LABELS_MOST` labels, none over another already placed."""
-    out: list[tuple[float, float, str, str]] = []
+def _placed(
+    labels: Sequence[tuple[float, float, str, str]],
+) -> list[tuple[float, float, str, str, str]]:
+    """At most `LABELS_MOST` labels, each beside its point (right, left, below, above, the first that
+    is free), none over another already placed: (x, y, anchor, words, class)."""
+    out: list[tuple[float, float, str, str, str]] = []
+    boxes: list[tuple[float, float, float, float]] = []
     for x, y, words, cls in labels:
         if len(out) >= LABELS_MOST:
             break
-        width = 9.0 * len(words) + 12
-        if any(abs(y - oy) < 20 and x < ox + 9.0 * len(ow) + 12 and ox < x + width for ox, oy, ow, _ in out):
-            continue
-        out.append((x, y, words, cls))
+        width = LABEL_CHAR * len(words) + 4
+        for tx, ty, anchor in ((x + 9, y + 6, "start"), (x - 9, y + 6, "end"), (x + 6, y + 26, "start"),
+                               (x + 6, y - 12, "start")):  # fmt: skip
+            x0 = tx - width if anchor == "end" else tx
+            box = (x0, ty - LABEL_HIGH, x0 + width, ty + 4)
+            if box[0] < 0 or box[2] > SIZE or box[1] < 0 or box[3] > SIZE:
+                continue
+            if any(box[0] < b[2] and b[0] < box[2] and box[1] < b[3] and b[1] < box[3] for b in boxes):
+                continue
+            boxes.append(box)
+            out.append((tx, ty, anchor, words, cls))
+            break
     return out
 
 
@@ -938,7 +962,7 @@ def _arc(a: tuple[float, float], b: tuple[float, float], cls: str, c: float) -> 
     nx, ny = -(b[1] - a[1]) / chord, (b[0] - a[0]) / chord
     if nx * (mx - c) + ny * (my - c) < 0 or (abs(mx - c) < 1 and abs(my - c) < 1 and ny > 0):
         nx, ny = -nx, -ny
-    lift = max(8.0, 0.32 * chord)
+    lift = max(8.0, (0.46 if cls == "next" else 0.3) * chord)  # a trip ahead apart from one lived
     qx, qy = mx + nx * lift, my + ny * lift
     dash = ' stroke-dasharray="5 5"' if cls == "next" else ""
     return (
@@ -1021,22 +1045,30 @@ def door(site: Site, year: str | None = None) -> str:
 def _scrubber(site: Site, reading: Reading, first: int, last: int, at: int | None) -> str:
     today = date.fromisoformat(reading.today)
     where = f"{at}" if at is not None else f"{MONTHS[today.month - 1]} {today.year}"
+    quiet = at is not None and not any(_in(d, f"{at}-01-01", f"{at}-12-31") for d in reading.days.values())
+    quiet = quiet and not any(t.first[:4] <= str(at) <= t.last[:4] for t in [*reading.trips, *reading.ahead])
     lines = (
-        f'<p class="pencil-line">Your life, from {first}</p>\n'
+        (f'<p class="pencil-line">{escape(QUIET.format(year=at))}</p>\n' if quiet else "")
+        + f'<p class="pencil-line">Your life, from {first}</p>\n'
         f'<p class="pencil-line">{escape(where)}{DOT}choose a year to travel in time</p>\n'
     )
     if site.static:
         return lines
     years = [first, *(y for y in range(first + 1, last) if y % YEAR_LINKS_EVERY == 0), last]
     years = list(dict.fromkeys(years))
+    ends = (first, last)
     links = "".join(
-        f'<a href="/places?at={y}"' + (' aria-current="true"' if y == at else "") + f">{y}</a>" for y in years
+        f'<a href="/places?at={y}"'
+        + (' class="half"' if y not in ends and y % (2 * YEAR_LINKS_EVERY) else "")
+        + (' aria-current="true"' if y == at else "")
+        + f">{y}</a>"
+        for y in years
     )
     value = at if at is not None else today.year
     value = max(first, min(last, value))
     ticks = "".join(f'<option value="{y}"></option>' for y in years)
     return (
-        f'<nav class="scrub-years" aria-label="The years of your life">{links}</nav>\n'
+        f'<div class="scrub-years" role="navigation" aria-label="The years of your life">{links}</div>\n'
         '<form class="scrub" method="get" action="/places">'
         f'<input type="range" name="at" min="{first}" max="{last}" step="1" value="{value}"'
         ' list="door-places-years" aria-label="the year">'
@@ -1200,14 +1232,23 @@ def _folk(site: Site, folk: Sequence[tuple[str, str]]) -> str:
 
 
 def _through(site: Site, reading: Reading, p: Place) -> str:
+    """The trips that passed through the place, the latest first: each its days to the return day, in
+    the serif, and in pencil where else it went."""
     found = [t for t in reading.trips if p.id in t.places]
     if not found:
-        return f'<p class="empty">{escape(NO_TRIPS)}</p>\n'
+        return f'<p class="empty">{escape(FROM_HOME if p.home else NO_TRIPS)}</p>\n'
+    names = {q.id: q.name for q in reading.places}
     out = ['<ol class="rows">\n']
     for t in found:
+        back = (date.fromisoformat(t.last) + timedelta(days=1)).isoformat()
+        elsewhere = [names[i] for i in sorted(t.places) if i != p.id and i in names]
+        if t.name != p.name and t.name not in elsewhere:
+            elsewhere.insert(0, t.name)
+        nights = "the night" if t.first == t.last else "the nights"
+        said = f"also {', '.join(elsewhere)}" if elsewhere else f"{nights} at {p.name}"
         inner = (
-            f'<span class="where">{escape(t.name)}</span>'
-            f'<span class="when">{escape(span_words(t.first, t.last))}</span>'
+            f'<span class="where">{escape(span_words(t.first, back))}</span>'
+            f'<span class="when">{escape(said)}</span>'
         )
         href = site.href(t.link)
         out.append(

@@ -190,6 +190,8 @@ def test_a_year_turns_the_globe_to_it(lb: Logbook) -> None:
     before = _door(_get(site, "/places", "at=2010"))
     assert not re.search(r'class="arc', before), "no trip that year"
     assert 'class="place home faint"' in before, "the places of other years faint"
+    assert "Nothing recorded in 2010 yet" in before, "a year the record does not reach, said once"
+    assert "Nothing recorded" not in now
     assert site.respond("/places", "at=59.9200,10.7400").status in (200, 302), "a stay's spot, as before"
     assert site.respond("/places", "at=nowhere").status == 400
 
