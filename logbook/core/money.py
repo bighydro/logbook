@@ -2,7 +2,9 @@
 `transaction/v1` lines (RFC 0021) of the local days [start, end], each with its merchant and amount,
 and the totals per currency, read as the ledger reads them (`ledger.standing`: a correction in the
 place of the line it supersedes; a retracted line out; a line the source marks deleted listed, marked
-and never summed). It writes nothing (ADR 0013), and receipt mails are not read here.
+and never summed; a receipt's own line that a payment source's line holds out, named as that
+payment's `receipt`, `ledger.held_of`). It writes nothing (ADR 0013), and receipt mails are not read
+here.
 
 **When no payment source covers the window**, it says so from the record's own lines and sums
 nothing: a payment source covers the days from its first transaction line to its last (a retracted
@@ -53,6 +55,7 @@ class Payment:
     deleted: bool
     source: str
     line: str
+    receipt: str | None = None  # the receipt's line this payment's evidence is (`ledger.held_of`)
 
     def to_json(self) -> dict[str, Any]:
         return {
@@ -64,6 +67,7 @@ class Payment:
             "deleted": self.deleted,
             "source": self.source,
             "line": self.line,
+            "receipt": self.receipt,
         }
 
 
@@ -104,10 +108,16 @@ def money_in(lb: Logbook, start: str, end: str, tiers: Sequence[int] | None = No
     with lb.index() as idx:
         retracted = retractions(idx.retractions())
         lines = [x for x in idx.by_kind(KIND, start, end) if str(x.get("id")) not in retracted]
+        held = ledger.held_through(ledger.held_of(idx), tiers)
         span = idx.span(KIND)
         if span is not None:
             span = _standing_span(idx, retracted, days, *span)
-    payments = [_payment(line, days) for line in ledger.standing(lines)]
+    by_payment = ledger.receipts_of(held)
+    payments = [
+        _payment(line, days, by_payment.get(str(line.get("id"))))
+        for line in ledger.standing(lines)
+        if str(line.get("id")) not in held
+    ]
     payments.sort(key=lambda p: (p.day, p.at, p.line))
     totals = _totals(payments)
     one = start == end
@@ -175,7 +185,7 @@ def _no_source(one: bool, where: str) -> str:
     return NO_SOURCE.format(days="this day" if one else "these days", where=where)
 
 
-def _payment(line: Line, days: day_start.DayStart) -> Payment:
+def _payment(line: Line, days: day_start.DayStart, held: ledger.Held | None = None) -> Payment:
     """One transaction line read, on the local day of its instant: the day the window is cut by (a
     source that files by the day puts `at` at that day's local midnight, RFC 0021 rule 5)."""
     payload = line.get("payload") or {}
@@ -193,6 +203,7 @@ def _payment(line: Line, days: day_start.DayStart) -> Payment:
         deleted=extra.get("deleted") is True,
         source=str(line.get("source") or ""),
         line=str(line.get("id")),
+        receipt=None if held is None else held.receipt,
     )
 
 

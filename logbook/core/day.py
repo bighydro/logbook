@@ -55,7 +55,9 @@ What a Day shows, in order:
    sleep once, on the night row, and leaves out a health row that had nothing else), the day's
    steps, the resting heart rate, from the `health-sample/v1` lines standing, a correction superseding what it
    corrects. Then, when the day has a `transaction/v1` line, the spend line (`ledger.spend`): the
-   totals per currency in the lines' own currencies, how many transactions, the merchants.
+   totals per currency in the lines' own currencies, how many transactions, the merchants; a
+   receipt's line (`review receipts`) that a payment source's line holds is that payment's evidence,
+   named under `receipts` on the payment's day, and never a second payment (`ledger.held_of`).
    And when the day has `weather/v1` lines (RFC 0026, `logbook sync weather`), one
    weather line (`weather.day_row`): the cluster of the night after when the day has one, else
    the first, every cluster of the day under `places`; a day without them has no row. The lines are
@@ -298,7 +300,7 @@ def of_reading(
         "unplaced": _unplaced(folded, stands_for, entries, tz, rd),
         "stories": [story.summary(line, rd.names) for line in story.about(stories or (), day)],
         "health": health_row,
-        "spend": ledger.spend(lines, day),
+        "spend": ledger.spend(lines, day, ledger.held_in(rd, lines)),
         "weather": weather.day_row(  # by the line's own day: under a `day_start` it starts on the day before
             weather.by_day(rd.by_kind.get(weather.KIND, ())).get(day, []),
             None if night_after is None else night_after.position,

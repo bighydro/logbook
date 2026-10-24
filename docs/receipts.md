@@ -135,18 +135,23 @@ same payment, both lines stand for one payment. The queue lists the pair as **co
   —  2026-09-03  Fjordkaffe  CHF -1 234.50  receipt #12 is covered by google-takeout #14, which wins: logbook repair retract 12 "covered by google-takeout #14"
 ```
 
-The payment source's line wins. The receipt's line is the one to take back, and the row prints the
-command that does it: `logbook repair retract SEQ`, a retraction appended through the same writer. A
-retracted line is out of every reader, the ledger included. The queue writes nothing on its own: you
-run the command.
+The payment source's line wins, and it is counted once already, before you do anything: every reader
+that sums the ledger (the Day's spend, `rollup ledger`, `rollup money`, a trip's spend, an org's money,
+the money slot) pairs a receipt's line with the payment source's line that holds the same payment, by
+the rule above (the currency, the signed amount, within two days, the merchant), and counts the
+source's line alone, the receipt named as its evidence (`1 with its receipt` on the Day). One source
+line holds one receipt: two dinners of one price are two payments until the source has delivered both.
+
+The receipt's line is still the one to take back, and the row prints the command that does it:
+`logbook repair retract SEQ`, a retraction appended through the same writer. A retracted line is out of
+every reader, the ledger included. The queue writes nothing on its own: you run the command.
 
 Why not a superseding line? The record's rule (SPEC §3) puts a line that names another in
 `payload.supersedes` *in its place*. Only the payment source's own line could do that, and an adapter
 does not know the receipt's id. A new line written here to supersede the receipt would be a second
-copy of the source's payment, and would count it twice. The amendment that would make the ledger's
-line win by itself is an open proposal: RFC 0021 would say that a reader treats a `receipts` line as
-superseded by a matching line of another source. Until that lands, the covered row and the retraction
-are how it is done.
+copy of the source's payment. The pairing is a reader's rule of the reference
+(`logbook.core.ledger.receipts_held`); writing it into RFC 0021, so that a second implementation pairs
+the lines the same way, is an open proposal.
 
 ## Who sees it
 

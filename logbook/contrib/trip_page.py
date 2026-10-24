@@ -34,7 +34,7 @@ from typing import Any, NamedTuple
 
 from ..core import day as day_reader
 from ..core import days as days_reader
-from ..core import health, keepers, present, reading, rollup, stays, trips
+from ..core import health, keepers, ledger, present, reading, rollup, stays, trips
 from ..core import places as named_places
 from ..core.chain import Line
 from ..core.export import day_range, parse_day
@@ -357,9 +357,15 @@ def _keepers(rd: Reading, span: Sequence[str]) -> dict[str, Any]:
 def _spend(rd: Reading, start: str, until: str) -> dict[str, Any] | None:
     """Every `transaction/v1` line standing whose day (`date`, else the local day of `at`) is in
     [start, until], in day order, summed per currency; None when there is none. Amounts are
-    signed from the owner's side (RFC 0021): a sum below zero is money spent."""
+    signed from the owner's side (RFC 0021): a sum below zero is money spent. A receipt's line a
+    payment source's line holds is not one (`ledger.held_in`): it is that payment's `receipt`."""
     found: list[dict[str, Any]] = []
-    for line in rd.of_kind(TRANSACTION):
+    lines = ledger.standing(rd.of_kind(TRANSACTION))
+    held = ledger.held_in(rd, lines)  # a receipt the source's line holds is its evidence, never a payment
+    evidence = ledger.receipts_of(held)
+    for line in lines:
+        if str(line["id"]) in held:
+            continue
         payload = line.get("payload") or {}
         amount = payload.get("amount")
         if isinstance(amount, bool) or not isinstance(amount, int | float):
@@ -376,6 +382,8 @@ def _spend(rd: Reading, start: str, until: str) -> dict[str, Any] | None:
                 "category": payload.get("category"),
                 "provider": payload.get("provider"),
                 "line": str(line["id"]),
+                # only on a payment a receipt stands behind: the Trip's object is otherwise unchanged
+                **({"receipt": evidence[str(line["id"])].receipt} if str(line["id"]) in evidence else {}),
             }
         )
     if not found:
