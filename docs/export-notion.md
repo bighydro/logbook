@@ -60,10 +60,12 @@ logbook export notion ~/Handover/notion --include-unsigned
 ## The window
 
 Every event rests on lines written in the window, from the start of `--since` (default: the record's
-first day) to the moment the record is read, that pass the gate: a contact, a day together, a promise,
-an idea's status entry, a touch. A calendar entry later today is no contact yet. An idea's current status
-is a state, not an event: it is read from every status line the gate lets through, whatever its day, so
-a narrow window never blanks it. The lines that
+first day) to the moment the record is read, that pass the gate: a contact, a promise, an idea's status
+entry, a touch. A calendar entry later today is no contact yet. An idea's current status is a state, not
+an event: it is read from every status line the gate lets through, whatever its day, so a narrow window
+never blanks it. A person's days together are a total in the same way: counted over their whole history
+in the record, from its first day to the moment it is read, through the same gate, so a run over the last
+week still says how many days you have spent together and since when. The lines that
 bind a name to an address or a page, `resolution/v1` and `entity/v1`, come from any day and are held to
 the ceiling and not to the signature, as a crossing package ships its resolution lines: Ola's email is
 his whenever the record learned it. A line the record holds at tier 3 binds nothing here, and an earlier
@@ -92,14 +94,37 @@ the resolution lines hold them) and `facts`:
 
 - `last_contact`: its `date` and `kind` (`together`, `call`, `message`, `transcript`, `event`, `mail` or
   `photo`; a day together names the day when it falls on the last one);
-- `days_together` in the window;
+- `days_together`: the days you spent together over the whole record, not only the window, with
+  `first_together` and `last_together`, the first and the last of them (`YYYY-MM-DD`); 0 and null when
+  there are none;
 - `promises`, open both ways ([promises](promises.md)): `owed_by_owner` and `owed_to_owner`, each
   `{sentence, date, line}`: the sentence as `logbook promises` quotes it (one sentence, its case kept,
-  its whitespace collapsed), the day it was said, the line it was read in. A promise said before the
-  window is not in it; the person's speaker and counterpart are resolved through the same gate.
+  its whitespace collapsed), the day it was said, the line it was read in. Only a promise still open,
+  said in the window and in the 365 days before the moment the record is read, and only from a
+  conversation the person is a direct party to: a one-to-one chat with them, a mail you are both on
+  that did not come through a mailing list, a call or a meeting they spoke in. A group chat, a mailing
+  list, a meeting they were only invited to and a note are not; a quoted part of a mail (the lines after
+  `On … wrote:` or `Am … schrieb …:`, and those that begin with `>`) is never read at all. The newest
+  come first, at most ten a side; `promises_more` counts the rest of each side. The person's speaker and
+  counterpart are resolved through the same gate.
 
 And `page`: those facts as the lines of a page, in German, whole. The program that writes Notion replaces
-a person's page with it and never merges.
+a person's page with it and never merges:
+
+```
+Stand: 15.10.2026, aus dem Logbuch
+Letzter Kontakt: 12.10.2026 (Nachricht)
+Tage zusammen: 14 (zuerst 14.06.2019, zuletzt 10.09.2026)
+Offene Versprechen von mir:
+– „I will call the yard tomorrow.“ (12.10.2026)
+Offene Versprechen an mich:
+– „I'll send you the drawings by Friday.“ (11.10.2026)
+…
+und 3 weitere
+```
+
+With no day together there is no "Tage zusammen" line at all; with more than ten promises a side, the
+side ends in one line, `und N weitere`.
 
 **Ideas.** Every idea whose entity has a Notion page ref: `page` (`notion:<id>`), `status` (the current
 status as the gate lets it be read, whatever its day, tier 2, with the day it took effect and its line;
@@ -130,7 +155,13 @@ Every German word is a fixed template in the code; no model writes or rewrites a
   a printed export, never through Notion.
 - A sentence that names money: a promise or a reason that holds a currency sign, code or word (`450
   NOK`, `2 MNOK`, `€ 12`, `kroner`, `quid`), a Norwegian price (`300,-`) or a figure with a magnitude
-  (`250k`, `5 mill`) is left out and counted. The filter errs towards leaving a sentence out.
+  (`250k`, `5 mill`) is left out and counted. A promise that talks of money without a figure is left
+  out and counted the same way: one about a payment, an invoice, a transfer or a price, in German or
+  English (`Zahlung`, `zahlen`, `Rechnung`, `Überweisung`, `überweisen`, `Preis`, `Geld`, `Kosten`,
+  `invoice`, `payment`, `pay`, `transfer`, `wire`, `price`, `money`, `cost`, in the forms a sentence
+  gives them: "Ich überweise dir das morgen", "send me the invoice"). The words are one list in the code
+  (`notion_export.MONEY_WORDS`). The filter errs towards leaving a sentence out: money stays out of
+  Notion.
 - The text of a message, a mail or a recording, beyond the one sentence a promise quotes; a mail's
   subject; a page's title; a person's name.
 
