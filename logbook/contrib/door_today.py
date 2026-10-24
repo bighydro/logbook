@@ -79,7 +79,7 @@ CHECK = (
 
 STYLE = """
 body.today{background:var(--paper,#F4F1EA);color:var(--ink,#16181D)}
-main.today{max-width:84rem;padding:28px 1.5rem 3rem;font:15px/1.5 var(--sans,system-ui,sans-serif);
+main.today{max-width:none;padding:28px 1.5rem 3rem;font:15px/1.5 var(--sans,system-ui,sans-serif);
 color:var(--ink,#16181D)}
 main.today a{color:inherit}
 main.today h1,main.today h2{font-family:var(--serif,Georgia,serif);font-weight:400;color:var(--ink,#16181D)}
@@ -96,7 +96,7 @@ section.the-day p{margin:0}
 p.weather{font-size:15px;margin:0 0 .5rem}
 p.state{display:flex;align-items:center;gap:.4rem;font-size:15px}
 p.state.signed{color:var(--ink,#16181D)}
-p.state a{color:var(--ink,#16181D)}
+p.state a{display:inline-flex;align-items:center;min-height:44px;color:var(--ink,#16181D)}
 p.empty-record{margin:.8rem 0 0}
 figure.photo{margin:0}
 figure.photo img{display:block;width:100%;height:auto;max-height:34rem;object-fit:cover;border-radius:20px;
@@ -139,8 +139,8 @@ margin:0 0 .6rem}
 dl.questions{margin:1.2rem 0 1.4rem;display:grid;grid-template-columns:max-content minmax(0,1fr);
 gap:.35rem 1rem;color:var(--pencil,#62666D);font-size:15px}
 dl.questions dt{margin:0}dl.questions dd{margin:0;overflow-wrap:anywhere}
-section.acts{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-start}
-section.acts form{margin:0;display:flex;flex-direction:column;gap:10px;flex:1 1 18rem;min-width:0}
+section.acts{display:flex;flex-direction:column;gap:14px;align-items:stretch}
+section.acts form{margin:0;display:flex;flex-direction:column;gap:10px;min-width:0}
 section.acts textarea{width:100%;box-sizing:border-box;min-height:6.5rem;
 font:15px/1.5 var(--sans,system-ui,sans-serif);padding:.7rem .9rem;border-radius:14px;
 border:1px solid var(--line,#E3DED3);background:var(--paper,#F4F1EA);
@@ -151,7 +151,7 @@ section.acts form.sign ol.proposals li{padding:.3rem 0}
 section.acts form button{align-self:flex-start}
 p.sign-later{font-size:13px;margin:0}
 aside.today-aside{display:flex;flex-direction:column;gap:22px;min-width:0}
-aside.today-aside .card{padding:24px}
+aside.today-aside .card{padding:28px}
 ol.week{list-style:none;display:flex;gap:8px;margin:0 0 .8rem;padding:0}
 ol.week a,ol.week span.day{display:flex;flex-direction:column;align-items:center;gap:6px;min-width:32px;
 min-height:44px;text-decoration:none;color:var(--pencil,#62666D);
@@ -174,7 +174,7 @@ p.legend,p.here{font-size:13px}
 @media (max-width:40rem){
 main.today{padding:18px 16px 2rem}
 section.the-day h1{font-size:40px}
-.card,section.year-ago{padding:20px;border-radius:18px}
+.card,section.year-ago,aside.today-aside .card{padding:20px;border-radius:18px}
 section.year-ago p.said{font-size:24px}
 section.owe h2,section.owed h2{font-size:30px}
 span.what{font-size:20px}
@@ -317,7 +317,8 @@ def _the_day(site: Site, day: str, morning: Morning, local: datetime) -> str:
         signed = f"<span>Signed at {escape(morning.signed_at)}</span>"
         parts.append(f'<p class="state signed">{CHECK}{signed}</p>\n')
     elif not empty:
-        sign = "" if site.static else ' <a href="/#acts">Sign it</a>'
+        act = "Sign it" if data.get("reflection") else "Reflect, then sign"  # Sign signs with your words
+        sign = "" if site.static else f' <a href="/#acts">{act}</a>'
         parts.append(f'<p class="state muted">Not signed yet.{sign}</p>\n')
     if empty:
         parts.append(
@@ -475,7 +476,9 @@ def _year_ago_html(site: Site, found: Mapping[str, Any] | None) -> str:
     label = "A year ago today" if years == 1 else f"{years} years ago today"
     then = date.fromisoformat(str(found["day"]))
     when = f"{WEEKDAYS[then.weekday()]} {then.day} {MONTHS[then.month - 1]} {then.year}"
-    where = DOT.join(x for x in (when, str(found["where"] or "")) if x)
+    place = str(found["where"] or "")
+    named = place and place in str(found["sentence"])  # the sentence names it already: the date alone
+    where = when if named else DOT.join(x for x in (when, place) if x)
     link = site.href(f"/day/{found['day']}")
     pill = "" if link is None else f'<a class="pill" href="{escape(link)}">Open that day</a>'
     return (
@@ -549,6 +552,7 @@ def _promise(
         )
     chip = due_words(p.due, day) if p.due else None
     own = p.direction == promises.OWED_BY_OWNER and p.role != promises.ASKED and p.day == day
+    said = said[:1].upper() + said[1:]
     href = shelf_promises.day_line(p.day, p.line)
     return Loose(p.at, f"\u201c{escape(p.match.quote)}\u201d", said, chip, href, RULES, own)
 
@@ -561,7 +565,7 @@ def _you_owe(site: Site, day: str, tz: ZoneInfo, person: Callable[[Mapping[str, 
         for t in plan.tasks["rows"]:
             name = str(t.get("title") or plan_reader.UNTITLED)
             start = str((t.get("date") or {}).get("start") or day)
-            from_plan = ["from your plan"]
+            from_plan = ["From your plan"]
             if t.get("status"):
                 from_plan.append(escape(str(t["status"])))
             if t.get("overdue"):
@@ -713,7 +717,8 @@ def _acts(site: Site, day: str) -> str:
     else:
         text = r.text if has and r is not None else ""
     out.append(
-        f'<textarea name="text" rows="4" aria-label="your reflection" spellcheck="true">'
+        f'<textarea name="text" rows="4" aria-label="your reflection" spellcheck="true"'
+        ' placeholder="A few sentences about the day, in your words.">'
         f"{escape(text, quote=False)}</textarea>\n"
         f'<button name="act" value="reflect" class="{"" if has else "primary"}">'
         f"{'Add to the reflection' if has else 'Reflect'}</button>\n</form>\n"
@@ -816,7 +821,8 @@ def _ahead(found: Sequence[Mapping[str, Any]], person: Callable[[Mapping[str, An
     out = ['<div class="card ahead">\n<p class="mono-label">Coming up</p>\n']
     if not found:
         out.append(
-            '<p class="muted">The calendar\u2019s next days come here once a calendar is synced.</p>\n'
+            '<p class="muted">The next days\u2019 calendar entries come here once your calendar is in'
+            " the record.</p>\n"
         )
     else:
         out.append('<ul class="ahead">\n')
