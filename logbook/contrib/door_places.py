@@ -123,7 +123,7 @@ letter-spacing:.13em;color:var(--pencil,#62666D);margin:0 0 12px}
 .door-places .card{background:var(--surface,#FBFAF6);border:1px solid var(--line,#E3DED3);
 border-radius:18px;
 padding:20px;margin:0 0 16px}
-.door-places .globe-card{background:#0E141B;color:var(--paper,#F4F1EA);border-radius:24px;padding:16px;
+.door-places .globe-card{background:#0E141B;color:var(--paper,#F4F1EA);border-radius:24px;padding:12px 8px;
 margin:0 0 16px}
 .door-places .globe-card .pencil-line{color:var(--muted,#C9C4B8)}
 .door-places .globe-card a{color:var(--paper,#F4F1EA)}
@@ -142,9 +142,10 @@ stroke-linejoin:round}
 .door-places svg.globe .arc.next{stroke:#F2A27E;stroke-width:1.8}
 .door-places svg.globe .end{fill:#C9C4B8}
 .door-places svg.globe .end.next{fill:#F2A27E}
-.door-places svg.globe text{font-family:Inter,system-ui,sans-serif;font-size:12px;fill:#C9C4B8}
+.door-places svg.globe text{font-family:Inter,system-ui,sans-serif;font-size:16px;fill:#C9C4B8}
 .door-places svg.globe text.home{fill:#F4F1EA}
 .door-places svg.globe text.next{fill:#F2A27E}
+.door-places .scrub-years,.door-places .globe-card .pencil-line,.door-places form.scrub{padding:0 8px}
 .door-places .scrub-years{display:flex;flex-wrap:wrap;gap:4px 14px;margin:14px 0 8px;
 font-family:'JetBrains Mono',ui-monospace,monospace;font-size:12px;line-height:1.4}
 .door-places .scrub-years a{display:inline-block;min-height:44px;line-height:44px;
@@ -191,6 +192,7 @@ details.register{margin:0 0 1rem}
 .door-places .grid{display:grid;grid-template-columns:minmax(0,7fr) minmax(0,5fr);gap:24px;
 align-items:start}
 .door-places .card{padding:28px}
+.door-places .globe-card{padding:20px}
 }
 @media (max-width:40rem){.door-places{border-radius:18px}}
 """
@@ -921,22 +923,23 @@ def _placed(labels: Sequence[tuple[float, float, str, str]]) -> list[tuple[float
     for x, y, words, cls in labels:
         if len(out) >= LABELS_MOST:
             break
-        width = 7.0 * len(words) + 12
-        if any(abs(y - oy) < 16 and x < ox + 7.0 * len(ow) + 12 and ox < x + width for ox, oy, ow, _ in out):
+        width = 9.0 * len(words) + 12
+        if any(abs(y - oy) < 20 and x < ox + 9.0 * len(ow) + 12 and ox < x + width for ox, oy, ow, _ in out):
             continue
         out.append((x, y, words, cls))
     return out
 
 
 def _arc(a: tuple[float, float], b: tuple[float, float], cls: str, c: float) -> str:
-    """A curve from `a` to `b` lifted off the disc, away from its centre, as a flight's arc is drawn."""
+    """A curve from `a` to `b` lifted to one side of its chord, the side away from the disc's centre,
+    as a flight's arc is drawn."""
     mx, my = (a[0] + b[0]) / 2, (a[1] + b[1]) / 2
-    dx, dy = mx - c, my - c
-    length = math.hypot(dx, dy) or 1.0
-    lift = max(6.0, 0.35 * math.dist(a, b))
-    qx, qy = mx + dx / length * lift, my + dy / length * lift
-    if length < 2:  # a chord through the centre: lifted to one side of it
-        qx, qy = mx - (b[1] - a[1]) * 0.35, my + (b[0] - a[0]) * 0.35
+    chord = math.dist(a, b) or 1.0
+    nx, ny = -(b[1] - a[1]) / chord, (b[0] - a[0]) / chord
+    if nx * (mx - c) + ny * (my - c) < 0 or (abs(mx - c) < 1 and abs(my - c) < 1 and ny > 0):
+        nx, ny = -nx, -ny
+    lift = max(8.0, 0.32 * chord)
+    qx, qy = mx + nx * lift, my + ny * lift
     dash = ' stroke-dasharray="5 5"' if cls == "next" else ""
     return (
         f'<path class="arc {cls}"{dash} d="M{a[0]:.1f},{a[1]:.1f} Q{qx:.1f},{qy:.1f} {b[0]:.1f},{b[1]:.1f}"/>'
@@ -1002,7 +1005,7 @@ def door(site: Site, year: str | None = None) -> str:
     at = int(year) if year is not None else None
     out = [
         '<div class="door-places">\n',
-        f'<header><h1>Places</h1>\n<p class="lead">{escape(LEAD)}</p></header>\n',
+        f'<div class="head"><h1>Places</h1>\n<p class="lead">{escape(LEAD)}</p></div>\n',
         '<div class="grid">\n<section class="globe-card" aria-label="The globe">\n',
         globe_svg(reading, at),
         "\n",
@@ -1125,7 +1128,7 @@ def page_place(site: Site, place_id: str) -> str:
     out = [
         '<div class="door-places place-page">\n',
         f'<p class="crumb">{site.link("&larr; Places", "/places")}</p>\n',
-        f'<header><h1>{escape(found.name)}</h1>\n<p class="lead" id="what">{what}</p></header>\n',
+        f'<div class="head"><h1>{escape(found.name)}</h1>\n<p class="lead" id="what">{what}</p></div>\n',
         '<section class="card">\n<h2 class="mono">The days there</h2>\n',
         _strip(site, found, days) if days else f'<p class="empty">{escape(NO_DAYS)}</p>\n',
         "</section>\n",
