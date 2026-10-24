@@ -24,7 +24,14 @@ them (Monday's began the Sunday before, whose evening's sleep lines it reads for
 hours, and the workouts (`health.nights`, `health.training`), else `no data` (always so under a
 ceiling under 3: health is tier 3). Each figure carries the ids of the lines it came from, in
 the draft's `extra.numbers` and, as references, in the material; a sentence that writes a figure the
-items it cites do not give is marked unsupported (`dream.hold_numbers`).
+items it cites do not give is marked unsupported (`dream.hold_numbers`). The counts by person are the
+model's to read, never a reader's to print: `extra.numbers.people` keeps each person's name, id,
+lines and contacts (`KEPT_PERSON`: the week page computes who moved from them and prints none), in
+the material's order (the most contacts first), a chat among the threads its counterpart and lines
+without its count, and every reader prints the people by name only (`drafts.names_only`). And, as
+for a day, a month and a chapter, no number stands beside a person, pencil included: a sentence that
+names a canonical person and writes a figure is held (`dream.hold_names`, counted under
+`extra.marked` as `a number beside a person`).
 
 **What else it reads.** The seven days' standing drafts the entry allows, read through the one rule
 (`drafts.through`): a draft above the entry is not read, and the week is refused while a day that has
@@ -108,7 +115,7 @@ from .model_client import Transport
 from .week_paper import parse_week, week_of
 
 PROMPT_FILE = Path(__file__).with_name("dream-week-prompt.md")
-PROMPT_NAME = "dream-week/1"  # kept under `extra.prompt`, so a draft says which prompt wrote it
+PROMPT_NAME = "dream-week/2"  # kept under `extra.prompt`, so a draft says which prompt wrote it
 WEEK_DAYS = 7
 REFS = 12  # the references an item carries, at most; its count is always whole
 SHOWN = 8  # the places, people and threads given, at most, the largest first
@@ -283,8 +290,8 @@ def material(
     threads = _threads(on, names, made, (rd.day_start.span(monday)[0], rd.day_start.span(sunday)[1]))
     read.numbers = {
         "places": [_lined(p, made) for p in places[:SHOWN]],
-        "people": [_lined(p, made) for p in persons[:SHOWN]],
-        "threads": [_lined(t, made) for t in threads[:SHOWN]],
+        "people": [_named(p, made) for p in persons[:SHOWN]],  # no count a reader prints
+        "threads": drafts.names_only({"threads": [_lined(t, made) for t in threads[:SHOWN]]})["threads"],
         "energy": None if energy is None else {k: _lined(v, made) if v else None for k, v in energy.items()},
     }
     made.data = {
@@ -382,6 +389,18 @@ def _lined(item: Mapping[str, Any], made: Material) -> dict[str, Any]:
     out = {k: v for k, v in item.items() if k != "ref"}
     out["lines"] = [made.refs[r] for r in item.get("ref") or [] if r in made.refs]
     return out
+
+
+KEPT_PERSON = ("name", "id", "contacts", "lines")  # what `extra.numbers.people` keeps of a person
+
+
+def _named(person: Mapping[str, Any], made: Material) -> dict[str, Any]:
+    """A person of `time.people` as `extra.numbers` keeps them (`KEPT_PERSON`): the name, the id, the
+    lines, and the week's contacts, which the week page compares with the week before's to say who
+    moved and never prints; not the counts by channel nor the days together. No reader prints a count
+    beside a person (`drafts.names_only`, RFC 0043); the order of the list says who came first."""
+    lined = _lined(person, made)
+    return {k: lined[k] for k in KEPT_PERSON}
 
 
 def _persons(report: people.Report, ids: set[str], made: Material) -> list[dict[str, Any]]:
@@ -624,7 +643,7 @@ def _threads(
     for chat in dream._messages(on, names, made):
         item: dict[str, Any] = {
             "thread": chat["counterpart"],
-            "kind": "chat",
+            "kind": drafts.CHAT,
             "count": chat["count"],
             "ref": chat["ref"][:REFS],
         }
@@ -689,8 +708,9 @@ def shape(found: Mapping[str, Any], read: Read) -> tuple[list[dict[str, Any]], d
     """The answer as a draft has it: the goal items checked first (`_reviews`: a goal of the
     material, a disposition, once each, resting on lines of the week; else dropped and counted), then
     every part's segments in order (`dream.segments_of`), one proposal for next week at most, the
-    number rule held (`dream.hold_numbers`) and the evidence rule's share checked again; and what
-    `extra` keeps of it: `parts`, `goals`, `numbers`, `dropped`, `marked`."""
+    number rule held (`dream.hold_numbers`), no figure beside a person (`dream.hold_names`), and the
+    evidence rule's share checked again; and what `extra` keeps of it: `parts`, `goals`, `numbers`,
+    `dropped`, `marked`."""
     made = read.made
     dropped: Counter[str] = Counter()
     reviews, items = _reviews(found.get("goals"), read, dropped)
@@ -699,7 +719,13 @@ def shape(found: Mapping[str, Any], read: Read) -> tuple[list[dict[str, Any]], d
     for i in reversed(proposals[NEXT_WEEK:]):
         del segments[i], parts[i]
         dropped[MORE_THAN_ONE] += 1
-    marked = dream.hold_numbers(segments, made.data, made)
+    marked: dict[str, int] = {}
+    unbacked = dream.hold_numbers(segments, made.data, made)
+    if unbacked:
+        marked[dream.UNBACKED] = unbacked
+    beside = dream.hold_names(segments, made)
+    if beside:
+        marked[dream.BESIDE_A_NAME] = beside
     dream.share_of(segments, made.unit)
     goal_segments = [i for i, part in enumerate(parts) if part == "goals"]
     extra: dict[str, Any] = {"parts": parts, "numbers": read.numbers}
@@ -713,7 +739,7 @@ def shape(found: Mapping[str, Any], read: Read) -> tuple[list[dict[str, Any]], d
     if dropped:
         extra["dropped"] = dict(dropped)
     if marked:
-        extra["marked"] = {dream.UNBACKED: marked}
+        extra["marked"] = marked
     return segments, extra
 
 
@@ -887,7 +913,8 @@ def catch_up(
 def on_sunday(lb: Logbook, day: str) -> tuple[str | None, dict[str, Any] | None, dict[str, Any] | None]:
     """The week a Sunday closes, its standing draft and its withheld row, as `day DAY` carries them: by
     the Journeys' rule (`drafts.for_unit`: the `dream` entry today, the evidence checked against the
-    week's lines). (None, None, None) on any other day."""
+    week's lines), its numbers as a reader prints them (`drafts.names_only`: never a count beside a
+    person). (None, None, None) on any other day."""
     if parse_day(day).weekday() != SUNDAY:
         return None, None, None
     week, monday, sunday = parse_week(week_of(day))
@@ -903,4 +930,6 @@ def on_sunday(lb: Logbook, day: str) -> tuple[str | None, dict[str, Any] | None,
             if str(line["id"]) not in retracted
         }
     draft, withheld = drafts.for_unit(found, on_week, None, drafts.allowed(lb.root), drafts.NOT_ON_WEEK)
+    if draft is not None and isinstance(draft.get("numbers"), dict):
+        draft["numbers"] = drafts.names_only(draft["numbers"])
     return week, draft, withheld

@@ -1,9 +1,10 @@
 """The week's paper: `logbook digest --paper [--week YYYY-Www] [--html PATH]` writes the week as
 four pages of A4 — the days with their one line each (the line `logbook days` prints), the people
-confirmed present and the week's keepers, the promises due, and what was read: the browse lines of
-the week, titles only, never a URL. It is set from the Year's typographic constants
-(`print_layout.paper_stylesheet`, the paper edition's stylesheet with the sheet pinned), one
-inline stylesheet, no script, no photo, nothing fetched.
+confirmed present (the most days first, by name only: never a count beside a name) and the week's
+keepers, the promises due, and what was read: the browse lines of the week, titles only, never a URL.
+It is set from the Year's typographic constants (`print_layout.paper_stylesheet`, the paper
+edition's stylesheet with the sheet pinned), one inline stylesheet, no script, no photo, nothing
+fetched.
 
 A week is an ISO week, Monday to Sunday (`parse_week`); without `--week` it is the week of the
 day given, or of today in the record's zone. Everything is composed from the readers: the days
@@ -66,7 +67,7 @@ def week_of(day: str) -> str:
 def read(lb: Logbook, week: str, airports: Airports | None = None) -> dict[str, Any]:
     """The week's paper as one JSON-ready object: the week and its days, the owner's name as the
     paper edition names them, the head; the seven days as `days.read` gives them with the line
-    `days.row` prints; the people confirmed with how many days each; the keepers (day, lane,
+    `days.row` prints; the people confirmed, the most days first, by name only; the keepers (day, lane,
     name); the open promises due in the week; the titles read by day. `ValueError` for a week
     that is not one; `stays.SettingsError` when the record's settings, places or assets file is
     not what it should be."""
@@ -104,9 +105,7 @@ def read(lb: Logbook, week: str, airports: Airports | None = None) -> dict[str, 
         "head": str(lb.meta.get("head") or ""),
         "tz": tz,
         "days": rows,
-        "people": [
-            {"name": name, "days": n} for name, n in sorted(together.items(), key=lambda kv: (-kv[1], kv[0]))
-        ],
+        "people": [{"name": name} for name, _n in sorted(together.items(), key=lambda kv: (-kv[1], kv[0]))],
         "keepers": found_keepers,
         "promises": [p.to_json() for p in due],
         "read": titles(browsed, tz, start),
@@ -181,12 +180,9 @@ def _days_page(data: Mapping[str, Any]) -> list[str]:
 
 def _with_page(data: Mapping[str, Any]) -> list[str]:
     out = ['<section class="page" id="p-with">']
-    out += _header(data, "With", "the people confirmed present, by days; the week's keepers")
+    out += _header(data, "With", "the people confirmed present, the most days first; the week's keepers")
     if data["people"]:
-        out += table(
-            [("who", ""), ("days", "n")],
-            [[(str(p["name"]), ""), (f"{p['days']:,}", "n")] for p in data["people"]],
-        )
+        out += table([("who", "")], [[(str(p["name"]), "")] for p in data["people"]])
     else:
         out.append('<p class="muted">nobody confirmed</p>')
     out.append("<h3>Keepers</h3>")

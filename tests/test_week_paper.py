@@ -7,6 +7,7 @@ not exist."""
 from __future__ import annotations
 
 import json
+from collections import Counter
 from pathlib import Path
 
 import pytest
@@ -108,7 +109,9 @@ def test_the_paper_goes_to_stdout_and_as_json(lb: Logbook, capsys: pytest.Captur
     assert all(set(d) >= {"day", "weekday", "night", "line", "people"} for d in data["days"])
     assert data["days"][1]["line"].startswith("2026-06-16  Tue  aboard"), "the line `days` prints"
     assert {p["name"] for p in data["people"]} >= {"Ola Nordmann", "Anders Vik"}
-    assert all(p["days"] >= 1 for p in data["people"])
+    together = Counter(n for d in data["days"] for n in d["people"]["names"])
+    assert [p["name"] for p in data["people"]] == sorted(together, key=lambda n: (-together[n], n))
+    assert all(set(p) == {"name"} for p in data["people"]), "the most days first, never their count"
     assert data["keepers"] and all(set(k) == {"day", "lane", "name"} for k in data["keepers"])
     assert data["promises"] == []
     assert data["read"] and all(set(r) == {"day", "title"} for r in data["read"])

@@ -121,7 +121,11 @@ def test_the_page_is_its_status_first_said_timeline_people_documents_titles_word
     assert page.words == {"2024-03": 120, "2026-09": 660}
     assert [(s.status, s.current) for s in page.history] == [("spark", False), ("exploring", True)]
     text = "\n".join(ideas.page_rows(page))
-    assert "Ola Nordmann: 1 day, last 2026-09-20" in text and "README 2 versions, 210 words" in text
+    assert (
+        "  Ola Nordmann, last 2026-09-20\n" in text
+        and "Ola Nordmann: 1" not in text
+        and "README 2 versions, 210 words" in text
+    )
 
 
 def test_a_bot_s_line_an_agent_and_a_relations_line_are_no_touch_no_person_and_no_words(lb: Logbook) -> None:

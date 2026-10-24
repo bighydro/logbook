@@ -359,15 +359,16 @@ def journey_answer(material: dict[str, Any]) -> dict[str, Any]:
 
 
 def week_answer(material: dict[str, Any]) -> dict[str, Any]:
-    """A plausible answer from a week's material, every figure as the material gives it, two
-    proposals for next week (one is kept) and a review proposed for the first goal."""
+    """A plausible answer from a week's material, every figure as the material gives it and none
+    beside a person (`dream-week/2`), two proposals for next week (one is kept) and a review proposed
+    for the first goal."""
     time = material["time"]
     place, person = time["places"][0], time["people"][0]
     first = re.findall(r'"(L\d+)"', json.dumps(material["days"]))[:1]
     found: dict[str, Any] = {
         "time": [
             {"text": f"{place['hours']} hours at {place['place']}.", "evidence": place["ref"][:1]},
-            {"text": f"{person['contacts']} contacts with {person['name']}.", "evidence": person["ref"][:1]},
+            {"text": f"Most of all with {person['name']}.", "evidence": person["ref"][:1]},
         ],
         "energy": [],
         "people": [],
@@ -392,7 +393,8 @@ def week_answer(material: dict[str, Any]) -> dict[str, Any]:
         m = movers[0]
         found["people"] = [
             {
-                "text": f"{m['name']}: {m['this_week']} contacts, {m['week_before']} the week before.",
+                "text": f"{'More' if m['this_week'] > m['week_before'] else 'Less'} with {m['name']} than the"
+                " week before.",
                 "evidence": m["ref"][:1],
             }
         ]
