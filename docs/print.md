@@ -138,7 +138,7 @@ the type scale, the ink — with the sheet pinned:
    days` prints: the night after and the kilometres, then the flights, the stays with what
    attached, the people confirmed, the health triple and the usual sources with no line.
 2. **With**: the people **confirmed** present (never a proposed face, never an all-day
-   attendee), with how many days each; then the week's keepers (RFC 0024) by day, lane and name.
+   attendee), the most days first, by name only, never a count beside a name; then the week's keepers (RFC 0024) by day, lane and name.
 3. **Promises due**: the open promises due within the week, as the promises reader proposes them
    (`promises.extract`, narrowed the way the digest narrows them): when, who, the sentence, where
    it was said.

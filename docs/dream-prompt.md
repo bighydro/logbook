@@ -95,10 +95,11 @@ A journey and a week have prompts of their own beside it,
 [`dream-journey-prompt.md`](https://github.com/bighydro/logbook/blob/main/logbook/contrib/dream-journey-prompt.md)
 (`dream-journey/1`) and
 [`dream-week-prompt.md`](https://github.com/bighydro/logbook/blob/main/logbook/contrib/dream-week-prompt.md)
-(`dream-week/1`), with the same first rule, evidence or `unsupported`, and one more: numbers are given,
+(`dream-week/2`), with the same first rule, evidence or `unsupported`, and one more: numbers are given,
 never made. A figure is written only as an item it cites gives it, never added up, rounded or
 estimated, and a day's or a call's `drafted` text, a model's words, never lends one; the code marks a
-sentence that breaks it ([Journeys and weeks](dream.md#journeys-and-weeks)). The journey's asks for
+sentence that breaks it. The week's says too that no number stands beside a person (its third rule,
+since `dream-week/2`): a sentence that names one and writes a figure is held ([Journeys and weeks](dream.md#journeys-and-weeks)). The journey's asks for
 eight lists: `journey`, `days`, `places`, `people`, `decisions`, `promises`, `photos` (the ones to star,
 at most six) and `name` (one). The week's asks for six: `time`, `energy` (empty when the material says
 `no data`), `people`, `goals` (`{goal, disposition, text, evidence}`, one per goal the week holds

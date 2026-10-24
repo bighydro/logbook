@@ -119,11 +119,16 @@ def test_the_day_shows_a_named_voice_below_the_names_tier_and_the_name_at_it(
     voices = [s for item in _transcripts(data) for s in item["speakers"] if s["label"] == "S2"]
     if 3 in tiers:
         assert [v["name"] for v in voices] == [PER_NAME]
-        assert f"{PER_NAME} 14 min" in text and PER_NAME in page
+        assert f"Middag · S1 · {PER_NAME} · S3" in text and "min" not in _row(text) and PER_NAME in page
     else:
         assert [v["name"] for v in voices] == [voices_of.NAMED_VOICE]
-        assert f"{voices_of.NAMED_VOICE} 14 min" in text and voices_of.NAMED_VOICE in page
+        assert f"Middag · S1 · {voices_of.NAMED_VOICE} · S3" in text and voices_of.NAMED_VOICE in page
         assert PER_NAME not in whole and PER_NAME not in text and PER_NAME not in page
+
+
+def _row(text: str) -> str:
+    """The Day's row of the dinner: its voices, never a time beside one (RFC 0043)."""
+    return next(row for row in text.splitlines() if "Middag" in row)
 
 
 def _transcripts(data: dict[str, Any]) -> list[dict[str, Any]]:

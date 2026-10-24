@@ -647,10 +647,7 @@ class _Builder:
         body.append("## Days\n\n" + ("\n".join(days) if days else "- none in the window") + "\n")
         people = sorted(page.people.items(), key=lambda kv: (-len(kv[1]), self.people[kv[0]].name))
         if people:
-            rows = [
-                f"- {link(self.names.claim(self.people[key].name))}{DOT}{_plural(len(days_met), 'day')}"
-                for key, days_met in people
-            ]
+            rows = [f"- {link(self.names.claim(self.people[key].name))}" for key, _days in people]  # no count
             body.append("## People\n\n" + "\n".join(rows) + "\n")
         if page.trips:
             body.append("## Trips\n\n" + "\n".join(f"- {link(t)}" for t in dict.fromkeys(page.trips)) + "\n")
@@ -783,7 +780,7 @@ class _Builder:
                 people.append((person.name, len(days_with)))
         people.sort(key=lambda p: (-p[1], p[0]))
         if people:
-            rows = [f"- {link(self.names.claim(name))}{DOT}{_plural(n, 'day')}" for name, n in people]
+            rows = [f"- {link(self.names.claim(name))}" for name, _n in people]  # the most days first
             body.append("## People\n\n" + "\n".join(rows) + "\n")
         for month in range(1, 13):
             key = f"{year}-{month:02d}"
@@ -827,8 +824,8 @@ class _Builder:
             ]
             body.append("## Places\n\n" + "\n".join(rows) + "\n")
         if self.people:
-            rows = [
-                f"- {link(self.names.claim(p.name))}{DOT}{_plural(len(p.days), 'day')}"
+            rows = [  # the most days first, never their count beside a name
+                f"- {link(self.names.claim(p.name))}"
                 for p in sorted(self.people.values(), key=lambda p: (-len(p.days), p.name))
             ]
             body.append("## People\n\n" + "\n".join(rows) + "\n")

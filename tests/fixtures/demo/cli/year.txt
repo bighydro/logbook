@@ -67,7 +67,7 @@
           mail         Agenda for next week (1 message)
       17:25–17:45  move   652 m · 20 min · walk
       17:45–24:00  stay   Home · 6 h 15 min · 1 call
-          call         ← Ola Nordmann, 19 min
+          call         19 min ← Ola Nordmann
 
       health        7,830 steps · resting 58 bpm
       spend         NOK -168.00 · 1 transaction · Kafé Måken

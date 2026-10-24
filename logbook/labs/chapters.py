@@ -524,6 +524,6 @@ def rows(data: dict[str, Any]) -> Iterator[str]:
             if c["places"]:
                 parts.append("places " + ", ".join(f"{p['name']} {p['hours']:g} h" for p in c["places"]))
             if c["people"]:
-                parts.append("with " + ", ".join(f"{p['name']} {p['days']} d" for p in c["people"]))
+                parts.append("with " + ", ".join(str(p["name"]) for p in c["people"]))  # never a count
         tail = f"  {f' {MIDDLE_DOT} '.join(parts)}" if parts else ""
         yield f"{c['n']:>4}  {c['start']} {EN_DASH} {c['end']}  {count:>10}  {c['title']:<{width}}{tail}"

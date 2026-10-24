@@ -758,8 +758,9 @@ def unit_json(payload: Mapping[str, Any]) -> dict[str, Any]:
     `proposed` the name and the photos to star a journey's draft proposes (`name`, `star`) and the
     review a week's proposes for each goal (`goals`: `{goal, text, disposition, segment}`) and its
     one stale question (`question`: `{entity, label, status, status_line, since, text}`); under
-    `numbers` what the code computed from the lines for a week (each figure with its line ids); and
-    `dropped` and `marked`, by why. Only the keys the draft has."""
+    `numbers` what the code computed from the lines for a week (each figure with its line ids: a
+    reader that prints them prints its people by name only, `names_only`); and `dropped` and `marked`,
+    by why. Only the keys the draft has."""
     extra = payload.get("extra")
     if not isinstance(extra, dict):
         return {}
@@ -770,6 +771,32 @@ def unit_json(payload: Mapping[str, Any]) -> dict[str, Any]:
     for key in ("numbers", "dropped", "marked"):
         if isinstance(extra.get(key), dict) and extra[key]:
             out[key] = extra[key]
+    return out
+
+
+PERSON_KEYS = ("name", "id", "lines")  # what a reader prints of a draft's person: never a count
+CHAT = "chat"  # a thread that is a chat, named by its counterpart: a person, or people
+
+
+def names_only(numbers: Mapping[str, Any]) -> dict[str, Any]:
+    """A draft's numbers as a reader prints them, in text or in its JSON: its people as `PERSON_KEYS`
+    alone and its chats (`CHAT`, named by their counterpart) without their count, in the draft's order
+    (the most first), whatever counts the line keeps beside them; no number stands beside a person
+    (VISION: no metrics near people). The week page computes who moved from the line's `contacts` and
+    prints none of them (`week_page._moved`)."""
+    out = dict(numbers)
+    people = numbers.get("people")
+    if isinstance(people, list):
+        out["people"] = [
+            {k: p[k] for k in PERSON_KEYS if k in p} for p in people if isinstance(p, dict) and p.get("name")
+        ]
+    threads = numbers.get("threads")
+    if isinstance(threads, list):
+        out["threads"] = [
+            {k: v for k, v in t.items() if k != "count"} if t.get("kind") == CHAT else t
+            for t in threads
+            if isinstance(t, dict)
+        ]
     return out
 
 
@@ -1438,17 +1465,22 @@ def extra_rows(block: Mapping[str, Any], indent: str = "    ") -> Iterator[str]:
 
 
 def number_rows(numbers: Mapping[str, Any], indent: str = "    ") -> Iterator[str]:
-    """A week's numbers, one row each: the hours by place, the contacts by person, the threads, and
-    the energy (`no data` when the health lines under the ceiling hold none)."""
+    """A week's numbers, one row each: the hours by place, the people by name in the draft's order
+    (the most time together first), the threads (a chat by its counterpart alone, a title quoted with
+    its count), and the energy (`no data` when the health lines under the ceiling hold none); never a
+    count beside a name (`names_only`)."""
+    numbers = names_only(numbers)
     places = numbers.get("places") or []
     if places:
         yield f"{indent}  {'hours':<9} " + DOT.join(f"{p['place']} {p['hours']} h" for p in places)
     people = numbers.get("people") or []
     if people:
-        yield f"{indent}  {'contacts':<9} " + DOT.join(f"{p['name']} {p['contacts']}" for p in people)
+        yield f"{indent}  {'with':<9} " + DOT.join(str(p["name"]) for p in people)
     threads = numbers.get("threads") or []
     if threads:
-        yield f"{indent}  {'threads':<9} " + DOT.join(f"{t['thread']} {t['count']}" for t in threads)
+        yield f"{indent}  {'threads':<9} " + DOT.join(
+            str(t["thread"]) if t.get("kind") == CHAT else f"“{t['thread']}” {t['count']}" for t in threads
+        )
     energy = numbers.get("energy")
     if isinstance(energy, dict):
         said = []

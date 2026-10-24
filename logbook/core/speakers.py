@@ -40,7 +40,7 @@ import json
 import math
 import re
 from bisect import bisect_right
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -436,20 +436,25 @@ def voices(payload: Mapping[str, Any]) -> list[Voice]:
     return out
 
 
-def voice_text(voice: Voice) -> str:
-    """`you 31 min`, `S2 14 min`, `S3 42 s`; the voice alone when the line gives no seconds."""
-    if voice.seconds is None:
-        return voice.shown
-    return f"{voice.shown} {duration_text(voice.seconds)}"
-
-
 def duration_text(value: float) -> str:
     return f"{value / MINUTE:.0f} min" if value >= MINUTE else f"{value:.0f} s"
 
 
 def row_text(payload: Mapping[str, Any]) -> str:
-    """The voices of a line in one run, `you 31 min · S2 14 min`; empty for a line without them."""
-    return " · ".join(voice_text(v) for v in voices(payload))
+    """The voices of a line in one run, the one who spoke most first, `you · S2`, never a time beside
+    a voice (RFC 0043: no number beside a person); empty for a line without them."""
+    return " · ".join(v.shown for v in by_time(voices(payload), lambda v: v.seconds))
+
+
+def by_time[T](found: Iterable[T], seconds: Callable[[T], object]) -> list[T]:
+    """`found` in the order of the time each spoke, the most first, the ones without a time last and
+    the rest in the order given: the order a reader names voices in, in place of their minutes."""
+
+    def key(item: T) -> float:
+        spoke = seconds(item)
+        return -float(spoke) if isinstance(spoke, int | float) and not isinstance(spoke, bool) else 1.0
+
+    return sorted(found, key=key)
 
 
 def to_json(payload: Mapping[str, Any]) -> list[dict[str, Any]]:
@@ -473,14 +478,15 @@ def to_json(payload: Mapping[str, Any]) -> list[dict[str, Any]]:
 
 def json_text(entries: Iterable[Mapping[str, Any]]) -> str:
     """The voices of a reader's JSON (`to_json`, `attribution.Heard.to_json`) in one run: `you`, a
-    person's name, else the name the source displayed or the label, each with its minutes; the
-    voices bound unnamed counted, `1 unnamed`, never named; then `recorded with consent: unknown`
-    (or `no`) when a voice bound to someone not the owner was not stated as consenting (RFC 0038
-    §3.4, §7). `Middag · you 31 min · Kari Nordmann 14 min · 1 unnamed · recorded with consent: unknown`."""
+    person's name, else the name the source displayed or the label, the one who spoke most first and
+    never with their minutes (RFC 0043: no number beside a person); the voices bound unnamed counted
+    after the last, `and 1 unnamed`, never named; then `recorded with consent: unknown` (or `no`)
+    when a voice bound to someone not the owner was not stated as consenting (RFC 0038 §3.4, §7).
+    `Middag · you · Kari Nordmann and 1 unnamed · recorded with consent: unknown`."""
     out: list[str] = []
     unnamed = 0
     stated: set[str] = set()
-    for entry in entries:
+    for entry in by_time(entries, lambda e: e.get("seconds")):
         owner = entry.get("owner") is True
         # a guest's attribution always states a consent (absent reads as `unknown`); a voice not yet
         # named states neither consent nor basis
@@ -491,11 +497,13 @@ def json_text(entries: Iterable[Mapping[str, Any]]) -> str:
         if bound and not owner and entry.get("person") is None:
             unnamed += 1
             continue
-        shown = OWNER if owner else str(entry.get("name") or entry.get("label") or "")
-        spoken = entry.get("seconds")
-        out.append(f"{shown} {duration_text(spoken)}" if isinstance(spoken, int | float) else shown)
-    if unnamed:
-        out.append(f"{unnamed} unnamed")
+        out.append(OWNER if owner else str(entry.get("name") or entry.get("label") or ""))
+    if unnamed:  # after a name with a word between, so no count stands beside it
+        said = f"{unnamed} unnamed"
+        if out:
+            out[-1] += f" and {said}"
+        else:
+            out.append(said)
     worst = next((c for c in ("no", "unknown") if c in stated), None)
     if worst is not None:
         out.append(f"recorded with consent: {worst}")

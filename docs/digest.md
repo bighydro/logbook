@@ -24,7 +24,8 @@ logbook digest 2026-06-10 --json     # the whole sets behind the lines, every ro
    `night in transit`. A day with no line at all is `nothing logged`.
 2. **with** — the people the Day confirms present (declared in a note, speaking in a transcript,
    attending a timed calendar entry at the stay); never the owner, never a face in a photo or an
-   attendee of an all-day entry, who are only proposed — `(1 proposed)` says how many are. A
+   attendee of an all-day entry, who are only proposed — `and 1 proposed` after the names says how
+   many are (`nobody confirmed (1 proposed)` without a name), never a count beside a name. A
    person proposed at one stay and confirmed at another is confirmed.
 3. **attached** — how many of each kind attached across the day's rows (`1 event, 1 note, 3
    photos`), and how many lines fell inside no row (`2 unplaced`).

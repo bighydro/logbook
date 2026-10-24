@@ -118,11 +118,12 @@ are as they always were.
    maintains, one line per flight — with their evidence: `tracked`, `inferred` or `declared`; the
    move a flight covers names it under `--json`.
    Under each row: its attachments, named for events (with their time; an entry several calendars
-   carry is one event, see below), transcripts (with their voices when the line has them, `Middag ·
-   you 31 min · Kari Nordmann 14 min · 1 unnamed · recorded with consent: unknown`, a voice not yet
-   named by its label, [who they are](speakers.md#who-they-are); a transcript another of the day
-   supersedes is not listed beside it), notes (the first line), mail threads (with the message
-   count), calls and keepers, and counted for messages and photos; then **with**, the people there, split into **confirmed** — declared in a note
+   carry is one event, see below), transcripts (with their voices when the line has them, who spoke
+   most first and never a time beside a voice, `Middag · you · Kari Nordmann and 1 unnamed · recorded
+   with consent: unknown`, a voice not yet named by its label, [who they are](speakers.md#who-they-are);
+   a transcript another of the day supersedes is not listed beside it), notes (the first line), mail
+   threads (with the message count), calls (the length first, `19 min ← Ola Nordmann`, never beside the
+   name) and keepers, and counted for messages and photos; then **with**, the people there, split into **confirmed** — declared in a note
    (`with <name>`, only a name the record's resolution lines make a person: `with US` names
    nobody), speaking in a transcript (a voice you named, or a participant; the far end of a call is
    never there, and a person you would not name is counted, `with.unnamed`), attending a timed calendar entry that overlaps the
