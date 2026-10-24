@@ -247,7 +247,6 @@ class Reading:
     days: dict[str, list[str]]  # place id → the local days there, in order
     trips: list[Trip]  # lived, the latest first
     ahead: list[Trip]  # the soonest first
-    people: dict[str, list[tuple[str, str]]]  # place id → (entity, name), the closest first
     first_year: int
     gated: bool = False
     coast: list[list[tuple[float, float]]] = field(default_factory=list)  # (lon, lat) lines
@@ -293,17 +292,31 @@ def _read(site: Site, today: str) -> Reading:
     shown = [Place(ids[p.name], p.name, p.lat, p.lon, p.kind, tuple(p.tags)) for p in named]
     whole = site._record_days()
     first_year = int(whole[0][:4]) if whole else int(today[:4])
-    reading = Reading(today, shown, {p.id: [] for p in shown}, [], [], {p.id: [] for p in shown}, first_year)
+    reading = Reading(today, shown, {p.id: [] for p in shown}, [], [], first_year)
     reading.gated = site.tiers is not None
     reading.coast = coastlines(lb.meta)
     bundle = _bundle(site, today)
     if bundle is not None:
         reading.days, reading.trips = _lived(bundle, shown, site, ids)
-    report = _people(site)
-    if report is not None:
-        reading.people = _people_at(report, shown, today)
-    reading.ahead = ahead(site, today, shown, report)
+    reading.ahead = ahead(site, today, shown, _directory(site))
     return reading
+
+
+def people_at(site: Site, reading: Reading) -> dict[str, list[tuple[str, str]]]:
+    """Who was at each place with you, the closest first: read for a place's page alone, so the door
+    reads the people of the whole record only when a place is opened (`Site.shared`, once per head)."""
+    key = ("door places people", None if site.tiers is None else tuple(site.tiers), reading.today)
+
+    def found() -> dict[str, list[tuple[str, str]]]:
+        report = _people(site)
+        return {} if report is None else _people_at(report, reading.places, reading.today)
+
+    return site.shared(key, found)
+
+
+def _directory(site: Site) -> people.Report:
+    """Who is who: the resolution lines alone (`people.directory`), which name an attendee ahead."""
+    return site.shared(("door places directory",), lambda: people.directory(site.lb))
 
 
 def _bundle(site: Site, today: str) -> Mapping[str, Any] | None:
@@ -500,7 +513,7 @@ def _calendar_ahead(
         gone = set(retractions(idx.retractions())) | set(idx.superseded("event"))
     by_name = {_fold(p.name): p for p in shown}
     owner = {str(e).casefold() for e in lb.meta.get("owner_emails") or []}
-    labels = _labels(report)
+    labels = _labels(report, allowed)
     home = homes[0]
     out: list[Trip] = []
     open_: dict[str, Any] | None = None
@@ -613,12 +626,14 @@ def _cities(airports: Airports) -> dict[str, tuple[float, float]]:
     return {k: (v[0], v[1]) for k, v in out.items()}
 
 
-def _labels(report: people.Report | None) -> dict[str, str]:
+def _labels(report: people.Report | None, allowed: set[int] | None = None) -> dict[str, str]:
     """An address or a number → the name the record gives the person it belongs to."""
     if report is None:
         return {}
     out: dict[str, str] = {}
     for person in report.known.values():
+        if allowed is not None and person.tier not in allowed:
+            continue  # named by a line above the gate: the attendee's own name, if the entry gives one
         for _kind, value in person.refs:
             out[str(value).casefold()] = person.name
     return out
@@ -1115,7 +1130,7 @@ def page_place(site: Site, place_id: str) -> str:
         _strip(site, found, days) if days else f'<p class="empty">{escape(NO_DAYS)}</p>\n',
         "</section>\n",
         '<section class="card">\n<h2 class="mono">Who was there with you</h2>\n',
-        _folk(site, reading.people.get(found.id, [])),
+        _folk(site, people_at(site, reading).get(found.id, [])),
         "</section>\n",
         '<section class="card">\n<h2 class="mono">Trips through it</h2>\n',
         _through(site, reading, found),
