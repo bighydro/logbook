@@ -50,8 +50,13 @@ from ..core.store import Logbook, retractions
 from . import promises as promise_reader
 from . import trip_page
 
+SPILL_DAYS = 2  # a reading holds the night after its last day and the morning after that
 MARGIN_DAYS = 31  # a year is read with a month either side: a journey over New Year is seen whole
 PHOTO = "photo"
+READ_KINDS: tuple[str, ...] | None = (
+    *trips.READ_KINDS,
+    PHOTO,
+)  # a year's journeys' lines; the rest from the index
 YEAR_DIGITS = 4
 
 
@@ -118,6 +123,7 @@ class Shelf:
     years: list[str]
     journeys: list[Journey]
     warning: str | None = None
+    reads: tuple[str, str] | None = None  # the local days read: the year, the margin, its journeys whole
 
     def to_json(self) -> dict[str, Any]:
         return {
@@ -153,7 +159,7 @@ def shelf(
         runs = f"{whole[0]} {trips.EN_DASH} {whole[1]}"
         return Shelf(year, years, [], f"no days in {year}: the record runs {runs}")
     airports = airports or Airports.load()
-    rd = reading.read(lb, since, until, airports, tiers)
+    rd = reading.read(lb, since, until, airports, tiers, READ_KINDS)
     found, warning = trips.trips(rd)
     if warning:
         return Shelf(year, years, [], warning)
@@ -173,7 +179,8 @@ def shelf(
     allowed = drafts.allowed(lb.root)
     out = [_journey(t, r, named, drafted, allowed, tiers) for t, r in pairs]
     out.sort(key=lambda j: j.trip.start, reverse=True)
-    return Shelf(year, years, out)
+    through = (date.fromisoformat(max(until, last)) + timedelta(days=SPILL_DAYS)).isoformat()
+    return Shelf(year, years, out, reads=(since, through))
 
 
 def _journey(
@@ -300,7 +307,7 @@ def draft_of(
     found = drafted.get(trip.id, [])
     if not found:
         return None, None
-    on_journey = {str(line["id"]) for line in rd.lines if trip.start <= rd.day_of(line) <= trip.until}
+    on_journey = {str(line["id"]) for line in rd.lines_of(trip.start, trip.until)}
     return drafts.for_unit(found, on_journey, tiers, allowed, not_on=drafts.NOT_ON_JOURNEY)
 
 

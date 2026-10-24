@@ -27,6 +27,7 @@ from shared_day import (
     both,
     ines_drafts,
     install_keys,
+    ola_record,
     use,
 )
 
@@ -674,10 +675,10 @@ def test_a_sealed_record_shares_a_day_whose_line_names_a_sealed_attachment(
 ):
     """The issue's case: the photo's store file is sealed, so its bytes on disk never hash to its
     name; the share opens it with this machine's identity, checks the opened bytes and puts them
-    in the zip, as the lines are opened."""
+    in the zip. At tier 1, so the page carries no sealed line (a day that does is refused)."""
     assert sealing.is_sealed_file(sealed_ines.root / "attachments" / PHOTO_SHA)
     out = tmp_path / "sealed-to-ola.zip"
-    _run(capsys, "export", "share", "day", DAY, "--to", "ola", "--tier", "2", "--out", str(out))
+    _run(capsys, "export", "share", "day", DAY, "--to", "ola", "--tier", "1", "--out", str(out))
     members = _members(out)
     photo = members[f"attachments/{PHOTO_SHA}"]
     assert hashlib.sha256(photo).hexdigest() == PHOTO_SHA and photo == PHOTO_BYTES
@@ -690,7 +691,7 @@ def test_a_sealed_attachment_that_opens_to_other_bytes_stops_the_share(
     sealed_ines: Logbook, tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ):
     """A store file sealed to the right recipients but holding other bytes opens, and does not hash to
-    its name: an error, and no zip is left behind."""
+    its name: an error, and no zip is left behind. At tier 1, so the page carries no sealed line."""
     store = sealed_ines.root / "attachments" / PHOTO_SHA
     other = tmp_path / "other.bin"
     other.write_bytes(b"synthetic bytes that are not the photo")
@@ -698,7 +699,7 @@ def test_a_sealed_attachment_that_opens_to_other_bytes_stops_the_share(
     sealing.seal_file(other, store, sealed_ines.recipients)
     out = tmp_path / "sealed-to-ola.zip"
     code, err = _failure(
-        capsys, "export", "share", "day", DAY, "--to", "ola", "--tier", "2", "--out", str(out)
+        capsys, "export", "share", "day", DAY, "--to", "ola", "--tier", "1", "--out", str(out)
     )
     assert code != 0 and "opens to bytes that do not hash to its name" in err
     assert not out.exists() and not out.with_name(out.name + ".tmp").exists()
@@ -715,3 +716,87 @@ def test_a_plain_attachment_that_does_not_hash_to_its_name_stops_the_share(
     )
     assert code != 0 and "does not hash to its name" in err
     assert not out.exists()
+
+
+# -- a day that holds sealed lines does not share yet (RFC 0029's follow-up) ------------------------------
+
+
+def test_a_day_that_holds_sealed_lines_is_refused_before_anything_is_written(
+    sealed_ines: Logbook, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+):
+    """The Saturday's note is tier 2, so this record holds it sealed: a page carrying it opened would
+    not recompute on the other side, so the share refuses in one sentence, and writes nothing — no
+    zip, no temporary file, no crossing line, not the output folder."""
+    before = sealed_ines.meta
+    meta_raw = (sealed_ines.root / "logbook.json").read_bytes()
+    folder = tmp_path / "pages"
+    out = folder / "sealed-to-ola.zip"
+    code, err = _failure(
+        capsys, "export", "share", "day", DAY, "--to", "ola", "--tier", "2", "--out", str(out)
+    )
+    assert code == 2
+    assert (
+        f"export share day {DAY}: this day holds sealed lines, and a shared page cannot carry them yet; "
+        "a sealed day shares after v1 (RFC 0029)"
+    ) in err
+    assert len(err.strip().splitlines()) == 1
+    assert not folder.exists()
+    assert (sealed_ines.root / "logbook.json").read_bytes() == meta_raw
+    after = Logbook(sealed_ines.root).meta
+    assert (after["seq"], after["head"]) == (before["seq"], before["head"])
+
+
+def test_a_plain_day_of_a_sealed_record_shares_and_is_received(
+    sealed_ines: Logbook, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+):
+    """The same record's Sunday holds one tier-1 fix and nothing sealed: its page builds at tier 2,
+    and Ola's record takes it in."""
+    sunday = "2026-06-14"
+    out = tmp_path / "sunday-to-ola.zip"
+    _run(capsys, "export", "share", "day", sunday, "--to", "ola", "--tier", "2", "--out", str(out))
+    assert _manifest(out)["lines"] == 1
+    ola = ola_record(tmp_path)
+    _circle_add(monkeypatch, ola, "ines", INES_SEED)
+    assert "from ines" in _run(capsys, "import", "page", str(out))
+    assert (ola.root / "circle" / "ines" / sunday / "lines.jsonl").read_bytes() == _members(out)[
+        "lines.jsonl"
+    ]
+
+
+def test_a_day_whose_only_sealed_thing_is_an_attachment_shares_and_is_received(
+    sealed_ines: Logbook, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+):
+    """At tier 1 the Saturday carries no sealed line, only the photo whose store file is sealed: the
+    file crosses opened under its plaintext digest (#364), and the receiver recomputes every line
+    and every file."""
+    out = tmp_path / "saturday-to-ola.zip"
+    _run(capsys, "export", "share", "day", DAY, "--to", "ola", "--tier", "1", "--out", str(out))
+    assert _members(out)[f"attachments/{PHOTO_SHA}"] == PHOTO_BYTES
+    ola = ola_record(tmp_path)
+    _circle_add(monkeypatch, ola, "ines", INES_SEED)
+    assert "from ines" in _run(capsys, "import", "page", str(out))
+    assert (ola.root / "circle" / "ines" / DAY / "attachments" / PHOTO_SHA).read_bytes() == PHOTO_BYTES
+
+
+def test_a_plain_line_that_repeats_a_sealed_lines_id_does_not_make_its_day_sealed(
+    sealed_ines: Logbook, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+):
+    """An `id` is outside the hash and a writer may repeat one (SPEC §2): a tier-1 fix that carries
+    the sealed note's id is plain, so the Saturday at tier 1 still shares, and only the note's
+    own tier refuses it."""
+    note = next(d for d in ines_drafts() if d["kind"] == "note")
+    fix = next(d for d in ines_drafts() if d["kind"] == "location" and d["at"].startswith(DAY))
+    payload = {
+        **fix["payload"],
+        "raw_id": "fix-0905",
+    }  # its own raw_id, so it is not deduped as the 09:00 fix
+    sealed_ines.append_many(
+        [{**fix, "at": fix["at"].replace("09:00", "09:05"), "payload": payload, "id": note["id"]}]
+    )
+    out = tmp_path / "saturday-to-ola.zip"
+    _run(capsys, "export", "share", "day", DAY, "--to", "ola", "--tier", "1", "--out", str(out))
+    assert note["id"] in {line["id"] for line in _lines(_members(out)["lines.jsonl"])}
+    code, err = _failure(
+        capsys, "export", "share", "day", DAY, "--to", "ola", "--tier", "2", "--out", str(tmp_path / "t2.zip")
+    )
+    assert code == 2 and "this day holds sealed lines" in err

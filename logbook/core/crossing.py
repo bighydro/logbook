@@ -9,8 +9,12 @@ Every real export is itself a line in the chain, `crossing/v1` (RFC 0011), and m
 per destination in `exports/crossing.json`. A second gate beside the tier (RFC 0034): only the
 lines of days the owner has signed cross, unless the request says `--unsigned`. A draft crosses
 only while the entry it was written under allows its tier (`drafts.Allowed.of`): a person's the
-`relationship` entry, every other unit's the `dream` entry, whatever the destination's ceiling. Nothing
-here rewrites a line; the only write to the log is that one `Logbook.append`."""
+`relationship` entry, every other unit's the `dream` entry, whatever the destination's ceiling. A
+mail crosses only when it is a person's (RFC 0045, `peoples_mail.Rule`), unless the request says
+`--all-mail`. What a podcast or a video said (`heard`, RFC 0046) crosses only to a destination whose
+entry says `"heard": true`, and is counted with the drafts held back by their entry otherwise. The two
+rules read different kinds, so a line passes both and neither decides for the other. Nothing here
+rewrites a line; the only write to the log is that one `Logbook.append`."""
 
 from __future__ import annotations
 
@@ -28,7 +32,7 @@ from pathlib import Path, PurePosixPath
 from typing import Any
 
 from .. import __version__
-from . import attachments, day_start, drafts, policy, sealing, signing, stars
+from . import attachments, day_start, drafts, heard, peoples_mail, policy, sealing, signing, stars
 from .chain import Line, is_sealed
 from .resolve import Ref, standing, walk
 from .store import Logbook, retractions, utc, uuid7
@@ -106,10 +110,16 @@ class Request:
     recipient: str | None = None  # the destination's age recipient (policy), to reseal sealed lines to
     open_sealed: bool = False  # `--open`: ship sealed lines and files opened, when there is no recipient
     signed_only: bool = True  # RFC 0034: only the lines of signed days cross; `--unsigned` lifts it
+    all_mail: bool = False  # RFC 0045: every mail crosses, not people's mail only; `--all-mail`
 
     @property
     def tier3(self) -> bool:
         return 3 in self.tiers
+
+    @property
+    def mail(self) -> bool:
+        """Whether mail is among the kinds asked for: `--kinds` names it, or there is no `--kinds`."""
+        return self.kinds is None or peoples_mail.KIND in self.kinds
 
 
 def request(
@@ -121,12 +131,14 @@ def request(
     kinds: frozenset[str] | None = None,
     open_sealed: bool = False,
     signed_only: bool = True,
+    all_mail: bool = False,
 ) -> Request:
     """Resolve `--since last`, check the window, and hold the request against the policy: a tier
     above the destination's ceiling is refused naming the policy file. Tier 3 is in `tiers` only
     when `--tier 1,2,3` was typed, so a policy edit alone never lets it cross (ADR 0016). The
     destination's recipient, when the policy names one, is what sealed lines are resealed to.
-    `signed_only` is the gate of RFC 0034: the lines of signed days, unless the owner lifts it."""
+    `signed_only` is the gate of RFC 0034: the lines of signed days, unless the owner lifts it;
+    `all_mail` lifts RFC 0045's, people's mail only."""
     if since == LAST:
         since = last_until(lb, destination)
     since, until = utc(_checked(since)), utc(_checked(until))
@@ -146,7 +158,9 @@ def request(
             f"{policy.expiry_note(lb.root, destination)}; "
             "raise it there if that is what you want"
         )
-    return Request(destination, since, until, tiers, kinds, max_tier, recipient, open_sealed, signed_only)
+    return Request(
+        destination, since, until, tiers, kinds, max_tier, recipient, open_sealed, signed_only, all_mail
+    )
 
 
 def _checked(stamp: str) -> str:
@@ -194,8 +208,10 @@ class Selection:
     sealed: dict[str, Line] = field(default_factory=dict)  # id → the line as the file holds it, when sealed
     held_back_unsigned: int = 0  # lines in the tiers and kinds asked for whose day is not signed (RFC 0034)
     held_back_by_entry: int = (
-        0  # drafts the entry they were written under no longer allows (`drafts.Allowed.of`)
+        0  # drafts the entry they were written under no longer allows (`drafts.Allowed.of`), and the
+        # `heard` lines of a destination whose entry does not name them (RFC 0046 §9)
     )
+    mail_held_back: int | None = None  # mail no person is on (RFC 0045); None when the rule read no mail
 
     @property
     def held_back(self) -> int:
@@ -221,6 +237,7 @@ class Selection:
             "held_back": self.held_back,
             "held_back_unsigned": self.held_back_unsigned,
             **({"held_back_by_entry": self.held_back_by_entry} if self.held_back_by_entry else {}),
+            **({"mail_held_back": self.mail_held_back} if self.mail_held_back is not None else {}),
             "by_tier": self.by_tier,
             "by_kind": self.by_kind,
             "resolutions": len(self.resolutions),
@@ -277,21 +294,40 @@ def select(lb: Logbook, req: Request) -> Selection:
                 "are in the window: add one (RFC 0029 §7), or pass --open to ship them opened"
             )
     lines = [lb.opened(line) for line in raw]
+    resolution_lines = [lb.opened(line) for line in raw_resolutions]
+    # a mail crosses only when it is a person's (RFC 0045), unless the request says `--all-mail`; the
+    # count is written whenever the rule read a mail, so a package with none is what it was
+    mail_held: int | None = None
+    if not req.all_mail and any(line.get("kind") == peoples_mail.KIND for line in lines):
+        try:
+            rule = peoples_mail.Rule.of(lb, retraction_lines, resolution_lines)
+        except policy.PolicyError as e:
+            raise CrossingError(str(e)) from e
+        persons = [
+            line for line in lines if line.get("kind") != peoples_mail.KIND or rule.classify(line).person
+        ]
+        mail_held = len(lines) - len(persons)
+        lines = persons
     # a draft follows the entry it was written under, not the head (RFC 0036 amendment 1): once its
     # entry (the `relationship` entry's for a person, the `dream` entry's for every other unit) no
     # longer allows its tier it stays home, whatever this ceiling
     entries = drafts.allowed(lb.root)
+    # what was heard leaves only when the entry says so (RFC 0046); it reads `heard` lines alone, as the
+    # mail rule above reads mail alone, so the two rules never see the same line and their order is moot
+    texts = heard.crosses(lb.root, req.destination)
     held_by_entry = len(lines)
-    lines = [line for line in lines if not _held_by_entry(line, entries)]
+    lines = [line for line in lines if not _held_by_entry(line, entries) and not heard.held(line, texts)]
     held_by_entry -= len(lines)
     beside = {str(line["id"]) for line in lines}
     lines = [line for line in lines if stars.beside(line, beside)]
-    last = standing([*retraction_lines, *(lb.opened(line) for line in raw_resolutions)])
+    last = standing([*retraction_lines, *resolution_lines])
     overlay, held = _overlay(lines, last, req.tiers)
     found, missing = blobs(lb, lines)
     crossed = {str(line["id"]) for line in [*lines, *overlay]}
     carried = {k: v for k, v in sealed.items() if k in crossed}
-    return Selection(lines, len(inside), overlay, held, found, missing, carried, unsigned_held, held_by_entry)
+    return Selection(
+        lines, len(inside), overlay, held, found, missing, carried, unsigned_held, held_by_entry, mail_held
+    )
 
 
 def _held_by_entry(line: Line, entries: drafts.Allowed) -> bool:
@@ -458,6 +494,7 @@ def record(
             "file": policy.POLICY_FILE.as_posix(),
             "max_tier": req.max_tier,
             "signed_only": req.signed_only,  # RFC 0034: whether the signed-day gate was in force
+            **_all_mail(req),
         },
         "logbook_head": head,
         "package_sha256": package_sha256,
@@ -494,6 +531,7 @@ def build_manifest(
             },
             "carve_outs": [],
             "signed_days": "only" if req.signed_only else "any",  # RFC 0034 rule 5
+            **_all_mail(req),
         },
         "tiers": list(req.tiers),
         "counts": sel.counts(),
@@ -524,6 +562,12 @@ def build_manifest(
             else {"lines": len(sel.sealed), "mode": "opened"}
         )
     return manifest
+
+
+def _all_mail(req: Request) -> dict[str, str]:
+    """`{"mail": "all"}` when `--all-mail` lifted RFC 0045's rule and mail is among the kinds; else
+    nothing, so the policy of every other package is what it was."""
+    return {"mail": "all"} if req.all_mail and req.mail else {}
 
 
 def write_bundle(

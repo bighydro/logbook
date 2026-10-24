@@ -2,9 +2,11 @@
 `logbook.contrib.review_with`, no new top-level command (the help is one screen, the October 2026
 audit): `with --from D1 --to D2 NAME…` beside `with DAY`; `people not-with NAME --from D1 --to D2`,
 `people lives-with NAME --from D [--until D]`, `people lives-in NAME CITY [--from D]` and `people city
-CITY [--journey ID]` beside the other forms of `people`; `review with (--journey ID | --week YYYY-Www |
---from D1 --to D2)` beside the other queues, answered with `--accept NAME [--days D,D]` and `--not
-NAME`. A refusal is one sentence on stderr, exit 2, and nothing written."""
+CITY [--trip ID]` beside the other forms of `people` (`--journey` there is `--trip`'s old name until
+the release after 1.0, said once on stderr; elsewhere it is `people nearby`'s line id); `review with
+(--journey ID | --week YYYY-Www | --from D1 --to D2)` beside the other queues, answered with `--accept
+N[,N] [--days D,D]` (the queue's numbers) and `--not NAME`. A refusal is one sentence on stderr, exit
+2, and nothing written."""
 
 from __future__ import annotations
 
@@ -22,6 +24,10 @@ PEOPLE_FORMS = (NOT_WITH, LIVES_WITH, LIVES_IN, CITY)
 WITH = "with"  # `review with`: the queue of a stretch, beside the kinds of `review`
 REVIEW_FLAGS = (("--week", "week"), ("--days", "with_days"), ("--not", "not_with"))
 STRETCH_FLAGS = (("--journey", "journey"), ("--from", "from_"), ("--to", "to"))
+# `people city --journey ID`: `--trip`'s old name, kept for one release (the owner's answer to #351)
+OLD_JOURNEY = (
+    "people city: --journey is now --trip, and is removed from `people city` in the release after 1.0"
+)
 DAY = re.compile(r"^\d{4}-\d{2}-\d{2}$")  # a word that is a day, never a name
 # the options of the other forms of `people`, refused by these
 PEOPLE_OTHERS = (
@@ -94,8 +100,14 @@ def _clock(line: Any) -> str:
 
 
 def people_arguments(s: argparse.ArgumentParser) -> None:
-    """The options of `people not-with`, `lives-with` and `lives-in` (`--journey` is `people`'s)."""
+    """The options of `people not-with`, `lives-with`, `lives-in` and `city` (`--journey` is `people
+    nearby`'s)."""
     g = s.add_argument_group("who was there", "with `people not-with`, `lives-with`, `lives-in` and `city`")
+    g.add_argument(
+        "--trip",
+        metavar="ID",
+        help="city: the journey, trip:FIRST:LAST or a day of it; seen or not yet on it",
+    )
     g.add_argument(
         "--from",
         dest="from_",
@@ -104,7 +116,10 @@ def people_arguments(s: argparse.ArgumentParser) -> None:
     )
     g.add_argument("--to", metavar="DAY", help="not-with: the last day")
     g.add_argument(
-        "--until", metavar="DAY", help="lives-with: the last day lived together; alone, it ends it"
+        "--until",
+        metavar="DAY",
+        help="lives-with: the last day lived together; alone, it ends it; mail: the last local day, inclusive"
+        " (default: today)",
     )
 
 
@@ -119,21 +134,32 @@ def people_form(a: argparse.Namespace) -> None:
     lb = Logbook.find()
     if a.name == CITY:
         if a.place is None or a.question is not None:
-            _refuse(prog, "say the city: `logbook people city CITY [--journey ID]`")
+            _refuse(prog, "say the city: `logbook people city CITY [--trip ID]`")
         if a.from_ is not None or a.to is not None or a.until is not None:
             _refuse(prog, "--from, --to and --until go with not-with, lives-with and lives-in")
+        trip = a.trip
+        if a.journey is not None:
+            if trip is not None:
+                _refuse(
+                    prog, "--trip or its old name --journey, not both: `logbook people city CITY --trip ID`"
+                )
+            trip = a.journey
         try:
-            data = review_with.people_in_city(lb, a.place, a.journey)
+            data = review_with.people_in_city(lb, a.place, trip)
         except (who_was_there.CompanyError, ValueError, stays.SettingsError) as e:
-            _refuse(prog, str(e))
+            _refuse(prog, str(e))  # the refusal alone: one sentence
+        if a.journey is not None:
+            print(OLD_JOURNEY, file=sys.stderr)
         if a.json:
             print(json.dumps(data, indent=2, ensure_ascii=False))
             return
         for text in review_with.city_rows(data):
             print(text)
         return
+    if a.trip is not None:
+        _refuse(prog, "--trip goes with `people city`")
     if a.journey is not None:
-        _refuse(prog, "--journey goes with `people city` and `people nearby`")
+        _refuse(prog, "--journey goes with `people nearby`")
     if a.place is None:
         _refuse(prog, f"name the person: `logbook people {a.name} NAME …`")
     try:
@@ -172,6 +198,8 @@ def refuse_people_flags(a: argparse.Namespace) -> None:
     ]
     if given:
         _refuse("people", f"{', '.join(given)} go with `people not-with`, `lives-with` and `lives-in`")
+    if a.trip is not None:
+        _refuse("people", "--trip goes with `people city`")
 
 
 # -- review with ---------------------------------------------------------------------------------------------
@@ -181,7 +209,8 @@ def review_arguments(s: argparse.ArgumentParser) -> None:
     """The options of `review with` (`--accept` and `--json` are `review`'s)."""
     g = s.add_argument_group(
         "with",
-        "with `review with`: who the record puts with you over a stretch, asked once; --accept takes a NAME",
+        "with `review with`: who the record puts with you over a stretch, asked once; --accept takes the"
+        " queue's numbers, as for the other kinds",
     )
     g.add_argument(
         "--journey", metavar="ID", help="the stretch of a journey: trip:YYYY-MM-DD:YYYY-MM-DD, or a day of it"
@@ -189,9 +218,7 @@ def review_arguments(s: argparse.ArgumentParser) -> None:
     g.add_argument("--week", metavar="YYYY-Www", help="the stretch of an ISO week")
     g.add_argument("--from", dest="from_", metavar="DAY", help="the stretch's first day (with --to)")
     g.add_argument("--to", metavar="DAY", help="the stretch's last day")
-    g.add_argument(
-        "--days", dest="with_days", metavar="D,D", help="with --accept NAME: only these days of it"
-    )
+    g.add_argument("--days", dest="with_days", metavar="D,D", help="with --accept N: only these days of it")
     g.add_argument(
         "--not",
         dest="not_with",
@@ -208,13 +235,19 @@ def refuse_review_flags(kind: str | None, a: argparse.Namespace) -> None:
         _refuse(f"review {kind}" if kind else "review", f"{', '.join(given)} go with `review with`")
 
 
+def _given(value: object) -> bool:
+    """An option given on the command line: any value but absent (None) or an unset switch (False);
+    0 is given (`--top 0`), though it equals False."""
+    return value is not None and value is not False
+
+
 def review_with(a: argparse.Namespace) -> None:
     """`review with (--journey ID | --week YYYY-Www | --from D1 --to D2) [--json]`, and its answers."""
     from ..contrib import review_with as reader
     from ..contrib import who_was_there
 
     prog = "review with"
-    from . import review, speakers
+    from . import receipts, review, speakers
 
     others = (
         *(tell for tell in review.TELLS if tell[0] != "--accept"),
@@ -223,20 +256,29 @@ def review_with(a: argparse.Namespace) -> None:
         *review.VIDEO_FLAGS,
         *review.GOAL_FLAGS,
         *speakers.FLAGS,
+        *receipts.FLAGS,
     )
-    told = [flag for flag, dest in others if getattr(a, dest, None) not in (None, False)]
+    told = [flag for flag, dest in others if _given(getattr(a, dest, None))]
     if told:
-        _refuse(prog, f"{', '.join(told)}: not here; answer with --accept NAME, --days D,D, --not NAME")
-    accept = [name.strip() for given in a.accept or [] for name in given.split(",") if name.strip()]
+        _refuse(prog, f"{', '.join(told)}: not here; answer with --accept N[,N], --days D,D, --not NAME")
+    try:
+        accept = reader.numbers(a.accept)
+    except who_was_there.CompanyError as e:
+        _refuse(prog, str(e))
     nots = [name.strip() for given in a.not_with or [] for name in given.split(",") if name.strip()]
     days = None if a.with_days is None else [d.strip() for d in a.with_days.split(",") if d.strip()]
     if days is not None and not accept:
-        _refuse(prog, "--days goes with --accept NAME")
+        _refuse(prog, "--days goes with --accept N")
     lb = Logbook.find()
     try:
         if accept or nots:
-            stretch, _rd = reader.stretch_of(lb, a.journey, a.week, a.from_, a.to, read_it=False)
-            done = reader.answer(lb, stretch, accept, days, nots)
+            people: list[str] = []
+            if accept:  # the numbers are the queue's as it stands now
+                asked = reader.read(lb, a.journey, a.week, a.from_, a.to)
+                stretch, people = asked.stretch, [ask.person for ask in reader.pick(asked, accept)]
+            else:
+                stretch, _rd = reader.stretch_of(lb, a.journey, a.week, a.from_, a.to, read_it=False)
+            done = reader.answer(lb, stretch, people, days, nots)
             if a.json:
                 print(json.dumps(done.to_json(), indent=2, ensure_ascii=False))
                 return

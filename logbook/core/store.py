@@ -11,6 +11,7 @@ import re
 import secrets
 import shutil
 import sys
+import threading
 import time
 import uuid
 import zoneinfo
@@ -23,7 +24,7 @@ from pathlib import Path, PurePath
 from typing import IO, Any, BinaryIO, NamedTuple, TextIO
 
 from .. import FORMAT, PREVIOUS_FORMAT
-from . import attachments, policy, sealing
+from . import attachments, cancel, policy, sealing
 from .chain import (
     CONTENT_FIELDS,
     ENVELOPE_FIELDS,
@@ -121,6 +122,7 @@ HEAD_MOVED = (
     " would not chain; the batch was not written"
 )
 _held: dict[Path, int] = {}  # lock file -> how many `writer` blocks of this process hold it
+_holder: dict[Path, int] = {}  # lock file -> the thread whose block took it (`writing` tells the others)
 
 # -- the files end where logbook.json says: append's precondition, and `repair tail` ---------------------
 REPAIR_TAIL = "nothing was written: run `logbook repair tail`"  # what every refusal of a writer ends in
@@ -566,11 +568,29 @@ class Logbook:
     def index(self) -> Index:
         """The index, current with logbook.json; built from the files first when it is not. The
         caller closes it (`with lb.index() as idx:`). Silent: a rebuild inside a reader prints
-        nothing; `logbook index` is the command that shows progress."""
+        nothing; `logbook index` is the command that shows progress. A reader never rebuilds it
+        from under a writer: while one holds the lock (`writing`) and the index is only behind
+        (`Index.behind`: a writer between logbook.json and the index), it is read as it stands, the
+        record up to the last line it holds (`Index.indexed`), and the writer brings it forward."""
         idx = Index.open(self)
-        if not idx.matches(self.meta):
+        meta = self.meta
+        if not idx.matches(meta):
+            if idx.behind(meta) and self.writing():
+                return idx
             idx.rebuild()
         return idx
+
+    def writing(self) -> bool:
+        """Whether another writer holds the record's lock now: a block of this process on another
+        thread (`_held`, `_holder`: the server's act while a page is read), or a live process that is
+        not this one (a lock left by this process outside any block is stale). Never the caller's own
+        block: a writer that finds the index behind finds what a crashed writer left, and rebuilds it."""
+        path = self._lock_path()
+        if _held.get(path):
+            return _holder.get(path) != threading.get_ident()
+        holder = _read_lock(path)
+        pid = None if holder is None else holder.get("pid")
+        return isinstance(pid, int) and pid != os.getpid() and _alive(pid)
 
     def index_rebuild(self, progress: Callable[[int, float], None] | None = None) -> int:
         """`logbook index`: build from the files whatever the state; returns the line count."""
@@ -685,12 +705,14 @@ class Logbook:
         say = notice if notice is not None else (lambda text: print(text, file=sys.stderr))
         _take_lock(path, command or COMMAND, WAIT if wait is None else wait, say)
         _held[path] = 1
+        _holder[path] = threading.get_ident()
         try:
             yield
         finally:
             _held[path] -= 1
             if not _held[path]:
                 del _held[path]
+                _holder.pop(path, None)
                 _release_lock(path)
 
     def _lock_path(self) -> Path:
@@ -1468,7 +1490,8 @@ class Logbook:
     def _parse(self, path: Path, n: int, raw: str | bytes) -> Line:
         """One stored line as a dict; a bad one is reported by file and line number. A last line
         with no newline that is not JSON is a file cut inside it (SPEC §3): said plainly, without
-        the decoder's position."""
+        the decoder's position. `Cancelled` first when the reading was stopped (`cancel.check`)."""
+        cancel.check()
         try:
             return parse_line(raw)
         except json.JSONDecodeError as e:
@@ -1678,7 +1701,9 @@ def retractions(lines: Iterable[Line]) -> dict[str, Line]:
 
 
 def read_line_at(fh: BinaryIO, offset: int) -> Line:
-    """The line that starts at byte `offset` of an open month file."""
+    """The line that starts at byte `offset` of an open month file; `Cancelled` first when the reading
+    was stopped (`cancel.check`)."""
+    cancel.check()
     fh.seek(offset)
     return parse_line(fh.readline())
 

@@ -23,11 +23,15 @@ Per person: the name, the evidence in words (*faces on 41 photos across 7 days �
 invited to 'Lofoten crew'*), the days the evidence lies on, and the lines. Ordered strongest first
 (the most days, then the most evidence, then the name), at most `SHOWN`, the rest counted. No number
 stands beside a name: the order is the only rank, and the counts are in the sentence of the evidence.
+A person's number in the queue is their place in it, from 1, as the rest of `review` numbers its
+proposals (the owner's answer to #351): `rows` prints it on a line of its own under the person,
+`--accept N`, and the JSON keeps it as the place in `people`, never as a value beside the name.
 
-**The answers** (`answer`) are the acts of `who_was_there`: *whole stretch* (`--accept NAME`), one
-`with` note per day of the stretch that has begun, at its longest stay; *some days* (`--accept NAME
---days D,D`); *not with me* (`--not NAME`), one `not-with` note for the stretch. Every name and day
-is checked before the first line is written, under one hold of the writer lock.
+**The answers** (`answer`) are the acts of `who_was_there`: *whole stretch* (`--accept N`), one
+`with` note per day of the stretch that has begun, at its longest stay; *some days* (`--accept N
+--days D,D`); *not with me* (`--not NAME`), one `not-with` note for the stretch. The numbers are the
+queue's as it stands when answered (`numbers`, `pick`); a name given to `--accept` is refused. Every
+person and day is checked before the first line is written, under one hold of the writer lock.
 
 **Your people in a city** (`people_in_city`): the people the record places in a city, by the owner's
 `lives-in` note (the latest of each person). No contacts import keeps a city today (the iOS and
@@ -63,7 +67,8 @@ SHOWN = 10  # the people a queue lists; the rest are counted
 TITLES = 2  # the titles named in a sentence of evidence; the rest are counted
 MEETING_PROVIDERS = frozenset({"granola", "meet"})  # a meeting note-taker's transcripts
 EN_DASH = "\N{EN DASH}"
-ANSWERS = "--accept NAME (every day of it) · --accept NAME --days D,D · --not NAME"
+ANSWERS = "--accept N[,N] (every day of it) · --accept N --days D,D · --not NAME"
+NUMBERS = "--accept 1,3"  # the form a name given to --accept is told
 
 
 @dataclass(frozen=True)
@@ -322,10 +327,11 @@ def rows(queue: Queue) -> Iterator[str]:
     yield f"who was there, {queue.stretch.words()}"
     if not queue.people:
         yield "  nobody to ask: no proposal on these days that you have not answered"
-    for ask in queue.people:
+    for number, ask in enumerate(queue.people, start=1):
         yield f"  {ask.name}"
         yield f"      {ask.words()}"
         yield f"      on {', '.join(_short(day) for day in sorted(ask.days))}"
+        yield f"      --accept {number}"  # on a line of its own: never a number beside a name
     if queue.more:
         yield f"  and {queue.more} more, on less evidence"
     if queue.unplaced:
@@ -340,6 +346,46 @@ def _short(day: str) -> str:
 
 
 # -- the answers -------------------------------------------------------------------------------------------
+
+
+def numbers(text: Sequence[str] | None) -> list[int]:
+    """`--accept N[,N]`, given once or more, to the queue's numbers in order, each once. `CompanyError`
+    for a word that is not one: a name is refused in one sentence that names the number form."""
+    found: list[int] = []
+    for piece in text or ():
+        for word in piece.split(","):
+            word = word.strip()
+            if not word:
+                continue
+            if word.isdigit() and int(word) < 1:
+                raise CompanyError(f"--accept {word}: the queue is numbered from 1; nothing was written")
+            if not word.isdigit():
+                raise CompanyError(
+                    f"--accept {word!r}: --accept takes the queue's numbers, not a name: {NUMBERS}, as"
+                    " `review with` lists them under each person; nothing was written"
+                )
+            if int(word) not in found:
+                found.append(int(word))
+    return found
+
+
+def pick(queue: Queue, wanted: Sequence[int]) -> list[Ask]:
+    """The people of `queue` numbered `wanted` (from 1, as `rows` prints them). `CompanyError` naming
+    every number the queue does not have, nothing written."""
+    missing = [n for n in wanted if not 1 <= n <= len(queue.people)]
+    if missing and queue.more:
+        raise CompanyError(
+            f"no person {', '.join(map(str, missing))} to accept: the queue of {queue.stretch.words()} shows"
+            f" {len(queue.people)} and counts {queue.more} more, who are stated by name with `logbook with"
+            " --from D1 --to D2 NAME`; nothing was written"
+        )
+    if missing:
+        has = len(queue.people)
+        raise CompanyError(
+            f"no person {', '.join(map(str, missing))} in the queue of {queue.stretch.words()}: it lists"
+            f" {has}, numbered from 1 by `review with`; nothing was written"
+        )
+    return [queue.people[n - 1] for n in wanted]
 
 
 @dataclass(frozen=True)
@@ -364,15 +410,15 @@ def answer(
     nots: Sequence[str] = (),
     now: datetime | None = None,
 ) -> Answered:
-    """Write the answers to a stretch's queue through the acts: `accept` the people with the owner on
-    every day of the stretch that has begun, or on `days` only (one person then); `nots` a `not-with`
-    note each for the stretch. Every name and day is checked first, under one hold of the writer lock;
-    `CompanyError` and nothing written otherwise."""
+    """Write the answers to a stretch's queue through the acts: `accept` the people (by id, as `pick`
+    gives them, or by name) with the owner on every day of the stretch that has begun, or on `days`
+    only (one person then); `nots` a `not-with` note each for the stretch. Every name and day is
+    checked first, under one hold of the writer lock; `CompanyError` and nothing written otherwise."""
     clock = now if now is not None else datetime.now(UTC)
     if not accept and not nots:
-        raise CompanyError("nothing to write: say --accept NAME or --not NAME")
+        raise CompanyError("nothing to write: say --accept N or --not NAME")
     if days is not None and len(accept) != 1:
-        raise CompanyError("--days goes with one --accept NAME")
+        raise CompanyError("--days goes with one --accept N")
     with lb.writer():
         report = people.directory(lb)
         accepted = [acts.resolve([name], report)[0] for name in accept]

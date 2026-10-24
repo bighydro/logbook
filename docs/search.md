@@ -133,6 +133,62 @@ A Python whose SQLite was built without FTS5 (every official build has it; a dis
 not) builds an index with no search table and `logbook search` says so and exits 1; every other
 reader is unaffected.
 
+## In the Library
+
+`logbook serve` has the same search at `/search` (`logbook/contrib/search_page.py`), under
+**search** in the navigation: a form with one field, the words as you would type them after
+`logbook search`, sent as a GET. It calls the two functions the command calls (`search.query`,
+`search.search`), so the words, the phrases, the prefixes, the ranking and the retracted lines are
+the command's own.
+
+```
+/search?q=kari                          every line with the word
+/search?q=kari&kind=note                notes only (trip and journey are one kind, as with --kinds)
+/search?q=kari&year=2026                lines of 2026 only, by local day
+/search?q=harbour&kind=note&page=2      the next fifty
+```
+
+- **The tier is the page's.** The hits are held to the Library's tier gate as every other page
+  holds its lines: `logbook serve` reads every tier on this machine, as its Day and `/line/ID` do,
+  so a search there finds tier 3 too; a gated page (`export site`'s, a test's `Site(tiers=…)`) finds
+  only what its gate lets through, and a hit above it is not on the page and not in a page's
+  count; a gate of some tiers only (1 and 3) searches further until its page is full. The header
+  says the highest tier among the hits shown.
+- **A hit** is one row under its day, the date a link to the Day: its local time, a link to the
+  Day too, to the hit's own row on it for a note, a mail and a calendar entry (the kinds the Day
+  lists as rows of their own; a message is under its conversation there); its kind; an excerpt of
+  up to sixteen words around the match, each matching word marked (the command's `[brackets]`,
+  drawn; a bracket the record itself holds, `[urgent]` in a note, stays as written); and its line's
+  id, a link to `/line/ID`, the line as the record holds it. A hit a later line supersedes says so
+  as the command does, `superseded by #N`, a link to that line: the last correction the page's
+  gate lets through, as the Day marks one, so a correction above the gate is never named.
+- **The filters are links**: every kind with words and every year the record runs over (its span,
+  as the front page says it, whatever the gate), the filter in force in bold and *every* to take
+  it off. They are never counted: a count would cost
+  the matches of the words a second time, and would say how many lines a gate holds back. A filter
+  that finds nothing says so in its sentence (`In 2025, nothing in the record matches marina.`). Nothing about a filter is kept in the browser: the
+  address is the whole search, so it can be bookmarked, reloaded and sent back to.
+- **The pages are links** of fifty hits. The rank decides which page a hit is on, the day where it
+  is read on that page, as the command does with `--limit`. Page 20 is the last (a thousand hits);
+  past that, a kind or a year narrows the search.
+- An empty query is the form and nothing else. A query that finds nothing says so in one sentence.
+
+The page is the Library's: one document with the Day's tokens and type, no script, nothing fetched,
+no reference but the server's own paths, nothing written, and phone width first, every link and
+control a 44 px target. No person is a filter and no number stands beside a name. An exported site
+(`logbook export site`) has no server to answer a form, and has no search.
+
+A page of hits is kept by its tag like every page of the record (`Site.etag`): asked again at the
+same head, it is not searched again (a millisecond). Otherwise the cost is the command's: the
+matches of the words, never the size of the record. On the five-million-line synthetic record of
+`scripts/bench_library.py` (ten years, 4 vCPUs), a fresh query in a running server answers in
+0.07 to 0.9 s — a name (`kari`, 205,000 lines) 0.63 s, a word (`fjord`) 0.45 s, a phrase
+(`"running late"`, 346,000 lines) 0.87 s, a name and a word together 0.07 s, page 5 of `fjord`
+0.46 s, each with its superseded hits marked — and `kari` from a cold disk, the first request after a restart with nothing in the
+operating system's cache, 1.5 s. A word in most lines costs its matches, every one ranked: the
+persona's surname, in 2.2 million of the five million, takes 4 s, as `logbook search` does.
+Narrow with a second word, a kind or a year.
+
 ## What it is not
 
 Not a question answered: it finds the lines that say the words, and ranks them; it does not read

@@ -1,14 +1,17 @@
 # The dream
 
-Every morning a model reads yesterday and writes one line about it: the day in a paragraph, the threads
-it moved, two questions for your reflection, and proposals, the people it thinks were there, the
-promises it thinks were made and the events it thinks the day held. Every sentence points at the lines it came from. The line is a `draft/v1`
+Every morning a model reads yesterday and writes one line about it: the goodnight story, an answer to
+each of your lenses, the threads it moved, what the day shows was learned and decided, the ideas it
+moved, one question for your reflection, and proposals, the people it thinks were there, the promises it
+thinks were made, the photo of the day, the events it thinks the day held and the lines it thinks belong
+to one of your ideas or orgs (*The dream learns*, below). Every sentence points at the lines it came from. The line is a `draft/v1`
 ([RFC 0036](rfcs/0036-goals-reviews-drafts-chapters.md), [the profile](https://github.com/bighydro/logbook/blob/main/rfcs/0036-draft-v1.md)),
 and the Day shows it above your note, labelled as a draft.
 
 ```
 logbook dream day 2026-06-13            # one day, one line
 logbook dream day 2026-06-13 --dry-run  # ask the model, check the answer, write nothing
+logbook dream day 2026-10-21 --evening  # today so far: the draft says `the day so far`
 logbook dream journey trip:2026-06-15:2026-06-17   # a journey that has come home, or any day of it
 logbook dream week 2026-W25             # a week whose Sunday is over; no week: the last one over
 logbook dream --catch-up --days 14      # every day of the last fortnight that needs it, its weeks, the calls, the journeys
@@ -134,7 +137,15 @@ ceiling, their text; the notes in full; the commitments on the day; and the note
 signed it. Every item carries a reference (`L1`, `L2`, ...) that stands for one line id of the day.
 Each stay carries its `place`, the id a proposed event names it by, and the material ends with
 `people`: the canonical people the day names, by `id` and `name`, the only people a proposed event
-may hold.
+may hold. dream-day/4 adds `photos` (the day's photos, the owner's own camera first, then the starred,
+then by time, each its reference, clock, `provenance` and `starred`, twelve at most), and, under the
+same ceiling and only when the day is dreamed (a catch-up's comparison never pays for them): `for`,
+what the day was meant for (RFC 0043 §4.1), its `chapter` (the standing chapter the day is in, its
+`name`, its `rules` in the owner's words, `from` and `to`) and its `goals` (the open standing goals,
+`id` and `text`), under one key so a day's material is never taken for a month's or a chapter's; `named` (the ideas and orgs the owner named, `id`,
+`kind`, `name`, forty of each at most, by name: the only ids an idea or a link may name) and `lenses`
+(`id` and `text`, from `policy/questions.json`, below). Each is read from its own kind through the
+index, a few lines each; never the touches the Ideas shelf sweeps.
 
 `--show-prompt` prints what is sent: the prompt ([docs/dream-prompt.md](dream-prompt.md) explains it)
 and the material as JSON. The prompt says which language to write in: the language most of the day's
@@ -155,10 +166,12 @@ unsupported. Before anything is written:
   nothing is written. A model that mostly makes things up writes nothing into the record.
 
 The draft line holds the segments and the ids, never the prompt, the material or the day's text the
-model was shown. Its `extra` says which prompt wrote it (`dream-day/3`; `dream-day/1` drafts asked for
-no events, and drafts before `dream-day/3` were not told that agents are not people), which part of the
-dream each segment belongs to (`day`, `threads`, `questions`, `people`, `promises`) and the digest of
-the ids it read, which `--catch-up` compares.
+model was shown. Its `extra` says which prompt wrote it (`dream-day/4`; `dream-day/1` drafts asked for
+no events, drafts before `dream-day/3` were not told that agents are not people, and a `dream-day/3`
+draft has a `day` paragraph and two questions where dream-day/4 has the story and one), which part of
+the dream each segment belongs to (`story`, `lens:<id>`, `threads`, `learned`, `decision`, `ideas`,
+`questions`, `people`, `promises`, `photo`; a `dream-day/3` draft's `day` still reads), the digest of
+the ids it read and the count and digest of the ids `--catch-up` compares (*The re-dream rule*).
 
 On the Day, each segment prints with its evidence after it, the ids shortened; an unsupported one is
 set apart with a leading `~` and the word `unsupported`, never run into the prose around it and never
@@ -166,19 +179,30 @@ as a fact. A reader that finds an evidence id that is not on the day marks the s
 says why; a segment of neither documented shape is unsupported and the line is said to be malformed.
 
 ```
-  draft         model:qwen2.5-7b-instruct · read at bb97e90d · 5 lines · dreamed 2×, last on 2026-06-14 · 1 unsupported
-      day       A morning at home, then the afternoon aboard Solvind on the fjord.  […000000a1, …000000a2]
-      day       You wrote that the engine sounded right for the first time since May.  […000000a4]
-      question  What made the engine sound right this time?  […000000a4]
+  draft         model:qwen2.5-7b-instruct · read at bb97e90d · 5 lines · dreamed 2×, last on 2026-06-14 · 1 unsupported · 1 proposed link
+      story     You spent the morning at home, then the afternoon aboard Solvind on the fjord.  […000000a1, …000000a2]
+      story     You wrote that the engine sounded right for the first time since May.  […000000a4]
+                Tomorrow: two entries, the first at 09:00.
+      lens:boat The new reefing lines ran cleanly; this is an inference.  […000000a4]
+      lens:money — the day doesn't answer this
     ~ question  Was the evening alone what you wanted?  unsupported
       people    Ola Nordmann was aboard in the evening.  […000000a4]
+      photo     The only photo from the water.  […000000a5]
+    ? link 1    Crew list  proposed  […000000a6]
 ```
 
 `day --no-dream` leaves the draft out; `day --json` carries it under `draft`, the key there only on a
 day that has one (and the entry allows, *When the entry changes*), so the Day's object is otherwise what it was: the line, the model, when it was written, what it read, the segments each with `supported`, its
 `evidence`, its `part` and `why` when a reader found it wanting, `supersedes`, the `earlier` drafts'
-ids newest first, how many times the day was `dreamed` and the day it was `last`. `serve` shows the
-same above the timeline, an unsupported segment a muted block marked with the word.
+ids newest first, how many times the day was `dreamed` and the day it was `last`. Since dream-day/4 a
+day's draft also carries, on every day draft (empty or false for an older one): `evening` and
+`read_until`; `lenses`, each `{id, text, answered}`; `entity` on each `ideas` segment; `links`, each
+`{number, kind: link, entity, text, note, evidence, supported, why, kept}`; `kept` on each proposed
+event beside `confirmed`; `since_signed` and `signed_seq`; `closing`, the story's last line as the
+reader computed it, `{text, day, entries, first, lines}` or null; and `marked`, `dropped`,
+`dropped_links`, `dropped_segments`, by why. `serve` shows the segments above the timeline, an
+unsupported segment a muted block marked with the word; the Day page reads the new fields with RFC 0043
+slice A, and until then shows the new parts' segments as it shows every segment.
 
 ## Proposed events
 
@@ -270,11 +294,83 @@ A draft names the head it read (`read_head`) and how many lines of the day it re
   `DAY` on (the days dreamed are still the last N). The exit status is 1 when any day or call was
   refused, so the schedule's run can say so; a policy or endpoint refusal is said once, before any
   day, exit 2.
+- **Kept lines never make a day be dreamed again** (RFC 0043 §6 rule 4). What the catch-up compares
+  leaves out the lines the close writes: a line whose `extra.from` names a draft of the day (an event
+  accepted with `--accept`, a sentence or a link kept), and the reflection and its delegations. A star
+  is the day's like any line (it changes which photos the material lists first).
+  A dream-day/4 draft keeps the count and the digest of what it compared (`extra.compared_count`,
+  `extra.compared_ids_sha256`); an older draft is compared by what it read, as before, until it is
+  dreamed again.
+- **After a signature, only a later line** (rule 5). On a signed day the catch-up, the 06:00 close's
+  included, dreams the day again only when a line it compares arrived after both the standing
+  signature and the standing draft, by `seq`: `1 line since you signed (#412)`. The new draft
+  supersedes the standing one, the evening's among them. A line synced before the signature does not
+  count: you signed what you saw.
+- **A signed day with no late line is never dreamed again** (rule 6): `signed as #412, no line since`,
+  unless its entry changed (the first bullet) or you ask, `dream day DAY`.
+- **Today is never the catch-up's.** `dream day TODAY --evening` dreams today so far, writing
+  `extra.evening: true` and `extra.read_until`, the moment it read up to; a day that is not today is
+  refused with `--evening`. The morning's catch-up dreams the day again when lines arrived after the
+  evening's draft, superseding it.
 
 The whole dream, reading the day, the model's turn and the write, runs inside the record's writer lock
 ([the commands](commands.md), one writer at a time), and the head is read again before the line is
 appended: a head that moved under the reading is the record's `HeadMoved`, one sentence, and nothing
 is written; dream the day again.
+
+## The dream learns (dream-day/4)
+
+RFC 0043 slice B ([the Day page and its rhythm](https://github.com/bighydro/logbook/blob/main/rfcs/0043-the-day-page.md),
+§4.3–4.8, §6, §7, §12, §13.2–13.4). The prompt's parts, in order, each a list of segments with evidence:
+
+| Part | What | The code's rule |
+|---|---|---|
+| `story` | the goodnight story: five or six sentences, second person, past tense, calm, concrete, ending where the day ended | at most six kept; its last line is the reader's, `Tomorrow: two entries, the first at 09:00.`, from the next day's timed calendar entries, or nothing; never the model's |
+| `lens:<id>` | one answer to each lens (`"ask": "day"` in `policy/questions.json`, [RFC 0027](rfcs/0027-reflection.md), at most five) | one segment per lens; a lens answered without evidence is dropped, and a lens with no segment is printed by the reader, `— the day doesn't answer this` |
+| `threads` | the threads the day moved | as before |
+| `learned` | what the day shows was learned | |
+| `decision` | what the day shows was decided | |
+| `ideas` | an idea the day moved, with `entity` its id | dropped unless the id is an idea of the material's `named`; kept under `extra.ideas`, `{segment, entity}` |
+| `questions` | one question for the reflection | the first kept; dream-day/3 asked two |
+| `people`, `promises` | as before | |
+| `photo` | the photo of the day: the owner's own camera first, the starred first, with a one-line reason | one, resting on exactly one photo of the material, else dropped |
+
+Beside them, `events` as before and `links` (`draft/v1` amendment 2): a line of the day that belongs
+to an idea or an org of `named`, `{kind: link, entity, text, evidence, note?}`, four at most; one that
+names an id the material did not give, has no text or no evidence of the day is dropped and counted
+under `extra.dropped_links`. An event whose title, or a link whose text or note, puts a number beside a
+canonical person's name is dropped too, never kept, and counted as `a number beside a person` under
+`extra.dropped` (an event) or `extra.dropped_links` (a link). A link is numbered after the events among the draft's `proposals`, so an
+event's number, and the `raw_id` it is accepted under, is what it would be without it. Keeping a link,
+a sentence or the photo of the day (as a star with its note) is RFC 0043 slice C: this slice writes
+none of them.
+
+Every rule of the evidence rule holds, and the 30 % refusal is counted over what is kept. The number
+rule of the journey and the week now holds for a day too (`dream.hold_numbers`): a figure a sentence
+writes that the items it cites do not give marks it unsupported, counted under `extra.marked` (a
+note's and a promise's own figures count, as a stay's do). And, as for a month and a chapter, no number
+stands beside a person, pencil included (`dream.hold_names`): a sentence that names a canonical person
+(the full name, or the first name) and writes a figure, whatever its evidence and whether or not the
+number rule marked it already, is **held**: its words are dropped before the line is written, its slot
+stays as an unsupported segment whose text is the reason, `held: a number beside a name`, the evidence
+it cited, when it cited any, is kept under `extra.held` (`{segment, evidence}`, the segment's place from
+1), and it is counted under `extra.marked` as `a number beside a person` (a sentence the number rule
+marked first is counted under both keys; the 30 % refusal counts it once). A model's sentence that
+reads as the reason itself is held the same way, never kept as prose. No reader prints the model's
+words, since the line does not hold them: `day`, the Day page and `export site --with-drafts` show `~ held: a number
+beside a name  unsupported` in their place. The draft's tier is the highest among every line it read:
+the day's, and the chapter, goal and entity lines it was given, so a tier-3 goal makes a tier-3 draft
+(when the entry lets tier 3 cross at all). The prompt carries RFC 0043 §7's voice rules word for word (without the RFC's `[main]` mark), and
+`--show-prompt` prints it.
+
+Where this slice and RFC 0043 as written differ, the RFC is a draft and this page is what the code does:
+the parts are §13.4's with `photo` last (§13.4 has no photo part; §12 proposes the photo of the day); a
+link is `{entity, text, evidence, note?}`, where §13.3 has `{entity, ref, evidence}`, so slice C finds
+the observed reference from the evidence line when it keeps one; and *not yet kept* is matched both
+ways: a proposal of the standing draft by its `raw_id`, as `--accept` writes it, and one of any other
+draft of the day by its fields, an event's title and span, a link's entity and evidence, as §6 rule 5
+says, since a `raw_id` names its own draft. Either way the proposal carries `kept` and `confirmed`, the
+line that kept it, so `--accept` refuses it (`confirmed already`) and the page shows it confirmed.
 
 ## Journeys and weeks
 
@@ -429,8 +525,9 @@ It writes:
   when the month has no stay at all), and the people **in the order of the time spent together** (the
   days the with module puts them at your stays, then their contacts): **names only**. No count is given
   beside a person, none is kept in the line, a day draft's sentence that puts one beside a name is not
-  passed on, and a sentence of the month that writes a figure where it names a person is marked
-  unsupported (`a number beside a person` under `extra.marked`), whatever it cites;
+  passed on, and a sentence of the month that writes a figure where it names a person is held, whatever
+  it cites: its words are dropped and its slot reads `held: a number beside a name`, unsupported
+  (`a number beside a person` under `extra.marked`);
 - `goals`: for each goal open on the month's last day or reviewed in it, what the month shows, from
   what the code computed: your reviews dated in the month, the standing verdict on the last day, and the
   days a line of the month **touched** the goal, as dates and never a count (a goal's words may name a
@@ -487,7 +584,7 @@ and after. It writes:
   and its own close.
 
 The same rules hold: every sentence cited or marked, more than 30 % unsupported refused, no figure the
-items do not give, no figure beside a person. A chapter is a tier-2 line, so under a ceiling of 1 it
+items do not give, no figure beside a person (the sentence held, its words dropped). A chapter is a tier-2 line, so under a ceiling of 1 it
 is refused before anything is read. Its `subject` is the ids of its lines, the standing one first, so
 `dream chapter --json` and a later page find the draft by any of them; closing a chapter writes a new
 line, which is a change, so the chapter is dreamed again. A chapter no month or week draft says anything

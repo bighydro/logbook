@@ -56,7 +56,11 @@ to `/with` (`Site._with`: `presence.state`, the lines `logbook with` writes). Th
 acts, allowed because the server binds 127.0.0.1 and runs as the record's own user: a POST is
 answered only when the connection comes from this machine (the client address is loopback) and the
 form was submitted from the server's own pages (the browser's `Origin`, when it sends one, names
-127.0.0.1); anything else is a 403 and nothing is written. Every write is one at a time
+127.0.0.1); a request that came through a proxy (`phone.proxied`: a Host that is not 127.0.0.1 or
+[::1], or a `Tailscale-*` or `X-Forwarded-*` header) is answered only once `logbook setup phone`
+names the owner's own phone in `logbook.json` and it is the phone's, through Tailscale Serve
+(`phone.allows`: its origin, its Host and its login, all at once); anything else is a 403 and
+nothing is written. Every write is one at a time
 (`Site._write_lock`) and through the CLI's own function, under the record's writer lock and never
 waiting for it: another command writing is one answer for every act, the shelves', the Manifest's
 and the Day's alike (`Site._busy`): a 409, one sentence (`BUSY`), the form's input kept in a form
@@ -106,18 +110,32 @@ that no model touched it (`NO_MODEL`): its rows are computed and a model's draft
 from __future__ import annotations
 
 import base64
+import contextlib
+import contextvars
 import email
+import faulthandler
 import functools
 import hashlib
+import http.client
 import ipaddress
 import json
 import math
+import os
 import re
 import secrets
+import select
+import signal
+import socket
 import socketserver
+import sys
 import tempfile
 import threading
+import time
+import traceback
 from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
+from concurrent.futures import CancelledError as FuturesCancelled
+from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FuturesTimeout
 from datetime import UTC, date, datetime, timedelta
 from email.utils import collapse_rfc2231_value
 from html import escape
@@ -129,6 +147,7 @@ from zoneinfo import ZoneInfo
 
 from ..core import (
     assets,
+    cancel,
     chapter,
     day_start,
     drafts,
@@ -156,6 +175,7 @@ from ..core.store import NOT_WAITING, HeadMoved, Locked, Logbook, now_utc, retra
 from . import (
     asset_status,
     day_photos,
+    day_rhythm,
     dream,
     entities,
     entity_review,
@@ -163,15 +183,19 @@ from . import (
     gaps,
     ideas,
     journeys,
+    library_build,
     orgs,
     person_page,
+    phone,
     places_review,
     reflect,
+    search_page,
     shelf_agents,
     shelf_goals,
     shelf_promises,
     timeline_page,
     trip_page,
+    week_page,
     week_paper,
     world,
 )
@@ -182,6 +206,14 @@ if TYPE_CHECKING:  # the review reads the adapters' phone rules: loaded by the P
 T = TypeVar("T")
 HOST = "127.0.0.1"  # the one host the server binds; anything else is refused
 PORT = 8765
+LIMIT_S = 15.0  # a page read longer than this is stopped and said so (`serve --limit`)
+RENDERS = 2  # pages read at once; the rest wait their turn, within their limit
+WATCH_S = 0.25  # how often a waiting request looks at its reading and its browser
+IDLE_S = 60.0  # a kept-alive connection idle this long is closed
+WATCH_EVERY_S = 30.0  # the server asks itself for its icon this often (`Watchdog`)
+SILENT_S = 5.0  # an answer slower than this is no answer
+STUCK_AFTER = 2  # this many in a row, and the server leaves for its service manager to start again
+STUCK_EXIT = 70  # EX_SOFTWARE: a non-zero exit, which launchd's KeepAlive and systemd's on-failure restart
 WINDOW_DAYS = 14  # `/days` without a window: the record's last fortnight
 HEAD_CHARS = 12
 CSP = "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'"
@@ -193,6 +225,7 @@ RECORD_PAGES = frozenset(
     {"/", "/days", "/trips", "/places", "/world", "/journeys", "/people", "/manifest", "/manifest/people"}
     | {"/ideas"}
     | {"/promises", "/goals", "/agents"}  # the shelves' lists
+    | {"/search"}  # the record's words (`search_page`)
 )
 JOURNEY_PATH = re.compile(r"^/journeys/(\d{4}-\d{2}-\d{2})/(\d{4}-\d{2}-\d{2})$")  # its first and last day
 PERSON_PATH = re.compile(r"^/people/([^/]+)$")  # a canonical person, by entity id
@@ -222,15 +255,22 @@ PHOTOS = "photos"  # the Day page's anchor of its photo review, where the review
 WEEK = "week"  # the anchor of a Sunday's week draft (`dream week`), which the other six days link to
 LINE_PATH = re.compile(r"^/line/([^/]+)$")  # one line as written, read-only, through the gate
 PHOTO_PATH = re.compile(r"^/photo/([^/]+)$")  # a photo line's pixels from the attachment store, likewise
+WEEK_PATH = re.compile(r"^/week/(\d{4}-W\d{2})$")  # the week page (RFC 0043 §8, `week_page`), read-only
 CLOSE = "close"  # the Day page's anchor of Reflect and sign, where a write sends the owner back
 # pages the record's today moves too (this year, anniversaries, drift, the stale orgs and ideas): in the tag
-CLOCK_PAGES = ("/people", "/manifest", "/org/", "/ideas", "/idea/", "/goals")  # /goals: a goal goes past
+# /goals: a goal goes past; /world: its window ends on today, whatever the calendar holds after it
+CLOCK_PAGES = ("/people", "/manifest", "/org/", "/ideas", "/idea/", "/goals", "/world")
+TRIP_KINDS: tuple[str, ...] | None = (
+    trips.READ_KINDS
+)  # the lines a year's trips parse; the rest from the index
+SPILL_DAYS = 2  # a reading of days holds the night after the last and the morning after that
 ID_SHOWN = 4  # line ids an evidence row prints; the rest are counted
 PAGE_SIZE = 20  # clusters a page of the review queue; "more" is the next page
 SHOWN = 30  # an org's timeline rows shown before the rest fold
 PAGES_KEPT = 64  # pages the server keeps by their tag, the latest asked for last (`Site._keep`)
 PAGE_BYTES_KEPT = 64 * 1024 * 1024  # and at most this many bytes of them
 SHARED_KEPT = 32  # readings `Site.shared` keeps for the record as it stands, the oldest going first
+DAY_KEPT = 48  # readings the Day keeps beside them (`Site._day_reading`): a few each for the days last read
 FORM_BYTES = 64 * 1024  # the most a form may carry: a name, a reflection, the proposals accepted
 # another command holds the writer lock: every act's one answer, a 409 (the owner's word of 14 Oct 2026)
 BUSY = "Another command is writing to the record; nothing was written. Try again in a moment."
@@ -246,6 +286,7 @@ AUDIO_BYTES = 64 * 1024 * 1024  # the most a recording may carry: half an hour o
 STATE_FILES = (
     places_review.STATE_FILE,
     day_photos.STATE_FILE,
+    *week_page.HOLD_FILES,  # Hold's reports, whose counts the week page reads
 )  # record-relative bookkeeping the pages read, in the tag
 NO_MODEL = "No model touched this page. What a model drafted is marked as a draft."  # the Day's footer
 TIERS_SAID = (  # under the Day's header: what crosses where (SPEC §4), in the Library's words
@@ -505,6 +546,7 @@ dl.header dd{overflow-wrap:anywhere}
 NAV = (
     '<a href="/">Logbook</a><a href="/today">today</a><a href="/days">days</a>'
     '<a href="/timeline">timeline</a>'
+    '<a href="/search">search</a>'
     '<a href="/journeys">journeys</a><a href="/people">people</a><a href="/manifest">manifest</a>'
     '<a href="/ideas">ideas</a><a href="/promises">promises</a><a href="/goals">goals</a>'
     '<a href="/agents">agents</a><a href="/places">places</a><a href="/assets">assets</a>'
@@ -586,6 +628,19 @@ class Stale(Exception):
     not what the page showed; a 409, nothing written."""
 
 
+_READS: contextvars.ContextVar[Reads | None] = contextvars.ContextVar("reads", default=None)
+
+
+class Reads(NamedTuple):
+    """What a page was made of, when it says (`Site.reads`): the lines of the local days `first` to
+    `last`, and of `kinds` the lines of any day; the record's settings and who is who beside them. A
+    built page that says it is rendered again only when a line comes for those (`library_build`)."""
+
+    first: str
+    last: str
+    kinds: tuple[str, ...] = ()
+
+
 class Response(NamedTuple):
     status: int
     body: bytes
@@ -593,6 +648,7 @@ class Response(NamedTuple):
     etag: str | None = None  # a page of the record at its head: kept by the browser, asked again
     location: str | None = None  # a redirect's target
     csp: str = CSP  # the Places page names its one inline script; every other page allows none
+    reads: Reads | None = None  # what the page was made of, when it says; None: the whole record
 
     @property
     def headers(self) -> dict[str, str]:
@@ -637,6 +693,8 @@ class Site:
         footer: str | None = None,
         voice: Voice | None = None,
         with_drafts: bool = True,
+        library: library_build.Library | None = None,
+        on_act: Callable[[], None] | None = None,
     ):
         self.lb = lb
         self.airports = airports or Airports.load()
@@ -648,6 +706,10 @@ class Site:
         self.footer = footer
         self.voice = voice
         self.with_drafts = with_drafts  # False: no model's draft (pencil) on the Day (`export site`)
+        # the pages built ahead (`library_build`): a GET is answered from them when they hold it, and a
+        # page rendered here is added to them; None renders every page (the tests, `export site`)
+        self.library = library
+        self.on_act = on_act  # told after an act changed the record: the server's rebuild, in the background
         self._lock = threading.Lock()
         # the review queues are read (their tables built once) and acted on under it
         self._review_lock = threading.Lock()
@@ -664,6 +726,8 @@ class Site:
         self._shared: dict[tuple[Any, ...], Any] = {}  # a reader's result, for `_shared_state`
         self._shared_state: str | None = None
         self._building: dict[tuple[Any, ...], threading.Lock] = {}  # one build of each result at a time
+        self._day_kept: dict[tuple[str, ...], Any] = {}  # the Day's readings, a pool of their own
+        self._day_state: str | None = None
 
     def href(self, path: str) -> str | None:
         """The link to write for a server path: the path itself, or what `href` makes of it."""
@@ -681,17 +745,48 @@ class Site:
     def tz(self) -> ZoneInfo:
         return ZoneInfo(str(self.lb.meta["timezone"]))
 
-    def respond(self, path: str, query: str = "", if_none_match: str | None = None) -> Response:
-        """The page at `path`. `if_none_match` is the request's header: when it names the page's
-        tag, a 304 and nothing rendered. The tag is taken before the page is read, so a head that
-        moves in between makes the tag older than the page, never newer: the next reload reads it
-        again rather than keeping a stale page."""
+    def quick(self, path: str, query: str = "", if_none_match: str | None = None) -> Response | None:
+        """The answer that reads nothing of the record, or None: the icon, a form's address asked with
+        a GET, and a page the build holds (`_built`). The server answers these on the request's own
+        thread; everything else is a reading, under the limit (`Handler`)."""
         if path == "/favicon.ico":
             return Response(204, b"", "image/x-icon")
         if path in WRITE_PATHS or path in LINE_ACTS:
             return self._error(405, f"{path} takes the forms of the server's own pages (POST), nothing else")
         if DAY_ACT.match(path) is not None:
             return self._error(405, f"{path} takes the Day page's forms (POST), nothing else")
+        if self.library is not None and (built := self._built(path, query, if_none_match)) is not None:
+            return built  # what the build wrote: no index opened, nothing read
+        return None
+
+    def still_reading(self, path: str, query: str, limit_s: float) -> Response:
+        """The page a reading over the limit is answered with (503): what happened and when the page
+        will be there, in one sentence each, never a spinner. With the build, the page is being
+        built in the background; without it (live, the default), the reading was stopped."""
+        target = path + (f"?{query}" if query else "")
+        again = f'<a href="{escape(target)}">this page again</a>'
+        if self.library is not None:
+            said = (
+                f"This page reads more of the record than the server reads while you wait ({limit_s:g} s)."
+                " It is being built now, in the background, and will be here as a page of its own in a"
+                f" few minutes; every other door opens as usual. Try {again} then."
+            )
+        else:
+            said = (
+                f"This page took longer than {limit_s:g} s to read, so the reading was stopped and this"
+                " machine is free for the other pages; `logbook serve` without `--limit` reads every page"
+                f" to its end. Try {again}, or the front page."
+            )
+        body = f'<h1>Still reading</h1>\n<p class="busy">{said}</p>\n<p><a href="/">The front page</a></p>\n'
+        return Response(503, self.document("still reading", body).encode("utf-8"))
+
+    def respond(self, path: str, query: str = "", if_none_match: str | None = None) -> Response:
+        """The page at `path`. `if_none_match` is the request's header: when it names the page's
+        tag, a 304 and nothing rendered. The tag is taken before the page is read, so a head that
+        moves in between makes the tag older than the page, never newer: the next reload reads it
+        again rather than keeping a stale page."""
+        if (found := self.quick(path, query, if_none_match)) is not None:
+            return found
         meta = self.current()
         self._add_indexes(str(meta.get("head")))
         if path == TODAY:
@@ -707,10 +802,14 @@ class Site:
         csp = PLACES_CSP if path == "/places" else WORLD_CSP if path == "/world" else CSP
         if DAY_PATH.match(path) is not None:
             csp = DAY_CSP if self._records() else DAY_IMAGES
+        said = _READS.set(None)
         try:
-            response = Response(200, self._page(path, params).encode("utf-8"), etag=etag, csp=csp)
+            rendered = self._page(path, params).encode("utf-8")
+            response = Response(200, rendered, etag=etag, csp=csp, reads=_READS.get())
             if etag is not None:
                 self._keep(etag, response)
+            if self.library is not None:
+                self._build_too(path, query, meta, response)
             return response
         except NotFound as e:
             return self._error(404, str(e))
@@ -735,6 +834,61 @@ class Site:
             return self._error(500, str(e))
         except ValueError as e:  # a day that is not one, a window that runs backwards, a year that is not
             return self._error(400, str(e))
+        finally:
+            _READS.reset(said)
+
+    def reads(self, first: str, last: str, kinds: Sequence[str] = ()) -> None:
+        """Say that the page being rendered is made of the lines of the local days `first` to `last`, of
+        `kinds` those of any day, and the settings and who is who (`Reads`): its response carries it,
+        and the build renders it again only when a line comes for those. A page that says nothing is
+        made of the whole record."""
+        _READS.set(Reads(first, last, tuple(kinds)))
+
+    def _built(self, path: str, query: str, if_none_match: str | None) -> Response | None:
+        """The page the build holds at this address, as it was written; None when it holds none, or
+        the page is one the server always renders (`library_build.live`: today's Day, `/today`)."""
+        assert self.library is not None
+        try:
+            today = day_start.of(self.lb.meta).today(self.now()).isoformat()
+        except (day_start.DayStartError, KeyError, ValueError):
+            return None  # the page that says why is rendered
+        if library_build.live(path, today):
+            return None
+        found = self.library.page(library_build.address(path, query))
+        if found is None:
+            return None
+        page, body = found
+        if if_none_match is not None and _matches(if_none_match, page.etag):
+            return Response(304, b"", etag=page.etag)
+        csp = page.csp if page.csp is not None else CSP
+        return Response(page.status, body, etag=page.etag, location=page.location, csp=csp)
+
+    def _build_too(self, path: str, query: str, meta: Mapping[str, Any], response: Response) -> None:
+        """A page the build did not hold, rendered for this request, added to it (`asked`): the next
+        visit is a file. Never today's Day, and never a page the clock alone moves faster than a build."""
+        assert self.library is not None
+        try:
+            today = day_start.of(meta).today(self.now()).isoformat()
+        except (day_start.DayStartError, KeyError, ValueError):
+            return
+        if library_build.live(path, today):
+            return
+        target, head = library_build.address(path, query), str(meta.get("head") or "")
+        with contextlib.suppress(OSError):  # a full disk or a cache folder gone: the page was answered
+            self.library.put(target, response, head, asked=True)
+
+    def _after_act(self, path: str, form: Mapping[str, str], response: Response) -> None:
+        """An act changed the record: the built pages it changed are dropped at once (the server renders
+        them until the build writes them again, so the owner sees what was written), and the rebuild is
+        asked for (`on_act`). Which pages: the page the act returns to and the front page; refused
+        because the page was older than the record (409), the page the form was on, so the reload is
+        the page as it stands (`library_build.touched`)."""
+        if self.library is None:
+            return
+        back = urlsplit(response.location or "").path
+        self.library.drop(library_build.touched(self.library.pages(), path, response.status, back, form))
+        if self.on_act is not None and response.status < 400:
+            self.on_act()
 
     def write(
         self,
@@ -743,6 +897,24 @@ class Site:
         client: str,
         origin: str | None,
         upload: Upload | None = None,
+        *,
+        asked: phone.Asked | None = None,
+    ) -> Response:
+        """`_write`, and the built pages it changed dropped when it wrote (`_after_act`)."""
+        response = self._write(path, form, client, origin, upload, asked=asked)
+        with contextlib.suppress(OSError):  # the act is written; a cache that cannot be told is the build's
+            self._after_act(path, form, response)
+        return response
+
+    def _write(
+        self,
+        path: str,
+        form: Mapping[str, str],
+        client: str,
+        origin: str | None,
+        upload: Upload | None = None,
+        *,
+        asked: phone.Asked | None = None,
     ) -> Response:
         """A POST: one of the forms of the server's own pages, each through the function the CLI
         runs for the same act. The Library's (`WRITE_PATHS`), under the record's writer lock: the
@@ -755,6 +927,11 @@ class Site:
         once (`_busy`: a 409, the form kept), and nothing is written. Refused (403, nothing
         written) unless `client`, the connection's address, is loopback and `origin`, the browser's
         Origin header when it sent one, names 127.0.0.1: this machine, the server's own pages. A
+        request that came through a proxy (`phone.proxied`: `asked`, its headers, name a Host that is
+        not 127.0.0.1 or [::1], or carry a `Tailscale-*` or `X-Forwarded-*` header) is answered only
+        when `logbook.json` names the owner's phone (`phone`, off by default) and the headers are the
+        phone's (`phone.allows`: the Origin, the Host and the login the setting names, read with each
+        POST), and never by the Origin's absence. A
         field sent more than once (the Sign form's boxes) arrives as its values joined with commas,
         as `--accept N,N` takes them; `upload` is the file a form carried, the Day's recording. One
         write at a time (`_write_lock`)."""
@@ -766,7 +943,13 @@ class Site:
                 f"nothing to post at {path}; the server's own forms post to {posts}, a Day's to"
                 f" /day/YYYY-MM-DD/reflect and /day/YYYY-MM-DD/sign, {STAR_PATH} and {WITH_PATH}",
             )
-        if not _loopback(client) or (origin is not None and not _loopback_origin(origin)):
+        # through Tailscale Serve (or any proxy): the phone's checks, or nothing
+        proxied = phone.proxied(asked)
+        if (
+            not _loopback(client)
+            or (proxied and not phone.allows(self.lb.meta, origin, asked))
+            or (not proxied and origin is not None and not _loopback_origin(origin))
+        ):
             where = f"from {client!r}" + (f", origin {origin!r}" if origin is not None else "")
             what = {
                 REVIEW_PATH: "a place is named from this machine only, through the server's own pages or"
@@ -792,7 +975,7 @@ class Site:
                 "a day is reflected on and signed from this machine only, through the server's own"
                 " pages or `logbook day reflect`",
             )
-            return self._error(403, f"refused {where}: {what}; nothing was written")
+            return self._error(403, f"refused {where}: {what}, {phone.FROM_PHONE}; nothing was written")
         try:
             if day_act is not None:
                 day, act = day_act.group(1), day_act.group(2)
@@ -1153,14 +1336,18 @@ class Site:
         """`logbook.json` as it is now. When its head has moved since the last request (a sync
         appended while the server runs), the index is brought to the new head here, once, under a
         lock, before any page reads it: the requests that arrive together wait for that one rebuild
-        instead of each starting its own on the same file."""
+        instead of each starting its own on the same file. While a writer is between `logbook.json`
+        and the index, the index is read as it stands and never rebuilt (`Logbook.index`): the meta
+        returned then names the last line the index holds, so a page's tag names what it read."""
         meta = self.lb.meta
         head = str(meta.get("head"))
         if head != self._head:
             with self._lock:
                 if head != self._head:
-                    with self.lb.index():
-                        pass
+                    with self.lb.index() as idx:
+                        seq, indexed = idx.indexed()
+                    if indexed != head:  # a writer between logbook.json and the index: what it holds
+                        return {**meta, "seq": seq, "head": indexed}
                     self._head = head
                     with self._kept_lock:  # every kept page names the old head in its tag
                         self._kept.clear()
@@ -1229,6 +1416,26 @@ class Site:
                         self._shared.pop(next(iter(self._shared)))
             return found
 
+    def _day_reading(self, key: tuple[str, ...], build: Callable[[], T]) -> T:
+        """What the Day reads beside the day (`day_rhythm`), kept for the record as it stands as
+        `shared` keeps a page's readings, in a pool of its own (`DAY_KEPT`), so paging through days
+        never pushes out what `shared` keeps for the other pages."""
+        state = self._state(self.lb.meta)
+        with self._kept_lock:
+            if state != self._day_state:
+                self._day_kept.clear()
+                self._day_state = state
+            if key in self._day_kept:
+                kept: T = self._day_kept[key]
+                return kept
+        found = build()
+        with self._kept_lock:
+            if self._day_state == state:
+                self._day_kept[key] = found
+                while len(self._day_kept) > DAY_KEPT:
+                    self._day_kept.pop(next(iter(self._day_kept)))
+        return found
+
     def _state(self, meta: Mapping[str, Any]) -> str:
         """The record as the pages read it: `logbook.json`, the record's today, and the settings,
         bookkeeping and pages beside the chain that `etag` digests."""
@@ -1257,16 +1464,24 @@ class Site:
             and ORG_PATH.match(path) is None
             and IDEA_PATH.match(path) is None
             and LINE_PATH.match(path) is None
+            and WEEK_PATH.match(path) is None
         ):
             return None
         parts = [self._started, path, query, json.dumps(meta, sort_keys=True)]
-        if DAY_PATH.match(path) is not None or path.startswith(CLOCK_PAGES):
+        # a week's plan, and its trip's days to go, move with the record's today
+        if (
+            DAY_PATH.match(path) is not None
+            or WEEK_PATH.match(path) is not None
+            or path.startswith(CLOCK_PAGES)
+        ):
             # a Day's forms are there from the day the owner is in; this year, the coming
             # anniversaries and a silence move with it too
             try:
                 parts.append(day_start.of(meta).today(self.now()).isoformat())
             except day_start.DayStartError:
                 parts.append("-")
+        if (day := DAY_PATH.match(path)) is not None:  # today's shape and its now line move with the clock
+            parts.append(day_rhythm.clock_tag(day.group(1), meta, self.now()))
         parts += self._beside()
         digest = hashlib.sha256("\n".join(parts).encode("utf-8")).hexdigest()
         return f'"{str(meta.get("head") or "")[:HEAD_CHARS]}-{digest[:16]}"'
@@ -1378,7 +1593,7 @@ class Site:
         if path == "/":
             return self.page_index()
         if (m := DAY_PATH.match(path)) is not None:
-            return self.page_day(m.group(1), expanded=params.get("open") == "1")
+            return self.page_day(m.group(1), expanded=params.get("open") == "1", shape=params.get("shape"))
         if (m := LINE_PATH.match(path)) is not None:
             return self.page_line(unquote(m.group(1)))
         if path == "/days":
@@ -1418,12 +1633,16 @@ class Site:
             return shelf_goals.page_goal(self, unquote(m.group(1)))
         if path == "/agents":
             return shelf_agents.page_agents(self, params.get("page") or "1", params.get("day") or None)
+        if path == "/search":
+            return search_page.page_search(self, params)
         if path == "/assets":
             return self.page_assets()
         if path == "/gaps":
             return self.page_gaps(params.get("since") or None)
         if path == "/world":
             return self.page_world(params.get("from") or None, params.get("to") or None)
+        if (m := WEEK_PATH.match(path)) is not None:
+            return week_page.page_week(self, m.group(1), expanded=params.get("open") == "1")
         raise NotFound(f"no page at {path}")
 
     def _error(self, status: int, message: str) -> Response:
@@ -1527,6 +1746,7 @@ class Site:
             f"<li>{self.link('Goals', '/goals')}: the goals you wrote, by horizon, and the chapter today is"
             " in.</li>\n"
             f"<li>{self.link('Agents', '/agents')}: the sessions with an agent, day by day.</li>\n"
+            f"<li>{self.link('Search', '/search')}: the record's words, as logbook search finds them.</li>\n"
         )
         parts.append(
             '<ul class="plain">\n'
@@ -1549,22 +1769,166 @@ class Site:
 
     # -- /day/YYYY-MM-DD ------------------------------------------------------------------------------------
 
-    def page_day(self, day: str, expanded: bool = False) -> str:
-        """The Day; with `expanded` every toggle is open, so a page prints or saves whole. Under the
-        header, the one sentence of what crosses where (`TIERS_SAID`) and, on a day of a week whose
-        draft stands, the week (`_week_html`); the timeline under the day's track (`_track_svg`),
-        each row that is a line linked to it as written (`/line/ID`), a row's photos a strip under it
-        (`_strip`), many edits of one Drive file one row (`_drive_folded`), a row's messages by
-        conversation (`_conversations_html`); at the foot, every line of the day, folded
-        (`_held_html`), the photo review (`_photo_review_html`), then Reflect and sign. A static
-        page (`export site`) has neither fold: its rows count the messages, as they did."""
+    def page_day(self, day: str, expanded: bool = False, shape: str | None = None) -> str:
+        """The Day in its shape (`day_rhythm`): morning, live, evening or signed, computed from the
+        clock, the evening hour and the signature on every request, or the one `shape` asks for, shown
+        for reading. With `expanded` every toggle is open, so a page prints or saves whole. Each shape
+        orders the same parts (`day_rhythm.ORDER`): the header (the eyebrow, the date, where, the
+        weather and who, then the night before and after, the signature and the `with` row); what the
+        day was for; Yesterday, Today and One person in the morning; the ribbon of the planned beside
+        the lived; the owner's words; the pencil; the record, folded (Loose ends, People, the
+        timeline under the day's track, each row that is a line linked to it as written, a row's
+        photos a strip under it, many edits of one Drive file one row, a row's messages by
+        conversation, Looking back, everything the day held, the sources); the photos, the starred
+        and the review; every part with nothing named once; then Reflect and sign. A static page
+        (`export site`) is the evening's or the signed day's, with no clock, no form and neither fold
+        of a row's messages: its rows count the messages, as they did."""
         # the folds from the same reading; a static page (`export site`) keeps to the rows, as before
-        data = day_reader.read(self.lb, day, self.airports, self.tiers, held=not self.static)
+        data = self._day_reading(
+            ("day", day),
+            lambda: day_reader.read(self.lb, day, self.airports, self.tiers, held=not self.static),
+        )
         tz = ZoneInfo(data["tz"])
         marks = self._day_marks(day)
-        starred, photos = marks.starred, marks.photos
-        star = self._toggle(day, starred, expanded)
+        star = self._toggle(day, marks.starred, expanded)
         extras = Rows(self._raw(marks), self._strip(day, marks, expanded), marks.lines)
+        d = date.fromisoformat(day)
+        bounds = day_start.of(self.lb.meta)
+        now = self.now().astimezone(tz)
+        today = bounds.today(now)
+        signed = data.get("signed")
+        hour = day_rhythm.evening_hour()  # once a request: the live shape names it too
+        if self.static:  # a file has no clock: the day as it closed, or as it was signed
+            computed = day_rhythm.SIGNED if signed is not None else day_rhythm.EVENING
+            shown = computed
+        else:
+            computed = day_rhythm.shape_of(
+                d,
+                now,
+                signed=signed is not None,
+                first_stay=day_rhythm.first_stay(data, tz),
+                evening=hour,
+                today=today,
+            )
+            shown = day_rhythm.asked(shape) or computed
+        live = d == today and not self.static  # today's clock, and its now line
+
+        def link(text: str, path: str) -> str:
+            return self.link(escape(text), path)
+
+        def person(c: Mapping[str, Any]) -> str:
+            name = escape(str(c.get("name") or ""))
+            href = self.href(_person_path(str(c["person"]))) if c.get("person") else None
+            if href is None:
+                return f'<span class="person">{name}</span>'
+            return f'<a class="person" href="{escape(href)}">{name}</a>'
+
+        pieces: dict[str, str] = {}
+        company = day_reader.company_of_day(data)
+        brow = day_rhythm.eyebrow(data["weekday"], shown, now if live else None, signed, day)
+        pieces["header"] = (
+            self._day_header(day, data, star, extras, expanded, company, shown, computed)
+            .replace("<!--eyebrow-->", f'<p class="eyebrow">{escape(brow)}</p>\n')
+            .replace("<!--meta-->", day_rhythm.meta_line(data, company, person))
+        )
+        shelf = self._day_reading(("goals", day), lambda: shelf_goals.read(self.lb, self.tiers, today=day))
+        pieces["for"] = day_rhythm.for_html(shelf, day_rhythm.touched(shelf, marks.lines), link)
+        pieces["tiers"] = f'<p class="tiers">{escape(TIERS_SAID)}</p>\n'
+        near = (  # a static site's days keep to their rows: no promise read for each day exported
+            []
+            if self.static
+            else self._day_reading(
+                ("promises", day), lambda: day_rhythm.promises_near(self.lb, day, self.tiers)
+            )
+        )
+        span = bounds.span(d)
+        ribbon = day_rhythm.ribbon(data, marks.lines, span, now if live else None)
+        pieces["the-day"] = ribbon
+        pieces["so-far"] = ribbon
+        if shown == day_rhythm.MORNING:
+            plan = day_rhythm.planned(data, marks.lines)
+            due = day_rhythm.due_on(near, day)
+            pieces["today"] = ribbon + day_rhythm.today_html(plan, due, day, tz, person)
+            found = self._day_reading(
+                ("yesterday", day), lambda: day_rhythm.yesterday(self.lb, day, self.tiers)
+            )
+            pieces["yesterday"] = day_rhythm.yesterday_html(
+                found, link, lambda y: self.link("Sign again", f"/day/{y}#{CLOSE}")
+            )
+        directory = self._day_reading(("directory",), lambda: people.directory(self.lb))
+        coming = day_rhythm.birthdays(directory, day, day_rhythm.WEEK, self.tiers)
+        this_week = [b for b in coming if (b.on - d).days < day_rhythm.WEEK]
+        if this_week:
+            said = day_rhythm.birthday_said(this_week[0], day, person)
+            pieces["one-person"] = f'<div class="card"><p class="ink">{said}</p></div>\n'
+        if data.get("reflection"):  # the owner's words, in ink
+            pieces["words"] = _reflection_html(data["reflection"], tz)
+        pencil = ""  # a model's words: none on a site built without its drafts (`with_drafts`, #364)
+        if self.with_drafts and data.get("draft"):
+            model = escape(day_rhythm.model_of(data["draft"]))
+            pencil = (
+                f'<div class="paper"><p class="eyebrow">Pencil <span class="sc">{model}</span></p>\n'
+                f"{_draft_html(data['draft'], star)}</div>\n"
+            )
+        if self.with_drafts and data.get("draft_withheld"):  # the policy no longer allows it: the row
+            pencil += _withheld_html(data["draft_withheld"], heading=not data.get("draft"))
+        folds, empty = self._day_folds(
+            day, data, marks, star, extras, expanded, tz, near, shown, link, person, coming
+        )
+        proposed = (data.get("draft") or {}).get("proposals") or ()
+        confirmed = sum(1 for p in proposed if p.get("confirmed"))
+        if pencil and shown in (
+            day_rhythm.SIGNED,
+            day_rhythm.MORNING,
+        ):  # folded: at the foot, or in the record
+            said = f"{confirmed} of {len(proposed)} proposals confirmed" if proposed else "the model's draft"
+            folds["pencil"] = day_rhythm.fold("Pencil", said, pencil, expanded)
+            pieces["pencil"] = folds["pencil"] if shown == day_rhythm.SIGNED else ""
+        elif pencil:
+            pieces["pencil"] = pencil
+        pieces["photos"] = self._photos_html(day, marks, expanded)
+        if not pieces["photos"]:
+            empty.append("photos")
+        elif shown == day_rhythm.MORNING:  # the morning's record holds them, so Add to today follows it
+            n = len(marks.photos)
+            said = f"{n} photo{'s' if n != 1 else ''}"
+            folds["photos"] = day_rhythm.fold("Photos", said, pieces.pop("photos"), expanded)
+        week = self._week_html(day, expanded) if self.with_drafts else ""
+        pieces["record"] = week + "".join(folds[name] for name in day_rhythm.FOLDS[shown] if folds.get(name))
+        pieces["nothing-from"] = day_rhythm.nothing_from(empty)
+        asked_at = f" Your question comes at {hour:02d}:00." if hour is not None else ""
+        reflect_now = f'<a href="#{CLOSE}">reflect now</a>'
+        quiet = not pencil and self.with_drafts and not self.static  # a page that could hold a pencil
+        pieces["quiet"] = f'<p class="quiet">No pencil yet.{asked_at} {reflect_now}</p>\n' if quiet else ""
+        script = None
+        if not self.static:
+            closing, records = self._close_html(day, day_rhythm.CLOSE_HEADING[shown])
+            pieces["add" if shown in (day_rhythm.MORNING, day_rhythm.LIVE) else "close"] = closing
+            script = DAY_SCRIPT if records else None
+        pieces["foot"] = f'<p class="foot">{escape(day_rhythm.FOOTER)}</p>\n'
+        parts = [
+            day_rhythm.part(name, pieces[name], day_rhythm.HEADINGS.get((shown, name)))
+            for name in day_rhythm.ORDER[shown]
+            if pieces.get(name)
+        ]
+        return self.document(
+            f"{day} {data['weekday']}", "".join(parts), script, NO_MODEL, DAY_STYLE + day_rhythm.STYLE
+        )
+
+    def _day_header(
+        self,
+        day: str,
+        data: Mapping[str, Any],
+        star: Toggle,
+        extras: Rows,
+        expanded: bool,
+        company: Sequence[Mapping[str, Any]],
+        shown: str,
+        computed: str,
+    ) -> str:
+        """The Day's header: the eyebrow and the meta line (`<!--eyebrow-->`, `<!--meta-->`, put in
+        by `page_day`), the date, the note of a shape shown for reading, the pager, then the night
+        before and after, the country, the signature, the day's all-day entries and the `with` row."""
         d = date.fromisoformat(day)
         before, after = (d - timedelta(days=1)).isoformat(), (d + timedelta(days=1)).isoformat()
         a, b = (d - timedelta(days=6)).isoformat(), (d + timedelta(days=7)).isoformat()
@@ -1580,10 +1944,21 @@ class Site:
         )
         held = f"{DOT}{chapter.header_text(data['chapter'])}" if data.get("chapter") else ""  # RFC 0036
         close = "" if self.static else f'<a href="/day/{day}#{CLOSE}">reflect and sign</a>{DOT}'
+        asked = ""
+        if shown != computed:
+            own = self.link("its own", f"/day/{day}")
+            asked = (
+                f'<p class="asked">The {shown} shape, shown for reading; the day is in its {computed} '
+                f"now ({own}).</p>\n"
+            )
         parts = [
+            "<!--eyebrow-->",
+            asked,
             f"<h1>{day} <small>{escape(data['weekday'] + held)}</small></h1>\n",
+            "<!--meta-->",
             f'<p class="pager">{self.link(f"← {before}", f"/day/{before}")}{DOT}'
-            f"{self.link('the fortnight around', f'/days?from={a}&to={b}')}{DOT}{toggle}{close}"
+            f"{self.link('the fortnight around', f'/days?from={a}&to={b}')}{DOT}"
+            f"{week + DOT if (week := week_page.link_html(self, day)) else ''}{toggle}{close}"
             f"{self.link(f'{after} →', f'/day/{after}')}</p>\n",
             "" if self.static or data["sources"] else self._nothing_held(day),
             '<dl class="header">\n',
@@ -1605,7 +1980,6 @@ class Site:
                 for a in data["all_day"]
             )
             parts.append(f"<dt>all day</dt><dd>{entries}</dd>\n")
-        company = day_reader.company_of_day(data)
         if company or not self.static:  # the "with" row: who was there, and the field to say so
             proposed = any((e.get("with") or {}).get("proposed") for e in data["timeline"])
             nobody = (
@@ -1623,24 +1997,87 @@ class Site:
             field = "" if self.static else self._with_form(day)
             parts.append(f'<dt id="with">with</dt><dd>{said}{field}</dd>\n')
         parts.append("</dl>\n")
-        parts.append(f'<p class="tiers">{escape(TIERS_SAID)}</p>\n')
-        parts.append(self._week_html(day, expanded) if self.with_drafts else "")
-        if data.get("reflection"):  # the owner's words, above the record (`day reflect`)
-            parts.append(_reflection_html(data["reflection"], tz))
-        if self.with_drafts and data.get("draft"):
-            parts.append(_draft_html(data["draft"], star))
-        parts.append(_owner_html(data, star, extras.raw))
-        # the policy no longer allows it: the row, never the text
-        if self.with_drafts and data.get("draft_withheld"):
-            parts.append(_withheld_html(data["draft_withheld"], heading=not data.get("draft")))
-        parts.append("<h2>Timeline</h2>\n")
-        # a call's synthesis, or the policy's row, under the call
+        return "".join(parts)
+
+    def _day_folds(
+        self,
+        day: str,
+        data: Mapping[str, Any],
+        marks: DayMarks,
+        star: Toggle,
+        extras: Rows,
+        expanded: bool,
+        tz: ZoneInfo,
+        near: Sequence[Any],
+        shown: str,
+        link: Callable[[str, str], str],
+        person: Callable[[Mapping[str, Any]], str],
+        coming: Sequence[day_rhythm.Birthday],
+    ) -> tuple[dict[str, str], list[str]]:
+        """The record's folds by name, each with its summary in counts, and the names of the parts
+        with nothing for the day (`day_rhythm.nothing_from`)."""
+        folds: dict[str, str] = {}
+        empty: list[str] = []
+        fold = day_rhythm.fold
+
+        # the call syntheses' decisions are a model's (pencil): none without drafts (`with_drafts`)
+        said_by_calls = data if self.with_drafts else {**data, "syntheses": []}
+        summary, body = day_rhythm.loose_ends(near, said_by_calls, day, tz, person)
+        if body:
+            folds["loose-ends"] = fold("Loose ends", summary, body, expanded)
+        elif not self.static:  # a static day reads no promise: it cannot say there were none
+            empty.append("loose ends")
+        who = day_rhythm.people_of_day(data, marks.lines)
+        rows = [
+            f'<li><span>{person(p)}<span class="sub">'
+            + escape(DOT.join([*(f"at {w}" for w in p["where"][:3]), *(["you said"] if p["stated"] else [])]))
+            + "</span></span></li>\n"
+            for p in who
+        ]
+        if coming:
+            rows.append(
+                '<li class="birthdays"><span>Birthdays: '
+                + " ".join(day_rhythm.birthday_said(b, day, person) for b in coming)
+                + "</span></li>\n"
+            )
+        if rows:
+            said = DOT.join(
+                x
+                for x in (
+                    f"{len(who)} {'person' if len(who) == 1 else 'people'}" if who else "",
+                    f"{len(coming)} {'birthday' if len(coming) == 1 else 'birthdays'}" if coming else "",
+                )
+                if x
+            )
+            folds["people"] = fold(
+                "People", said, '<ul class="rows">\n' + "".join(rows) + "</ul>\n", expanded
+            )
+        else:
+            empty.append("people")
+        reviews = _owner_html({**data, "goals": [], "chapters": []}, star, extras.raw)
+        if reviews:
+            n = len(data.get("reviews") or ())
+            folds["reviews"] = fold(
+                "Reviews",
+                f"{n} review{'s' if n != 1 else ''}",
+                reviews.removeprefix("<h2>Reviews</h2>\n"),
+                expanded,
+            )
+        written = _owner_html({**data, "reviews": []}, star, extras.raw)
+        if written:
+            n = len(data.get("goals") or ()) + len(data.get("chapters") or ())
+            folds["goals"] = fold(
+                "Goals and chapters",
+                f"{n} line{'s' if n != 1 else ''}",
+                written.removeprefix("<h2>Goals and chapters</h2>\n"),
+                expanded,
+            )
+        # a call's synthesis, or the policy's row, under the call: none without drafts (`with_drafts`)
         syntheses = day_reader.syntheses_of(data) if self.with_drafts else {}
         if data["timeline"]:
-            parts.append(_track_svg(data["timeline"]))
-            parts.append('<ol class="timeline">\n')
             name_this = None if self.static else self._name_this
-            parts.extend(
+            body = _track_svg(data["timeline"]) + '<ol class="timeline">\n'
+            body += "".join(
                 _entry_html(
                     entry,
                     tz,
@@ -1648,24 +2085,34 @@ class Site:
                     name_this=name_this,
                     syntheses=syntheses,
                     star=star,
-                    photos=photos,
+                    photos=marks.photos,
                     rows=extras,
                 )
                 for entry in data["timeline"]
             )
-            parts.append("</ol>\n")
+            body += "</ol>\n"
+            folds["timeline"] = fold(
+                "Timeline", day_rhythm.timeline_summary(data, marks.photos), body, expanded
+            )
         else:
-            parts.append('<p class="mute">nothing logged</p>\n')
+            folds["timeline"] = fold(
+                "Timeline", "nothing logged", '<p class="mute">nothing logged</p>\n', expanded
+            )
         in_rows = [((e.get("attached") or {}).get("photos") or {}).get("lines", ()) for e in data["timeline"]]
-        outside = extras.strip([i for i in photos if not any(i in ids for ids in in_rows)])  # in no row
+        outside = [i for i in marks.photos if not any(i in ids for ids in in_rows)]  # in no row
         if outside:
-            parts.append(f'<h2>Photos outside any stay</h2>\n<div class="outside">{outside}</div>\n')
+            folds["outside"] = fold(
+                "Photos outside any stay",
+                f"{len(outside)} photo{'s' if len(outside) != 1 else ''}",
+                f'<div class="outside">{extras.strip(outside)}</div>\n',
+                expanded,
+            )
         if data["unplaced"]:
-            parts.append('<h2>Unplaced</h2>\n<ul class="unplaced">\n')
+            body = '<ul class="unplaced">\n'
             for item in _drive_folded(data["unplaced"], marks.lines, "at"):
                 span = day_reader.span_text(item["at"], item["end"], tz)
                 blocks = syntheses.get(item["line"], []) if item["kind"] == "transcript" else []
-                parts.append(
+                body += (
                     f'<li id="{_row_id(item["line"])}" title="line {escape(item["line"])}">'
                     f'<span class="clock">{escape(span)}</span> '
                     f'<span class="kind">{escape(item["kind"])}</span> '
@@ -1673,51 +2120,104 @@ class Site:
                     f"{star([item['line'], *item.get('lines', ())], False)}{extras.raw([item['line']])}"
                     f"{''.join(_synthesis_html(block, expanded) for block in blocks)}</li>\n"
                 )
-            parts.append("</ul>\n")
-        parts.append(f"<h2>Health</h2>\n<p>{escape(day_reader.health_text(data['health']))}</p>\n")
+            body += "</ul>\n"
+            n = len(data["unplaced"])
+            folds["unplaced"] = fold("Unplaced", f"{n} line{'s' if n != 1 else ''}", body, expanded)
+        found = (  # a static site's days keep to their rows: no year read again for each day exported
+            None
+            if self.static
+            else self._day_reading(
+                ("looking back", day),
+                lambda: day_rhythm.looking_back(self.lb, day, self.airports, self.tiers),
+            )
+        )
+        summary, body = day_rhythm.looking_back_html(found or [], link, person)
+        if body:
+            folds["looking-back"] = fold("Looking back", summary, body, expanded)
+        elif found is not None:
+            empty.append("looking back")
+        if data["health"]:
+            text = day_reader.health_text(data["health"])
+            folds["health"] = fold("Health", text, f"<p>{escape(text)}</p>\n", expanded)
+        else:
+            empty.append("health")
         if data.get("weather"):
-            parts.append(f"<h2>Weather</h2>\n<p>{escape(weather.text(data['weather'], data['tz']))}</p>\n")
-        parts.append("<h2>Sources</h2>\n")
-        if data["sources"]:
-            rows: list[list[Cell]] = [
+            text = weather.text(data["weather"], data["tz"])
+            folds["weather"] = fold(
+                "Weather", weather.short_text(data["weather"]), f"<p>{escape(text)}</p>\n", expanded
+            )
+        else:
+            empty.append("weather")
+        circle = []
+        for page in data.get("received") or []:  # a page someone shared for the day (RFC 0025)
+            body = f"<p>{escape(day_reader.received_text(page))}</p>\n"
+            if page["named"]:
+                body += '<ul class="unplaced">\n'
+                for item in page["named"]:
+                    line, kind, title = escape(item["line"]), escape(item["kind"]), escape(item["title"])
+                    body += f'<li title="line {line}"><span class="kind">{kind}</span> {title}</li>\n'
+                body += "</ul>\n"
+            n = len(page["named"])
+            circle.append(fold(f"From {page['from']}", f"{n} line{'s' if n != 1 else ''}", body, expanded))
+        if circle:
+            folds["circle"] = "".join(circle)
+        else:
+            empty.append("the circle")
+        held = (
+            data
+            if self.with_drafts
+            else {**data, "held": [r for r in data.get("held") or () if not _drafted(r)]}
+        )
+        folds["held"] = _held_html(held, tz, extras.raw, expanded)
+        sources = [s for s in data["sources"] if self.with_drafts or not _drafted(s)]  # a model's row: #364
+        if sources:
+            rows_: list[list[Cell]] = [
                 [
                     escape(s["source"]),
                     _num(s["lines"]),
                     escape(_clock(s["first"], tz)),
                     escape(_clock(s["newest"], tz)),
                 ]
-                for s in data["sources"]
-                if self.with_drafts or not str(s["source"]).startswith(drafts.SOURCE_PREFIX)
+                for s in sources
             ]
-            parts.append(_table(["source", ("lines", "num"), "first", "last"], rows))
-        else:
-            parts.append('<p class="mute">none</p>\n')
-        for page in data.get("received") or []:  # a page someone shared for the day (RFC 0025)
-            parts.append(f"<h2>From {escape(str(page['from']))}</h2>\n")
-            parts.append(f"<p>{escape(day_reader.received_text(page))}</p>\n")
-            if page["named"]:
-                parts.append('<ul class="unplaced">\n')
-                for item in page["named"]:
-                    line, kind, title = escape(item["line"]), escape(item["kind"]), escape(item["title"])
-                    parts.append(f'<li title="line {line}"><span class="kind">{kind}</span> {title}</li>\n')
-                parts.append("</ul>\n")
-        parts.append(_held_html(data, tz, extras.raw, expanded))
-        script = None
-        if not self.static:
-            parts.append(self._photo_review_html(day, marks))
-            closing, records = self._close_html(day)
-            parts.append(closing)
-            script = DAY_SCRIPT if records else None
-        return self.document(f"{day} {data['weekday']}", "".join(parts), script, NO_MODEL, DAY_STYLE)
+            total = sum(int(s["lines"]) for s in sources)
+            said = f"{len(sources)} source{'s' if len(sources) != 1 else ''}{DOT}{total:,} lines"
+            folds["sources"] = fold(
+                "Sources", said, _table(["source", ("lines", "num"), "first", "last"], rows_), expanded
+            )
+        else:  # the record's spine, as the timeline is: drawn on every day, a day with no line says so
+            folds["sources"] = fold("Sources", "none", '<p class="mute">none</p>\n', expanded)
+        return folds, empty
 
-    def _close_html(self, day: str) -> tuple[str, bool]:
+    def _photos_html(self, day: str, marks: DayMarks, expanded: bool) -> str:
+        """The day's photos: how many and how many starred, the starred ones this machine holds the
+        pixels of, then the review of the rest (`_photo_review_html`); nothing on a day with none."""
+        if not marks.photos:
+            return ""
+        starred = [i for i in marks.photos if i in marks.starred]
+        shown = [(i, self._thumbnail(i, marks)) for i in starred]
+        drawn = [(i, img) for i, img in shown if img]
+        n, k = len(marks.photos), len(starred)
+        said = f"{n} photo{'s' if n != 1 else ''}" + (f"{DOT}{k} starred" if k else "")
+        if len(drawn) < k:
+            said += f"{DOT}{k - len(drawn)} starred not on this machine"
+        out = [f'<p class="mute">{escape(said)}</p>\n']
+        if drawn:
+            out.append('<ul class="gallery">\n')
+            out.extend(f'<li class="starred">{img}</li>\n' for _i, img in drawn)
+            out.append("</ul>\n")
+        if not self.static:
+            out.append(self._photo_review_html(day, marks))
+        return "".join(out)
+
+    def _close_html(self, day: str, heading: str = "Reflect and sign") -> tuple[str, bool]:
         """Reflect and sign, at the foot of the Day: the reflection's field (the Wispr Flow draft
         prefilled when one is waiting, else the reflection standing), the recording form when the
         server can hear one, then the standing signature as `day sign` prints it, and the Sign form:
         the proposals as boxes, none ticked. Nothing here is written until a button is clicked. With
         it, whether the page carries the recording form (and so its script)."""
         tz = self.tz
-        out = [f'<section class="close">\n<h2 id="{CLOSE}">Reflect and sign</h2>\n']
+        out = [f'<section class="close">\n<h2 id="{CLOSE}">{escape(heading)}</h2>\n']
         try:
             self._closing_day(day)
         except reflect.ReflectError:
@@ -1995,6 +2495,8 @@ class Site:
             link = said if href is None else f'<a href="{escape(href)}#{WEEK}">{said}</a>'
             return f'<p class="mute week">The week {escape(week)} has a draft: {link}.</p>\n'
         out = [f'<h2 id="{WEEK}">The week {escape(week)}</h2>\n']
+        if page := week_page.link_html(self, day):
+            out.append(f'<p class="mute">{page}: its ribbons, goals and proposal</p>\n')
         if draft is not None:
             href = self.href(f"/line/{quote(str(draft['line']), safe='')}")
             if href is not None:
@@ -2157,7 +2659,11 @@ class Site:
         if last < first:
             parts.append(f"<p>no days in {year}: the record runs {whole[0]} {EN_DASH} {whole[1]}</p>\n")
             return self.document(f"trips {year}", "".join(parts), style=TABLES_STYLE)
-        rd = reading.read(self.lb, first, last, self.airports, self.tiers)
+        rd = self.shared(  # the door and its year's page are one reading
+            ("trips", first, last),
+            lambda: reading.read(self.lb, first, last, self.airports, self.tiers, TRIP_KINDS),
+        )
+        self.reads(first, (date.fromisoformat(last) + timedelta(days=SPILL_DAYS)).isoformat())
         found, warning = trips.trips(rd)
         if warning:
             parts.append(f"<p>{escape(warning)}</p>\n")
@@ -2321,7 +2827,13 @@ class Site:
         """The journeys that began in the year (default the record's last), the latest first, each
         a row: its name or dates linking its page, the bounds, the nights away, the places, the
         canonical people, the photos, the draft folded, and the evidence folded."""
-        shelf = journeys.shelf(self.lb, year, self.airports, self.tiers)
+        located = reading.record_days(self.lb, "location")
+        this = year or (located[1][:4] if located is not None else None)  # the door is its year's page
+        shelf = self.shared(
+            ("journeys", this), lambda: journeys.shelf(self.lb, this, self.airports, self.tiers)
+        )
+        if shelf.reads is not None:  # its days, and a draft of any day may name one of its journeys
+            self.reads(*shelf.reads, kinds=(drafts.KIND,))
         if shelf.year is None:
             return self.document("journeys", f"<h1>Journeys</h1>\n<p>{escape(shelf.warning or '')}</p>\n")
         links = DOT.join(
@@ -3636,7 +4148,7 @@ class Site:
         """`logbook export world`'s page, read as the export reads it by default (the `world` ceiling of
         the policy, the record's days or `from` and `to`): the same JSON, the same script, the
         Library's navigation above it and the policy in the header, not in the page."""
-        found = world.library_page(self.lb, first, last, self.nav, self.airports)
+        found = world.library_page(self.lb, first, last, self.nav, self.airports, self._today_of())
         if found is None:
             return self.document(
                 "world", "<h1>The world</h1>\n<p>the record has no day yet: nothing to draw</p>\n"
@@ -3647,14 +4159,10 @@ class Site:
         """`Index.activity` of the record as it stands, read once per window: the page moves with the
         clock, what it counts only with the head."""
 
-        def read() -> list[dict[str, Any]]:
-            with self.lb.index() as idx:
-                return idx.activity(first, last)
-
-        return self.shared(("activity", first, last), read)
+        return self.shared(("activity", first, last), lambda: gaps.activity_of(self.lb, first, last))
 
     def page_gaps(self, since: str | None) -> str:
-        data = gaps.report(self.lb, since=since, activity=self._activity)
+        data = gaps.report(self.lb, since=since, activity=self._activity, instant=self.now())
         tz = ZoneInfo(data["timezone"])
         body = (
             "<h1>Gaps <small>where each source went quiet</small></h1>\n"
@@ -4124,6 +4632,12 @@ def _held_html(
         out.append(_table([("at", "at"), "kind", "what"], cells))
     out.append("</details>\n</section>\n")
     return "".join(out)
+
+
+def _drafted(row: Mapping[str, Any]) -> bool:
+    """Whether a sources row or a held row is a model's: its source is `model:<name>`
+    (`drafts.SOURCE_PREFIX`)."""
+    return str(row.get("source") or "").startswith(drafts.SOURCE_PREFIX)
 
 
 @functools.lru_cache(maxsize=8192)
@@ -4629,6 +5143,7 @@ class Handler(BaseHTTPRequestHandler):
     server_version = "logbook"
     sys_version = ""
     protocol_version = "HTTP/1.1"
+    timeout = IDLE_S  # a connection that sends nothing for this long is closed: no thread waits on it forever
 
     def do_GET(self) -> None:
         self._answer(body=True)
@@ -4664,22 +5179,75 @@ class Handler(BaseHTTPRequestHandler):
         else:
             query = parse_qs(raw.decode("utf-8", "replace"), keep_blank_values=True)
             form = {k: ",".join(v) for k, v in query.items()}
-        response = site.write(path, form, str(self.client_address[0]), self.headers.get("Origin"), upload)
+        client, origin = str(self.client_address[0]), self.headers.get("Origin")
+        response = site.write(path, form, client, origin, upload, asked=phone.Asked.of(self.headers))
         self._send(response, body=True)
 
     def _answer(self, body: bool) -> None:
+        """A GET: what reads nothing (`Site.quick`: a built page) on this thread at once; a reading in
+        the server's pool (`Server.read`), at most `renders` at a time, under the limit. Over it, the
+        reading is stopped and the page is the one that says so (`Site.still_reading`), with the page
+        built in the background when the server builds; a browser that leaves stops its reading, and
+        is sent nothing."""
         assert isinstance(self.server, Server)
+        server = self.server
         path, _, query = self.path.partition("?")
-        response = self.server.site.respond(path, query, self.headers.get("If-None-Match"))
+        inm = self.headers.get("If-None-Match")
+        quick = server.site.quick(path, query, inm)
+        if quick is not None:
+            self._send(quick, body)
+            return
+        token = cancel.Token()
+        try:
+            future = server.pool.submit(server.read, path, query, inm, token)
+        except RuntimeError:  # the server is closing: no reading starts
+            self.close_connection = True
+            return
+        deadline = time.monotonic() + server.limit_s
+        while True:
+            try:
+                response = future.result(timeout=WATCH_S)
+                break
+            except FuturesTimeout:
+                pass
+            except FuturesCancelled:  # the server closed with the reading still waiting its turn
+                self.close_connection = True
+                return
+            if self._gone():
+                token.cancel("the browser left")
+                self.close_connection = True
+                return
+            if time.monotonic() >= deadline:
+                token.cancel(f"over the limit of {server.limit_s:g} s")
+                if server.rebuilder is not None:
+                    server.rebuilder.ask(path + (f"?{query}" if query else ""))
+                response = server.site.still_reading(path, query, server.limit_s)
+                break
+        if response is None:  # stopped before it was read: the limit, answered above, or a closing server
+            response = server.site.still_reading(path, query, server.limit_s)
         self._send(response, body)
 
+    def _gone(self) -> bool:
+        """Whether the browser closed the connection while its page is read: readable, and nothing to
+        read (a request pipelined behind this one is left where it is)."""
+        try:
+            readable, _, _ = select.select([self.connection], [], [], 0)
+            return bool(readable) and self.connection.recv(1, socket.MSG_PEEK) == b""
+        except (OSError, ValueError):
+            return True
+
     def _send(self, response: Response, body: bool) -> None:
-        self.send_response(response.status)
-        for name, value in response.headers.items():
-            self.send_header(name, value)
-        self.end_headers()
-        if body and response.status not in (204, 304):
-            self.wfile.write(response.body)
+        """The answer, or nothing when the browser has gone: a broken pipe is the browser's leaving,
+        never a traceback in the log."""
+        try:
+            self.send_response(response.status)
+            for name, value in response.headers.items():
+                self.send_header(name, value)
+            self.end_headers()
+            if body and response.status not in (204, 304):
+                self.wfile.write(response.body)
+        except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
+            self.close_connection = True
 
 
 class Server(ThreadingHTTPServer):
@@ -4688,9 +5256,31 @@ class Server(ThreadingHTTPServer):
 
     daemon_threads = True
 
-    def __init__(self, port: int, site: Site):
+    def __init__(self, port: int, site: Site, limit_s: float = LIMIT_S, renders: int = RENDERS):
         self.site = site
+        self.rebuilder: library_build.Rebuilder | None = None
+        self.limit_s = limit_s
+        # the readings: at most `renders` at once, however many pages are asked for together, so a
+        # whole menu opened at once never holds the record in memory a dozen times over
+        self.pool = ThreadPoolExecutor(max_workers=renders, thread_name_prefix="logbook-read")
         super().__init__((HOST, port), Handler)
+
+    def read(self, path: str, query: str, if_none_match: str | None, token: cancel.Token) -> Response | None:
+        """One page read in the pool under `token`; None when it was stopped (`cancel.Cancelled`)
+        before or while it was read."""
+        if token.cancelled:
+            return None
+        try:
+            with cancel.scope(token):
+                return self.site.respond(path, query, if_none_match)
+        except cancel.Cancelled:
+            return None
+
+    def server_close(self) -> None:
+        if self.rebuilder is not None:
+            self.rebuilder.stop()
+        self.pool.shutdown(wait=False, cancel_futures=True)
+        super().server_close()
 
     def server_bind(self) -> None:
         socketserver.TCPServer.server_bind(self)
@@ -4699,21 +5289,106 @@ class Server(ThreadingHTTPServer):
         self.server_port = int(port)
 
 
+def stacks() -> None:
+    """Every thread's stack to stderr, the log of a service: `faulthandler`'s, which needs no lock and
+    no allocation; `traceback`'s when stderr has no file under it."""
+    try:
+        faulthandler.dump_traceback(file=sys.stderr, all_threads=True)
+    except (AttributeError, ValueError, OSError):
+        names = {t.ident: t.name for t in threading.enumerate()}
+        for ident, frame in sys._current_frames().items():
+            print(f"thread {names.get(ident, ident)}:", file=sys.stderr)
+            print("".join(traceback.format_stack(frame)), file=sys.stderr)
+
+
+class Watchdog:
+    """The server asking itself, every `WATCH_EVERY_S`, for `/favicon.ico` (an empty 204 that reads
+    nothing of the record), as `serve --status` asks it from outside. `STUCK_AFTER` silences in a row
+    (no answer in `SILENT_S`) and it writes every thread's stack to the log, so the next hang says why,
+    then `stuck`: by default the process exits (`STUCK_EXIT`), and the service manager that runs it
+    starts it again. A process the system paused answers nothing and runs nothing, this thread
+    included: the scheduled run restarts that one (`sync --scheduled`)."""
+
+    def __init__(
+        self,
+        port: int,
+        stuck: Callable[[], None] | None = None,
+        every_s: float = WATCH_EVERY_S,
+        silent_s: float = SILENT_S,
+        after: int = STUCK_AFTER,
+        say: Callable[[str], None] = lambda text: print(text, file=sys.stderr, flush=True),
+    ):
+        self.port, self.every_s, self.silent_s, self.after, self.say = port, every_s, silent_s, after, say
+        self.stuck = stuck or self._leave
+        self._stop = threading.Event()
+        self._thread = threading.Thread(target=self._run, name="logbook-watchdog", daemon=True)
+        self.misses = 0
+
+    def start(self) -> Watchdog:
+        self._thread.start()
+        return self
+
+    def stop(self) -> None:
+        self._stop.set()
+
+    def answers(self) -> bool:
+        connection = http.client.HTTPConnection(HOST, self.port, timeout=self.silent_s)
+        try:
+            connection.request("HEAD", "/favicon.ico")
+            return connection.getresponse().status == 204
+        except (OSError, http.client.HTTPException):
+            return False
+        finally:
+            connection.close()
+
+    def _run(self) -> None:
+        while not self._stop.wait(self.every_s):
+            self.misses = 0 if self.answers() else self.misses + 1
+            if self.misses >= self.after:
+                self.say(
+                    f"serve: no answer from itself in {self.silent_s:g} s, {self.misses} times running;"
+                    " every thread's stack follows"
+                )
+                stacks()
+                self.stuck()
+                return
+
+    def _leave(self) -> None:
+        self.say("serve: leaving, for the service manager to start it again")
+        sys.stderr.flush()
+        os._exit(STUCK_EXIT)
+
+
 def make_server(
     lb: Logbook,
     host: str = HOST,
     port: int = PORT,
     airports: Airports | None = None,
     voice: Voice | None = None,
+    built: bool = False,
+    say: Callable[[str], None] | None = None,
+    limit_s: float = LIMIT_S,
 ) -> Server:
     """The server, bound and ready to `serve_forever`. `HostError` for any host but 127.0.0.1,
-    before a socket is opened; OSError when the port is taken. `voice`: how a Day hears a recording."""
+    before a socket is opened; OSError when the port is taken. `voice`: how a Day hears a recording.
+    `built`: answer from the pages built ahead (`library_build`; `logbook serve --built`, labs),
+    rebuilt in the background after every act; False, the default, renders every page as it is asked
+    for. `limit_s`: a page read longer is stopped and said so; `math.inf` reads every page to its end."""
     if host != HOST:
         raise HostError(
             f"serve binds {HOST} only, never {host!r}: the record is read from this machine, "
             "and nothing here leaves it"
         )
-    return Server(port, Site(lb, airports, voice=voice))
+    if not built:
+        return Server(port, Site(lb, airports, voice=voice), limit_s)
+    library = library_build.Library(lb)
+    site = Site(lb, airports, voice=voice, library=library)
+    server = Server(port, site, limit_s)
+    server.rebuilder = library_build.Rebuilder(lb, site, library, say).start()
+    site.on_act = server.rebuilder.kick
+    if not library.built():
+        server.rebuilder.kick()  # never built on this machine: the first build starts with the server
+    return server
 
 
 def serve(
@@ -4723,9 +5398,17 @@ def serve(
     airports: Airports | None = None,
     announce: Callable[[str], None] = print,
     voice: Voice | None = None,
+    built: bool = False,
+    limit_s: float = LIMIT_S,
 ) -> None:
-    """Serve the record until Ctrl-C. `HostError` and OSError as `make_server`."""
-    server = make_server(lb, host, port, airports, voice)
+    """Serve the record until Ctrl-C, every page rendered as it is asked for, or with `built`
+    (`--built`, labs) from the pages built ahead; a page read longer than `limit_s` stopped and said so
+    (`math.inf`: none). `HostError` and OSError as `make_server`."""
+    server = make_server(lb, host, port, airports, voice, built=built, say=announce, limit_s=limit_s)
+    if sys.platform != "win32":  # `kill -USR1 <pid>`: every stack to the log, the server running on
+        with contextlib.suppress(AttributeError, ValueError, OSError):  # a stderr with no file under it
+            faulthandler.register(signal.SIGUSR1, file=sys.stderr, all_threads=True)
+    watchdog = Watchdog(int(server.server_address[1])).start()
     try:
         bound = server.server_address[1]
         announce(
@@ -4736,6 +5419,7 @@ def serve(
     except KeyboardInterrupt:
         announce("stopped")
     finally:
+        watchdog.stop()
         server.server_close()
 
 

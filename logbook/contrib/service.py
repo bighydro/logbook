@@ -33,7 +33,10 @@ import http.client
 import os
 import plistlib
 import shlex
+import socket
+import subprocess
 import sys
+from collections.abc import Callable
 from dataclasses import dataclass
 from itertools import pairwise
 from pathlib import Path
@@ -49,7 +52,8 @@ SYSTEM_ROOT = Path("/")  # under it the system domain's folders; the tests point
 DAEMONS = ("Library", "LaunchDaemons")
 SYSTEM_UNITS = ("etc", "systemd", "system")
 ARGS = ("-m", "logbook.cli", "serve")
-PROBE_TIMEOUT_S = 2.0
+PROBE_TIMEOUT_S = 5.0  # a server that takes the connection and says nothing for this long is not answering
+ANSWERING, NOT_ANSWERING, NOTHING = "answering", "not answering", "nothing"  # `probe`
 
 
 class ServiceError(ValueError):
@@ -320,18 +324,53 @@ def port_of(path: Path) -> int:
 
 
 def answering(port: int) -> bool:
-    """Whether a logbook server answers on 127.0.0.1:`port`: one HEAD of `/favicon.ico` (an empty
-    204 that reads nothing of the record) and the `Server` header it carries. Loopback only, by
-    address: nothing is resolved."""
-    connection = http.client.HTTPConnection(serve.HOST, port, timeout=PROBE_TIMEOUT_S)
+    """Whether a logbook server answers on 127.0.0.1:`port` (`probe`)."""
+    return probe(port) == ANSWERING
+
+
+def probe(port: int, timeout: float = PROBE_TIMEOUT_S) -> str:
+    """What is on 127.0.0.1:`port`: `answering`, a logbook server's answer to one HEAD of
+    `/favicon.ico` (an empty 204 that reads nothing of the record), known by its `Server` header;
+    `not answering`, something took the connection and said nothing for `timeout` (a server that is
+    up and stuck, or paused); `nothing`, no listener, or something that is not a logbook server.
+    Loopback only, by address: nothing is resolved."""
+    try:
+        sock = socket.create_connection((serve.HOST, port), timeout=timeout)
+    except OSError:
+        return NOTHING
+    connection = http.client.HTTPConnection(serve.HOST, port, timeout=timeout)
+    connection.sock = sock
     try:
         connection.request("HEAD", "/favicon.ico")
         reply = connection.getresponse()
-        return (reply.getheader("Server") or "").strip() == serve.Handler.server_version
+        ours = (reply.getheader("Server") or "").strip() == serve.Handler.server_version
+        return ANSWERING if ours else NOTHING
+    except TimeoutError:
+        return NOT_ANSWERING
     except (OSError, http.client.HTTPException):
-        return False
+        return NOTHING
     finally:
         connection.close()
+
+
+def restart_command(item: Installed, uid: int | None = None) -> Command | None:
+    """The command that restarts an installed service as its user may run it: `launchctl kickstart
+    -k` for the user's agent, `systemctl --user restart` for the user's unit. None for a system-domain
+    service, which only an administrator restarts (the server's own watchdog exits instead, and the
+    service manager starts it again)."""
+    if item.kind == "launchd agent":
+        who = uid if uid is not None else (os.getuid() if hasattr(os, "getuid") else 0)
+        return Command(("launchctl", "kickstart", "-k", f"gui/{who}/{LABEL}"))
+    if item.kind == "systemd user service":
+        return Command(("systemctl", "--user", "restart", UNIT))
+    return None
+
+
+def restart_by_hand(item: Installed) -> Command:
+    """What an administrator runs to restart a system-domain service."""
+    if item.kind == "launchd daemon":
+        return Command(("sudo", "launchctl", "kickstart", "-k", f"system/{LABEL}"))
+    return Command(("sudo", "systemctl", "restart", UNIT))
 
 
 def shown(path: Path, home: Path) -> str:
@@ -340,3 +379,40 @@ def shown(path: Path, home: Path) -> str:
         return "~/" + path.relative_to(home).as_posix()
     except ValueError:
         return str(path)
+
+
+def keep_answering(
+    system: str,
+    home: Path,
+    config_home: Path | None,
+    say: Callable[[str], None],
+    run: Callable[[Command], int] | None = None,
+) -> list[Installed]:
+    """The scheduled run's look at each serve service installed: one that takes the connection and
+    says nothing for `PROBE_TIMEOUT_S` (`probe`: stuck, or paused by the system, which its own
+    watchdog cannot see from inside) is restarted by its service manager (`restart_command`), said in
+    one line; a system-domain one is named with the command an administrator runs. One that is not
+    running at all is its service manager's to start, and `doctor` says so. The services restarted."""
+    restarted: list[Installed] = []
+    for item in find(system, home, config_home):
+        if probe(item.port) != NOT_ANSWERING:
+            continue
+        address = f"http://{serve.HOST}:{item.port}/"
+        command = restart_command(item)
+        if command is None:
+            say(f"serve: not answering at {address}; as an administrator: {restart_by_hand(item).text}")
+            continue
+        status = (run or _run)(command)
+        if status == 0:
+            restarted.append(item)
+            say(f"serve: not answering at {address} in {PROBE_TIMEOUT_S:g} s; restarted ({command.text})")
+        else:
+            say(f"serve: not answering at {address}; `{command.text}` exited {status}; output: {item.log}")
+    return restarted
+
+
+def _run(command: Command) -> int:
+    try:
+        return subprocess.run(list(command.args), capture_output=True, check=False, timeout=60).returncode
+    except (OSError, subprocess.TimeoutExpired):
+        return 1

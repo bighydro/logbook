@@ -1,6 +1,6 @@
 # RFC 0027 — Reflection: the digest's closing question comes from the record
 
-Status: draft · 2026-10-03 · comment period: two weeks
+Status: draft · 2026-10-03 · comment period: two weeks · amended 2026-10-21 (lenses, `ask`, below)
 
 The digest (`logbook digest`, [docs/digest.md](../digest.md)) ends with one question the owner can answer in a word. Until now the question was chosen in code, by the first of seven rules that applied. This RFC moves the choice into the record: the questions live in `policy/questions.json`, a setting the owner edits like every other policy file; each carries the facts of the day it asks on and a weight; the digest reads the day's facts, draws one question whose conditions hold, never the same one two days running, and remembers what it asked. Nothing about the record's lines changes: no new kind, no envelope change, no spec version bump. The mechanism is specified here; the content of the bank is not, and is explicitly left to a future author (the last section).
 
@@ -22,12 +22,32 @@ The seven rules were data-quality nudges — *was the tracker switched off, was 
 | `weight` | number > 0 | MUST | the question's share of the draw among the candidates of the day |
 | `source` | string | MUST | free text: the research, the book, the person the question comes from; **empty in every default** |
 | `enabled` | boolean | MAY | `false` keeps the question in the file and never asks it; absent is `true` |
+| `ask` | string | MAY | `owner` (absent is `owner`): the digest's question, asked of the owner; or `day`: a **lens** (amendment of 2026-10-21, below) |
 
 Absent `kind`, `when`, `weight` and `source` are read as `open`, `[]`, `1` and `""`, so a hand-written entry needs only an id and a text; a present value that is not what it should be is refused.
 
 ### Placeholders
 
 A text may hold one of these, in braces, filled from the day: `{person}` (the person seen again after a long while, else the first confirmed present), `{proposed}` (the first person proposed and confirmed nowhere), `{place}` (the first stay of the day that is not home), `{asset}` (the asset the owner was aboard), `{missing}` (the first usual source with no line), `{promise}` (the first open promise due, quoted as the digest prints it), `{event}` (the title of the first calendar entry the track placed nowhere, quoted). A question whose placeholder the day cannot fill is not a candidate that day, whatever its `when` says; a placeholder outside this list is refused when the file is read.
+
+### Lenses (amendment, 2026-10-21)
+
+From RFC 0043 §4.4 and §13.2, adopted with dream-day/4 (`docs/dream.md`):
+
+> A question MAY carry `"ask"`: `"owner"` (absent is `"owner"`), the digest's question, asked of the owner;
+> or `"day"`, a lens, which the dream answers every evening as part `lens:<id>` and which the digest never
+> draws. A value outside the two is refused naming the file.
+
+A lens is a question the owner wants the pencil to look at every day, *what did I learn*, *where did the
+money go*, rather than one the digest asks them. The digest's draw leaves every lens out, the remembered
+one included, so a lens is never the evening's question and the page still asks at most one. Three more
+rules come with it, each refused naming the file: a lens holds no placeholder (the dream answers the text
+as written and computes no facts for it); at most **five** lenses are enabled at once; and `ask` is one of
+the two words. The dream (`dream day`, dream-day/4) answers each enabled lens with at most one segment of
+part `lens:<id>`, evidenced as every segment is; a lens the day gives no lines for is printed by the
+reader as *— the day doesn't answer this*, never by the model. Which questions are lenses is the owner's
+to write in their own bank (RFC 0043 §16 q2); the defaults carry none, and a bank written before the
+amendment reads and writes as it did (`ask` is written only when it is `day`).
 
 ## The day's facts
 

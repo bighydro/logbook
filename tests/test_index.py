@@ -630,3 +630,24 @@ def test_superseded_retractions_are_every_retraction_as_rfc_0003_reads_them(lb: 
     with lb.index() as idx:
         assert idx.superseded("retraction") == {a["id"]: int(second["seq"])}
     assert first["seq"] < second["seq"]
+
+
+def test_the_kinds_and_spans_are_read_down_the_index(tmp_path: Path) -> None:
+    lb = Logbook.init(tmp_path / "lb", "Europe/Oslo")
+    for at, kind in (
+        ("2026-06-02T10:00:00Z", "note"),
+        ("2026-06-01T10:00:00Z", "location"),
+        ("2026-06-05T10:00:00Z", "note"),
+    ):
+        payload: dict[str, Any] = (
+            {"schema": f"{kind}/v1", "text": "x"}
+            if kind == "note"
+            else {"schema": "location/v1", "lat": 59.9, "lon": 10.7}
+        )
+        lb.append(at=at, source="manual", kind=kind, tier=1, payload=payload)
+    with lb.index() as idx:
+        assert idx.kind_names() == sorted(row["kind"] for row in idx.kinds())
+        assert idx.span(None) == ("2026-06-01", "2026-06-05")
+        assert idx.span("note") == ("2026-06-02", "2026-06-05")
+        assert idx.span("call") is None
+        assert idx.last_file("note") == "logbook/2026/06.jsonl" and idx.last_file("call") == ""

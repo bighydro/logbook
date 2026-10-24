@@ -40,6 +40,7 @@ import bisect
 import contextlib
 import cProfile
 import io
+import itertools
 import json
 import math
 import os
@@ -70,7 +71,8 @@ LAST_DAY = date(2026, 10, 18)
 NOW = datetime(2026, 10, 18, 16, 0, tzinfo=UTC)  # the Library's clock: the afternoon of the last day
 TIMEOUT_S = 3600  # one route's child, at most
 OWNER = {"name": "Ines Nordmann", "email": "ines.nordmann@example.org", "phone": "+447700900000"}
-PEOPLE = 300  # resolved people
+PEOPLE = 300  # resolved people (`--people`)
+PHONED = 600  # the people with a number: 07700 900001 up; the reserved range holds 1,000, the rest are mail
 PHONES = 1000  # the whole reserved range: the owner, the people, the rest unresolved
 EMAILS = 2200  # unresolved addresses at example.org
 GROUPS = 40
@@ -209,6 +211,7 @@ ROUTES = (
     "/promises",
     "/goals",
     "/agents",
+    "/week/{week}",
 )
 JOURNEY_LINK = re.compile(r'href="/journeys/(\d{4}-\d{2}-\d{2}/\d{4}-\d{2}-\d{2})"')
 
@@ -228,9 +231,10 @@ def _slug(text: str) -> str:
 class Cast:
     """Everyone and everything the record speaks of, made from the seed."""
 
-    def __init__(self, rng: random.Random):
+    def __init__(self, rng: random.Random, people: int = PEOPLE):
         self.people: list[dict[str, Any]] = []
-        for n in range(PEOPLE):
+        phoned = min(people, PHONED)
+        for n in range(people):
             first = FIRST_NAMES[n % len(FIRST_NAMES)]
             last = SURNAMES[(n // len(FIRST_NAMES)) % len(SURNAMES)]
             name = (
@@ -243,19 +247,19 @@ class Cast:
                     "id": _uuid(n + 1, 0x9133),
                     "name": name,
                     "email": f"{_slug(first)}.{_slug(last)}.{n}@example.org",
-                    "phone": f"+447700900{n + 1:03d}",
+                    "phone": f"+447700900{n + 1:03d}" if n < phoned else None,  # reached by mail
                     "face": f"p_{n}" if n < FACES else None,
                 }
             )
-        self.phones = [f"+447700900{n:03d}" for n in range(PEOPLE + 1, PHONES)]  # unresolved numbers
+        self.phones = [f"+447700900{n:03d}" for n in range(phoned + 1, PHONES)]  # unresolved numbers
         self.emails = [f"contact.{n}@example.org" for n in range(EMAILS)]  # unresolved addresses
-        weights = [1 / (r + 1) ** 1.1 for r in range(PEOPLE)]  # a few people most of the time
-        self.cumulative = [sum(weights[: i + 1]) for i in range(PEOPLE)]
+        weights = [1 / (r + 1) ** 1.1 for r in range(people)]  # a few people most of the time
+        self.cumulative = list(itertools.accumulate(weights))
         self.groups: list[dict[str, Any]] = [
             {
                 "id": f"120363{n:012d}@g.us",
                 "name": f"{rng.choice(WORDS).title()} {n}",
-                "members": rng.sample(range(PEOPLE), rng.randint(3, 10)),
+                "members": rng.sample(range(phoned), rng.randint(3, 10)),
             }
             for n in range(GROUPS)
         ]
@@ -280,6 +284,13 @@ class Cast:
 
     def person(self, rng: random.Random) -> dict[str, Any]:
         return self.people[bisect.bisect_left(self.cumulative, rng.random() * self.cumulative[-1])]
+
+    def phoned(self, rng: random.Random) -> dict[str, Any]:
+        """Someone with a number, for a call: drawn as `person` draws, again until they have one."""
+        p = self.person(rng)
+        while p["phone"] is None:
+            p = self.person(rng)
+        return p
 
 
 # -- the days ----------------------------------------------------------------------------------------------
@@ -416,14 +427,16 @@ def _text(rng: random.Random, promise: bool = False) -> str:
 class Generator:
     """The record's drafts, day by day, in time order."""
 
-    def __init__(self, lines: int, seed: int):
+    def __init__(self, lines: int, seed: int, people: int = PEOPLE, open_flights: int = 0):
         self.rng = random.Random(seed)
-        self.cast = Cast(self.rng)
+        self.cast = Cast(self.rng, people)
         self.trips = _trips(self.rng)
         self.lines = lines
         self.counts: dict[str, int] = {}
         self.carried: dict[str, float] = {}
         self.n = 0
+        self.open_flights = open_flights  # every Nth flight without its arrival (0: none), as #344's
+        self.flown = 0
 
     def drafts(self) -> Iterator[dict[str, Any]]:
         yield from self._resolutions()
@@ -440,7 +453,8 @@ class Generator:
                 ideas_named += 1
 
     def _fixed(self) -> int:
-        return 2 + PEOPLE * 2 + FACES + ORGS * 3 + IDEAS * 3
+        people = self.cast.people
+        return 2 + len(people) + sum(1 for p in people if p["phone"]) + FACES + ORGS * 3 + IDEAS * 3
 
     def _count(self, kind: str) -> None:
         self.counts[kind] = self.counts.get(kind, 0) + 1
@@ -452,7 +466,9 @@ class Generator:
             ("phone", OWNER["phone"], "owner", OWNER["name"]),
         ]
         for p in self.cast.people:
-            refs += [("email", p["email"], p["id"], p["name"]), ("phone", p["phone"], p["id"], p["name"])]
+            refs.append(("email", p["email"], p["id"], p["name"]))
+            if p["phone"]:
+                refs.append(("phone", p["phone"], p["id"], p["name"]))
             if p["face"]:
                 refs.append(("provider_id", f"immich:{p['face']}", p["id"], p["name"]))
         for kind, value, entity, label in refs:
@@ -648,8 +664,12 @@ class Generator:
             sender = {"kind": "phone", "value": member["phone"], "name": member["name"].split()[0]}
         elif roll < 0.8:
             p = self.cast.person(rng)
-            chat = {"id": f"{p['phone'][1:]}@s.whatsapp.net", "type": "direct", "name": p["name"]}
-            sender = {"kind": "phone", "value": p["phone"], "name": p["name"].split()[0]}
+            if p["phone"] is None:  # no number: iMessage by their address
+                chat = {"id": p["email"], "type": "direct", "name": p["name"]}
+                sender = {"kind": "email", "value": p["email"], "name": p["name"].split()[0]}
+            else:
+                chat = {"id": f"{p['phone'][1:]}@s.whatsapp.net", "type": "direct", "name": p["name"]}
+                sender = {"kind": "phone", "value": p["phone"], "name": p["name"].split()[0]}
         else:
             phone = rng.choice(self.cast.phones)
             chat = {"id": f"{phone[1:]}@s.whatsapp.net", "type": "direct", "name": "Chat"}
@@ -818,7 +838,7 @@ class Generator:
     def _call(self, day: date, minute: float) -> dict[str, Any]:
         rng = self.rng
         at = _stamp(_utc(day, minute))
-        p = self.cast.person(rng)
+        p = self.cast.phoned(rng)
         seconds = rng.choice((0, 45, 300, 900))
         self.n += 1
         return {
@@ -894,6 +914,9 @@ class Generator:
     def _flight(self, day: date, dep: float, arr: float, origin: str, destination: str) -> dict[str, Any]:
         number = f"{self.rng.randint(100, 999)}"
         d, a = _stamp(_utc(day, dep)), _stamp(_utc(day, arr))
+        self.flown += 1
+        if self.open_flights and self.flown % self.open_flights == 0:
+            return self._open_flight(day, d, number, origin, destination)
         return {
             "at": d,
             "end": a,
@@ -916,6 +939,30 @@ class Generator:
             },
         }
 
+    def _open_flight(self, day: date, d: str, number: str, origin: str, destination: str) -> dict[str, Any]:
+        """A flight the tracker never saw land: `end` null, no arrival in the payload (SPEC §2)."""
+        self._count("open flight")
+        return {
+            "at": d,
+            "end": None,
+            "source": "flighty",
+            "kind": "flight",
+            "tier": 1,
+            "payload": {
+                "schema": "flight/v1",
+                "raw_id": f"fx-{day.isoformat()}-{number}",
+                "date": day.isoformat(),
+                "carrier": "XY",
+                "number": number,
+                "from": {"iata": origin},
+                "to": {"iata": destination},
+                "actual_departure": d,
+                "role": "passenger",
+                "evidence": "tracked",
+                "observations": [{"evidence": "tracked", "source": "flighty"}],
+            },
+        }
+
 
 # -- building -----------------------------------------------------------------------------------------------
 
@@ -929,9 +976,14 @@ def _environment(root: Path) -> dict[str, str]:
     return env
 
 
-def build(root: Path, lines: int, seed: int) -> dict[str, Any]:
+def build(
+    root: Path, lines: int, seed: int, people: int = PEOPLE, open_flights: int = 0, reflections: int = 0
+) -> dict[str, Any]:
     """The synthetic record at `root/record`, indexed, then the owner's acts that go through the
-    product's own functions: a chapter and goals with reviews, signed days, stars, retractions."""
+    product's own functions: a chapter and goals with reviews, signed days, stars, retractions; and
+    with `reflections`, that many days of the last year reflected on (`day reflect`'s note) before
+    the 30 signed ones are signed."""
+    from logbook.contrib import reflect
     from logbook.core import chapter, goals, signing, stars
     from logbook.core.store import Logbook
 
@@ -948,7 +1000,7 @@ def build(root: Path, lines: int, seed: int) -> dict[str, Any]:
     )
     (lb.root / "places.json").write_bytes(json.dumps(PLACES, indent=2).encode())
     (lb.root / "assets.json").write_bytes(json.dumps({"assets": [BOAT]}).encode())
-    gen = Generator(lines, seed)
+    gen = Generator(lines, seed, people, open_flights)
 
     def progress(n: int, elapsed: float) -> None:
         if n % 500_000 == 0:
@@ -972,7 +1024,14 @@ def build(root: Path, lines: int, seed: int) -> dict[str, Any]:
     for (seq,) in mistakes:
         lb.retract(int(seq), "imported twice")
     year_days = [str(d) for (d,) in days]
-    for day in sorted(rng.sample(year_days[:-2], min(30, len(year_days) - 2))):
+    signed = sorted(rng.sample(year_days[:-2], min(30, len(year_days) - 2)))
+    reflected = (
+        set(rng.sample(year_days[:-2], min(reflections, len(year_days) - 2))) if reflections else set()
+    )
+    for day in sorted(reflected | set(signed)) if reflections else ():
+        said = reflect.Reflection(_text(rng, promise=rng.random() < 0.2), reflect.TYPED)
+        reflect.write(lb, day, said, _stamp(_utc(date.fromisoformat(day), 1300)), LAST_DAY.isoformat())
+    for day in signed:
         signing.sign(lb, day, at=_stamp(_utc(date.fromisoformat(day), 1320)))
     added = []
     chapter.open_chapter(lb, "The autumn at the yard", start="2026-08-01", rules="the yard, the boat")
@@ -1107,6 +1166,12 @@ def open_index(root: Path) -> float:
     return round(time.perf_counter() - t, 3)
 
 
+def week_of(day: str) -> str:
+    """The ISO week a day is in, `YYYY-Www`, as the week page's path names it."""
+    year, week, _weekday = date.fromisoformat(day).isocalendar()
+    return f"{year}-W{week:02d}"
+
+
 def busiest_day(root: Path) -> str:
     with sqlite3.connect(next((root / "cache").rglob("index.sqlite"))) as db:
         day = db.execute(
@@ -1115,6 +1180,97 @@ def busiest_day(root: Path) -> str:
             ((LAST_DAY - timedelta(days=365)).isoformat(),),
         )  # the busiest day of the last year: the first day holds every resolution line, and is no Day
         return str(day.fetchone()[0])
+
+
+def time_routes(
+    root: Path, built: dict[str, Any], routes: list[str] | None, profiles: list[str], timeout: int
+) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    """Every route of `ROUTES` (or those `routes` names), each in a child of its own (`run_route`),
+    filled in from the record (`fill`): the busiest day and its week, person, org, idea and the first
+    journey.
+    Says each as it goes, on stderr."""
+    busiest = busiest_day(root)
+    fill: dict[str, Any] = {
+        "day": busiest,
+        "week": week_of(busiest),  # the busiest day's week
+        "person": built["busiest_person"],
+        "org": built["org"],
+        "idea": built["idea"],
+        "journey": None,
+    }
+    wanted = routes or list(ROUTES)
+    results: list[dict[str, Any]] = []
+    for template in ROUTES:
+        if template not in wanted and template.split("{")[0] not in wanted:  # `/people/` is every person
+            continue
+        if "{journey}" in template and fill["journey"] is None:
+            found = run_route(root, "/journeys", False, timeout) if "/journeys" not in wanted else None
+            fill["journey"] = (found or {}).get("journey")
+            if fill["journey"] is None:
+                results.append({"route": template, "error": "no journey on /journeys"})
+                continue
+        route = template.format(**fill)
+        profile = template in profiles or route in profiles
+        print(f"  {route} …", file=sys.stderr, flush=True)
+        r = run_route(root, route, profile, timeout)
+        r["template"] = template
+        if r.get("journey") and fill["journey"] is None:
+            fill["journey"] = r["journey"]
+        results.append(r)
+        if "profile" in r:
+            print(f"\n== {route} (cold) ==\n{r['profile']}", file=sys.stderr, flush=True)
+        if "error" in r:
+            print(f"    {r['error']}", file=sys.stderr, flush=True)
+        else:
+            print(
+                f"    cold {r['cold_s']} s, warm {r['warm_s']} s, after append {r['after_append_s']} s,"
+                f" {r['peak_mb']} MB",
+                file=sys.stderr,
+                flush=True,
+            )
+    return fill, results
+
+
+def together(root: Path, routes: list[str]) -> dict[str, Any]:
+    """Every route asked for at once, cold, by one thread each, of one server (as a browser opens the
+    whole menu): how long the last one took to answer, and each route's own time and status."""
+    import threading
+
+    from logbook.contrib import serve
+    from logbook.core.store import Logbook
+
+    os.environ.update(_environment(root))
+    site = serve.Site(Logbook(root / "record"), now=lambda: NOW)
+    each: dict[str, dict[str, Any]] = {}
+    begun = time.perf_counter()
+
+    def ask(route: str) -> None:
+        path, _, query = route.partition("?")
+        t = time.perf_counter()
+        response = site.respond(path, query)
+        each[route] = {"status": response.status, "s": round(time.perf_counter() - t, 3)}
+
+    threads = [threading.Thread(target=ask, args=(route,)) for route in routes]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    return {"routes": each, "all_s": round(time.perf_counter() - begun, 3), "peak_mb": peak_mb()}
+
+
+def run_together(root: Path, routes: list[str], timeout: int) -> dict[str, Any]:
+    """`together` in a child of its own, so no route is warm from another's run."""
+    argv = [sys.executable, __file__, "--together", *routes, "--root", str(root)]
+    try:
+        done = subprocess.run(
+            argv, capture_output=True, timeout=timeout, encoding="utf-8", env=_environment(root)
+        )
+    except subprocess.TimeoutExpired:
+        return {"error": f"over {timeout} s"}
+    if done.returncode != 0:
+        return {"error": done.stderr.strip().splitlines()[-1] if done.stderr.strip() else "failed"}
+    found: dict[str, Any] = json.loads(done.stdout.strip().splitlines()[-1])
+    return found
 
 
 def machine() -> dict[str, Any]:
@@ -1159,6 +1315,9 @@ def parse(argv: list[str] | None) -> argparse.Namespace:
         help=f"lines in the synthetic record (default {LINES:,}, or the record kept at --root)",
     )
     p.add_argument("--seed", type=int, default=SEED)
+    p.add_argument("--people", type=int, default=PEOPLE, help=f"resolved people (default {PEOPLE})")
+    p.add_argument("--open-flights", type=int, default=0, help="every Nth flight without its arrival")
+    p.add_argument("--reflections", type=int, default=0, help="days of the last year reflected on")
     p.add_argument("--root", type=Path, help="keep the record here and reuse it on the next run")
     p.add_argument("--routes", nargs="*", help="these routes only (as written in ROUTES, e.g. /people)")
     p.add_argument(
@@ -1174,6 +1333,7 @@ def parse(argv: list[str] | None) -> argparse.Namespace:
     p.add_argument("--markdown", action="store_true", help="print the table as Markdown")
     p.add_argument("--build-only", action="store_true", help="build the record and stop")
     p.add_argument("--child", help=argparse.SUPPRESS)
+    p.add_argument("--together", nargs="+", help=argparse.SUPPRESS)
     p.add_argument("--profile-child", action="store_true", help=argparse.SUPPRESS)
     return p.parse_args(argv)
 
@@ -1183,6 +1343,9 @@ def main(argv: list[str] | None = None) -> None:
     if args.child is not None:
         print(json.dumps(child(args.root, args.child, args.profile_child)))
         return
+    if args.together is not None:
+        print(json.dumps(together(args.root, args.together)))
+        return
     keep = args.root is not None
     root = args.root or Path(tempfile.mkdtemp(prefix="bench-library-"))
     root.mkdir(parents=True, exist_ok=True)
@@ -1190,12 +1353,23 @@ def main(argv: list[str] | None = None) -> None:
     try:
         built = json.loads(built_file.read_text()) if built_file.exists() else None
         asked = args.lines or (built or {}).get("asked") or LINES  # no --lines: the record kept at --root
-        if built is None or built.get("asked") != asked or built.get("seed") != args.seed:
+        shape = {
+            "seed": args.seed,
+            "people": args.people,
+            "open_flights": args.open_flights,
+            "reflections": args.reflections,
+        }
+        kept = {"people": PEOPLE, "open_flights": 0, "reflections": 0, **(built or {})}  # an older built.json
+        if built is None or built.get("asked") != asked or any(kept.get(k) != v for k, v in shape.items()):
             if (root / "record").exists():
                 shutil.rmtree(root / "record")
                 shutil.rmtree(root / "cache", ignore_errors=True)
             print(f"building a record of {asked:,} lines in {root} …", file=sys.stderr, flush=True)
-            built = {"asked": asked, "seed": args.seed, **build(root, asked, args.seed)}
+            built = {
+                "asked": asked,
+                **shape,
+                **build(root, asked, args.seed, args.people, args.open_flights, args.reflections),
+            }
             built_file.write_text(json.dumps(built, indent=2))
             print(f"built in {built['build_s']} s", file=sys.stderr, flush=True)
         if args.build_only:
@@ -1203,45 +1377,7 @@ def main(argv: list[str] | None = None) -> None:
             return
         opened = open_index(root)
         print(f"  the index opened in {opened} s", file=sys.stderr, flush=True)
-        fill = {
-            "day": busiest_day(root),
-            "person": built["busiest_person"],
-            "org": built["org"],
-            "idea": built["idea"],
-            "journey": None,
-        }
-        wanted = args.routes or list(ROUTES)
-        results: list[dict[str, Any]] = []
-        for template in ROUTES:
-            if template not in wanted and template.split("{")[0] not in wanted:  # `/people/` is every person
-                continue
-            if "{journey}" in template and fill["journey"] is None:
-                found = (
-                    run_route(root, "/journeys", False, args.timeout) if "/journeys" not in wanted else None
-                )
-                fill["journey"] = (found or {}).get("journey")
-                if fill["journey"] is None:
-                    results.append({"route": template, "error": "no journey on /journeys"})
-                    continue
-            route = template.format(**fill)
-            profile = template in args.profile or route in args.profile
-            print(f"  {route} …", file=sys.stderr, flush=True)
-            r = run_route(root, route, profile, args.timeout)
-            r["template"] = template
-            if r.get("journey") and fill["journey"] is None:
-                fill["journey"] = r["journey"]
-            results.append(r)
-            if "profile" in r:
-                print(f"\n== {route} (cold) ==\n{r['profile']}", file=sys.stderr, flush=True)
-            if "error" in r:
-                print(f"    {r['error']}", file=sys.stderr, flush=True)
-            else:
-                print(
-                    f"    cold {r['cold_s']} s, warm {r['warm_s']} s, after append {r['after_append_s']} s,"
-                    f" {r['peak_mb']} MB",
-                    file=sys.stderr,
-                    flush=True,
-                )
+        fill, results = time_routes(root, built, args.routes, args.profile, args.timeout)
         out = {
             "record": built,
             "machine": machine(),

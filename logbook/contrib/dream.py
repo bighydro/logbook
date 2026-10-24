@@ -1,8 +1,10 @@
 """The dream (`logbook dream day DAY`, `logbook dream --catch-up`): a model reads one day of the
-record and writes one `draft/v1` line about it (RFC 0036, `logbook.core.drafts`), the day in a
-paragraph, the threads it moved, two questions for the owner's reflection, and proposals, the
-people it thinks were there and the promises it thinks were made, every sentence pointing at the
-lines it came from. The dream is a proposal; the owner's signature and notes are the facts.
+record and writes one `draft/v1` line about it (RFC 0036, `logbook.core.drafts`), in the parts of
+dream-day/4 (RFC 0043 §13.4, `day_parts`): the goodnight story, one answer per lens, the threads it
+moved, what was learned and decided, the ideas it moved, one question for the owner's reflection, and
+proposals, the people it thinks were there, the promises it thinks were made and the photo of the day,
+every sentence pointing at the lines it came from. The dream is a proposal; the owner's signature
+and notes are the facts.
 
 Sending a day to a model is a crossing like any other, so it is governed by `policy/crossing.json`
 (ADR 0016, ADR 0022): the `dream` entry's `max_tier` is the ceiling the day is read under, its
@@ -15,17 +17,26 @@ there, the flights, what is unplaced, the health line when tier 3 is allowed; th
 messages by counterpart with their count and, since a message line is in the reading only when its
 tier is under the ceiling, their text, an agent's marked (`agent` on its counterpart, `machine` on
 the text it wrote; `logbook.core.machine`), so the model never takes a bot for a person; the notes
-in full; the commitments on the day; and the owner's note on signing it. Never a raw line above the
-ceiling. Every item carries a reference (`L1`, `L2`, ...) that stands for one line id of the day, so
-the model cites references and the record keeps ids. The prompt is `dream-prompt.md` beside this
+in full; the commitments on the day; the day's photos, the owner's own camera first, then the starred
+(`_photos`); and the owner's note on signing it; and, when the day is dreamed (`enrich`), what the day
+was for (`for`: the chapter it is in and its rule, the open goals), the ideas and orgs the owner named,
+by id, and the lenses of
+`policy/questions.json` (`"ask": "day"`, RFC 0027). Never a raw line above the ceiling. Every item
+carries a reference (`L1`, `L2`, ...) that stands for one line id of the day, so the model cites
+references and the record keeps ids. The prompt is `dream-prompt.md` beside this
 module (docs/dream-prompt.md explains it); it asks for one JSON object of segments `{text,
 evidence}` and says which language to write in: the language most of the day's own text is in
 (`language_of`).
 
 The answer is checked before anything is written (`segments_of`): a segment whose every reference
 is one the material gave is supported and carries the ids; one with a reference the day does not
-have, or none, is marked unsupported; a segment without text is dropped. When more than
-`UNSUPPORTED_SHARE` of the segments are unsupported the answer is refused and nothing is written.
+have, or none, is marked unsupported; a segment without text is dropped. Each part's own rule
+then drops what breaks it and counts it under `extra.dropped_segments` (`day_segments`): six sentences
+of story at most, one segment per lens and none without evidence, one question, an idea only by an id
+the material named, one photo resting on one photo of the day; a figure the cited items do not give
+marks the sentence (`hold_numbers`), and one that writes a figure beside a person's name is held, its
+words dropped and its slot kept with the reason (`hold_names`). When more than `UNSUPPORTED_SHARE` of
+the segments are unsupported the answer is refused and nothing is written.
 The draft's tier is the highest tier among the lines it read, not the lines it cited (RFC 0036);
 `read_count` is how many it read; `read_head` the record's head at that moment. The whole dream,
 reading, the model's turn and the write, runs inside the record's writer lock (`Logbook.writer`,
@@ -46,10 +57,18 @@ form: a time not on the day, a place not on the day, an evidence reference the d
 and a person who is not one of the day's canonical people (a name, an id the record does not resolve,
 the owner) each drop it, and the drops are counted by why under `extra.dropped`. What survives is
 kept in the draft line under `proposals`, kind `event` (`drafts.proposal_shape`), never as an event
-line: the owner confirms one with `day sign --accept N` (`logbook.contrib.dream_events`).
+line: the owner confirms one with `day sign --accept N` (`logbook.contrib.dream_events`). Proposed
+links (`draft/v1` amendment 2, `links_of`) follow the events in `proposals`: `{kind: link, entity,
+text, evidence, note?}`, the entity an idea or an org the material named, dropped and counted under
+`extra.dropped_links` otherwise.
+
+**The evening** (`dream day TODAY --evening`): today so far, `extra.evening` and `extra.read_until`
+on the draft; a day that is not today is refused, and the catch-up never dreams today.
 
 `--catch-up` dreams each of the last N days that has no draft, or whose lines today differ from
-what the standing draft read (its `read_count`, and the digest of the ids it read, kept under
+what the standing draft compared (`why_again_day`, RFC 0043 §6 rules 4 to 6: the lines the close writes
+left out, `kept`; on a signed day only a line that came after the signature and the draft; kept as
+`extra.compared_count` and `extra.compared_ids_sha256`, and for an older draft its `read_count` and
 `extra.read_ids_sha256`), or whose standing draft the entry no longer stands behind: its tier above
 the entry's `max_tier` today, or dreamed under another version of the entry. Derived material follows
 the policy, not the head, so a lowered ceiling or a moved `until` is a change of the day as much as a
@@ -72,26 +91,43 @@ from string import Template
 from typing import Any
 from zoneinfo import ZoneInfo
 
+from ..core import chapter as chapters
 from ..core import day as day_reader
-from ..core import day_start, drafts, machine, policy, present, reading, resolve, stays
+from ..core import (
+    day_start,
+    drafts,
+    goals,
+    machine,
+    notes,
+    policy,
+    present,
+    reading,
+    resolve,
+    signing,
+    stays,
+)
+from ..core import stars as starred
 from ..core.chain import Line
 from ..core.export import parse_day
 from ..core.flights import Airports
 from ..core.reading import Reading
 from ..core.resolve import Ref
 from ..core.store import HeadMoved, Logbook, now_utc, retractions
-from . import model_client
+from . import entities, model_client, questions
 from .model_client import Endpoint, Transport
 from .promises import chat_ref
 
 PROMPT_FILE = Path(__file__).with_name("dream-prompt.md")
-# kept under `extra.prompt`, so a draft says which prompt wrote it; 2 added the events, 3 rule 5 (agents)
-PROMPT_NAME = "dream-day/3"
+# kept under `extra.prompt`, so a draft says which prompt wrote it; 2 added the events, 3 rule 5 (agents),
+# 4 the goodnight story, the lenses, learned, decided, the ideas, the photo, the links and one question
+PROMPT_NAME = "dream-day/4"
 UNSUPPORTED_SHARE = 0.30  # more than this share of segments unsupported: refused, nothing written
 TEXT_CHARS = 400  # a message's text in the material, at most
 NOTE_CHARS = 1500  # a note's text in the material, at most
 MESSAGES_PER_COUNTERPART = 25  # the texts given per counterpart; the count is always whole
-EXCLUDED_KINDS = frozenset({"retraction", "signed-day", drafts.KIND, "crossing"})  # never material
+# never material; `heard` (RFC 0046): the listen or watch it belongs to is, and a text that lands
+# later is no reason to dream a day again
+EXCLUDED_KINDS = frozenset({"retraction", "signed-day", drafts.KIND, "crossing", "heard"})
 DEFAULT_LANGUAGE = "en"
 DOT = " \u00b7 "
 HEAD_MOVED = (
@@ -99,6 +135,29 @@ HEAD_MOVED = (
     " say what it read; nothing was written, dream the {unit} again"
 )
 EVENTS = "events"  # the key of the answer that holds the proposed events
+LINKS = "links"  # the key of the answer that holds the proposed links (draft/v1 amendment 2)
+STORY_SENTENCES = 6  # the goodnight story: five or six sentences, at most six kept
+QUESTIONS_KEPT = 1  # one question for the reflection (RFC 0043 §7), where dream-day/3 asked two
+LINKS_KEPT = 4  # the links a draft proposes, at most
+PHOTOS_GIVEN = 12  # the photos of the day the material lists, own camera first, starred first
+NAMED_GIVEN = 40  # the named ideas and orgs the material lists, each kind, by name
+# why a segment of the answer was dropped, the keys of `extra.dropped_segments`
+DROP_STORY = "story beyond six sentences"
+DROP_QUESTION = "a second question"
+DROP_LENS = "a lens answered twice"
+DROP_LENS_UNSUPPORTED = "a lens answered without evidence"
+DROP_IDEA = "an idea the material did not name"
+DROP_PHOTO = "not one photo of the day"
+DROP_PHOTO_TWICE = "a second photo"
+# why a proposed link was dropped, the keys of `extra.dropped_links`
+DROP_LINK_SHAPE = "not a link"
+DROP_LINK_ENTITY = "an entity the material did not name"
+DROP_LINK_TEXT = "no text"
+DROP_LINK_MANY = "beyond four links"
+DROP_BESIDE_A_NAME = "a number beside a person"  # an event or a link dropped for a figure beside a name
+# a line the close writes, which never makes the day be dreamed again (RFC 0043 §6 rule 4): a line whose
+# `extra.from` names a draft of the day, and the reflection and its delegations
+KEPT_LABELS = (notes.REFLECTION, notes.DELEGATION)
 LONGEST_EVENT = timedelta(hours=24)  # a proposed event lasts less than a day and a night
 # why a proposed event was dropped, the keys of `extra.dropped`
 DROP_SHAPE = "not an event"
@@ -127,6 +186,8 @@ STOPWORDS: dict[str, frozenset[str]] = {
 WORD = re.compile(r"[^\W\d_]+", re.UNICODE)
 # -- the number rule (`hold_numbers`): a figure a sentence writes is one the code computed from lines --
 UNBACKED = "a number the lines do not give"  # the key of `extra.marked`: a segment marked for a figure
+BESIDE_A_NAME = "a number beside a person"  # the key of `extra.marked` for a figure beside a name
+HELD = "held: a number beside a name"  # a held segment's text: the model's words are dropped, the slot kept
 # a figure: digits, a decimal point or comma and more digits, glued to a unit or not (`45min`, `7,5t`),
 # never a piece of an id (`L12`, `6bc0`)
 NUMBER = re.compile(r"(?<![\w.,])\d+(?:[.,]\d+)?(?![.,]?\d)(?!\w*\d)")
@@ -190,6 +251,11 @@ class Material:
     people: dict[str, str] = field(default_factory=dict)  # the canonical people the material names
     identities: dict[Ref, resolve.Identity] = field(default_factory=dict)
     unit: str = drafts.UNIT_DAY  # what the material is of: a day, a journey, a week
+    compared: dict[str, int] = field(default_factory=dict)  # the ids `--catch-up` compares -> seq (rule 4)
+    photos: set[str] = field(default_factory=set)  # the references of the day's photos the material gave
+    named: dict[str, str] = field(default_factory=dict)  # the ideas and orgs the material named: id -> kind
+    lenses: list[dict[str, str]] = field(default_factory=list)  # the lenses asked: {id, text}
+    enriched: bool = False  # whether the named things, the chapter, the goals and the lenses were added
     _by_id: dict[str, str] = field(default_factory=dict)  # line id -> `L1`
 
     def ref_of(self, line_id: str | None) -> str | None:
@@ -204,6 +270,11 @@ class Material:
         self.refs[ref] = line_id
         self._by_id[line_id] = ref
         return ref
+
+    @property
+    def compared_sha256(self) -> str:
+        """The digest of the ids `--catch-up` compares (`extra.compared_ids_sha256`)."""
+        return digest(self.compared)
 
     def refs_of(self, ids: Iterable[str | None]) -> list[str]:
         return [ref for ref in (self.ref_of(i) for i in ids) if ref is not None]
@@ -237,6 +308,20 @@ class Dream:
     answer: str
     proposals: list[dict[str, Any]] = field(default_factory=list)
     dropped: dict[str, int] = field(default_factory=dict)
+    links: list[dict[str, Any]] = field(default_factory=list)  # the proposed links, as the Day shows them
+    closing: dict[str, Any] | None = None  # the story's closing line, computed (`drafts.closing`)
+
+    def shown(self) -> dict[str, Any]:
+        """The draft as `drafts.rows` prints it: the segments with their parts, the lenses asked and
+        whether each was answered, the closing line, the proposed events and links."""
+        extra = self.payload.get("extra") or {}
+        segments = [drafts.segment_json(s, None) for s in self.payload["segments"]]
+        for segment, part in zip(segments, extra.get("parts") or [], strict=False):
+            segment["part"] = part
+        block: dict[str, Any] = {"segments": segments, "proposals": self.proposals}
+        block.update(drafts.dream_day_json(self.payload, segments, None, {}))
+        block["closing"] = self.closing if any(s["part"] == drafts.STORY for s in segments) else None
+        return block
 
 
 @dataclass(frozen=True)
@@ -300,6 +385,7 @@ def material(lb: Logbook, day: str, found: policy.Ceiling, airports: Airports | 
         ]
         names = resolve.labels(lb, idx)
         identities = resolve.identities_from([*idx.retractions(), *idx.resolutions()])
+        dreamed = {str(line["id"]) for line in drafts.of_day(idx.by_kind(drafts.KIND), retracted, day)}
     on_day.sort(key=lambda line: (str(line["at"]), int(line["seq"])))
     ids = {str(line["id"]) for line in on_day}
     tier = max((int(line.get("tier", 1)) for line in on_day), default=1)
@@ -317,9 +403,90 @@ def material(lb: Logbook, day: str, found: policy.Ceiling, airports: Airports | 
         span=days.span(day),
         canonical=canonical(lb, identities),
         identities=identities,
+        compared={str(line["id"]): int(line["seq"]) for line in on_day if not kept(line, dreamed)},
     )
     made.data = _data(data, on_day, names, made, found.max_tier)
     return made
+
+
+def kept(line: Line, dreamed: Collection[str]) -> bool:
+    """Whether `line` is one the close wrote, which never makes the day be dreamed again (RFC 0043 §6
+    rule 4): a line whose `extra.from` names one of the day's drafts (`dreamed`: an event the owner
+    accepted, a sentence or a link kept), and the owner's reflection and its delegations. A star is the
+    day's like any line: it changes the photos the material gives."""
+    payload = line.get("payload") or {}
+    extra = payload.get("extra")
+    if (
+        isinstance(extra, dict)
+        and isinstance(extra.get(drafts.KEPT_FROM), str)
+        and extra[drafts.KEPT_FROM] in dreamed
+    ):
+        return True
+    return any(notes.labelled(line, label) for label in KEPT_LABELS)
+
+
+def enrich(lb: Logbook, made: Material, found: policy.Ceiling) -> None:
+    """What dream-day/4 adds to a day's material, under the entry's ceiling as the rest of it, once,
+    when the day is dreamed (a catch-up's comparison never pays for it): what the day was for (`for`,
+    the chapter it is in and its rule, the open goals), the named ideas and orgs with their ids (the
+    only ids an idea or a link may name), and the lenses of the bank (`questions.lenses`, `"ask":
+    "day"`). Each from a scan of its own kind through the index, a few lines each; never the touches
+    a shelf reads. The draft's tier rises to the highest of the chapter, goal and entity lines given."""
+    if made.enriched:
+        return
+    tiers = tiers_of(found)
+    with lb.index() as idx:
+        marks = idx.retractions()
+        retracted = retractions(marks)
+        chapter_lines = reading.crossing(idx.by_kind(chapters.KIND), tiers)
+        goal_lines = reading.crossing(idx.by_kind(goals.KIND), tiers)
+        review_lines = reading.crossing(idx.by_kind(goals.REVIEW), tiers)
+        entity_lines = reading.crossing(idx.by_kind(entities.ENTITY), tiers)
+    held, _clash = chapters.of_day(chapters.chapter_lines(chapter_lines, retracted), made.day)
+    chapter: dict[str, Any] | None = None
+    if held is not None:
+        payload = held.get("payload") or {}
+        first, last = chapters.span(held)
+        chapter = {
+            "name": payload.get("name"),
+            "rules": payload.get("rules") or "",
+            "from": first,
+            "to": last,
+        }
+    drawn: list[Line] = [] if held is None else [held]  # every line the model is given beside the day's
+    standing = goals.Goals(goal_lines, retracted)
+    reviews = goals.review_lines(review_lines, retracted)
+    open_lines = [
+        goal
+        for goal in standing.standing()
+        if goals.state(goal, goals.standing_review(reviews, standing.chain(str(goal["id"]))), made.day)
+        == "open"
+    ]
+    drawn += open_lines
+    open_goals = [
+        {"id": str(goal["id"]), "text": str((goal.get("payload") or {}).get("text") or "")}
+        for goal in open_lines
+    ]
+    # what the day was for (RFC 0043 §4.1), under one key: a month's and a chapter's material have their
+    # own `chapter` and `goals`, and a day's is not one of theirs
+    made.data["for"] = {"chapter": chapter, "goals": open_goals}
+    named = entities.canonical([*marks, *entity_lines])
+    listed: list[dict[str, Any]] = []
+    for kind in (entities.IDEA, entities.ORG):
+        of_kind = sorted((e for (k, _i), e in named.items() if k == kind), key=lambda e: (e.label, e.id))
+        for e in of_kind[:NAMED_GIVEN]:
+            listed.append({"id": e.id, "kind": kind, "name": e.label})
+            made.named[e.id] = kind
+            drawn += [line for line in entity_lines if str(line["id"]) in e.lines]
+    made.data["named"] = listed
+    # the draft's tier is the highest among the lines it read (RFC 0036): these as much as the day's
+    made.tier = max([made.tier, *(int(line.get("tier") or 1) for line in drawn)])
+    try:
+        made.lenses = [{"id": q.id, "text": q.text} for q in questions.lenses(lb.root)]
+    except policy.PolicyError as e:
+        raise DreamError(str(e)) from e
+    made.data["lenses"] = list(made.lenses)
+    made.enriched = True
 
 
 def canonical(lb: Logbook, identities: Mapping[Ref, resolve.Identity]) -> dict[str, str]:
@@ -388,6 +555,7 @@ def _data(
         "messages": _messages(on_day, names, made),
         "notes": _notes(on_day, made),
         "commitments": _commitments(on_day, names, made),
+        "photos": _photos(on_day, made),
     }
     named = sorted(made.people.items(), key=lambda p: (p[1], p[0]))
     out["people"] = [{"id": e, "name": name} for e, name in named]  # the only ids a proposal may hold
@@ -597,6 +765,41 @@ def _sender_ref(payload: Mapping[str, Any]) -> Ref | None:
     return (kind, value) if isinstance(kind, str) and isinstance(value, str) and value else None
 
 
+def _photos(on_day: Sequence[Line], made: Material) -> list[dict[str, Any]]:
+    """The day's photos the photo of the day may be (RFC 0043 §12), the owner's own camera first, then
+    the starred, then by time, at most `PHOTOS_GIVEN`: each its reference, the clock, where it came
+    from (`provenance`, RFC 0002) and whether the owner starred it already."""
+    stars = starred.standing(on_day)
+    found = [line for line in on_day if line.get("kind") == "photo"]
+
+    def order(line: Line) -> tuple[bool, bool, str, int]:
+        payload = line.get("payload") or {}
+        return (
+            payload.get("provenance") != "camera",
+            str(line["id"]) not in stars,
+            str(line["at"]),
+            int(line["seq"]),
+        )
+
+    out = []
+    for line in sorted(found, key=order)[:PHOTOS_GIVEN]:
+        payload = line.get("payload") or {}
+        ref = made.ref_of(str(line["id"]))
+        if ref is None:
+            continue
+        made.photos.add(ref)
+        at = datetime.fromisoformat(str(line["at"]).replace("Z", "+00:00")).astimezone(made.zone)
+        out.append(
+            {
+                "ref": [ref],
+                "at": at.strftime("%H:%M"),
+                "provenance": payload.get("provenance") or "other",
+                "starred": str(line["id"]) in stars,
+            }
+        )
+    return out
+
+
 def _notes(on_day: Sequence[Line], made: Material) -> list[dict[str, Any]]:
     return [
         {
@@ -788,6 +991,147 @@ def segments_of(
     return segments, named
 
 
+def day_parts(made: Material) -> tuple[str, ...]:
+    """The parts of a day's dream in order (dream-day/4, RFC 0043 §13.4): the story, one part per lens
+    asked (`lens:<id>`), then the rest of `drafts.PARTS`."""
+    lenses = tuple(drafts.LENS + lens["id"] for lens in made.lenses)
+    return (drafts.STORY, *lenses, *drafts.PARTS[1:])
+
+
+@dataclass(frozen=True)
+class DayAnswer:
+    """A day's answer as dream-day/4 keeps it: the segments, the part of each, the idea each `ideas`
+    segment names (`{segment, entity}`, the segment's place from 1), what was dropped and marked, by
+    why, and the evidence of each slot held for a number beside a name (`{segment, evidence}`)."""
+
+    segments: list[dict[str, Any]]
+    parts: list[str]
+    ideas: list[dict[str, Any]]
+    dropped: dict[str, int]
+    marked: dict[str, int]
+    held: list[dict[str, Any]]
+
+
+def day_segments(found: Mapping[str, Any], made: Material) -> DayAnswer:
+    """The answer's segments of a day (dream-day/4), checked as every segment is (`_segment`) and by
+    the rules of each part, a segment that breaks one dropped and counted, never marked: the story at
+    most `STORY_SENTENCES`; one segment per lens, and a lens answered without evidence dropped (the
+    reader says the day does not answer it, never the model); one question; an `ideas` segment only
+    when its `entity` is an idea the material named; one `photo`, resting on exactly one photo of the
+    day. Then the number rule (`hold_numbers`), no number beside a person (`hold_names`, each held
+    slot's evidence kept in `held`), and the evidence rule's share (`share_of`)."""
+    segments: list[dict[str, Any]] = []
+    named: list[str] = []
+    ideas: list[dict[str, Any]] = []
+    dropped: Counter[str] = Counter()
+    for part in day_parts(made):
+        items = found.get(part)
+        if not isinstance(items, list):
+            continue
+        kept_here = 0
+        for item in items:
+            segment = _segment(item, made)
+            if segment is None:
+                continue
+            why = _drop(part, item, segment, kept_here, made)
+            if why is not None:
+                dropped[why] += 1
+                continue
+            kept_here += 1
+            segments.append(segment)
+            named.append(part)
+            if part == drafts.IDEAS:
+                ideas.append({"segment": len(segments), "entity": str(item["entity"]).strip()})
+    marked: dict[str, int] = {}
+    cited = [list(s.get("evidence") or []) for s in segments]  # `hold_numbers` drops what it marks
+    unbacked = hold_numbers(segments, made.data, made, own_words(made))
+    if unbacked:
+        marked[UNBACKED] = unbacked
+    beside = hold_names(segments, made)  # no number beside a person, whatever the lines give
+    if beside:
+        marked[BESIDE_A_NAME] = beside
+    held = [
+        {"segment": n, "evidence": cited[n - 1]}
+        for n, s in enumerate(segments, 1)
+        if s["text"] == HELD and cited[n - 1]
+    ]
+    share_of(segments, made.unit)
+    return DayAnswer(segments, named, ideas, dict(dropped), marked, held)
+
+
+def _drop(part: str, item: object, segment: Mapping[str, Any], kept_here: int, made: Material) -> str | None:
+    """Why a segment of `part` is dropped by its part's rule, None when it is kept."""
+    if part == drafts.STORY and kept_here >= STORY_SENTENCES:
+        return DROP_STORY
+    if part == "questions" and kept_here >= QUESTIONS_KEPT:
+        return DROP_QUESTION
+    if part.startswith(drafts.LENS):
+        if segment.get("unsupported"):
+            return DROP_LENS_UNSUPPORTED
+        return DROP_LENS if kept_here else None
+    if part == drafts.IDEAS:
+        entity = item.get("entity") if isinstance(item, dict) else None
+        if not isinstance(entity, str) or made.named.get(entity.strip()) != entities.IDEA:
+            return DROP_IDEA
+    if part == drafts.PHOTO:
+        if kept_here:
+            return DROP_PHOTO_TWICE
+        evidence = item.get("evidence") if isinstance(item, dict) else None
+        refs = [str(e).strip() for e in evidence] if isinstance(evidence, list) else []
+        if len(refs) != 1 or refs[0] not in made.photos or segment.get("unsupported"):
+            return DROP_PHOTO
+    return None
+
+
+def links_of(found: Mapping[str, Any], made: Material) -> tuple[list[dict[str, Any]], dict[str, int]]:
+    """The answer's proposed links that hold (draft/v1 amendment 2), each `{kind: link, entity, text,
+    evidence, note?}` with the references turned into line ids, at most `LINKS_KEPT`; and how many were
+    dropped, by why. A link is dropped, never marked, when it is not an object, names an entity the
+    material did not give (`named`: an idea or an org, by id), has no text, puts a number beside a
+    person's name in its text or note (`beside_a_name`), or rests on a reference the day does not
+    have, or on none."""
+    items = found.get(LINKS)
+    kept_links: list[dict[str, Any]] = []
+    dropped: Counter[str] = Counter()
+    for item in items if isinstance(items, list) else []:
+        if not isinstance(item, dict):
+            dropped[DROP_LINK_SHAPE] += 1
+            continue
+        entity, text, note = item.get("entity"), item.get("text"), item.get("note")
+        if not isinstance(entity, str) or entity.strip() not in made.named:
+            dropped[DROP_LINK_ENTITY] += 1
+            continue
+        if not isinstance(text, str) or not text.strip():
+            dropped[DROP_LINK_TEXT] += 1
+            continue
+        if any(isinstance(t, str) and beside_a_name(t, made) for t in (text, note)):
+            dropped[DROP_BESIDE_A_NAME] += 1
+            continue
+        evidence = item.get("evidence")
+        ids: list[str] = []
+        for ref in evidence if isinstance(evidence, list) else []:
+            line_id = made.refs.get(str(ref).strip()) or (
+                str(ref).strip() if str(ref).strip() in made.ids else None
+            )
+            if line_id is None:
+                ids = []
+                break
+            if line_id not in ids:
+                ids.append(line_id)
+        if not ids:
+            dropped[DROP_EVIDENCE] += 1
+            continue
+        if len(kept_links) >= LINKS_KEPT:
+            dropped[DROP_LINK_MANY] += 1
+            continue
+        link: dict[str, Any] = {"kind": drafts.LINK, "entity": entity.strip(), "text": " ".join(text.split())}
+        link["evidence"] = ids
+        if isinstance(note, str) and note.strip():
+            link["note"] = " ".join(note.split())
+        kept_links.append(link)
+    return kept_links, dict(dropped)
+
+
 def share_of(segments: Sequence[Mapping[str, Any]], unit: str = drafts.UNIT_DAY) -> None:
     """The evidence rule's last word on an answer: no segment at all, or more than
     `UNSUPPORTED_SHARE` of them unsupported, is `AnswerError` and nothing is written."""
@@ -807,7 +1151,8 @@ def proposals_of(found: Mapping[str, Any], made: Material) -> tuple[list[dict[st
     dropped, by why. A proposal is dropped, never marked: when it is not an object, has no title,
     starts off the day or does not run forward (or runs longer than `LONGEST_EVENT`), names a place
     the material did not give, a person who is not one of the day's canonical people, or rests on a
-    reference the day does not have, or on none."""
+    reference the day does not have, or on none; and when its title puts a number beside a person's
+    name (`beside_a_name`)."""
     items = found.get(EVENTS)
     kept: list[dict[str, Any]] = []
     dropped: Counter[str] = Counter()
@@ -826,6 +1171,8 @@ def _proposal(item: object, made: Material) -> tuple[dict[str, Any] | None, str]
     title = item.get("title")
     if not isinstance(title, str) or not title.strip():
         return None, DROP_TITLE
+    if beside_a_name(title, made):
+        return None, DROP_BESIDE_A_NAME
     start, end = _moment(item.get("start"), made), _moment(item.get("end"), made)
     if start is None or end is None or made.span is None:
         return None, DROP_TIME
@@ -927,18 +1274,30 @@ def dream(
     transport: Transport | None = None,
     say: Callable[[str], None] | None = None,
     made: Material | None = None,
+    evening: bool = False,
 ) -> Dream:
     """Dream `day`: the policy, the endpoint, the material (`made` when the caller built it under
     the lock already), the model's turn, the check, and one `draft/v1` line appended under the
-    writer lock unless `dry_run`. `DreamError` says why a dream is refused; `HeadMoved` when the
+    writer lock unless `dry_run`. With `evening`, the day is today and is dreamed so far: the draft
+    carries `extra.evening` and `extra.read_until`, the moment it read up to (RFC 0043 §6 rule 1); a
+    day that is not today is refused. `DreamError` says why a dream is refused; `HeadMoved` when the
     record moved under the reading."""
     found = ceiling(lb)
     ep = endpoint(found, env)
+    if evening:
+        asked, today_here = parse_day(day).isoformat(), local_today(lb)
+        if asked != today_here:
+            raise DreamError(
+                f"--evening dreams today so far, and {asked} is not today ({today_here});"
+                f" `dream day {asked}` dreams it whole"
+            )
     with lb.writer():
+        read_until = now_utc()
         if made is None:
             made = material(lb, day, found, airports)
         if made.read_count == 0:
             raise DreamError(f"{made.day} has no line under max_tier {found.max_tier}; nothing to dream")
+        enrich(lb, made, found)
         with lb.index() as idx:
             earlier = drafts.of_day(idx.by_kind(drafts.KIND), retractions(idx.retractions()), made.day)
         latest = drafts.standing(earlier)
@@ -951,8 +1310,10 @@ def dream(
             say(messages[0]["content"])
             say(messages[1]["content"])
         answer, found_answer = ask(ep, messages, transport)
-        segments, parts = segments_of(found_answer, made)
+        told = day_segments(found_answer, made)
+        segments, parts = told.segments, told.parts
         proposals, dropped = proposals_of(found_answer, made)
+        links, dropped_links = links_of(found_answer, made)
         payload: dict[str, Any] = {
             "schema": drafts.SCHEMA,
             "unit": drafts.UNIT_DAY,
@@ -965,21 +1326,42 @@ def dream(
                 "prompt": PROMPT_NAME,
                 "parts": parts,
                 "read_ids_sha256": made.read_ids_sha256,
+                "compared_count": len(made.compared),
+                "compared_ids_sha256": made.compared_sha256,
                 "policy_version": version,
             },
         }
-        if proposals:
-            payload[drafts.PROPOSALS] = proposals
-        if dropped:
-            payload["extra"]["dropped"] = dropped
+        extra = payload["extra"]
+        if made.lenses:
+            extra["lenses"] = list(made.lenses)
+        if told.ideas:
+            extra["ideas"] = told.ideas
+        if told.held:
+            extra["held"] = told.held
+        if evening:
+            extra["evening"] = True
+            extra["read_until"] = read_until
+        if proposals or links:
+            payload[drafts.PROPOSALS] = [*proposals, *links]
+        for key, counted in (
+            ("dropped", dropped),
+            ("dropped_links", dropped_links),
+            ("dropped_segments", told.dropped),
+            ("marked", told.marked),
+        ):
+            if counted:
+                extra[key] = counted
         if latest is not None:
             payload["supersedes"] = str(latest["id"])
         valid(payload)
         shown = drafts.proposals_json(payload, made.ids, made.zone, made.people, {})
+        linked = drafts.links_json(payload, made.ids)
+        with lb.index() as idx:
+            ending = drafts.closing(idx, made.day, tiers_of(found), retractions(idx.retractions()), made.zone)
         if dry_run:
-            return Dream(made.day, None, payload, made.tier, messages, answer, shown, dropped)
+            return Dream(made.day, None, payload, made.tier, messages, answer, shown, dropped, linked, ending)
         line = append(lb, made, source, payload)
-    return Dream(made.day, line, payload, made.tier, messages, answer, shown, dropped)
+    return Dream(made.day, line, payload, made.tier, messages, answer, shown, dropped, linked, ending)
 
 
 # -- the steps every unit's dream takes ------------------------------------------------------------------
@@ -1050,12 +1432,9 @@ def why_again(latest: Line, found: policy.Ceiling, read_count: int, read_digest:
     follows the policy, not the head); or what it would read today is not what it read: another
     count, or another set of ids when it kept their digest."""
     payload = latest.get("payload") or {}
-    tier = int(latest.get("tier") or 0)
-    if tier > found.max_tier:
-        return f"dreamed at tier {tier}, above max_tier {found.max_tier} now"
-    version = _policy_version(payload)
-    if version is not None and version != policy.version(found):
-        return f"dreamed under another {policy.DREAM_DESTINATION} entry"
+    entry = why_entry(latest, found)
+    if entry is not None:
+        return entry
     extra = payload.get("extra")
     kept = extra.get("read_ids_sha256") if isinstance(extra, dict) else None
     if payload.get("read_count") != read_count:
@@ -1065,12 +1444,31 @@ def why_again(latest: Line, found: policy.Ceiling, read_count: int, read_digest:
     return None
 
 
+def why_entry(latest: Line, found: policy.Ceiling) -> str | None:
+    """Why a standing draft is dreamed again for the entry, in words, whatever its lines: its tier
+    above the entry's `max_tier` today, or dreamed under another version of the entry; None when the
+    entry still stands behind it."""
+    tier = int(latest.get("tier") or 0)
+    if tier > found.max_tier:
+        return f"dreamed at tier {tier}, above max_tier {found.max_tier} now"
+    version = _policy_version(latest.get("payload") or {})
+    if version is not None and version != policy.version(found):
+        return f"dreamed under another {policy.DREAM_DESTINATION} entry"
+    return None
+
+
 # -- catch-up ----------------------------------------------------------------------------------------------
 
 
 def today() -> date:
     """The day a catch-up counts back from: this machine's date."""
     return date.today()
+
+
+def local_today(lb: Logbook) -> str:
+    """The day the owner is in now, in the record's zone under its `day_start`: the day `--evening`
+    dreams so far."""
+    return day_start.of(lb.meta).today(datetime.fromisoformat(now_utc().replace("Z", "+00:00"))).isoformat()
 
 
 def days_to_catch_up(today: date, days: int) -> list[str]:
@@ -1096,13 +1494,46 @@ def changed_since(lb: Logbook, day: str, found: policy.Ceiling) -> tuple[bool, s
         return False, "nothing logged", None
     with lb.index() as idx:
         earlier = drafts.of_day(idx.by_kind(drafts.KIND), retractions(idx.retractions()), made.day)
+        signature = signing.signature_of(idx, made.day)
     latest = drafts.standing(earlier)
     if latest is None:
         return True, "no draft yet", made
-    why = why_again(latest, found, made.read_count, made.read_ids_sha256)
+    why = why_again_day(latest, found, made, signature)
     if why is not None:
         return True, why, made
+    if signature is not None:
+        return False, f"signed as #{signature['seq']}, no line since; unchanged since #{latest['seq']}", made
     return False, f"unchanged since #{latest['seq']}", made
+
+
+def why_again_day(latest: Line, found: policy.Ceiling, made: Material, signature: Line | None) -> str | None:
+    """Why a day with a standing draft is dreamed again, in words; None when it is not (RFC 0043 §6).
+    The entry first, as for every unit (`why_again`: its tier above `max_tier` today, or another
+    version of the entry). Then the lines, left out the ones the close writes (`kept`, rule 4): on a
+    signed day, only a line that arrived after both the signature and the standing draft, by `seq`
+    (rule 5), and a signed day with none is never dreamed again (rule 6); on a day not signed, what it
+    would compare today is not what the standing draft compared (`extra.compared_count` and
+    `extra.compared_ids_sha256`), or, for a draft written before them, what it read (`why_again`)."""
+    payload = latest.get("payload") or {}
+    found_extra = payload.get("extra")
+    extra: Mapping[str, Any] = found_extra if isinstance(found_extra, dict) else {}
+    entry = why_entry(latest, found)
+    if entry is not None:
+        return entry
+    if signature is not None:
+        after = max(int(signature["seq"]), int(latest["seq"]))
+        late = sum(1 for seq in made.compared.values() if seq > after)
+        if late:
+            return f"{late} line{'s' if late != 1 else ''} since you signed (#{signature['seq']})"
+        return None
+    count, kept_digest = extra.get("compared_count"), extra.get("compared_ids_sha256")
+    if isinstance(count, int) and isinstance(kept_digest, str):
+        if count != len(made.compared):
+            return f"{len(made.compared)} lines now, {count} when last dreamed"
+        if kept_digest != made.compared_sha256:
+            return "the day's lines are not the ones last dreamed"
+        return None
+    return why_again(latest, found, made.read_count, made.read_ids_sha256)
 
 
 def catch_up(
@@ -1173,6 +1604,7 @@ def numbers_by_id(data: Any, made: Material) -> dict[str, set[float]]:
         if not isinstance(node, dict):
             return
         refs = node.get("ref")
+        refs = [refs] if isinstance(refs, str) else refs  # a note's and a promise's `ref` is one reference
         own = [r for r in refs if isinstance(r, str)] if isinstance(refs, list) else []
         here = own or scope
         if here:
@@ -1220,12 +1652,30 @@ def figures(
     return out
 
 
-def hold_numbers(segments: list[dict[str, Any]], data: Any, made: Material) -> int:
+def own_words(made: Material) -> set[float]:
+    """The figures of the material's own words that rest on no line of the day, so carry no reference:
+    the chapter's name and rule, the goals', the named ideas' and orgs' names, the lenses' texts. A
+    sentence may write one of them whatever it cites (`hold_numbers`)."""
+    texts: list[str] = []
+    meant = made.data.get("for") or {}
+    found = meant.get("chapter")
+    if isinstance(found, dict):
+        texts += [str(found.get("name") or ""), str(found.get("rules") or "")]
+    texts += [str(g.get("text") or "") for g in meant.get("goals") or []]
+    texts += [str(n.get("name") or "") for n in made.data.get("named") or []]
+    texts += [str(lens.get("text") or "") for lens in made.data.get("lenses") or []]
+    return set().union(*(figures(t, language=made.language) for t in texts if t))
+
+
+def hold_numbers(
+    segments: list[dict[str, Any]], data: Any, made: Material, also: Collection[float] = ()
+) -> int:
     """The number rule, in place: a supported segment that writes a figure the material does not
     give for one of the lines it cites (`numbers_by_id`) is marked unsupported, since its number
     rests on no line; returns how many were marked. A number is computed from the lines by the code
     that built the material, never estimated by the model: rounded, added up or guessed, it is not
-    one of the given numbers and the sentence says so."""
+    one of the given numbers and the sentence says so. `also` are figures any sentence may write, the
+    material's own words that rest on no line (`own_words`)."""
     given = numbers_by_id(data, made)
     years = {str(y + d) for y in map(int, re.findall(r"\b(?:19|20)\d{2}\b", made.day)) for d in (-1, 0, 1)}
     marked = 0
@@ -1233,9 +1683,38 @@ def hold_numbers(segments: list[dict[str, Any]], data: Any, made: Material) -> i
         evidence = segment.get("evidence")
         if not isinstance(evidence, list):
             continue
-        allowed = set().union(*(given.get(str(e), set()) for e in evidence))
+        allowed = set(also).union(*(given.get(str(e), set()) for e in evidence))
         written = figures(str(segment["text"]), years=years, language=made.language)
         if any(not any(abs(n - a) < 1e-9 for a in allowed) for n in written):
             segments[i] = {"text": segment["text"], "unsupported": True}
+            marked += 1
+    return marked
+
+
+def beside_a_name(text: str, made: Material) -> bool:
+    """Whether `text` names a canonical person of the record (their full name, or their first name,
+    whole words, as written) and writes a figure (`figures`: dates, clock times and the unit's years
+    are not figures): a number beside a person (VISION: no metrics near people)."""
+    years = {str(y + d) for y in map(int, re.findall(r"\b(?:19|20)\d{2}\b", made.day)) for d in (-1, 0, 1)}
+    if not figures(text, years=years, language=made.language):
+        return False
+    names = {n.strip() for n in made.canonical.values() if n and n.strip()}
+    names |= {n.split()[0] for n in list(names) if len(n.split()[0]) >= 3}
+    return any(re.search(rf"(?<!\w){re.escape(name)}(?!\w)", text) is not None for name in names)
+
+
+def hold_names(segments: list[dict[str, Any]], made: Material) -> int:
+    """No number beside a person, in place, pencil included (RFC 0043): a segment that writes one
+    (`beside_a_name`), supported or already marked, is held: its words are dropped and its slot is
+    `{text: HELD, unsupported: true}`, whatever its evidence, so no reader can print them (a model's
+    sentence that reads as the reason itself is held too, never prose); returns
+    how many were held. A day's, a month's and a chapter's dream hold it; the day keeps the evidence
+    of each held slot under `extra.held`."""
+    marked = 0
+    for i, segment in enumerate(segments):
+        if segment == {"text": HELD, "unsupported": True}:
+            continue
+        if segment["text"] == HELD or beside_a_name(str(segment["text"]), made):
+            segments[i] = {"text": HELD, "unsupported": True}
             marked += 1
     return marked

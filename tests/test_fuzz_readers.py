@@ -340,8 +340,39 @@ def voices(drafts: list[Draft], rng: random.Random) -> None:
     )  # fmt: skip
 
 
+def open_ends(drafts: list[Draft], rng: random.Random) -> None:
+    """Every span the record holds with one end unknown (#344's crash, `_instant(None)`): each line with
+    an `end` written with `end` null (SPEC §2: unknown), a passage left open (RFC 0020 rule 6); every
+    flight without its arrival, every other one without its departure too (`at` stays: the envelope
+    requires it); and the owner's track silent from the first flight's departure to the end of its
+    day, so the stay before it has no point after it and the day no arrival."""
+    flights = sorted((d for d in drafts if d["kind"] == "flight"), key=lambda d: str(d["at"]))
+    for n, f in enumerate(flights):
+        for key in (
+            "actual_arrival",
+            "scheduled_arrival",
+            *(("actual_departure", "scheduled_departure") * (n % 2)),
+        ):
+            f["payload"].pop(key, None)
+    for d in drafts:
+        if d.get("end") is not None:
+            d["end"] = None
+            if d["payload"].get("mode") == "passage":
+                d["payload"].setdefault("extra", {})["open"] = True
+    if flights:
+        gone, day = str(flights[0]["at"]), local_date(str(flights[0]["at"]), demo.TZ)
+        drafts[:] = [
+            d
+            for d in drafts
+            if not (
+                d["kind"] == "location" and str(d["at"]) >= gone and local_date(str(d["at"]), demo.TZ) == day
+            )
+        ]
+
+
 MUTATIONS: dict[str, Mutation | None] = {
     "goals-and-chapters": goals_and_chapters,
+    "open-ends": open_ends,
     "voices": voices,
     "optional-fields": drop_optional_fields,
     "owner-acts": owner_acts,
@@ -349,6 +380,11 @@ MUTATIONS: dict[str, Mutation | None] = {
     "unknown-line-tz": unknown_line_tz,
     "tier-3-day": tier_3_day,
     "empty-month-file": None,  # on the folder, after the write
+}
+
+
+PLAN_MAPPING = {
+    role: f"{n:08x}-0000-4000-8000-{n:012x}" for n, role in enumerate(("tasks", "sprints", "trips"), 1)
 }
 
 
@@ -372,6 +408,8 @@ def make_record(root: Path, days: int, seed: int, mutations: frozenset[str]) -> 
         path = lb.log_dir.joinpath(*EMPTY_MONTH)
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(b"")
+    (lb.root / "policy").mkdir(exist_ok=True)  # `show plan` reads its databases under a mapping
+    (lb.root / "policy" / "notion.json").write_text(json.dumps({"plan": PLAN_MAPPING}), encoding="utf-8")
     return lb
 
 
@@ -430,6 +468,21 @@ def assert_day_serves(label: str, lb: Logbook, day: str) -> None:
                 )
 
 
+# the week page, served as `logbook serve` serves it, folded and open, at every tier and through a gate of
+# tier 1: the week a day is in, read from any record (most weeks with no week draft), never a traceback
+
+
+def assert_week_serves(label: str, lb: Logbook, day: str) -> None:
+    week = week_paper.week_of(day)
+    for tiers in (None, (1,)):
+        site = serve.Site(lb, tiers=tiers)
+        for query in ("", "open=1"):
+            response = site.respond(f"/week/{week}", query)
+            assert response.status == 200, (
+                f"{label}: /week/{week}?{query} through {tiers} answered {response.status}"
+            )
+
+
 # the Promises, Goals and Agents shelves, served as `logbook serve` serves them, at every tier and through
 # a gate of tiers 1 and 2: a page or a 404 for a detail the record does not hold, never a traceback
 SHELF_PAGES = ("/promises", "/promises?person=Ola Nordmann", "/goals", "/agents", "/agents?page=2")
@@ -459,11 +512,17 @@ def windowed_readers(
         ["show", day],
         ["show", day, "--raw"],
         ["show", "person", person, "--json"],
+        ["people", "gifts", person],
+        ["people", "gifts", person, "--json"],
+        ["lab", "companies", day],
+        ["lab", "companies", day, "--json"],
         ["show", "asset", demo.BOAT, "--json"],
         ["show", "place", "Home", "--json"],
         ["day", day],
         ["day", day, "--json"],
         ["day", "reflect", day, "--text", REFLECTION, "--dry-run"],
+        ["show", "plan", day],
+        ["show", "plan", day, "--json"],
         ["show", "days", "--from", since, "--to", until],
         ["show", "days", "--from", since, "--to", until, "--json"],
         ["show", "trips", "--since", since, "--until", until],
@@ -494,8 +553,12 @@ def windowed_readers(
         ["review", "with", "--from", day, "--to", day],  # RFC 0043 §11: one day, inside the 60 a queue takes
         ["review", "with", "--week", week_paper.week_of(day), "--json"],
         ["people", "city", "Oslo", "--json"],
+        ["people", "mail", "--since", since, "--until", until],
+        ["people", "mail", "--since", since, "--until", until, "--json"],
         ["setup", "assets", "status"],
         ["setup", "assets", "status", "--json"],
+        ["show", "heard", "--since", since, "--until", until],
+        ["show", "heard", "--day", day, "--json"],
         ["doctor"],
         ["show", "timeline", "--day", day],  # RFC 0043 §11: the timeline at each zoom
         ["show", "timeline", "--day", day, "--json"],
@@ -507,10 +570,13 @@ def windowed_readers(
 
 WHOLE_RECORD_READERS: list[list[str]] = [
     ["show"],
+    ["show", "heard", "--since", "2000-01-01"],
     ["show", "days"],
     ["show", "days", "--json"],
     ["show", "trips"],
     ["show", "trips", "--json"],
+    ["show", "plan", "--coverage"],
+    ["show", "plan", "--coverage", "--json"],
     *([["rollup", kind, "--json"] for kind in rollup.KINDS]),
     ["rollup", "countries"],
     ["setup", "places", "propose"],
@@ -538,6 +604,8 @@ WHOLE_RECORD_READERS: list[list[str]] = [
     ["review", "org", "--json"],
     ["show", "orgs"],
     ["show", "orgs", "--json", "--money"],
+    ["people", "gifts"],
+    ["people", "gifts", "--json"],
     ["people"],
     ["people", "--json"],
     ["review", "speakers"],
@@ -635,6 +703,7 @@ def every_reader_reads(
         for args in windowed_readers(since, until, day, who, kind, by, which_lane, whose, n):
             assert_reads_cleanly(label, args)
         assert_day_serves(label, lb, day)
+        assert_week_serves(label, lb, day)
 
 
 # -- the properties ----------------------------------------------------------------------------------------

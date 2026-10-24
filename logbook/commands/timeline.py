@@ -1,10 +1,10 @@
 """`logbook show timeline [--day D | --week W | --month M | --year Y | --life] [--json]`: the timeline the
 Library's `/timeline` shows, as text or as one JSON object (`logbook.core.moments`, RFC 0043 §11-12).
 
-A reader of `show`, as `show year` and `show trips` are: `show` lends it its `--year` and `--json` and
-takes the other three zooms' options from here (`timeline_arguments`). Without a zoom, the day the owner
-is in. The JSON is the object the page is drawn from, so the two never say different things. Nothing
-is written and no connection is opened."""
+A reader of `show`, as `show year` and `show trips` are: `show` lends it its `--day`, `--year` and
+`--json`, and it takes the other two zooms' options and `--life` from here (`timeline_arguments`).
+Without a zoom, the day the owner is in. The JSON is the object the page is drawn from, so the two
+never say different things. Nothing is written and no connection is opened."""
 
 from __future__ import annotations
 
@@ -16,10 +16,8 @@ WHAT = "timeline"
 
 
 def timeline_arguments(s: argparse.ArgumentParser) -> None:
-    """The timeline's zooms on `show`'s parser (its `--year` is shared with the year and trips)."""
-    s.add_argument(
-        "--day", dest="timeline_day", metavar="YYYY-MM-DD", help="timeline: one day (default: today)"
-    )
+    """The timeline's zooms on `show`'s parser (its `--day` is `show`'s own, `show_day`, shared with
+    `show heard`; its `--year` is shared with the year and trips)."""
     s.add_argument("--week", metavar="YYYY-Www", help="timeline: one ISO week, a line per day")
     s.add_argument("--month", metavar="YYYY-MM", help="timeline: one month, a calendar of its nights")
     s.add_argument(
@@ -37,7 +35,7 @@ def cmd_timeline(a: argparse.Namespace) -> None:
     asked = [
         (zoom, value)
         for zoom, value in (
-            ("day", a.timeline_day),
+            ("day", a.show_day),
             ("week", a.week),
             ("month", a.month),
             ("year", a.year),

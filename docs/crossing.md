@@ -24,6 +24,17 @@ entry's `until` has passed, it is removed, or its `max_tier` is below the draft'
 them. A video scene's draft (`video review`) is written on this machine under no entry and crosses by its
 tier like any line. With the entry in force the package is what it was.
 
+## People's mail
+
+Since 21 October 2026 ([RFC 0045](https://github.com/bighydro/logbook/blob/main/rfcs/0045-peoples-mail.md)),
+mail crosses only when it is a person's: a mail you received from someone the record names as a person,
+or one you sent to one, its sender not let go in Hold ([people's mail](mail-people.md)). Whenever mail is
+among the kinds (no `--kinds`, or `--kinds` naming `mail`), the rest stays home, its resolutions and
+attachments with it, and `counts` says how many as `mail_held_back`, written whenever the window held a
+mail the tiers and signed days let through (`0` when every one was a person's); a package with no mail is
+what it was, byte for byte. `--all-mail` crosses every mail the tiers and signed days let through, as
+before, and the manifest's `policy` says `"mail": "all"`.
+
 ## The package
 
 ```

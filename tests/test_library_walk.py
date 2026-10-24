@@ -55,6 +55,7 @@ DETAILS = (
     ("/goals/ID", serve.GOAL_PATH),
     ("/line/ID", serve.LINE_PATH),
     ("/timeline/Z", serve.TIMELINE_PATH),
+    ("/week/W", serve.WEEK_PATH),
 )  # the pages one of many: a route each
 ROUTES = frozenset(
     {
@@ -79,10 +80,12 @@ ROUTES = frozenset(
         "/promises/ID",
         "/goals",
         "/goals/ID",
+        "/search",
         "/agents",
         "/line/ID",
         "/timeline",
         "/timeline/Z",
+        "/week/W",
     }
 )  # every page `Site._page` answers
 EACH = 1  # pages of one kind (a route and the names in its query) the walk reads, beside its seeds
@@ -557,7 +560,15 @@ def walked(
         sites = (
             (
                 site,
-                ["/", f"/day/{WEDNESDAY}", f"/day/{WEDNESDAY}?open=1", "/nowhere", "/days?from=2026-13-01"],
+                [
+                    "/",
+                    f"/day/{WEDNESDAY}",
+                    f"/day/{WEDNESDAY}?open=1",
+                    "/nowhere",
+                    "/days?from=2026-13-01",
+                    "/search?q=ola",  # a search with hits
+                    "/search?q=ola&page=0",  # and one refused
+                ],
             ),
             (_manifest_site(_copy(manifest, folder / "orgs", mp)), ["/", "/manifest/people?money=1"]),
             (_ideas_site(_copy(shelf_of_ideas, folder / "ideas", mp)), ["/", "/ideas"]),

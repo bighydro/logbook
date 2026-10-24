@@ -141,3 +141,7 @@ for it.
 - **No consumer name in the format.** `recipient` is data; the standard stays generic and reusable by any
   circle member.
 - Consumers MUST ignore unknown manifest fields.
+- **2026-10-21, people's mail (RFC 0045).** When mail is among the kinds, only people's mail crosses; `counts`
+  gains `mail_held_back` (written whenever the window held a mail the other gates let through) and, under
+  `--all-mail`, which crosses every mail as before, `policy` gains `"mail": "all"`. A package without mail is
+  unchanged.

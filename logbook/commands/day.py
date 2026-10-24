@@ -27,6 +27,7 @@ from ..contrib import (
     week_paper,
     year_poster,
 )
+from ..contrib import keep as keep_sign
 from ..core import (
     chapter,
     day_start,
@@ -58,9 +59,11 @@ from .timeline import cmd_timeline, timeline_arguments
 if TYPE_CHECKING:
     from ..contrib import serve
 
+HEARD = "heard"  # RFC 0046: what the podcasts and videos you played said (`commands.heard`)
 READERS = ("year", "trip", "trips", "days", "keepers", "stats")  # commands of their own until 0.6
 ORGS = ("org", "orgs")  # RFC 0037: one org's page, and the orgs (the Manifest's text)
 IDEAS = ("idea", "ideas")  # RFC 0037: one idea's page, and the ideas (the Ideas shelf's text)
+PLAN = "plan"  # RFC 0043 §9: the plan `sync notion` wrote, read and never run (`commands.plan`)
 
 
 def show_arguments(sub: Subparsers) -> None:
@@ -70,18 +73,21 @@ def show_arguments(sub: Subparsers) -> None:
         "show",
         help="one day, a page; year, trip(s), days, keepers, stats, orgs, ideas",
         description="one day's lines (default today), a page (person, asset, place, org, idea), or a reader:"
-        " year, trip, trips, days, keepers, stats, orgs (the orgs you named under their status, the most"
+        " heard (what the podcasts and videos you played said: --day, or --since and --until, the last"
+        " 14 days without), year, trip, trips, days, keepers, stats, orgs (the orgs you named under their"
+        " status, the most"
         " recent touch first, stale ones said; the passed with their reasons; the people with more than one"
         " org), ideas (the ideas you named by stage, the most recent touch first, each with its reason),"
         " timeline (the moments of a day, a week, a month, a year or all years: --day, --week, --month,"
-        " --year, --life)",
+        " --year, --life),"
+        " plan (today's tasks, the sprint and the next trip, from `sync notion`'s tier-1 lines)",
     )
     s.add_argument(
         "day",
         nargs="?",
         metavar="WHAT",
         help="YYYY-MM-DD or today; person|asset|place|org|idea NAME; year YYYY; trip ID-OR-DAY; trips; days;"
-        " keepers; stats; orgs; ideas; timeline",
+        " keepers; stats; orgs; ideas; timeline; plan [DAY]",
     )
     s.add_argument(
         "name",
@@ -93,6 +99,7 @@ def show_arguments(sub: Subparsers) -> None:
         " (trip:YYYY-MM-DD:YYYY-MM-DD), or any day inside it",
     )
     s.add_argument("--raw", action="store_true", help="print refs as the sources gave them, never a name")
+    s.add_argument("--day", dest="show_day", metavar="YYYY-MM-DD", help="one local day")
     s.add_argument(
         "--json",
         action="store_true",
@@ -110,14 +117,14 @@ def show_arguments(sub: Subparsers) -> None:
         "--from",
         dest="since",
         metavar="YYYY-MM-DD",
-        help="trips, days, keepers: the first day (default the record's)",
+        help="trips, days, keepers: the first day (default the record's); heard: the first day",
     )
     s.add_argument(
         "--until",
         "--to",
         dest="until",
         metavar="YYYY-MM-DD",
-        help="trips, days, keepers: the last day, inclusive (default the record's)",
+        help="trips, days, keepers: the last day, inclusive (default the record's); heard: default today",
     )
     s.add_argument(
         "--airports",
@@ -167,6 +174,7 @@ def show_arguments(sub: Subparsers) -> None:
         metavar="TEXT",
         help="orgs: only the orgs in this portfolio, case and spaces aside (tier 3, on their status lines)",
     )
+    s.add_argument("--coverage", action="store_true", help="plan: the rows of each database the record knows")
     s.set_defaults(fn=cmd_show)
 
 
@@ -282,6 +290,11 @@ def cmd_show(a: argparse.Namespace) -> None:
     if a.day == TIMELINE:
         cmd_timeline(a)
         return
+    if a.day == HEARD:
+        from .heard import cmd_heard
+
+        cmd_heard(a)
+        return
     if a.day in READERS:
         _show_reader(a)
         return
@@ -290,6 +303,11 @@ def cmd_show(a: argparse.Namespace) -> None:
         return
     if a.day in IDEAS:
         _show_ideas(a)
+        return
+    if a.day == PLAN:
+        from .plan import cmd_plan
+
+        cmd_plan(a)
         return
     lb = Logbook.find()
     if a.day in pages.PAGES:
@@ -367,7 +385,8 @@ def day_arguments(sub: Subparsers) -> None:
         " and the events the dream proposed that you --accept, each written as an event line;"
         " `day reflect YYYY-MM-DD` closes it in your words: a reflection typed, heard or dictated becomes"
         " one note on the day, its commitments, delegations and dispositions proposed, and --sign signs"
-        " the day with the ones you --accept",
+        " the day with the ones you --accept; either keeps what you --keep of the dream's draft, the day"
+        " in a --word and the plan's tasks answered, each written before the signature (RFC 0043 §5)",
     )
     s.add_argument(
         "day",
@@ -437,6 +456,35 @@ def day_arguments(sub: Subparsers) -> None:
         action="store_true",
         help="reflect: print the reflection and its proposals; write nothing",
     )
+    kept = s.add_argument_group(
+        "keep and sign",
+        "with `day sign`, or `day reflect --sign`: each written as its line before the signature, every"
+        " one checked before the first is written (RFC 0043 §5)",
+    )
+    kept.add_argument(
+        "--keep",
+        metavar="N,N",
+        help="the draft's sentences, links and photo you keep, by the numbers `day YYYY-MM-DD` prints: a"
+        " sentence as a note (learned, decision, idea), a link as an entity line, the photo as a star",
+    )
+    kept.add_argument(
+        "--mend", metavar='N="..."', action="append", help="a sentence you keep, in your own words"
+    )
+    kept.add_argument(
+        "--revisit",
+        metavar="N=YYYY-MM-DD",
+        action="append",
+        help="a decision you keep, and the day it comes back to you",
+    )
+    kept.add_argument("--word", metavar="WORD", help="the day in a word, your own; one a day")
+    for flag, said in (
+        ("--done", "done"),
+        ("--tomorrow", "moved to tomorrow"),
+        ("--let-go", "let go, never deleted"),
+    ):
+        kept.add_argument(
+            flag, metavar="T,T", help=f"the plan's tasks {said}, by the numbers `show plan YYYY-MM-DD` prints"
+        )
     s.add_argument(
         "--model",
         metavar="NAME",
@@ -508,6 +556,13 @@ def cmd_day(a: argparse.Namespace) -> None:
     reflecting = _reflect_flags(a)
     if reflecting:
         print(f"day: {_listed(reflecting)} belong to `day reflect YYYY-MM-DD`", file=sys.stderr)
+        sys.exit(2)
+    keeping = keep_sign.given(a)
+    if keeping:
+        print(
+            f"day: {_listed(keeping)} belong to `day sign YYYY-MM-DD` and `day reflect YYYY-MM-DD --sign`",
+            file=sys.stderr,
+        )
         sys.exit(2)
     try:
         day = day_start.of(lb.meta).today(gaps.now()).isoformat() if a.day in (None, "today") else a.day
@@ -601,14 +656,21 @@ def _day_sign(lb: Logbook, a: argparse.Namespace) -> None:
         day_start.of(lb.meta)  # the page is the day so defined: a boundary not a clock is refused (RFC 0036)
         day = parse_day(a.signed_day).isoformat()
         wanted = [] if a.accept is None else reflect.numbers(a.accept)
+        asking = keep_sign.from_args(a)
         (confirm, keep), dispositions = _confirm(a), _dispositions(a)
+        reflect.no_draft(lb, day, [*(confirm or []), *(e for found in dispositions.values() for e in found)])
         found = dream_events.listed(lb, day)  # the draft the Day shows: a withheld one proposes nothing
         taken = dream_events.chosen(found, wanted, day, dream_events.held_back(lb, day) if wanted else None)
-        if taken:  # every flag checked before an event is written
+        if asking and confirm == []:
+            raise keep_sign.KeepError(
+                f"--confirm {signing.NOTHING} confirms nothing, and what you keep is confirmed by keeping it;"
+                " give one or the other"
+            )
+        if taken or asking:  # every flag checked before an event or a kept line is written
             dream_events.check_signature(lb, day, confirm, dispositions, a.at, a.note)
         for text in dream_events.rows(found):
             print(text)
-        line, kept = _sign_with_events(lb, day, taken, confirm, keep, a.note, a.at, dispositions)
+        line, kept = _sign_with_events(lb, day, taken, confirm, keep, a.note, a.at, dispositions, asking)
     except ValueError as e:  # SignError, EventError, a day that is not one, a day_start that is not a clock
         print(f"day sign: {e}", file=sys.stderr)
         sys.exit(2)
@@ -634,17 +696,25 @@ def _sign_with_events(
     note: str | None,
     at: str | None,
     dispositions: dict[str, list[str]],
+    asking: keep_sign.Asked | None = None,
 ) -> tuple[Line, str | None]:
-    """Under one hold of the writer lock: the proposals read again and every event line made before
-    the first is written (`dream_events.prepared`), each written, then the standing signature read
-    (`sign_again.again`: kept when `keep`) and the signature through `signing.sign`, the events among
-    the lines confirmed; with what was kept from the standing signature, said in a sentence."""
+    """Under one hold of the writer lock: what the owner keeps checked and made (`keep.prepared`), the
+    proposals read again and every event line made before the first is written
+    (`dream_events.prepared`), each written, then what is kept (`keep.write`: the kept sentences,
+    links and photo, the day in a word, the tasks answered), then the standing signature read
+    (`sign_again.again`: kept when `keep`) and the signature through `signing.sign`, the events and
+    the kept lines among the lines confirmed and never a draft line (`reflect.ink`, RFC 0043 §6 rule
+    3); with what was kept from the standing signature, said in a sentence."""
     with lb.writer():
+        items = keep_sign.prepared(lb, day, asking) if asking else []
         written = [_write_event(lb, p, line) for p, line in dream_events.prepared(lb, day, taken)]
+        today = notes.today_in(day_start.of(lb.meta))
+        written += [str(line["id"]) for line in keep_sign.write(lb, day, today, items, print, at)]
         args = sign_again.again(lb, day, confirm, keep, dispositions, note)
         confirm = args.confirm
         if confirm is not None and (confirm or keep):
             confirm = [*confirm, *written]
+        confirm = reflect.ink(lb, day, confirm)
         line = signing.sign(lb, day, confirm=confirm, note=args.note, at=at, dispositions=args.dispositions)
         return line, args.kept
 
@@ -723,6 +793,9 @@ def _day_reflect(lb: Logbook, a: argparse.Namespace) -> None:
         )
     if a.accept is not None and not a.sign:
         _refuse("--accept goes with --sign: the proposals you accept are written when the day is signed")
+    keeping = keep_sign.given(a)
+    if keeping and not a.sign:
+        _refuse(f"{_listed(keeping)} go with --sign: what you keep is written when the day is signed")
     inputs = [
         flag
         for flag, given in zip(INPUTS, (a.text, a.audio, a.mic, a.from_wispr), strict=True)
@@ -741,12 +814,19 @@ def _day_reflect(lb: Logbook, a: argparse.Namespace) -> None:
         if a.at is not None:
             notes.moment(day, tz, a.at, today, days)  # the note's rules, checked before anything is heard
         wanted = None if a.accept is None else reflect.numbers(a.accept)
-        _reflect(lb, a, day, today, wanted)
+        _reflect(lb, a, day, today, wanted, keep_sign.from_args(a))
     except ValueError as e:  # ReflectError, SignError, NoteError, a day that is not one
         _refuse(str(e))
 
 
-def _reflect(lb: Logbook, a: argparse.Namespace, day: str, today: str, wanted: list[int] | None) -> None:
+def _reflect(
+    lb: Logbook,
+    a: argparse.Namespace,
+    day: str,
+    today: str,
+    wanted: list[int] | None,
+    keeping: keep_sign.Asked | None = None,
+) -> None:
     zone = ZoneInfo(str(lb.meta["timezone"]))
     lines, retracted = reflect.day_lines(lb, day)
     standing = reflect.reflections(lines, retracted)
@@ -822,7 +902,7 @@ def _reflect(lb: Logbook, a: argparse.Namespace, day: str, today: str, wanted: l
         raise reflect.ReflectError(text)
     accepted = reflect.chosen(proposals, [n for n in chosen if n <= len(proposals)])
     taken = dream_events.chosen(events, [n for n in chosen if n > len(proposals)], day)
-    _reflect_sign(lb, a, day, today, r, accepted, zone, taken, first=len(proposals) + 1)
+    _reflect_sign(lb, a, day, today, r, accepted, zone, taken, first=len(proposals) + 1, asking=keeping)
 
 
 def _reflection(
@@ -1023,15 +1103,19 @@ def _reflect_sign(
     zone: ZoneInfo,
     taken: Sequence[dream_events.Proposed] = (),
     first: int = 1,
+    asking: keep_sign.Asked | None = None,
 ) -> None:
     """The day closed through `reflect.close`, the code the Day page's Sign runs too: under one hold
     of the writer lock, the page read again (a disposition's line retracted while the owner answered
     is refused, nothing written), the proposed events accepted read again and made into their lines
-    (`dream_events.prepared`), the reflection written when it is new, the accepted delegations
-    written as notes, the accepted events as event lines, then the signature through `signing.sign`;
-    each step printed as it is done. HeadMoved and another writer are the store's own errors, said
-    by `cli.main`; nothing is retried."""
-    closed = reflect.close(lb, day, today, r, accepted, a.at, say=print, events=taken, first=first)
+    (`dream_events.prepared`) and what the owner keeps checked (`keep.prepared`), the reflection
+    written when it is new, the accepted delegations written as notes, the accepted events as event
+    lines, what is kept (`keep.write`), then the signature through `signing.sign`, never confirming a
+    draft line; each step printed as it is done. HeadMoved and another writer are the store's own
+    errors, said by `cli.main`; nothing is retried."""
+    closed = reflect.close(
+        lb, day, today, r, accepted, a.at, say=print, events=taken, first=first, keeping=asking
+    )
     for text in signing.summary(closed.signature):
         print(text)
 

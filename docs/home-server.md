@@ -562,9 +562,10 @@ What it means:
 - **Every tier is on the pages.** The server reads them all because nothing it serves leaves the
   machine; whoever reaches the proxy reads everything. Keep the private network to your own devices:
   no shared or borrowed ones, and never a cloud machine between the phone and the pages.
-- **The Places form is read-only behind the proxy.** A naming is accepted only from 127.0.0.1 with the
-  server's own origin, so from the phone the Places page reads and its buttons are refused. To name
-  places from the laptop, use a tunnel, through which the form works:
+- **The forms are read-only behind the proxy**, unless it is Tailscale Serve and `logbook setup phone`
+  names your phone ([from your phone](serve.md#from-your-phone)). A naming is accepted only from
+  127.0.0.1 with the server's own origin, so from the phone the Places page reads and its buttons
+  are refused. To name places from the laptop, use a tunnel, through which the form works:
 
   ```bash
   # on laptop.example

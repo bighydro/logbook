@@ -17,7 +17,7 @@ from ..contrib import asset_status, first_run, gaps, home, last_run, schedule
 from ..core import assets, places, policy, stays
 from ..core import weather as weather_reader
 from ..core.export import day_range, parse_day
-from ..core.store import Logbook, now_utc
+from ..core.store import Logbook, now_utc, retractions
 from .common import (
     EN_DASH,
     Subparsers,
@@ -97,9 +97,9 @@ def sync_arguments(sub: Subparsers) -> None:
         "sync",
         help="pull new items from a live source; --all for every configured one",
         description="pull new items from a live source (immich, dawarich, imessage, beeper, gcal, drive,"
-        " gtasks, meet, gaudit, granola, mail, gmail, notion, telegram, github, ais, adsb, weather); safe to"
-        " re-run; --all for every configured source, --install-schedule for four times a day (00:00, 06:00,"
-        " 12:00, 18:00; the 06:00 run closes the day)."
+        " gtasks, meet, gaudit, granola, mail, gmail, notion, telegram, github, ais, adsb, weather,"
+        " heard); safe to re-run; --all for every configured source, --install-schedule for four times a day"
+        " (00:00, 06:00, 12:00, 18:00; the 06:00 run closes the day)."
         " gmail, gcal, drive, gtasks, meet and gaudit: one Google Workspace service account with domain-wide"
         " delegation, read-only, a scope per source (LOGBOOK_DRIVE_SA_KEY, the key file; LOGBOOK_DRIVE_USER,"
         " the address it reads as); a token per run, never stored; gcal reads its iCal feeds"
@@ -135,7 +135,9 @@ def sync_arguments(sub: Subparsers) -> None:
         " archived; never their text), telegram (what you sent your own bots, from what the Bot API still"
         " holds, read-only), github (commits, issues, pull requests, reviews and comments in the repos"
         " LOGBOOK_GITHUB_REPOS names), ais (your vessels via aisstream.io), adsb (your aircraft via"
-        " OpenSky), weather (the places of your days, one decimal of latitude, from Open-Meteo)",
+        " OpenSky), weather (the places of your days, one decimal of latitude, from Open-Meteo), heard (the"
+        " words of the podcasts and videos you played: a feed's transcript, Apple Podcasts' own, your"
+        " caption files; LOGBOOK_HEARD, docs/heard.md)",
     )
     s.add_argument(
         "--all",
@@ -405,10 +407,13 @@ def _sync_scheduled(a: argparse.Namespace) -> None:
     run = last_run.Run(started, tuple(runs), None, first)
     last_run.write(lb.root, last_run.State(run, week, weekly_sent))
     closed = _dream_catch_up(lb) if getattr(a, "close", False) and not interrupted else None
+    if closed is not None:
+        closed += f", {_build_library(lb)}"
     if last_run.is_first_sunday(local):
         tested = _restore_test_state(lb)
         if tested is None or tested.at.astimezone(zone).date() != local.date():
             _restore_test_lines(lb, backup.restore_test(lb, env=os.environ, at=started))
+    _keep_serve_answering()
     checks = doctor.run(lb, os.environ)
     doctor.report(checks, sys.stdout)
     report = last_run.Doctor(
@@ -451,6 +456,44 @@ def _sync_scheduled(a: argparse.Namespace) -> None:
 
 DREAM_COMMAND = "logbook.commands.dream"  # the dream (RFC 0036): a command of its own, not in every version
 DREAM_ENTRY = "dream"  # its entry in policy/crossing.json: sending a day to a model is a crossing
+
+
+def _keep_serve_answering() -> None:
+    """Before `doctor`: a serve service that takes connections and answers nothing in 5 s (stuck, or
+    paused by the system) is restarted by its service manager, in one line (`service.keep_answering`).
+    Never an error of the run."""
+    from ..contrib import service
+
+    xdg = os.environ.get("XDG_CONFIG_HOME", "").strip()
+    config_home = Path(xdg).expanduser() if xdg else None
+    try:
+        service.keep_answering(service.system(), Path.home(), config_home, say=print)
+    except Exception as e:  # the run is the sync and the doctor; the Library is looked at again next time
+        print(f"serve: could not look at the service: {type(e).__name__}: {e}")
+
+
+def _build_library(lb: Logbook) -> str:
+    """The close's third step: the Library's pages built for the day that begins (`library_build`,
+    RFC 0047 §8), so `serve --built` answers every door from a file. Built pages are a lab: only where
+    the owner turned them on (`serve --built` or `serve --build` left a manifest), and otherwise one
+    line saying so. Never an error of the run: a build another process holds, or one that fails, is one
+    line, and the server answers from the last build. What it did, in a few words, for the summary line."""
+    from ..contrib import library_build
+
+    if not (library_build.folder_of(lb) / library_build.MANIFEST).exists():
+        print("library: not built (built pages are off; `logbook serve --built` turns them on)")
+        return "library off"
+    try:
+        result = library_build.build(lb, workers=library_build.workers_default(lb))
+    except library_build.Busy as e:
+        print(f"library: {e}; not built now")
+        return "library busy"
+    except Exception as e:  # the record is closed and synced; the pages are the next build's
+        print(f"library: the build failed: {type(e).__name__}: {e}")
+        return "library failed"
+    failed = f", {len(result.failed):,} failed" if result.failed else ""
+    print(f"library: {result.pages:,} pages, {result.written:,} written{failed}, in {result.seconds} s")
+    return "library built"
 
 
 def _dream_catch_up(lb: Logbook) -> str:
@@ -783,6 +826,8 @@ def _sync_one(a: argparse.Namespace) -> None:
         options["lookup"] = _lookup(lb)
     if _takes(adapter, "existing", live=True):
         options["existing"] = _existing(lb)
+    if _takes(adapter, "lines", live=True):  # heard: the record's own listens and watches
+        options["lines"] = _lines(lb)
     if _takes(adapter, "held", live=True):  # mail: what any mail road wrote, by Message-ID
         from ..contrib import mail_lookup
 
@@ -1482,6 +1527,21 @@ def _lookup(lb: Logbook) -> Callable[[str, str], str | None]:
             return idx.line_id(source, raw_id)
 
     return lookup
+
+
+def _lines(lb: Logbook) -> Callable[[str, str], list[dict[str, Any]]]:
+    """For a live adapter whose `pull` takes `lines`: the record's lines of a kind from a local day on,
+    in chain order, a retracted one left out, read through the index (`by_kind`, on kind and day), so
+    a source of the record's own lines (`heard`: the listens and watches) never reads the log whole.
+    A sealed line comes back opened when the identity is here."""
+
+    def lines(kind: str, first_day: str) -> list[dict[str, Any]]:
+        with lb.index() as idx:
+            found = idx.by_kind(kind, first_day, None)
+            retracted = retractions(idx.retractions())
+        return [dict(line) for line in found if str(line["id"]) not in retracted]
+
+    return lines
 
 
 def _existing(lb: Logbook) -> Callable[[Iterable[tuple[str, str]]], set[tuple[str, str]]]:
