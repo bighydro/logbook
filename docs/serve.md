@@ -30,6 +30,8 @@ aboard the yacht Nordlys. Nothing in it is real.*
 
 | Page | What it is | The command it renders |
 |---|---|---|
+| `/` | **Today**, the front door ([RFC 0047 §4.1](https://github.com/bighydro/logbook/blob/main/rfcs/0047-the-librarys-doors.md)): the place of the night and the time, the date, the weather, whether the day is signed; the photo of the day you starred; one memory, a year ago today (else the nearest earlier year on the same date that holds a signed reflection, a starred photo or a journey); *What you owe* (your open promises and what was asked of you in the fortnight, today's tasks, the replies owed) and *Owed to you*, seven each at most, the oldest first, each a link to its moment; your words, the evening's three questions and the Day's Reflect and Sign, posting to the Day's own routes; beside them the week's signed days, the next four days' calendar with whom, the week's proposal in pencil, and the legend of ink and pencil ([Today](#today)) | `logbook day`'s morning |
+| `/shelves` | the gear: every shelf, as the front page listed them before the doors | — |
 | `/day/YYYY-MM-DD` | the Day as a timeline: the nights either side, the country, the signature (or `unsigned`) with the page digest, the all-day entries, the `with` row (the day's company, your word marked, and the *with…* field); your reflection; one row per stay, stop, move, flight or run aboard an asset, in time order, with the clock, the kind and what it was; each row's attachments (events, transcripts with their voices when the line has them, as the Day names them ([speakers](speakers.md)), notes, mail threads, calls, keepers named; messages by conversation, each folded; photos counted and named) and company (confirmed, then proposed) under a toggle; a star on every row that is a line; what is unplaced; the health line; the sources and when each last spoke; *Everything this day held*, every line of the day, folded ([below](#the-day--everything-it-held)); at its foot, *Reflect and sign* ([below](#reflect-and-sign)) | `logbook day`, and `logbook day reflect`, `logbook star`, `logbook with` |
 | `/week/YYYY-Www` | the week, read-only: seven ribbons, one a day, each a link to its Day; where the week went (the week draft's numbers, each with its lines); each goal with what the week shows for it and the command that gives a verdict; the one proposal for next week, in pencil; the stale question; the people who moved, names only; the sprint and the next trip; Hold's census, counts only ([the week](week.md)) | `logbook dream week`, `goal review`, `show plan`, `lab hold census` |
 | `/days?from=&to=` | one row per day of the window, the day a link to its Day: the night, the kilometres moved, the flights, the stays and what attached, the people confirmed, the health triple, the usual sources with no line that day; then *Starred*, the window's stars, each linked to its row. Without a window, the record's last fortnight; a form and *earlier* / *later* links move it | `logbook show days` |
@@ -51,8 +53,8 @@ aboard the yacht Nordlys. Nothing in it is real.*
 | `/gaps?since=` | where each source went quiet: lines, first and last line, the longest silence, the days with no line folded into runs | `logbook doctor sources --gaps` |
 | `/world?from=&to=` | the globe you can scrub: the named places, the assets on their tracks, your stays and journeys, the chapters on the time scrubber; the page `export world` writes by default ([the world](world.md)) | `logbook export world` |
 
-`/` is the front page: how many lines the record holds and the days it covers, and a link to each page.
-`/today` redirects to the Day of the current date in the record's timezone (`logbook.json`), the date
+`/` is Today; `/shelves`, behind the gear, is what the front page was: how many lines the record holds
+and the days it covers, and a link to each shelf. `/today` redirects to the Day of the current date in the record's timezone (`logbook.json`), the date
 before until the record's `day_start` when it sets one (at 05:59 under `06:00`, yesterday's Day), whatever
 the clock of the device that asks: the page to bookmark on a phone.
 `/day/YYYY-MM-DD?open=1` is the Day with every toggle open, for printing or saving whole, the
@@ -62,6 +64,21 @@ Every row reads as the command prints it, because it is the same code: the gramm
 move or a night is `logbook/core/day.py`'s and `logbook/core/days.py`'s, a trip's is `logbook/core/trips.py`'s, a
 silence's is `logbook/contrib/gaps.py`'s. A number here points at the lines it came from as it does under
 `--json`: hover an attachment and its line ids are the tooltip.
+
+## The header and Today
+
+Every page carries one header ([RFC 0047 §6](https://github.com/bighydro/logbook/blob/main/rfcs/0047-the-librarys-doors.md)):
+*Logbook* (a link to Today), the four doors, **Today** (`/`), **Life**, **People** and **Places** (until
+their own pages are built, Life opens `/days`, People `/people` and Places `/places`), **Ask** (a search
+of the record, `/search?q=`) and the gear (`/shelves`). The door you are in is underlined. On a phone the
+doors are a bar at the foot of the screen, and the page leaves room for it.
+
+<a id="today"></a>**Today** is the Day's morning made the front door: what it reads, it reads as today's
+Day reads it, through the same gate (a page that reads tier 1 shows no tier-2 line, name or count), and
+the two pages share their readings. Pencil is set lighter, dotted underlined, with what proposed it on
+hover: a promise is the promises reader's proposal, a reply owed the replies-owed rule's, the week's
+proposal a model's. *How did my ideas move?* names the ideas whose stage you set that day. No number
+stands beside a person's name. Today is always answered live, never from the build, as today's Day is.
 
 ## Three rules
 
@@ -74,9 +91,12 @@ never binds anywhere else: not as a service either ([As a service](#as-a-service
 carries `--host`. To read the record from another device, see
 [reaching it from another device](#reaching-it-from-another-device).
 
-**One document, nothing fetched.** A page is one HTML document with one inline stylesheet. No
-font, no stylesheet link, no frame, no script fetched; every link, form, image and tooltip points
-at the server's own paths. The one image is a Day's thumbnail of a photo, served from
+**One document, nothing fetched from anywhere else.** A page is one HTML document with one inline
+stylesheet. No stylesheet link, no frame, no script fetched; every link, form, image and tooltip points
+at the server's own paths. The fonts are the Library's own, served from the package at `/fonts/`
+(Instrument Serif, Inter and JetBrains Mono, latin, each with its OFL licence beside it in
+`logbook/contrib/fonts/`), and every page's policy allows fonts from the server alone
+(`font-src 'self'`). The one image is a Day's thumbnail of a photo, served from
 `/photo/ID` out of the record's own attachment store ([below](#the-day--photos-the-track-the-line-the-week)):
 the Day's policy allows images from the server and nowhere else (`img-src 'self'`), every other
 page's allows none. A script is inline on three pages, each named by its hash in that page's
