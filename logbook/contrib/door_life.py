@@ -92,7 +92,7 @@ text-underline-offset:4px}
 .door-life .empty{color:var(--pencil, #62666D);margin:0}
 .door-life code{font:400 13px 'JetBrains Mono',ui-monospace,monospace;background:var(--tint, #EDE8DE);
 border-radius:6px;padding:1px 6px}
-.door-life .top{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin:0 0 44px}
+.door-life .top{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin:0 0 44px;align-items:start}
 .door-life .card{background:var(--surface, #FBFAF6);border:1px solid var(--line, #E3DED3);border-radius:20px;
 padding:32px;min-width:0}
 .door-life .chapter h2{margin:0 0 12px}
@@ -110,7 +110,7 @@ padding:32px;min-width:0}
 align-items:center;min-height:44px;padding:0 18px;
 border-radius:23px;border:1px solid var(--line, #E3DED3);background:var(--surface, #FBFAF6);
 color:var(--ink, #16181D);text-decoration:none;margin:0;box-sizing:border-box;font-weight:500}
-.door-life nav.zoom [aria-current=page]{background:var(--ink, #16181D);border-color:var(--ink, #16181D);
+.door-life nav.zoom>span[aria-current=page]{background:var(--ink, #16181D);border-color:var(--ink, #16181D);
 color:var(--paper, #F4F1EA)}
 .door-life nav.zoom .moves{display:flex;gap:8px;margin-left:auto}
 .door-life nav.zoom .off{color:var(--pencil-rule, #8C8F95);background:transparent}
@@ -128,20 +128,24 @@ height:0}
 .door-life .seg.ahead{background:var(--line, #E3DED3)}
 .door-life .band{background:var(--ink, #16181D);border-radius:7px;min-width:4px;opacity:.55}
 .door-life .band.current{opacity:1}
-.door-life .span{background:var(--pencil-rule, #8C8F95);border-radius:4px;min-width:6px;height:8px}
+.door-life .span{background:var(--pencil-rule, #8C8F95);border-radius:4px;min-width:10px;height:8px}
 .door-life .tick{width:12px;height:44px;margin-left:-6px}
 .door-life .tick::after{content:"";position:absolute;left:5px;top:12px;width:2px;height:20px;
 background:var(--ink, #16181D)}
 .door-life .tick.signed::after{background:var(--pencil, #62666D)}
+.door-life .tick.reflection::after,.door-life .dot.reflection::after{content:"\\2605";background:none;
+width:auto;height:auto;left:0;top:12px;border:0;border-radius:0;font:400 14px/1 Georgia,serif;
+color:var(--ink, #16181D)}
 .door-life .year-tick{font:400 12px 'JetBrains Mono',ui-monospace,monospace;color:var(--pencil, #62666D);
 transform:translateX(-50%);padding-top:10px;white-space:nowrap}
 .door-life .year-tick::before{content:"";position:absolute;left:50%;top:0;width:1px;height:6px;
 background:var(--pencil-rule, #8C8F95)}
-.door-life .now{width:2px;background:var(--signal, #C8401A);scroll-initial-target:nearest;scroll-margin:0 40%}
+.door-life .now{width:2px;background:var(--signal, #C8401A);scroll-initial-target:nearest;
+scroll-margin-left:240px}
 .door-life .now-label{font:500 12px 'JetBrains Mono',ui-monospace,monospace;letter-spacing:.12em;
-color:var(--signal-deep, #A93413);transform:translateX(calc(-100% - 8px));white-space:nowrap}
+color:var(--signal-deep, #A93413);transform:translateX(-50%);white-space:nowrap}
 .door-life .ahead-label{font:500 12px 'JetBrains Mono',ui-monospace,monospace;letter-spacing:.12em;
-color:var(--pencil-rule, #8C8F95);margin-left:8px;white-space:nowrap}
+color:var(--pencil-rule, #8C8F95);margin-left:28px;white-space:nowrap}
 .door-life .ahead{background:var(--tint, #EDE8DE);opacity:.55}
 .door-life .rule{width:1px;background:var(--line-soft, #ECE7DD)}
 .door-life .month{font:500 12px 'JetBrains Mono',ui-monospace,monospace;letter-spacing:.12em;
@@ -150,13 +154,11 @@ padding-left:8px}
 .door-life .dot{width:12px;height:44px;margin-left:-6px}
 .door-life .dot::after{content:"";position:absolute;left:2px;top:18px;width:8px;height:8px;border-radius:50%;
 background:var(--ink, #16181D)}
-.door-life .dot.reflection::after{background:var(--surface, #FBFAF6);border:2px solid var(--ink, #16181D);
-box-sizing:border-box}
-.door-life .weeks{display:grid;grid-template-columns:56px repeat(7,minmax(44px,1fr));gap:4px;min-width:400px}
+.door-life .weeks{display:grid;grid-template-columns:72px repeat(7,minmax(44px,1fr));gap:4px;min-width:440px}
 .door-life .weeks .h{font:500 12px 'JetBrains Mono',ui-monospace,monospace;letter-spacing:.12em;
 color:var(--pencil, #62666D);text-align:center;padding:4px 0}
-.door-life .weeks .wk{font:500 12px 'JetBrains Mono',ui-monospace,monospace;color:var(--pencil, #62666D);
-display:flex;align-items:center;min-height:56px;text-decoration:none}
+.door-life .weeks .wk{font:500 12px 'JetBrains Mono',ui-monospace,monospace;color:var(--ink, #16181D);
+display:flex;align-items:center;min-height:56px}
 .door-life .cell{position:relative;display:block;min-height:56px;border:1px solid var(--line-soft, #ECE7DD);
 border-radius:10px;padding:6px 8px;text-decoration:none;background:var(--paper, #F4F1EA)}
 .door-life .cell .n{font:400 20px/1 'Instrument Serif',Georgia,serif}
@@ -191,7 +193,8 @@ min-height:44px;display:inline-flex;align-items:center;min-width:12rem}
 .door-life ol.days .marks{font-size:13px;color:var(--pencil, #62666D)}
 .door-life ol.days .marks .ink{font-size:15px}
 .door-life ul.this{list-style:none;padding:0;margin:8px 0 0}
-.door-life ul.this li{padding:6px 0;display:flex;flex-wrap:wrap;gap:4px 10px;align-items:baseline}
+.door-life ul.this li{padding:6px 0;display:flex;gap:4px 10px;align-items:baseline}
+.door-life ul.this .v{flex:1;min-width:0}
 .door-life ul.this .k{font:500 12px 'JetBrains Mono',ui-monospace,monospace;letter-spacing:.12em;
 text-transform:uppercase;color:var(--pencil, #62666D);min-width:6.5rem}
 .door-life ul.this a{font:400 19px/1.3 'Instrument Serif',Georgia,serif}
@@ -202,7 +205,8 @@ text-transform:uppercase;color:var(--pencil, #62666D);min-width:6.5rem}
 .door-life section.volumes{border-top:1px solid var(--line, #E3DED3);padding:28px 0 0}
 .door-life section.volumes .lede{font:400 26px/1.25 'Instrument Serif',Georgia,serif;margin:0 0 20px}
 .door-life ol.spines{list-style:none;padding:0;margin:0;display:flex;flex-wrap:wrap;gap:10px}
-.door-life a.spine{display:flex;align-items:flex-end;min-height:120px;min-width:56px;padding:12px 14px;
+.door-life a.spine{display:flex;align-items:center;min-height:160px;width:52px;padding:14px 0;
+writing-mode:vertical-rl;transform:rotate(180deg);justify-content:flex-end;
 box-sizing:border-box;border-radius:8px 8px 4px 4px;background:var(--ink, #16181D);
 color:var(--paper, #F4F1EA);text-decoration:none;font:400 20px/1.1 'Instrument Serif',Georgia,serif}
 .door-life a.spine.current{background:var(--surface, #FBFAF6);color:var(--ink, #16181D);
@@ -214,7 +218,14 @@ border:1px dashed var(--pencil-rule, #8C8F95)}
 .door-life .top{grid-template-columns:1fr;gap:12px;margin:0 0 32px}
 .door-life .card{padding:20px}
 .door-life .box{padding:12px;border-radius:18px}
-.door-life nav.zoom .moves{margin-left:0}
+.door-life nav.zoom .moves{margin-left:0;flex-basis:100%}
+.door-life .box.calendar{padding:8px}
+.door-life .weeks{grid-template-columns:repeat(7,minmax(0,1fr));gap:2px;min-width:0}
+.door-life .weeks .h.week{display:none}
+.door-life .weeks .wk{grid-column:1/-1;min-height:44px}
+.door-life .cell{min-height:52px;padding:4px 5px;border-radius:8px}
+.door-life .cell .marks{top:auto;bottom:8px;right:4px;gap:2px}
+.door-life ul.this li{flex-direction:column;gap:0}
 .door-life ol.days .date{min-width:0}
 }
 """  # Life's own, scoped under `.door-life`: the shell's tokens (custom properties) with the face's values
@@ -826,7 +837,7 @@ def _goal_list(found: Sequence[shelf_goals.Goal], rec: Record) -> str:
         elif g.state == "past" and g.until:
             said = f"Its time ended {words(g.until, rec.today)}"
         else:
-            said = f"Written for {words(g.start, rec.today)} on, not reviewed yet"
+            said = f"Since {words(g.start, rec.today)}, not reviewed yet"
         note = (
             f'<p class="ink goal-note">{escape(g.review.note)}</p>\n'
             if g.review is not None and g.review.note
@@ -1020,6 +1031,9 @@ def _life_html(site: Site, rec: Record, b: Bounds) -> str:
         title = f"First signed day, {weekday(day)} {words(day, today)}"
         out.append(_a(site, "", f"/day/{day}", "tick signed", title, _pos(scale.x(day), line_top + 2)) + "\n")
         labels.append((scale.x(day), "First signed day", f"/day/{day}", title))
+    if today < b.last:
+        after = scale.x(max(today, b.first))
+        out.append(f'<span class="ahead" style="{_pos(after, 0, 100 - after, line_top + 40)}"></span>\n')
     if b.first <= today <= b.last:
         x = scale.x(today)
         out.append(f'<span class="now" style="{_pos(x, line_top - 30, None, 62)}"></span>\n')
@@ -1232,36 +1246,47 @@ def _state_words(d: _Day) -> list[str]:
 
 def _this_html(site: Site, rec: Record, marked: Sequence[_Day], found_trips: Sequence[Trip]) -> str:
     """What the window holds, one row each, every name after its kind and before its days."""
-    rows: list[str] = []
     today = rec.today
-    for d in marked:
-        for name in d.begins:
-            rows.append(
-                f'<li><span class="k">Chapter</span>'
-                f" {_a(site, escape(name), _life(f'zoom=year&at={d.day[:4]}'))}"
-                f' <span class="prov">from {escape(words(d.day, today))}</span></li>\n'
-            )
-    for t in found_trips:
-        rows.append(
-            f'<li><span class="k">Trip</span> {_a(site, escape(t.label), _life(t.query))}'
-            f' <span class="prov">{escape(_span_words(t.first, t.home, today))}</span></li>\n'
+
+    def row(kind: str, link: str, said: str) -> str:
+        return (
+            f'<li><span class="k">{kind}</span><span class="v">{link}'
+            f' <span class="prov">{escape(said)}</span></span></li>\n'
         )
+
+    rows = [
+        row(
+            "Chapter",
+            _a(site, escape(name), _life(f"zoom=year&at={d.day[:4]}")),
+            f"from {words(d.day, today)}",
+        )
+        for d in marked
+        for name in d.begins
+    ]
+    rows += [
+        row("Trip", _a(site, escape(t.label), _life(t.query)), _span_words(t.first, t.home, today))
+        for t in found_trips
+    ]
     if rec.signed and any(d.day == rec.signed[0] for d in marked):
         day = rec.signed[0]
-        rows.append(
-            f'<li><span class="k">Signed</span> {_a(site, "First signed day", f"/day/{day}")}'
-            f' <span class="prov">on {escape(words(day, today))}</span></li>\n'
+        rows.append(row("Signed", _a(site, "First signed day", f"/day/{day}"), f"on {words(day, today)}"))
+    rows += [
+        row(
+            "Starred",
+            _a(site, escape(_clip(d.starred.text, 60)), f"/day/{d.day}", "ink"),
+            f"on {words(d.day, today)}",
         )
-    for d in marked:
-        if d.starred is not None:
-            rows.append(
-                f'<li><span class="k">Starred</span>'
-                f" {_a(site, escape(_clip(d.starred.text, 60)), f'/day/{d.day}', 'ink')}"
-                f' <span class="prov">on {escape(words(d.day, today))}</span></li>\n'
-            )
+        for d in marked
+        if d.starred is not None
+    ]
     if not rows:
         return ""
     return f'<ul class="this">\n{"".join(rows)}</ul>\n'
+
+
+def _named_here(t: Trip, d: _Day, first: str) -> bool:
+    """A trip is named on its first day in the window, and is "away" on the rest."""
+    return d.day == max(t.first, first)
 
 
 def _month_html(site: Site, rec: Record, v: View) -> str:
@@ -1273,16 +1298,14 @@ def _month_html(site: Site, rec: Record, v: View) -> str:
     marked = _marked(site, rec, monday.isoformat(), sunday.isoformat(), found_trips)
     out = [
         f'<p class="label">{escape(MONTHS[first.month - 1])} {first.year}</p>\n',
-        '<div class="box"><div class="weeks">\n<span class="h">Week</span>',
+        '<div class="box calendar"><div class="weeks">\n<span class="h week">Week</span>',
         "".join(f'<span class="h">{w[:3].upper()}</span>' for w in WEEKDAYS),
         "\n",
     ]
     for n in range(0, len(marked), 7):
         week = marked[n : n + 7]
         wk = week_of(week[0].day)
-        out.append(
-            _a(site, escape(f"W{wk[-2:]}"), f"/week/{wk}", "wk", f"The week page, week {int(wk[-2:])}")
-        )
+        out.append(_a(site, escape(f"Week {int(wk[-2:])}"), f"/week/{wk}", "wk", "The week page"))
         for d in week:
             said = _state_words(d)
             title = f"{weekday(d.day)} {words(d.day, rec.today)}" + (f": {', '.join(said)}" if said else "")
@@ -1307,14 +1330,17 @@ def _month_html(site: Site, rec: Record, v: View) -> str:
     return "".join(out)
 
 
-def _marks_list(site: Site, d: _Day) -> str:
+def _marks_list(site: Site, d: _Day, first: str) -> str:
     items: list[str] = []
     if d.signed:
         items.append('<li class="ink">Signed</li>')
     for name in d.begins:
         items.append(f'<li>Chapter begins: <span class="ink">{escape(name)}</span></li>')
     for t in d.trips:
-        items.append(f"<li>{_a(site, escape(t.label), _life(t.query))}</li>")
+        if _named_here(t, d, first):
+            items.append(f"<li>{_a(site, escape(t.label), _life(t.query))}</li>")
+        else:
+            items.append(f'<li class="quiet">{_a(site, "Away", _life(t.query))}</li>')
     if d.starred is not None:
         items.append(f"<li>{_a(site, 'A reflection you starred', f'/day/{d.day}')}</li>")
     if d.silent:
@@ -1340,7 +1366,7 @@ def _week_html(site: Site, rec: Record, v: View) -> str:
         out.append(
             f'<div class="wday {_flags(d, rec.today)}"><p class="label">{weekday(d.day)[:3]}</p>'
             f"{_a(site, escape(words(d.day, rec.today)), f'/day/{d.day}', 'date')}"
-            f"{_marks_list(site, d)}</div>\n"
+            f"{_marks_list(site, d, v.first)}</div>\n"
         )
     out.append("</div></div>\n")
     return "".join(out)
@@ -1362,7 +1388,10 @@ def _days_html(site: Site, rec: Record, v: View, label: str | None = None) -> st
         for name in d.begins:
             marks.append(f'Chapter begins: <span class="ink">{escape(name)}</span>')
         for t in d.trips:
-            marks.append(_a(site, escape(t.label), _life(t.query), "ink"))
+            named = _named_here(t, d, v.first)
+            marks.append(
+                _a(site, escape(t.label) if named else "Away", _life(t.query), "ink" if named else "")
+            )
         if d.starred is not None:
             marks.append(_a(site, "A reflection you starred", f"/day/{d.day}"))
         marks += [
