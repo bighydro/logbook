@@ -22,6 +22,17 @@ from logbook.contrib.schedule import Command
 from logbook.core.store import Logbook
 
 LOOPBACK = "127.0.0.1"
+ANSWER_WITHIN_S = 5.0  # a server a test expects to answer does so in this, or the test fails, never hangs
+PROBE = service.probe  # the real one, before any test patches it
+
+
+def answers(port: int, within_s: float = ANSWER_WITHIN_S) -> str:
+    """`service.probe` of a server the test expects to answer, waited on until it answers or
+    `within_s` passes: a server that stops answering fails the test, saying so."""
+    seen = PROBE(port, within_s)
+    if seen == service.NOT_ANSWERING:
+        pytest.fail(f"the server on {LOOPBACK}:{port} said nothing in {within_s:g} s", pytrace=False)
+    return seen
 
 
 @pytest.fixture
@@ -68,6 +79,13 @@ def test_probe_tells_answering_stuck_and_nothing_apart(answering: int, mute: int
     assert service.PROBE_TIMEOUT_S == 5.0, "not answering after five seconds"
 
 
+def test_a_server_that_stops_answering_fails_the_test_instead_of_hanging_it(mute: int) -> None:
+    began = time.monotonic()
+    with pytest.raises(pytest.fail.Exception, match=r"said nothing in 0\.2 s"):
+        answers(mute, within_s=0.2)
+    assert time.monotonic() - began < 3
+
+
 def test_status_says_not_answering_and_how_it_is_restarted(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -106,11 +124,15 @@ def test_the_scheduled_run_restarts_a_stuck_service_and_names_a_system_one(
     fine = service.Installed("launchd agent", tmp_path / "a.plist", answering, "")
     daemon = service.Installed("launchd daemon", tmp_path / "d.plist", mute, "")
     monkeypatch.setattr(service, "find", lambda *_a, **_k: [stuck, fine, daemon])
-    real = service.probe
     monkeypatch.setattr(service, "PROBE_TIMEOUT_S", 0.5)
+
     # `mute` is connected to by the kernel and never answered, so 0.5 s or any wait reads it as stuck;
-    # the server that answers is waited for until it answers (None), never against a clock
-    monkeypatch.setattr(service, "probe", lambda port, *_a: real(port, 0.5 if port == mute else None))
+    # the server that answers is waited on until it answers, up to `ANSWER_WITHIN_S`, and one that
+    # stops answering fails the test instead of hanging it
+    def probe(port: int, timeout: float = 0.5) -> str:
+        return PROBE(port, timeout) if port == mute else answers(port)
+
+    monkeypatch.setattr(service, "probe", probe)
     ran: list[tuple[str, ...]] = []
     said: list[str] = []
     restarted = service.keep_answering(
