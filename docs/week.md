@@ -114,8 +114,9 @@ Close the week
   already on a day of the week (by `review goal`, `goal review`, or here) shows its verdict and no
   choice: the same verdict on the same day again writes nothing, and another is refused.
 - **The intention** is one `note/v1` line labelled `intention` on the Sunday, source `reflect`, tier 2,
-  your words as one line. The field holds the words you kept already, else the week draft's proposal
-  when it is shown and supported (pencil until you keep it), else nothing; it is written only when
+  your words as one line. Once kept, the words are shown in ink above an empty field (other words
+  kept there take their place); before, the field holds the week draft's proposal when it is shown and
+  supported (pencil until you keep it), else nothing; it is written only when
   *Keep* is ticked. The same words again write nothing; other words are a new line whose `supersedes`
   names the first, so one intention stands for a week, never two. Next week's mornings show it under
   *For*, in ink, with its Sunday, in place of the pencil ([the Day](day.md#the-morning)); this page shows

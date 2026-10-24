@@ -418,7 +418,7 @@ def intention_html(text: str, sunday: str, link: Callable[[str, str], str], with
     )
     return (
         f'<p class="for intention"><span class="eyebrow-inline mute">This week</span> {said}'
-        f' <span class="mute">kept on {on}</span></p>\n'
+        f'<span class="mute">{DOT}kept on {on}</span></p>\n'
     )
 
 

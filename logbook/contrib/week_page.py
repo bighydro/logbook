@@ -43,9 +43,9 @@ every act. Each goal open on the Sunday, begun by it and not reviewed on a day o
 the five verdicts as one choice (none chosen: no verdict), your words on it, the command that writes
 the same line beside it, and the two honest moves when it stalls, the second the `goal add
 --supersedes` command written out for that goal, linked to its page; a goal the week has a verdict on
-already says it, with no choice. Then next week's intention: the words kept already, else the
-proposal's when it is shown and supported, in the field, written only when Keep is ticked, with the
-command beside it. A week whose Sunday is ahead says when it closes and carries no form.
+already says it, with no choice. Then next week's intention: the words kept already, in ink, above an
+empty field; else the proposal's in the field when it is shown and supported; written only when Keep
+is ticked, with the command beside it. A week whose Sunday is ahead says when it closes and carries no form.
 
 The draft's parts (2, 4, 5, 6 and the proposed verdicts of 3) are behind `with_drafts`: a static site
 built without its drafts (`export site`, #364) reads no draft and says so in one line. A model's
@@ -111,6 +111,7 @@ fieldset.verdict{border:0;border-top:1px solid var(--line);padding:8px 0 4px;mar
 fieldset.verdict legend{padding:0;font-weight:600;overflow-wrap:anywhere;max-width:100%}
 p.choices{display:flex;flex-wrap:wrap;gap:0 14px;margin:4px 0}
 p.choices label,label.keep{display:inline-flex;align-items:center;gap:6px;min-height:44px}
+p.choices input,label.keep input{width:1.2rem;height:1.2rem;margin:0}
 section.close input[type=text]{width:100%;box-sizing:border-box}
 p.ink.kept{margin:4px 0}
 """  # what the week page adds to the Day's stylesheet; every rule keeps to the column
@@ -568,9 +569,9 @@ def close_html(
         )
         return "".join(out)
     out.append(
-        '<p class="mute">Your verdicts on the goals and next week\'s intention, each one line in your words'
-        f" on {escape(sunday_text(sunday))}. Nothing is written until you press Close the week; every"
-        " item is checked before the first line, and one refused writes nothing.</p>\n"
+        '<p class="mute">Give each goal its verdict for the week, and keep next week\'s intention: both'
+        f" are written on {escape(sunday_text(sunday))}. Nothing is written until you press Close the"
+        " week, and if anything is refused, nothing is written at all.</p>\n"
         f'<form class="close-week" method="post" action="{escape(week_path(week))}/close">\n'
     )
     rows = []
@@ -583,9 +584,8 @@ def close_html(
         if given:
             r = given[0]  # the newest first
             rows.append(
-                f'<fieldset class="verdict"><legend>{text}</legend>\n'
-                f"<p>Your verdict for the week: {escape(r.disposition)}, {escape(r.day)}"
-                f' <span class="mute">({escape(r.period)})</span>.</p>\n</fieldset>\n'
+                f'<fieldset class="verdict"><legend>{linked}</legend>\n'
+                f"<p>Your verdict for the week: {escape(r.disposition)}, {escape(r.day)}.</p>\n</fieldset>\n"
             )
             continue
         field = escape(f"verdict-{g.line}")
@@ -612,9 +612,7 @@ def close_html(
     prefill = ""
     if intention is not None:
         out.append(kept_html(site, intention, sunday, names))
-        said = str((intention.get("payload") or {}).get("text") or "")
-        prefill = "" if beside(said, names) else said
-        what = "These words again keep nothing; other words take the place of the intention kept."
+        what = "To change it, write other words below and keep them: they take the place of this one."
     else:
         segment = next((x for x in (draft or {}).get("segments") or [] if x.get("part") == "next_week"), None)
         said = str((segment or {}).get("text") or "")
