@@ -31,7 +31,9 @@ with the label `name` and the journey's id under `extra.trip`, tier 2, source `m
 inside the journey: now, when today is one of its days, else the last minute of its last day away.
 The standing name of a journey is its latest such note not retracted that names its id, else, when
 a recompute has moved its bounds since it was named, the latest dated on one of its days. A reader
-never parses a note's prose into a name: only the label and the id say it is one. `logbook add
+never parses a note's prose into a name: only the label and the id say it is one. A name is held to
+the tier of its line, through the gate `tiers` as every line is (`reading.crossing`): a reading below
+it never learns the name, and the journey reads as one never named, its dates and places. `logbook add
 --trip` and the Journeys page's form write it through `name`, the one path. Nothing else here
 writes."""
 
@@ -174,7 +176,7 @@ def shelf(
     last = max((t.until for t, _rd in pairs), default=until)
     with lb.index() as idx:
         retracted = frozenset(retractions(idx.retractions()))
-        named = names_in(idx.by_kind(notes.KIND, since, max(until, last)), retracted)
+        named = names_in(reading.crossing(idx.by_kind(notes.KIND, since, max(until, last)), tiers), retracted)
         drafted = drafts.by_unit(idx.by_kind(drafts.KIND), retracted, drafts.UNIT_JOURNEY)
     allowed = drafts.allowed(lb.root)
     out = [_journey(t, r, named, drafted, allowed, tiers) for t, r in pairs]
@@ -329,7 +331,7 @@ def read(
     data = trip_page.compose(lb, rd, trip, tiers)
     with lb.index() as idx:
         retracted = frozenset(retractions(idx.retractions()))
-        named = names_in(idx.by_kind(notes.KIND, trip.start, trip.until), retracted)
+        named = names_in(reading.crossing(idx.by_kind(notes.KIND, trip.start, trip.until), tiers), retracted)
         drafted = drafts.by_unit(idx.by_kind(drafts.KIND), retracted, drafts.UNIT_JOURNEY)
     row = _journey(trip, rd, named, drafted, drafts.allowed(lb.root), tiers)
     data["journey"] = row.to_json()
