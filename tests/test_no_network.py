@@ -57,6 +57,8 @@ READERS: tuple[tuple[str, ...], ...] = (
     ("people", "mail", "--since", "2026-06-06", "--until", "2026-06-12"),
     ("people", "mail", "--since", "2026-06-06", "--until", "2026-06-12", "--json"),
     ("show", "2026-06-08"),
+    ("show", "timeline", "--day", "2026-06-17"),
+    ("show", "timeline", "--life", "--json"),
     ("show", "2026-06-08", "--raw"),
     (
         "show",
@@ -320,6 +322,12 @@ PAGES = (
     "/search",
     "/search?q=kari",
     "/search?q=kari&kind=note&year=2026",
+    "/timeline",  # the timeline at each zoom (RFC 0043 §11)
+    "/timeline/day/2026-06-17",
+    "/timeline/week/2026-W25",
+    "/timeline/month/2026-06",
+    "/timeline/year/2026",
+    "/timeline/life",
 )
 
 
