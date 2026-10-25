@@ -518,7 +518,7 @@ def test_the_library_serves_the_same_page_at_world(lb: Logbook, tmp_path: Path) 
     narrowed = world.bundle_of(site.respond("/world", "from=2026-07-11&to=2026-07-12").body.decode("utf-8"))
     assert narrowed["window"]["from"] == "2026-07-11" and narrowed["journeys"] == []
     assert site.respond("/world", "from=2026-07-12&to=2026-07-11").status == 400
-    assert 'href="/world"' in site.respond("/", "").body.decode("utf-8"), "in the navigation"
+    assert 'href="/world"' in site.respond("/shelves", "").body.decode("utf-8"), "in the navigation"
     assert int(lb.meta["seq"]) == seq, "serving appends nothing"
 
 

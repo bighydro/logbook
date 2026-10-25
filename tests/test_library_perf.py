@@ -135,6 +135,31 @@ def test_every_route_answers_and_reads_once_per_head(
 
 
 @pytest.mark.parametrize("lines", SIZES)
+def test_today_reads_its_days_and_the_readings_kept_beside_the_index(
+    lines: int, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Today (`/`, RFC 0047 §4.1) reads the night before today, a few days back for its memory, and its
+    promises and replies owed from the readings kept beside the index (ADR 0025): once those are kept,
+    a server started again reads a small part of the record for it and never a whole kind of words,
+    and a second visit at the same head reads nothing."""
+    lb, _built = _record(tmp_path, monkeypatch, lines)
+    serve.Site(lb, now=lambda: bench.NOW).respond(
+        "/"
+    )  # the first reading keeps its readings beside the index
+    reads = Reads(monkeypatch)
+    site = serve.Site(lb, now=lambda: bench.NOW)  # the server, started again
+    response = site.respond("/")
+    assert response.status == 200
+    assert reads.folds <= 24, reads.folds
+    assert not {"message", "mail", "transcript", "note"} & set(reads.whole), dict(reads.whole)
+    who = {"resolution", "retraction", "signed-day", "star", "keeper", "review", "chapter", "goal"}
+    read = sum(n for (kind, _source), n in reads.lines.items() if kind not in who)
+    assert read < lines / 20, dict(reads.lines)
+    reads.clear()
+    assert site.respond("/").body == response.body and reads.read == 0, dict(reads.lines)
+
+
+@pytest.mark.parametrize("lines", SIZES)
 def test_the_people_review_compares_only_who_could_be_the_same(
     lines: int, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

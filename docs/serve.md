@@ -51,7 +51,9 @@ aboard the yacht Nordlys. Nothing in it is real.*
 | `/gaps?since=` | where each source went quiet: lines, first and last line, the longest silence, the days with no line folded into runs | `logbook doctor sources --gaps` |
 | `/world?from=&to=` | the globe you can scrub: the named places, the assets on their tracks, your stays and journeys, the chapters on the time scrubber; the page `export world` writes by default ([the world](world.md)) | `logbook export world` |
 
-`/` is the front page: how many lines the record holds and the days it covers, and a link to each page.
+`/` is Today, the front door ([below](#today-the-front-door)). `/shelves` is the front page it replaces:
+how many lines the record holds and the days it covers, and a link to each page; the gear in the
+doors' header links it until `/gear` is built.
 `/today` redirects to the Day of the current date in the record's timezone (`logbook.json`), the date
 before until the record's `day_start` when it sets one (at 05:59 under `06:00`, yesterday's Day), whatever
 the clock of the device that asks: the page to bookmark on a phone.
@@ -62,6 +64,45 @@ Every row reads as the command prints it, because it is the same code: the gramm
 move or a night is `logbook/core/day.py`'s and `logbook/core/days.py`'s, a trip's is `logbook/core/trips.py`'s, a
 silence's is `logbook/contrib/gaps.py`'s. A number here points at the lines it came from as it does under
 `--json`: hover an attachment and its line ids are the tooltip.
+
+## Today, the front door
+
+`/` is what you read at 07:00, on a phone first (RFC 0047 §4.1), in the frame every door shares: the
+wordmark, the four doors (Today, Life, People, Places; until their own pages are built, Life opens
+`/days`, People `/people` and Places `/places`), the *Ask* field (a search of the record, `/search`)
+and the gear. On a phone the doors are a bar at the foot of the screen and *Ask* is at the top. The
+other pages keep their navigation and their look until their own door is built.
+
+From the top:
+
+1. **The date and where**: the day in words, a link to its Day; where you spent the night; the weather,
+   when the record holds it.
+2. **What's open**: the promises both ways that are still open (in pencil: the rules read them, and
+   they are yours to confirm), the task tool's tasks for the day (read, never run, tier 1 alone, as
+   `show plan` reads them), and the replies owed. Seven at most, the oldest first, each a link to its
+   moment; the rest is one link to the Promises shelf. Who and since when are words, never a date or a
+   count beside a name.
+3. **One memory**: this day a year ago, whatever it holds; else the same date in the nearest earlier
+   year that holds a signed reflection, a starred photo or a trip (a flight, or a night away); else no
+   card at all. One, never a list, a link to that Day, with its first sentence in your words and its
+   starred photo.
+4. **Reflect and sign**: the Day's own two forms, posting to the Day ([below](#reflect-and-sign)).
+
+What's open, with nothing in it, says what fills it, in one sentence. Today is rendered live, as today's Day
+is: the date, last night and the memory read a day or a few, each kept until the record or the day
+moves; the promises, the plan and the replies owed are the readings the Day's morning reads, by the
+same keys, read beside the page under `logbook serve` (until they have arrived, one sentence says
+so, and the next visit has them; the page's tag names what has arrived). On the demo record it
+answers in about 50 ms the first time and 15 ms after. A built Today (`--built`) is served only on
+the day it was built. `export site` writes it as `today.html`, as of the record's last day, with no
+form, no *Ask* and no font.
+
+The frame (`logbook/contrib/doors.py`) is one stylesheet: the owner's tokens as custom properties on
+`:root` (`--paper`, `--surface`, `--line`, `--line-soft`, `--tint`, `--ink`, `--pencil`,
+`--pencil-rule`, `--signal`, `--signal-deep`, `--card-dark`, `--card-dark-text`,
+`--card-dark-muted`), the same for a dark page, and the three families with their fallbacks
+(`--serif` Instrument Serif, `--sans` Inter, `--mono` JetBrains Mono). A door's own rules read the
+tokens with a fallback, `var(--paper, #F4F1EA)`, and never define `:root`.
 
 ## Three rules
 
@@ -75,8 +116,11 @@ carries `--host`. To read the record from another device, see
 [reaching it from another device](#reaching-it-from-another-device).
 
 **One document, nothing fetched.** A page is one HTML document with one inline stylesheet. No
-font, no stylesheet link, no frame, no script fetched; every link, form, image and tooltip points
-at the server's own paths. The one image is a Day's thumbnail of a photo, served from
+stylesheet link, no frame, no script fetched; every link, form, image and tooltip points at the
+server's own paths. The one font a page names is a door's ([Today](#today-the-front-door)): its
+three faces, bundled with the package under their SIL Open Font License and served by the server
+itself at `/font/NAME` (the door's policy allows fonts from the server and nowhere else, `font-src
+'self'`); every other page names none. The one image is a Day's thumbnail of a photo, served from
 `/photo/ID` out of the record's own attachment store ([below](#the-day--photos-the-track-the-line-the-week)):
 the Day's policy allows images from the server and nowhere else (`img-src 'self'`), every other
 page's allows none. A script is inline on three pages, each named by its hash in that page's

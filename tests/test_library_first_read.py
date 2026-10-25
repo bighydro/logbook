@@ -52,7 +52,7 @@ def _said(page: str) -> str:
 
 
 def test_the_front_page_links_every_page_the_navigation_does(record: Logbook) -> None:
-    page = _page(_site(record), "/")
+    page = _page(_site(record), "/shelves")  # the shelves listed: the front page before Today
     main = _main(page)
     linked = {href.split("?")[0] for href in re.findall(r'href="([^"]+)"', main)}
     for href in re.findall(r'href="([^"]+)"', serve.NAV):

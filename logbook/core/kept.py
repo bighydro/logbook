@@ -19,11 +19,13 @@ they are then 0600, readable by the record's user alone, as on a record that sea
 
 from __future__ import annotations
 
+import contextlib
 import copy
 import functools
 import hashlib
 import json
 import os
+import threading
 from collections.abc import Callable, Iterable, Mapping
 from pathlib import Path
 from typing import Any
@@ -106,8 +108,8 @@ def path(lb: Logbook, name: str) -> Path | None:
 
 def _sweep(folder: Path) -> None:
     """Every kept reading in `folder` removed (the JSON files beside the index, and the half-written ones
-    a crash left, `.<name>.<pid>.tmp`), whichever reading kept it: a gate's, a window's, one no reader
-    asks for again. Never the index, nor the Library's folder."""
+    a crash left, `.<name>.<pid>.<thread>.tmp`), whichever reading kept it: a gate's, a window's, one no
+    reader asks for again. Never the index, nor the Library's folder."""
     try:
         found = list(folder.iterdir())
     except OSError:
@@ -155,20 +157,23 @@ def save(at: Path | None, data: Mapping[str, Any]) -> None:
     """`data` at `at`, 0600 from its first byte, moved into place whole; nothing when the cache folder
     cannot be written (the next reading reads the whole record), or for no path (`path`). In memory,
     never on the disk, where `path` said so: the same bytes a file would hold, so a reader that changes
-    what it loaded never changes what is kept."""
+    what it loaded never changes what is kept. Each thread writes a temporary file of its own, so two
+    saving at once (`logbook serve` answers on threads) never move each other's bytes, nor, on Windows,
+    a file the other still holds open; a temporary file that cannot be removed either is left."""
     if at is None:
         return
     if at in _IN_MEMORY:
         _MEMORY[at] = json.dumps(data, separators=(",", ":")).encode("utf-8")
         return
-    tmp = at.with_name(f".{at.name}.{os.getpid()}.tmp")
+    tmp = at.with_name(f".{at.name}.{os.getpid()}.{threading.get_ident()}.tmp")
     try:
         fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | getattr(os, "O_BINARY", 0), 0o600)
         with os.fdopen(fd, "wb") as fh:
             fh.write(json.dumps(data, separators=(",", ":")).encode("utf-8"))
         os.replace(tmp, at)
     except OSError:
-        tmp.unlink(missing_ok=True)
+        with contextlib.suppress(OSError):
+            tmp.unlink(missing_ok=True)
 
 
 def read_on(idx: Index, held: Mapping[str, Any], files: Mapping[str, str], overlay: Iterable[str]) -> bool:
