@@ -20,7 +20,7 @@ import pytest
 from persona import note, persona_record, utc
 
 from logbook import cli
-from logbook.contrib import serve, world
+from logbook.contrib import doors, serve, world
 from logbook.core import index
 from logbook.core.store import Logbook
 
@@ -95,9 +95,10 @@ def test_no_page_references_a_url_outside_itself(tmp_path: Path, monkeypatch: py
     the Places page for its keys, a Day for its record button when the server can hear a recording,
     and the World page for its canvas, whose data is in two JSON blocks a browser never runs; each
     script is named by its hash in that page's policy and by nothing else; every other page has none
-    and a policy that allows none), no stylesheet link, no frame, no `url()` or `@import` in the
-    inline style, and a Content-Security-Policy that would stop a browser following any of those
-    even if one slipped in."""
+    and a policy that allows none), no stylesheet link, no frame, no `@import` in the inline style
+    and no `url()` but a door's faces, which the server serves itself (`/font/NAME`, `doors.FACES`,
+    allowed by `font-src 'self'` on that page alone), and a Content-Security-Policy that would stop a
+    browser following any of those even if one slipped in."""
     lb, site = _open(tmp_path, monkeypatch)
     voiced = serve.Site(lb, voice=serve.Voice(lambda path: None))  # type: ignore[arg-type, return-value]
     days = [page for page in PAGES if page.startswith("/day/")]
@@ -142,7 +143,14 @@ def test_no_page_references_a_url_outside_itself(tmp_path: Path, monkeypatch: py
             assert tag not in low, (page, tag)
         style = re.search(r"<style>(.*?)</style>", text, re.S)
         assert style is not None, page
-        assert "url(" not in style.group(1) and "@import" not in style.group(1), page
+        assert "@import" not in style.group(1), page
+        # a door (`doors`): its stylesheet names the faces the server serves, and nothing else
+        if path == "/":
+            faces = re.findall(r"url\(([^)]*)\)", style.group(1))
+            assert faces and set(faces) == {f"/font/{name}" for name in doors.FACES}, (page, faces)
+            assert "font-src 'self'" in csp, page
+        else:
+            assert "url(" not in style.group(1) and "font-src" not in csp, page
         assert "http://" not in style.group(1) and "https://" not in style.group(1), page
         assert csp.startswith("default-src 'none'"), page
 
@@ -369,7 +377,7 @@ def test_today_is_the_current_day_in_the_records_timezone(
     assert 'href="/day/2026-06-21"' in late.body.decode("utf-8")
     clock[0] = datetime(2026, 6, 21, 22, 0, 0, tzinfo=UTC)
     assert site.respond("/today", "").headers["Location"] == "/day/2026-06-22"
-    assert 'href="/today"' in site.respond("/", "").body.decode("utf-8"), "in the navigation"
+    assert 'href="/today"' in site.respond("/shelves", "").body.decode("utf-8"), "in the navigation"
 
 
 def test_today_west_of_utc_is_still_yesterday_there(tmp_path: Path) -> None:

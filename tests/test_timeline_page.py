@@ -110,7 +110,8 @@ def test_the_zooms_are_links_and_the_one_shown_is_not(demo: Logbook) -> None:
     } <= links
     assert "<b>day</b>" in page and f"/timeline/day/{OFFICE_DAY}" not in links
     assert '<a href="/timeline">timeline</a>' in page  # the navigation names it
-    assert "/timeline" in HREF.findall(_site(demo).respond("/").body.decode("utf-8"))
+    # the shelves listed link it (the front page before Today, behind the gear: RFC 0047 §4.6)
+    assert "/timeline" in HREF.findall(_site(demo).respond("/shelves").body.decode("utf-8"))
 
 
 def test_the_map_s_place_holds_the_day_s_track_as_the_day_page_draws_it(demo: Logbook) -> None:
