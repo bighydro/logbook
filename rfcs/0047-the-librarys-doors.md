@@ -1,9 +1,10 @@
 # RFC 0047 — The Library's doors
 
-Status: draft, accepted for build · 2026-10-22 · the captain's answers 2026-10-23 (§15) · changes no
-line, no envelope, no SPEC · builds on RFC 0034 (the signed day), RFC 0036 (goals, chapters, drafts),
-RFC 0037 (entities), RFC 0042 (Hold), RFC 0043 (the Day page) and ADR 0025 (derived tables) · names
-RFC 0042's Holdings as the next door and builds none of it
+Status: draft, accepted for build · 2026-10-22 · every open question answered, the captain's answers
+2026-10-23 and 2026-10-25 (§15) · changes no line, no envelope, no SPEC · builds on RFC 0034 (the
+signed day), RFC 0036 (goals, chapters, drafts), RFC 0037 (entities), RFC 0042 (Hold), RFC 0043 (the
+Day page) and ADR 0025 (derived tables) · names RFC 0042's Holdings as the next door and builds none
+of it
 
 ## 1. Why
 
@@ -350,7 +351,7 @@ follows here.
     build left from before is removed. The owner may turn this off with one setting,
     `"plaintext_cache": true` in `logbook.json`, off by default ([sealing](../docs/sealing.md),
     [serve](../docs/serve.md#built-ahead)). This keeps RFC 0029 §8's line: no plaintext copy of the
-    sealed lines on disk unless the owner asks for one.
+    sealed lines on disk unless the owner asks for one. The sealed-record fix, #412, builds it.
 
 **Volumes (§10).** Is Volumes the name of the printed edition?
 
@@ -360,4 +361,56 @@ the captain). It renames words only: the commands, `docs/print.md` and the modul
 are until the captain takes up the rest of §10. Question 9, one volume per calendar year or one per
 chapter, is not answered by the name.
 
-Every other question in §14 (1, 2 and 4 to 10) stays open for the captain.
+Every other question in §14 (1, 2 and 4 to 10) was left open for the captain; they are answered
+below, on 25 October 2026.
+
+### The captain's answers, 25 October 2026
+
+Asked 2026-10-22; answered by the captain 2026-10-25. The question stands in §14 as asked; the answer
+follows here.
+
+1. **Closeness.**
+
+   **Decided:** days together in the last year, then calls and messages, then years known, except
+   that the people the owner lives with always sit in the innermost ring, whatever the order says.
+   Closeness is never shown as a number (§4.3).
+
+2. **The memory on Today.**
+
+   **Decided:** exactly one year back first. If that day holds nothing worth showing, the memory is
+   the same date in the nearest earlier year that holds a signed reflection, a starred photo or a
+   trip. If no year does, there is no card (§4.1).
+
+4. **Promises.**
+
+   **Decided:** Today shows the open ones; People shows a person's own; the full list of every
+   promise stays in the gear.
+
+5. **Gaps.**
+
+   **Decided:** the split stands. The record's silences, the days the record holds nothing for, are
+   drawn on Life; the sources' silences, which source went quiet and when, live in the gear.
+
+6. **Ideas and goals.**
+
+   **Decided:** the year's goals at the top of Life; the ideas as a band on Life's timeline; the full
+   Ideas shelf kept in the gear.
+
+7. **Ask v2's model.**
+
+   **Decided:** none by default. v2 is off until the owner adds a `chat` entry to the crossing policy
+   naming the model and its tier ceiling; the first one is local-only, at tier 1.
+
+8. **Redirects.**
+
+   **Decided:** 302 for one release, then 301.
+
+9. **Volumes.**
+
+   **Decided:** one volume per calendar year. A chapter that spans years gets a divider page inside
+   each volume it touches.
+
+10. **Holdings' place.**
+
+    **Decided:** reserved and empty, in the header between Places and Ask (§6, §11). `/assets` stays
+    in the gear until Holdings is built.
