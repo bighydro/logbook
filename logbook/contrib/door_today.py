@@ -6,8 +6,9 @@ From the top:
    night after yesterday, as the Day's header says it, `day.of_reading`); the weather when the record
    holds a weather line for the day there.
 2. **What's open** (`OPEN_MOST` at most, the oldest first, each a link to its moment): the promises
-   both ways that are still open (`open_promises`: the promises reader's, the owner's and the ones
-   made to them, said on or before today), in pencil, since the rules read them and the owner has not
+   both ways that are still open, said in the fortnight before today and on it (`open_promises`, the
+   Day's morning reading of them, `day_rhythm.promises_near`, so a promise years old never fills
+   the list), in pencil, since the rules read them and the owner has not
    confirmed them; the
    plan's tasks for the day from the task tool, read and never run (`day_rhythm.plan_of`, RFC 0043
    §9), tier 1 alone; the replies the day owes (`day_rhythm.replies_owed`). Who it is with and since
@@ -24,12 +25,12 @@ Every part with nothing in it says what fills it, in one sentence (RFC 0047 §3.
 
 Speed (RFC 0047 §3.6, §8): nothing here reads the whole record while the browser waits. The date reads
 the day before (`reading.read`, one day), the memory a handful of days by the index and at most
-`MEMORY_READS` of them in full; each is kept for the record as it stands (`Site._day_reading`). The
-promises, the plan and the replies owed read beyond the day, and are the same readings the Day's
+`MEMORY_READS` of them in full, the promises the fortnight's (`day_rhythm.promises_near`); each is
+kept for the record as it stands (`Site._day_reading`), the promises under the key today's Day keeps
+them by. The plan and the replies owed read beyond the day, and are the same readings the Day's
 morning reads, by the same keys (`Site._day_later`): on `logbook serve` they are read off the request,
 and until they have arrived the page says so in one sentence and the next visit has them (its tag
-names what has arrived). The promises are the reading kept beside the index (`promises.extract`, ADR
-0025). A test or a build reads them on the request.
+names what has arrived). A test or a build reads them on the request.
 
 An exported site (`export site`, `site.static`) has no clock: its Today is the record's last day (its
 last day with a line that observes one, `reading.record_span`, so the export's own crossing line does
@@ -233,16 +234,11 @@ def _person(name: str) -> str:
     return f'<span class="person">{escape(name)}</span>'
 
 
-def open_promises(lb: Logbook, tiers: Sequence[int] | None) -> list[promises.Proposal]:
-    """The promises both ways still open, through the gate: the reading kept beside the index when the
-    gate reads every tier (`promises.extract`), what the Day's Loose ends lists over the whole record."""
-    allowed = None if tiers is None else {int(t) for t in tiers}
-
-    def admit(line: Line) -> bool:
-        return allowed is None or int(line.get("tier") or 0) in allowed
-
-    report = promises.extract(lb) if allowed is None else promises.extract(lb, admit=admit)
-    return [p for p in report.proposals if p.shows and p.direction is not None and p.status == "open"]
+def open_promises(found: Sequence[promises.Proposal]) -> list[promises.Proposal]:
+    """The promises both ways still open among `found`, the Day's morning reading of them
+    (`day_rhythm.promises_near`: said in the `PROMISE_DAYS` before today and on it, through the gate), so
+    a promise years old never fills Today; every one, whatever its age, is on the Promises shelf."""
+    return [p for p in found if p.status == "open"]
 
 
 def _with(p: promises.Proposal) -> str | None:
@@ -319,9 +315,10 @@ def open_html(site: Site, today: str) -> str:
     lb, tiers = site.lb, site.tiers
     head = str(lb.meta.get("head"))
     waiting = []
-    found_promises = site._day_later(("today-promises", today, head), lambda: open_promises(lb, tiers))
-    if found_promises is None:
-        waiting.append("the promises")
+    # the fortnight's promises, the reading today's Day keeps under the same key: one day's span of
+    # lines, read on the request
+    near = site._day_reading(("promises", today), lambda: day_rhythm.promises_near(lb, today, tiers))
+    found_promises = open_promises(near)
     directory = site._day_reading(("directory",), lambda: people.directory(lb))
     owed = site._day_later(
         ("owed", today, head), lambda: day_rhythm.replies_owed(lb, today, directory, tiers)

@@ -22,6 +22,7 @@ from typing import Any
 
 import phone_width
 import pytest
+from library_header import without_shell
 
 from logbook import cli
 from logbook.contrib import serve, timeline_page
@@ -84,7 +85,8 @@ def test_every_zoom_is_a_page_with_no_script_that_fits_a_phone(demo: Logbook, pa
     assert "<script" not in page.lower() and "script-src" not in response.csp
     assert response.csp.startswith("default-src 'none'")
     assert all(h.startswith("/") and not h.startswith("//") for h in HREF.findall(page)), "links stay home"
-    assert "@import" not in page and "url(" not in page, "nothing fetched"
+    own = without_shell(page)  # the header's faces are the server's own (`/font/`), and nothing else
+    assert "@import" not in page and "url(" not in own, "nothing fetched"
     assert phone_width.problems(page) == [], path
     assert phone_width.phone_breakpoints(phone_width.parse(page)[1]), path
     assert "nothing read above tier" in page
@@ -109,7 +111,7 @@ def test_the_zooms_are_links_and_the_one_shown_is_not(demo: Logbook) -> None:
         f"/day/{OFFICE_DAY}",
     } <= links
     assert "<b>day</b>" in page and f"/timeline/day/{OFFICE_DAY}" not in links
-    assert '<a href="/timeline">timeline</a>' in page  # the navigation names it
+    assert '<a class="gear" href="/shelves"' in page  # the gear, on every page, opens the shelves listed
     # the shelves listed link it (the front page before Today, behind the gear: RFC 0047 §4.6)
     assert "/timeline" in HREF.findall(_site(demo).respond("/shelves").body.decode("utf-8"))
 

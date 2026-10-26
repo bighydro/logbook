@@ -50,12 +50,20 @@ def _said(page: str) -> str:
 
 # -- 1. the front page links every shelf of the navigation ---------------------------------------------
 
+# the navigation before the doors' header (RFC 0047 §6): every page it reached is one tap from the gear
+NAV_BEFORE = (
+    "/", "/today", "/days", "/search", "/timeline", "/journeys", "/people", "/manifest", "/ideas",
+    "/promises", "/goals", "/agents", "/places", "/assets", "/gaps", "/world",
+)  # fmt: skip
+
 
 def test_the_front_page_links_every_page_the_navigation_does(record: Logbook) -> None:
-    page = _page(_site(record), "/shelves")  # the shelves listed: the front page before Today
+    site = _site(record)
+    assert '<a class="gear" href="/shelves"' in _page(site, "/days"), "the gear, on every page"
+    page = _page(site, "/shelves")  # the shelves listed: the front page before Today
     main = _main(page)
     linked = {href.split("?")[0] for href in re.findall(r'href="([^"]+)"', main)}
-    for href in re.findall(r'href="([^"]+)"', serve.NAV):
+    for href in NAV_BEFORE:
         if href in ("/", "/today"):  # the front page itself, and the Day it names as the last day
             continue
         assert href in linked, href

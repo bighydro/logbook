@@ -22,6 +22,7 @@ from typing import Any
 import pytest
 import test_library_walk as walk
 from dream_fortnight import DREAM_ENTRY, GOAL_READ, GOAL_SAIL, W25, run_cli
+from library_header import without_shell
 from test_day_rhythm import _seen, beside
 from test_week_page import AFTER, KEPT, SUNDAY, _copy, _dreamed, _names, _page
 
@@ -115,13 +116,15 @@ def test_no_form_on_a_static_site_or_a_page_that_does_not_read_tier_2(lb: Logboo
     static = serve.Site(lb, now=lambda: AFTER, href=lambda path: path)
     for site in (static, _site(lb, tiers=(1,))):
         page = _page(site)
-        assert "<form" not in page and "Close the week" not in page
+        own = without_shell(page, static=site.static)  # the header's one form is Ask, a GET
+        assert "<form" not in own and "Close the week" not in page
 
 
 def test_a_week_whose_sunday_is_ahead_says_when_it_closes_and_writes_nothing(lb: Logbook) -> None:
     site = _site(lb, datetime(2026, 6, 18, 10, 0, tzinfo=UTC))  # Thursday of the week
     page = _page(site)
-    assert "<form" not in page and f"The week closes on its Sunday, {SUNDAY}" in html.unescape(page)
+    own = without_shell(page)  # the header's one form is Ask, a GET
+    assert "<form" not in own and f"The week closes on its Sunday, {SUNDAY}" in html.unescape(page)
     head = lb.meta["seq"]
     response = _post(site, {"keep": "1", "intention": MINE})
     assert response.status == 400 and "ahead of today" in response.body.decode("utf-8")

@@ -221,7 +221,7 @@ STUCK_AFTER = 2  # this many in a row, and the server leaves for its service man
 STUCK_EXIT = 70  # EX_SOFTWARE: a non-zero exit, which launchd's KeepAlive and systemd's on-failure restart
 WINDOW_DAYS = 14  # `/days` without a window: the record's last fortnight
 HEAD_CHARS = 12
-CSP = "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'"
+CSP = "default-src 'none'; style-src 'unsafe-inline'; font-src 'self'; form-action 'self'; base-uri 'none'"
 SHOWN_MESSAGES, LONG_CONVERSATION = 10, 30  # a conversation of more than 30 shows 10, the rest folded
 DAY_PATH = re.compile(r"^/day/(\d{4}-\d{2}-\d{2})$")
 TODAY = "/today"
@@ -554,16 +554,6 @@ dl.header dd{overflow-wrap:anywhere}
 @media (max-width:40rem){pre.line{font-size:.75rem}}
 """
 
-NAV = (
-    '<a href="/">Logbook</a><a href="/today">today</a><a href="/days">days</a>'
-    '<a href="/search">search</a>'
-    '<a href="/timeline">timeline</a>'
-    '<a href="/journeys">journeys</a><a href="/people">people</a><a href="/manifest">manifest</a>'
-    '<a href="/ideas">ideas</a><a href="/promises">promises</a><a href="/goals">goals</a>'
-    '<a href="/agents">agents</a><a href="/places">places</a><a href="/assets">assets</a>'
-    '<a href="/gaps">gaps</a><a href="/world">world</a>'
-)
-
 
 class HostError(ValueError):
     """A host other than 127.0.0.1 was asked for."""
@@ -640,6 +630,7 @@ class Stale(Exception):
 
 
 _READS: contextvars.ContextVar[Reads | None] = contextvars.ContextVar("reads", default=None)
+_PATH: contextvars.ContextVar[str] = contextvars.ContextVar("path", default="")  # the page being rendered
 
 
 class Reads(NamedTuple):
@@ -700,7 +691,7 @@ class Site:
         now: Callable[[], datetime] | None = None,
         tiers: Sequence[int] | None = None,
         href: Href | None = None,
-        nav: str = NAV,
+        nav: str | None = None,
         footer: str | None = None,
         voice: Voice | None = None,
         with_drafts: bool = True,
@@ -825,6 +816,7 @@ class Site:
         if path == "/":  # Today: its fonts and its memory's thumbnail from here, the Day's forms
             csp = DOOR_CSP if self._records() else doors.CSP
         said = _READS.set(None)
+        asked = _PATH.set(path)  # the header marks the door the page is in
         try:
             rendered = self._page(path, params).encode("utf-8")
             response = Response(200, rendered, etag=etag, csp=csp, reads=_READS.get())
@@ -858,6 +850,7 @@ class Site:
             return self._error(400, str(e))
         finally:
             _READS.reset(said)
+            _PATH.reset(asked)
 
     def reads(self, first: str, last: str, kinds: Sequence[str] = ()) -> None:
         """Say that the page being rendered is made of the lines of the local days `first` to `last`, of
@@ -1819,21 +1812,35 @@ class Site:
     def document(
         self, title: str, body: str, script: str | None = None, footnote: str | None = None, style: str = ""
     ) -> str:
-        """One HTML document: the head, the navigation, `body`, the footer and `footnote` under it;
-        `script` is the one inline script a page may carry (the Places page's keys, the Day's record
+        """One HTML document: the head, the header (`header`), `body`, the footer and `footnote` under
+        it; `script` is the one inline script a page may carry (the Places page's keys, the Day's record
         button), named by hash in that page's policy; `style` what a page adds to the one inline
-        stylesheet (the Manifest's, the table pages', so every other page keeps its bytes)."""
+        stylesheet, after the header's (the Manifest's, the table pages', so every other page keeps its
+        look)."""
         footer = self.footer_text(footnote)
         return (
             "<!doctype html>\n"
             '<html lang="en">\n<head>\n<meta charset="utf-8">\n'
             '<meta name="viewport" content="width=device-width, initial-scale=1">\n'
             f"<title>{escape(title)} · Logbook</title>\n"
-            f"<style>{STYLE}{style}</style>\n</head>\n<body>\n"
-            f"<header><nav>{self.nav}</nav></header>\n<main>\n{body}</main>\n"
+            f"<style>{STYLE}{self.header_style()}{style}</style>\n</head>\n<body>\n"
+            f"{self.header()}<main>\n{body}</main>\n"
             f"<footer>{footer}</footer>\n{'' if script is None else f'<script>{script}</script>' + chr(10)}"
             "</body>\n</html>\n"
         )
+
+    def header(self) -> str:
+        """The header of the page being rendered: the doors' (`doors.header`, the door the page is in
+        marked), or the navigation a static site gives (`nav`), as it was."""
+        if self.nav is not None:
+            return f"<header><nav>{self.nav}</nav></header>\n"
+        path = _PATH.get()
+        return doors.header(self, doors.GEAR if path == doors.GEAR else doors.door_of(path) or "")
+
+    def header_style(self) -> str:
+        """What the header adds to a page's stylesheet: the doors' header (`doors.header_style`, its fonts
+        but on a static page), or nothing beside a static site's own navigation."""
+        return "" if self.nav is not None else doors.header_style(fonts=not self.static)
 
     def footer_text(self, footnote: str | None = None, door: bool = False) -> str:
         """What every page's footer says: read-only, the head, the timezone, and that nothing leaves this
@@ -4405,7 +4412,16 @@ class Site:
         """`logbook export world`'s page, read as the export reads it by default (the `world` ceiling of
         the policy, the record's days or `from` and `to`): the same JSON, the same script, the
         Library's navigation above it and the policy in the header, not in the page."""
-        found = world.library_page(self.lb, first, last, self.nav, self.airports, self._today_of())
+        found = world.library_page(
+            self.lb,
+            first,
+            last,
+            self.nav or "",
+            self.airports,
+            self._today_of(),
+            self.header(),
+            self.header_style(),
+        )
         if found is None:
             return self.document(
                 "world", "<h1>The world</h1>\n<p>the record has no day yet: nothing to draw</p>\n"

@@ -152,7 +152,7 @@ def test_the_front_door_is_today_in_the_doors_frame(lb: Logbook) -> None:
     assert gear is not None and "<svg" in head, "one icon, drawn inline"
     assert head.index("<nav") < head.index('<form class="ask"') < head.index('class="gear"'), "RFC 0047 §6"
     assert "<title>Today · Logbook</title>" in page
-    assert serve.NAV not in page, "the doors' header, not the old navigation"
+    assert page.count("<nav") == 1 and '<a href="/today">today</a>' not in page, "the doors' header alone"
 
 
 def test_the_stylesheet_holds_the_owner_s_tokens_once_on_root(lb: Logbook) -> None:
@@ -267,13 +267,17 @@ def test_what_is_open_both_ways_the_plan_and_the_replies_owed_oldest_first(lb: L
 
 
 def test_an_open_row_says_who_first_and_since_when_after_words(lb: Logbook) -> None:
-    """The desk's case: a year on, `since` carries the year, so it is said after the person and the words,
-    never just before a name: *Ola Nordmann promised you · since Wed 17 June 2026*."""
-    page = _today(_site(lb, "2027-06-19"))
+    """The desk's case: when `since` carries the year it is said after the person and the words, never
+    just before a name: *Ola Nordmann promised you · since Wed 23 December 2026*. What's open reads the
+    fortnight, so the case is a promise of the fortnight across the new year (a year-old one is on the
+    Promises shelf, never on Today)."""
+    lb.append_many([message(utc("2026-12-23", "18:00"), OLA_PROMISE, {**OLA, "name": "Ola"})])
+    lb = Logbook(lb.root)
+    page = _today(_site(lb, "2027-01-02"))
     rows = re.findall(r'<li class="(promise|owed)">.*?<span class="sub">(.*?)</span></div></li>', page, re.S)
     subs = [_text(sub) for _, sub in rows]
     assert subs and all(s.endswith(" 2026") and s.count(" · since ") == 1 for s in subs), subs
-    assert "Ola Nordmann promised you · since Wed 17 June 2026" in subs, subs
+    assert "Ola Nordmann promised you · since Wed 23 December 2026" in subs, subs
     names = sorted({p.name for p in people.directory(lb).known.values()})
     assert beside(_seen(page), names) == []
 
@@ -421,7 +425,10 @@ def test_live_what_reads_beyond_the_day_is_read_beside_the_page_and_said_until_i
     )  # `logbook serve`: never a reading of the record while the browser waits
     first = site.respond("/")
     said = _text(_section(first.body.decode("utf-8"), "open"))
-    assert "Still reading the promises, the replies owed and the plan" in said and NOTE_HOME not in said
+    assert "Still reading the replies owed and the plan" in said, said
+    assert NOTE_HOME in said, (
+        "the fortnight's promises: one day's span, read on the request as the Day reads it"
+    )
     assert len(re.findall(r"\. ", said.strip())) == 0, "one sentence"
     site.settle()
     second = site.respond("/", "", if_none_match=first.etag)
@@ -435,8 +442,11 @@ def test_the_shelves_listed_move_to_their_own_address_and_the_old_pages_keep_the
     shelves = site.respond("/shelves")
     assert shelves.status == 200 and shelves.etag is not None
     text = shelves.body.decode("utf-8")
-    assert serve.NAV in text and "The last fortnight" in text and 'href="/today"' in text
-    assert serve.NAV in site.respond("/days").body.decode("utf-8"), "every other page as it was"
+    assert "The last fortnight" in text and '<a class="gear" href="/shelves"' in text
+    days = site.respond("/days").body.decode("utf-8")
+    assert '<header class="doors">' in days and '<a href="/days" aria-current="page">Life</a>' in days
+    assert serve.STYLE in days, "every other page keeps its own stylesheet and look under the header"
+    assert f'href="/day/{TODAY}"' in _today(site), "the Day /today names, one tap from Today"
     assert doors.GEAR == "/shelves"
 
 
@@ -465,3 +475,106 @@ def test_a_static_today_has_no_form_no_ask_and_no_font(lb: Logbook) -> None:
     assert "<form" not in text and "@font-face" not in text and "url(" not in text
     assert 'href="index.html"' in text and "<span>People</span>" in text, "a door with no file is its name"
     assert "gear" not in _main(text) and 'class="gear"' not in text
+
+
+# -- the doors' header on every page, the one policy, the fortnight (the follow-up to #404) ----------------
+
+OLD_PROMISE = "I'll repaint the dinghy's name by Friday."  # said 18 days before Today: past the fortnight
+
+
+def _crawl(site: serve.Site, seeds: list[str], most: int = 60) -> list[tuple[str, serve.Response]]:
+    seen: list[tuple[str, serve.Response]] = []
+    queue, done = list(seeds), set()
+    while queue and len(seen) < most:
+        target = queue.pop(0)
+        if target in done:
+            continue
+        done.add(target)
+        path, _, query = target.partition("?")
+        response = site.respond(path, query)
+        seen.append((target, response))
+        if response.content_type.startswith("text/html"):
+            for found in re.findall(r'href="(/[^"#]*)', response.body.decode("utf-8")):
+                link = html.unescape(found)
+                if not link.startswith(("/photo/", "/font/")):
+                    queue.append(link)
+    return seen
+
+
+def test_every_page_carries_the_doors_header_and_marks_its_door(lb: Logbook) -> None:
+    site = _site(lb)
+    pages = [(t, r) for t, r in _crawl(site, ["/", "/shelves", "/days", "/people", "/places", "/world"])]
+    html_pages = [(t, r.body.decode("utf-8")) for t, r in pages if r.content_type.startswith("text/html")]
+    assert len(html_pages) >= 40
+    for target, page in html_pages:
+        assert page.count('<header class="doors">') == 1 and page.count("<nav") == 1, target
+        assert '<a href="/today">today</a>' not in page, (target, "the old navigation is gone")
+        door = doors.door_of(target.partition("?")[0])
+        marked = re.findall(r'<a href="([^"]+)" aria-current="page">', page)
+        assert marked == [t for n, t in doors.DOORS if n == door], (target, marked)
+        if target != "/":  # a page that is not a door's: its own stylesheet, the header's beside it
+            assert (doors.header_style() in page and serve.STYLE in page) or target == "/world", target
+            root = ":root{color-scheme:light dark;--paper"
+            assert root not in page, (target, "the tokens on the header alone")
+    assert doors.door_of("/people/019cadd3") == doors.PEOPLE and doors.door_of("/day/2026-06-19") is None
+    shelves = site.respond("/shelves").body.decode("utf-8")
+    assert (
+        '<a class="gear" href="/shelves"' in shelves
+        and 'aria-label="The gear" aria-current="page"' in shelves
+    )
+    days = site.respond("/days").body.decode("utf-8")
+    assert 'aria-label="The gear" aria-current' not in days, "the gear is marked on its own page alone"
+
+
+# what makes an element clip its descendants, or hold a `position:fixed` one to itself instead of the screen
+TRAPS = ("clip-path", "overflow", "contain", "transform", "filter", "perspective", "will-change")
+
+
+def test_the_header_never_clips_the_phone_s_door_bar() -> None:
+    """On a phone the doors are a bar fixed at the foot of the screen, inside the header; a rule on the
+    header that clips it (a `clip-path` drawing the band) or holds it to the header hides the bar."""
+    for sheet in (doors.header_style(), doors.header_style(fonts=False), doors.style()):
+        for selectors, body in re.findall(r"([^{}]+)\{([^{}]*)\}", sheet):
+            if "header.doors" in [s.strip() for s in selectors.split(",")]:
+                properties = [d.split(":")[0].strip() for d in body.split(";") if ":" in d]
+                assert not [p for p in properties if p.startswith(TRAPS)], (selectors, body)
+        phone = sheet[sheet.index("@media (max-width:40rem)") :]
+        assert re.search(r"nav\.doors\{position:fixed;[^}]*bottom:0", phone), "the bar at the foot"
+
+
+def test_doors_page_is_as_404_made_it(lb: Logbook) -> None:
+    """The frame the Life, People and Places sessions render through: `doors.page` and its stylesheet."""
+    page = _today(_site(lb))
+    assert doors.style() in page and page.count("<header") == 1
+    assert (
+        doors.FRAME.startswith(doors.ROOT)
+        and doors.HEADER in doors.FRAME
+        and doors.PHONE_HEADER in doors.FRAME
+    )
+    assert doors.header_style().startswith(doors.style()[: doors.style().index(":root")]), "the same faces"
+
+
+def test_one_policy_with_fonts_from_the_server_and_the_font_address_kept(lb: Logbook) -> None:
+    before = "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'"
+    assert before.replace("form-action", "font-src 'self'; form-action") == serve.CSP, "the one change"
+    for policy in (serve.CSP, serve.DAY_CSP, serve.DAY_IMAGES, serve.PLACES_CSP, serve.WORLD_CSP, doors.CSP):
+        assert policy.count("font-src 'self'") == 1, policy
+    site = _site(lb)
+    for name in doors.FACES:
+        found = site.respond(f"/font/{name}")
+        assert found.status == 200 and found.content_type == doors.FONT_TYPE, name
+    assert site.respond("/days").csp == serve.CSP
+    assert site.respond("/font/nothing.woff2").status == 404
+
+
+def test_what_is_open_reads_the_fortnight_and_never_a_promise_years_old(lb: Logbook) -> None:
+    lb.append_many([note(utc("2026-06-01", "09:00"), OLD_PROMISE)])
+    lb = Logbook(lb.root)
+    site = _site(lb)
+    said = _text(_section(_today(site), "open"))
+    assert html.unescape(OLD_PROMISE) not in said, "past the fortnight: on the shelf, not on Today"
+    assert NOTE_HOME in said, "said in the fortnight: on Today"
+    shelf = site.respond("/promises").body.decode("utf-8")
+    assert html.escape(OLD_PROMISE, quote=False) in shelf or OLD_PROMISE in html.unescape(shelf)
+    near = day_rhythm.promises_near(lb, TODAY, None)
+    assert {p.match.quote for p in door_today.open_promises(near)} <= {p.match.quote for p in near}

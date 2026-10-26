@@ -37,9 +37,10 @@ from logbook.core.store import Logbook
 
 GOLDEN = Path(__file__).parent / "fixtures" / "library_golden.json"
 WRITE = os.environ.get("LOGBOOK_GOLDEN_WRITE") == "1"
+# `/today` is a seed: no page links it since the doors' header took the old navigation's place
 SEEDS = (
-    "/", "/days", "/trips", "/journeys", "/people", "/manifest", "/manifest/people", "/ideas", "/places",
-    "/assets", "/gaps", "/world", "/promises", "/goals", "/agents",
+    "/", "/today", "/days", "/trips", "/journeys", "/people", "/manifest", "/manifest/people", "/ideas",
+    "/places", "/assets", "/gaps", "/world", "/promises", "/goals", "/agents",
 )  # fmt: skip
 LINK = re.compile(r"""href\s*=\s*["']([^"'#]*)""")
 MOST = 500  # pages a record's crawl renders at most; the order is fixed, so the same pages every run
