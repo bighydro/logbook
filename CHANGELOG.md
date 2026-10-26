@@ -1,5 +1,486 @@
 # Changelog
 
+## 0.7.1 — 2026-10-27
+
+### Adapters
+- `add beeper` and `sync beeper` mark your own bots as machine text, as the Telegram adapters do: a line a
+  named sender wrote carries `extra.machine`, every line of a one-on-one chat with one `extra.counterpart`
+  of kind `agent`, so no reader takes the bot for a person. The senders are yours to name, never in the
+  code: `logbook setup agents list|add SENDER [--name NAME]|remove SENDER` keeps them in
+  `policy/agents.json` ([your own agents](docs/adapters/agents.md#your-bots-through-beeper)).
+- `logbook doctor` has an `agents` line: the lines marked machine, per source, and the senders named.
+- Mail lines keep Gmail's inbox tab and the list headers, never their links (RFC 0015, amendment of
+  20 October 2026): every new line from `add mail` (a Takeout or any mbox), `sync mail` and `sync gmail`
+  may carry `extra.gmail_category` (`primary`, `social`, `promotions`, `updates`, `forums`; from Takeout's
+  `Category …` labels and the API's `CATEGORY_*`, never over IMAP, which does not say the tab) and
+  `extra.list` (`unsubscribe`, `one_click`, `id` from `List-Unsubscribe`, `List-Unsubscribe-Post` and
+  `List-Id`, of which only the list-id itself is kept). The unsubscribe URLs and `mailto` addresses,
+  and a `List-Id`'s phrase, links and addresses, are never kept. `labels`, `raw_id` and every
+  dedupe key are unchanged; lines already in the record are not rewritten, so older lines lack both keys.
+  A list header that does not parse is kept by its name and counted.
+
+### Added
+- Close the week, on the week page and at the command line (RFC 0043 §8, slice D part 2): each goal open
+  on the Sunday with the five verdicts of `review goal` as one choice, your words on it and the command
+  beside it, and the two honest moves when it stalls (`goal add --supersedes` written out for the goal);
+  the week's one proposal, or your own sentence, kept as next week's intention, one `note/v1` labelled
+  `intention` on the Sunday. One press, one writer lock, every item checked before the first line: a
+  refusal writes nothing. `logbook day reflect SUNDAY --intention "…"` keeps the same line, byte for
+  byte; kept again in other words, it supersedes the first, never a second. Next week's mornings show
+  the intention under *For*, in ink, with its Sunday, in place of the pencil ([the week](docs/week.md#close-the-week)).
+- The Day page shows everything a day held, folded: under each stay or move, its messages by
+  conversation (who, the network, how many; each message's time, sent or received and its text,
+  the whole a click away on its line), and at the foot *Everything this day held*, every line of
+  the day by source, each linked to its line. Every fold is closed until opened, or `?open=1`.
+- Today is the Library's front door (`/`, RFC 0047 §4.1): the date and where you spent the night; what's
+  open, the promises both ways in pencil, the day's tasks from the task tool and the replies owed, seven
+  at most, the oldest first, each a link to its moment; one memory, this day a year ago, else the same
+  date in the nearest earlier year with a signed reflection, a starred photo or a trip; and the Day's
+  Reflect and sign. It works on a phone first, renders live, and `export site` writes it as
+  `today.html`.
+- The doors share one header: the wordmark, Today, Life, People and Places (a bar at the foot on a
+  phone), the Ask field, which searches the record, and the gear. Its stylesheet carries the owner's
+  colours, and its typefaces (Instrument Serif, Inter, JetBrains Mono, under the SIL Open Font
+  License) ship with the package and are served by the Library itself; nothing is fetched.
+- `people ask` and `dream person` send the days you spent together in the window (RFC 0036 amendment 2): each its date, the `places.json` name of the place you shared (`a place with no name` when it has none, never coordinates) and the references of the lines it rests on, under the same gate as the lines, so a sentence about time together cites them; `people ask --json` counts them (`days_together`) ([the relationship reader](docs/relationship.md)).
+- `logbook dream month [YYYY-MM]` drafts a month once it is over, told from the days you signed (their
+  drafts and your reflections, never a raw line's text), with where it went computed by the code (places,
+  nights by class, people in order and never with a count), what the month shows for each goal, one
+  proposal for next month and one question; `logbook dream chapter [ID]` drafts a chapter from the month
+  and week drafts it spans: its arc, its rules, what it held and what it closed. Both are pencil, every
+  sentence cited, `--json` prints the draft, and `dream --catch-up` dreams the month before on the first
+  close of a month and a chapter on the first close after it closes, again only when what it read changed.
+- `logbook export letter FROM TO`: a range of your signed days read back as one HTML file to print
+  or hand to someone, and the same as Markdown: a page per day, week, month or journey with the
+  dream's story in pencil, your reflections, your stars and starred photos, your goal reviews, who was
+  there and where; `--unit month --card` makes the month card. A crossing under the policy's `letter`
+  entry, recorded as one `crossing/v1` line ([the letter](docs/letter.md)).
+- `logbook add gift DAY NAME WHAT [--received]` writes what you gave someone, or were given: one
+  note in your words labelled `gift`, the person under `extra.recipient` or `extra.giver`; a name
+  that is nobody, several people or you is refused in one sentence. `logbook people gifts [NAME]
+  [--json]` reads them back both ways ([gifts](docs/gifts.md)).
+- `logbook lab companies DAY [--json]`: the orgs the Manifest names that a day touched (an update
+  mailed from one of their domains, a meeting with someone of theirs, a document in one of their
+  repositories), each with its lines and the people of theirs on them, never a bare address;
+  grouped by portfolio; status and portfolio only where tier 3 is read ([companies](docs/companies.md)).
+- The money slot's reader, `money.money_in`: a window's transactions with merchant and amount (tier
+  3), and, when no payment source covers it, `No payment source covers this day — the last ends
+  <date>`, never an empty sum.
+- `day sign DAY --keep N,N` and `day reflect DAY --sign --keep N,N` keep what you choose of the dream's
+  draft before they sign: a sentence learned, decided or about an idea as a note, a proposed link as the
+  entity line `review` writes, the photo of the day as a star with its note. `logbook day DAY` numbers
+  them after the proposed events. `--mend N="…"` keeps a sentence in your own words, `--revisit
+  N=YYYY-MM-DD` gives a kept decision the day it comes back, and `--word WORD` keeps the day in a word,
+  one a day. Every item is checked before the first line is written; one refusal writes nothing.
+- The plan answered at the close: `day sign DAY --done T,T --tomorrow T --let-go T` writes one note per
+  task, labelled `task`, with the Notion row, its line and the answer, for the agent that runs your task
+  tool; it crosses with the signed day. `show plan` numbers today's tasks and marks the ones you
+  answered, and a task's day is its `Planned` date, else its `Due` date, unless the mapping names one.
+- Search in the Library: `/search?q=…` in `logbook serve`, under **search** in the navigation, finds
+  the record's words through the function `logbook search` calls and holds every hit to the page's
+  tier gate. Each hit shows its day (a link to the Day), its kind, an excerpt with the match marked
+  and its line's id (a link to `/line/ID`); a hit a later line supersedes is marked as the command
+  marks it, `superseded by #N`, with the last correction the gate lets through. The filters by kind
+  and year and the pages of fifty are links, never state in the browser. An empty query is the form
+  alone; a query with no hit says so in one sentence. A GET form only: nothing written, no script,
+  nothing fetched, phone width first ([search](docs/search.md#in-the-library)).
+- RFC 0044 (draft), local days: proposes that, behind a `local_days` setting off by default, a day is
+  the local calendar day where the owner was when it began (a flight west makes a long day, east a
+  short one), and that a signed day keeps the zone and the span it was signed in and is never moved.
+  Nothing changes in the readers yet.
+- `logbook lab hold census senders` counts, per sender, its mails with `List-Unsubscribe` and in
+  Promotions, Social or Updates, in the report and its JSON (`list_unsubscribe`, `tabs`,
+  `lists_and_tabs`); the terminal summary gives the totals and still prints no address.
+- `export share day` shares a day of a sealed record whose lines name an attachment: each sealed
+  file is opened with this machine's identity, checked against its name and zipped opened, as the
+  lines are; a store file that does not hash to its name, sealed or not, still stops the share (#320).
+- `export site` leaves a model's drafts (pencil) out: no Day page or Year pick carries a day's draft,
+  its week's or a call's synthesis unless `--with-drafts`, which puts them in headed with their model,
+  as the Day page heads them; the owner's reflection follows its own tier as before ([the site](docs/site.md)).
+- A voice's name keeps its tier (RFC 0038): the name a reader shows for a voice bound to a person takes
+  the highest tier of the lines that give it, and a reading below that tier (a site, a vault, a trip
+  bundle, a gated Day) shows `a named voice` in its place and names nobody in its company from that voice.
+- People's mail, one rule ([RFC 0045](rfcs/0045-peoples-mail.md), draft): a mail is a person's when
+  someone the record names as a person sent it to you or you sent it to one; no-reply addresses, agents
+  and companies are not people. `logbook people mail [--since DAY] [--until DAY] [--json]` counts
+  people's mail and the rest, never an address or a name in the terminal ([people's mail](docs/mail-people.md)).
+- `export crossing` sends people's mail only and counts the rest as `mail_held_back`; `--all-mail` sends
+  every mail as before, and the manifest says so ([the crossing](docs/crossing.md#peoples-mail)).
+- The owner's own phone may write through the Library behind Tailscale Serve, off by default:
+  `logbook setup phone --origin https://<machine>.<tailnet>.ts.net --login LOGIN` names it in
+  `logbook.json` after a yes typed at a terminal, and the Day's Reflect, With, Star and Sign and the
+  shelves' forms are then answered from that origin, that Host and that `Tailscale-User-Login` as
+  from this machine; a form from any other origin, Host or login is still a 403 with nothing
+  written.
+  `--off` removes it, and `doctor` says on its `phone` line whether the phone may write and from where
+  ([from your phone](docs/serve.md#from-your-phone), ADR 0024).
+- A form posted through Tailscale Serve, or any proxy (a `Host` that is not `127.0.0.1` or `[::1]`,
+  or a `Tailscale-*` or `X-Forwarded-*` header), is answered only as the phone's: a program on
+  another tailnet device that sends no `Origin` is refused, the setting on or off, where before it
+  was answered as this machine. Requests to `http://127.0.0.1:8765` or `http://[::1]:8765` from
+  this machine are answered as before; one naming any other host, `localhost` included, is treated
+  as coming through a proxy.
+- `logbook import pickup FOLDER [--write] [--source NAME] [--tier N] [--keep]` moves a folder of call
+  transcripts collected from the receiving side (the Purser's) into the record: one transcript line per
+  file through the transcript adapter, each with its own source, its text stored, where it came from under
+  `extra.picked_up`. A file already taken is skipped by its hash; a dry run unless `--write`, which removes
+  each file taken from the folder unless `--keep` ([the pickup](docs/crossing.md#the-pickup)).
+- `review receipts [--since D] [--json]` proposes the receipt mails the record holds as payments, the
+  money bridge until a payment source covers the day (RFC 0043 §12): a received mail from an order or
+  no-reply address, or a domain an org of the Manifest binds, never a person the record names, whose
+  subject or kept body carries an order or receipt marker and an amount with a currency, read by rules
+  (`CHF 1'234.50`, `€ 12,90`, `$12.90`, `NOK 1 840`), the total over the line items, a refund as money in.
+  `--accept N,N` writes one tier-3 `transaction/v1` line each (`source: receipts`, `extra.from` the
+  mail's line), a second mail of one payment in the same batch refused and counted; `--reject N` one
+  tier-3 `not-a-payment` line (`receipt-review/v1`), never proposed again; the queue never shows a
+  sender's address, it names a merchant by its domain; a receipt another source
+  already holds is shown and never written, and one a payment source delivers later is listed as
+  covered, with the retraction that lets the source's line win ([receipts](docs/receipts.md)).
+- `logbook search` marks a hit that a later line of its kind supersedes: the row ends
+  `· superseded by #N`, and `--json` gives every hit `standing` and `superseded_by`; `--standing`
+  shows standing hits only, still filling `--limit` ([search](docs/search.md)).
+- The dream learns (dream-day/4, RFC 0043 slice B): a day's draft holds the goodnight story, with its
+  last line about tomorrow computed by the reader and never written by the model; one answer per lens,
+  a question of `policy/questions.json` marked `"ask": "day"` (RFC 0027 amendment, at most five, never
+  drawn by the digest, and `— the day doesn't answer this` printed by the reader); what was learned and
+  decided; the ideas the day moved; one question where there were two; the photo of the day; and
+  proposed links of a line to an idea or an org (`draft/v1` amendment 2). The material adds the chapter
+  and its rule, the open goals and the named ideas and orgs with their ids, under the entry's ceiling;
+  a figure the cited lines do not give marks the sentence unsupported, no number ever stands beside a
+  person, and the draft's tier is the highest of every line it drew on, the goals and chapter included.
+  `logbook day DAY --json` carries the new parts.
+- `logbook dream day TODAY --evening` dreams today so far (`extra.evening`, `extra.read_until`); the
+  catch-up still never dreams today. Kept lines (an accepted event, a kept sentence, the reflection) never
+  make a day be dreamed again; after a signature only a line that arrived later does, and
+  the reader shows what is new `since you signed`, a proposal already kept matched by its fields and
+  never accepted twice.
+- CI moves the tag `stable` to each commit of `main` whose every check passed; a machine that updates
+  itself installs `@stable` (docs/install.md, "Following stable").
+- The map: one offline OpenStreetMap file (a PMTiles v3 vector extract, a Protomaps build you put on the
+  home machine) drawn by the server as inline SVG, light and dark, no script and nothing fetched, the
+  OpenStreetMap attribution on every map. `logbook setup map PATH` names the file after reading its
+  header (`--off` removes it); `logbook lab map render --bbox … [--track DAY]` draws one to check by eye;
+  for an unnamed stay the map proposes the named thing within 50 m. No page draws it yet
+  ([the map](docs/map.md), RFC 0043 §11).
+- `show plan [DAY] [--json] [--coverage]` reads the plan you keep in Notion back from the lines `sync notion`
+  wrote, for one day: today's open tasks (dated today, or overdue in the current sprint; five, the rest
+  counted; between sprints, one line says no overdue task is shown), the current sprint and its dates and the next trip as a countdown, each row with its Notion
+  link and never its text. It reads tier-1 `sync notion` lines and nothing else. Which databases are which
+  is a `plan` entry in `policy/notion.json`; without it, one sentence. `--coverage` says how much of each
+  database the record knows. Nothing is written, to the record or to Notion (RFC 0043 §9;
+  [the plan](docs/plan.md)).
+- The week page, `/week/YYYY-Www` in `logbook serve`, read-only: seven ribbons, one a day, each a link to
+  its Day; where the week went (the week draft's numbers, each with its lines; sleep and training only
+  where tier 3 is read); each goal with what the week shows for it, the five verdicts and the command
+  that gives one; the one proposal for next week, in pencil; the stale question, once; the people who
+  moved, names only; the sprint and the next trip; Hold's census, counts only. Every Day and the
+  Sunday's week draft link to it ([the week](docs/week.md), RFC 0043 §8, slice D part 1).
+- The timeline: `/timeline` in the Library and `logbook show timeline [--day | --week | --month | --year |
+  --life] [--json]`, the record's moments beside the map at five zooms. A moment is a stay of note with
+  its place, time, the people confirmed apart from the proposed (each with its reason), its photos, what
+  passed during it and, at tier 3 only, what was paid; the month and the year count the nights by class,
+  and all years lists each place and vessel with who was there, by name only ([the timeline](docs/timeline.md),
+  RFC 0043 §11-12).
+- A place's class (`home`, `family`, `aboard`, `away`), the colour of its nights on the timeline, read from
+  what `places.json` already says: a place of kind `home`, a place tagged `family`, a night aboard an
+  asset, else away.
+- `logbook doctor --attachments` lists the lines whose attachment the store lacks, by source.
+- What you heard (RFC 0046, draft): `sync heard` stores the words of the podcasts and videos you
+  played, one `heard/v1` line beside each listen or watch, the text kept as it came in the
+  attachment store: a feed's own transcript fetched once (WebVTT, SRT, JSON or plain text; at most
+  `LOGBOOK_HEARD_MAX_FETCHES` a run, two seconds apart, a failed fetch counted and not retried for a
+  week), the transcripts Apple Podcasts cached on this Mac, and a video's captions from your own
+  folder (YouTube documents no keyless way to fetch them). Opt in with `LOGBOOK_HEARD`.
+- `logbook show heard [--day D | --since D --until D] [--json]` lists the texts with a one-line excerpt
+  and their length; `logbook search` finds words inside them. A crossing or a shared page leaves
+  every text at home unless the destination's entry in `policy/crossing.json` says `"heard": true`.
+- Who was there, as commands and readers (RFC 0043 §11, §12): `logbook with --from D1 --to D2 NAME`
+  states a person on every day of a stretch, at each day's longest stay; `people not-with`,
+  `people lives-with` and `people lives-in` are your word as one note each; `review with --journey
+  ID|--week YYYY-Www|--from D1 --to D2` asks once who was with you over the stretch, the evidence in
+  words, faces from your own camera only, answered with `--accept N[,N] [--days D,D]` and `--not NAME`;
+  `people city CITY [--trip ID]` lists your people in a city, seen or not yet on a journey
+  ([who was there](docs/who-was-there.md)).
+
+### Fixed
+- `export crossing` ships the resolution lines that name a mail's addresses (`from`, `to`, `cc`, `bcc`)
+  and a transcript's participants (email, phone, provider id) in `resolution.jsonl`, as it did for a
+  message's sender and a calendar guest; before, a mail or a transcript crossed with nobody on it named
+  ([the crossing](docs/crossing.md), RFC 0005).
+- The Day's ribbon says the time before the entry (*19:30 — Dinner with Per Hansen*), so a clock time
+  never follows a name in its tooltips or its screen-reader sentence.
+- A draft is held to the entry it was written under: a person's draft (`dream person`) to the `relationship` entry, every other unit to the `dream` entry. Once the `relationship` entry's `until` has passed, or its `max_tier` is below a person draft's tier, the MCP door holds the draft back and counts it, `export crossing` leaves it home (`held_back_by_entry`), and `doctor` names it, whatever the `dream` entry allows; a day's draft reads as before ([the dream](docs/dream.md), *When the entry changes*).
+- Through the MCP door, `sign_day` with `confirm: "all"` confirms only the page's lines at or under the door's ceiling, the ones the agent could be shown, and says how many above it were left unconfirmed (`unconfirmed`, `above_ceiling`: a count, never the lines). `day sign --confirm all` and the Library's Sign still confirm the whole page (RFC 0034 amendment 4; [the MCP server](docs/mcp.md)).
+- A dream's sentence that puts a number beside a person's name is dropped, not only marked: the draft
+  keeps its slot as `held: a number beside a name`, unsupported, with the evidence it cited under
+  `extra.held` (a day's), so `day`, the Day page and `export site --with-drafts` never print its words.
+  A sentence the number rule had already marked is held too. A day's, a month's and a chapter's dream
+  (RFC 0043; [the dream](docs/dream.md)).
+- `dream day` drops a proposed event whose title, or a proposed link whose text or note, puts a number
+  beside a person's name, counted as `a number beside a person`.
+- `export crossing` holds every draft to the entry it was written under: a day's, a journey's, a week's draft and a call's synthesis cross only while the `dream` entry allows their tier, whatever the member's ceiling, and one that stays home is counted in `held_back_by_entry`, as a person's draft already was under the `relationship` entry; a record with drafts and no `dream` entry crosses none of them, and a video scene's draft, written on this machine under no entry, still crosses by its tier. The `export crossing` line that counts them now names the entry ([the crossing](docs/crossing.md)).
+- Through the MCP door, `sign_day` without `confirm` on a day not yet signed confirms only the page's lines at or under the door's ceiling, as `confirm: "all"` does, and says how many above it were left unconfirmed (`unconfirmed`, `above_ceiling`: a count, never the lines). `day sign` and the Library's Sign still confirm the whole page (RFC 0034 amendment 4; [the MCP server](docs/mcp.md)).
+- `people ask` and `dream person` send a day together only when the location lines behind the stay it names are at or under the `relationship` entry's `max_tier` too: the place's name takes the highest tier of the owner's location lines behind the stay and of the line that names the company, so at `max_tier` 1 a day at a stay found by tier-2 locations is held back and counted, never its name alone ([the relationship reader](docs/relationship.md)).
+- The Library's Day page no longer crashes when the day, or a day it looks back to, has a flight
+  line with no arrival: such a flight counts as ending at its departure, and one with no departure
+  is skipped. `export vault` writes it at its departure time.
+- The shelves listed (`/shelves`, the Library's front page until Today took `/`) answer in a second on a
+  record of millions of lines. The page counted the lines and found the first and last stamp in one pass
+  over the whole index; it now reads the count from the record's head, as `logbook doctor` prints it, and
+  the first and last day two steps down the day index. The page reads as before; a record with a torn
+  tail past its head (a crash before `logbook repair tail`) is counted to its head, as `doctor` counts it.
+  Today, at `/`, makes no pass over the lines on the request either.
+- A journey's name is held to the tier of the line that gave it: the Journeys shelf and a journey's page,
+  read through a tier gate that stops at 1, no longer show a name given in a tier-2 note; the journey reads
+  as it would unnamed, by its dates and places, with nothing that says a name exists. At tiers 1,2, and in
+  `serve`, which reads every tier, the name shows as before.
+- Two Library pages asked for at once no longer fail on Windows when both save the same reading kept
+  beside the index: each thread writes a temporary file of its own, and a save that cannot finish
+  leaves the reading for the next one to make.
+- A Library page read while a sync was between `logbook.json` and the index no longer keeps that earlier
+  reading as the record's: what the server shares between pages, the Day's readings and the morning's
+  replies owed and revisits are kept under the head the index held, and the review pages' tables of
+  observed people, orgs, ideas, assets and places are stamped with it, so the next page after the sync
+  reads the new line. The tables live in the index, so a restart no longer kept the earlier one either.
+  The page's footer and the built pages' record name that head too.
+- The Library (`logbook serve`) on a record of millions of lines: a page asked again at the same head
+  is answered from what the server kept (warm, under a second on every page), and the pages that read
+  the whole record read it once per head for all of them. A night is found by bisection over the
+  owner's stays instead of every stay once a day (the People pages, the World, Trips and Journeys); the
+  people review compares only the pairs that share an address, a number or a name word; the Promises
+  and Agents shelves stream the messages instead of holding them all. The pages are the same, byte for
+  byte. `scripts/bench_library.py` measures every route on a synthetic record of millions of lines.
+- `index.sqlite` gains an index on a line's id and one on the lines that supersede another; an index
+  built before them is given them when it is next opened.
+- `serve`: every form of the Library (Name this place, Sign, Reflect, Star, With, the review queues,
+  the status forms) is answered in a real browser again. The pages were sent with
+  `Referrer-Policy: no-referrer`, under which Chrome, Firefox and Safari post a form with
+  `Origin: null`, and the write gate refused it (403, nothing written); they are now sent with
+  `same-origin`, so a form names its own page's origin and no other site is sent a referrer. The
+  gate is as strict as it was.
+- A payment with its mailed receipt is counted once. When you accepted a receipt in `review receipts`
+  and your payment source then delivered the same payment, the Day's spend, `rollup ledger`, `rollup
+  money`, a trip's spend and an org's money counted it twice until you retracted the receipt. They now
+  count the source's line alone, on its own day, and name the receipt as its evidence (`1 with its
+  receipt`). One card line covers one receipt, the nearest in time, in the queue's covered rows too.
+- A trip's spend reads a corrected transaction in the place of the line it supersedes, as the ledger
+  does, instead of counting both.
+- A receipt's merchant is never a raw email address: a sender with no name and no registered domain
+  (`x@localhost`, an address with no domain) is `a sender`, and two such senders are two merchants.
+- A week draft's people are printed by name only, the most time together first, never with a count
+  beside a name (`with  Kari Nordmann · Ola Nordmann`, was `contacts  Kari Nordmann 12`): in `dream
+  week`, `logbook day` and `day --json` on its Sunday, the Day page, `export site --with-drafts`, and
+  for a week dreamed before as well. A chat among the week's threads is named without its count, and
+  a title is quoted beside its count. The line keeps each person's name, id, lines and contacts (the
+  week page compares the contacts to name who moved, and prints none), no longer the counts by
+  channel or the days together; and the week's own sentences are held as the day's, month's and
+  chapter's are: one that names a person and writes a figure is dropped, `held: a number beside a
+  name` (`dream-week/2`; RFC 0043 §2.5).
+- The readers of a day, a week, an org and an idea set no number beside a person's name either: a
+  call on the Day (`logbook day`, the Day page) reads `19 min ← Ola Nordmann` (was `← Ola Nordmann,
+  19 min`); a recording's voices are named in the order of who spoke most, without their minutes,
+  `you · Kari Nordmann and 1 unnamed`; the digest's `with` reads `Kari Nordmann and 1 proposed`; an
+  org's and an idea's people (`show org`, `show idea`, the Library) read `Kari Nordmann, last
+  2026-06-12`; the week's paper, the vault's People lists and the lab's chapters name the people, the
+  most days first, without the days.
+- `export notion` counts a person's days together over their whole history in the record, not the
+  export's window: `days_together` with `first_together` and `last_together` in the facts, and on the
+  page "Tage zusammen: N (zuerst …, zuletzt …)", or no line at all when there are none. Before, every
+  page said "seit" the window's first day, and most said 0 ([export for Notion](docs/export-notion.md)).
+- `export notion` lists only the open promises said in the 365 days before the export, from a
+  conversation the person is a direct party to (a one-to-one chat, a mail you are both on and no list
+  sent, a call they spoke in), newest first, at most ten a side, then "und N weitere"
+  (`promises_more` in the facts). Before, a page listed every promise of the window, group chats
+  included.
+- `export notion` leaves out a promise that talks of money without a figure (a payment, an invoice, a
+  transfer, a price, in German or English) and counts it under `sentences_with_money`, as one with a
+  sum.
+- `export notion` lists only promises: your own and the person's own. A request is no longer listed,
+  on either side; before, one the person made of you appeared under "Offene Versprechen von mir"
+  ([export for Notion](docs/export-notion.md)).
+- `export notion` lists only whole sentences: never a line quoted in a reply, a chat line pasted with
+  its time stamp, or a run of more than 40 words without a full stop (a whole chat message).
+- `export notion --dry-run` says how wide the pages' two long sections are, in totals and never a name:
+  `pages: days together: N lines on N pages; promises: N lines (N listed, N more not listed)`.
+- The World's time slider ends on today, not on the latest line the record holds: one calendar entry
+  in 2055 no longer stretches it thirty years into the future. `--from` and `--to` still reach any
+  day, the future included.
+- `/gaps` in the Library counts each silence to the server's own clock, so the same page read twice
+  is the same page (the slow test that turned `main` red on 1dd86c2).
+- A sealed record keeps no reading of its tier 2–3 lines in plain text on this disk: the readings kept
+  beside the index, the review pages' tables of observed people, orgs, ideas, assets and places, and the
+  Library's built pages stay in the process's memory instead, and what an earlier version left there is
+  removed. `logbook serve --built` renders every page live on a sealed record, to its end, and says why;
+  `serve --build` refuses in one sentence, and the 06:00 close says the build is off.
+  `"plaintext_cache": true` in `logbook.json` keeps them on disk as before, `0600` in the cache folder;
+  off by default. The index's own columns stay as RFC 0029 §8 has them ([sealing](docs/sealing.md);
+  RFC 0047 §15).
+- `doctor`'s `extra:*` hints add the missing extra to this Logbook exactly as it is installed, or print
+  no line (#334): this venv's pip (uv's pip in a venv uv made) at the installed version; `pipx runpip`
+  in the venv pipx made, which keeps its Python, its options and its suffix; `uv tool install --force`
+  on the Python running now, at the installed version or git commit, with every extra already there,
+  the index options and each companion at its installed version; in a checkout, `uv sync --inexact
+  --no-default-groups` on the Python running now, which removes nothing and brings back no group. It
+  prints no line and says in one sentence why and where in docs/install.md to read under Homebrew,
+  beside a receipt it cannot read or one naming a password or token, where uv's receipt names another
+  Python, where the source may have changed since (a folder, a URL, a wheel), outside a venv, and
+  under `uvx` or `uv run --with`, whose environment is uv's cache.
+- `setup` never adopts the demo record: it says it is the demo, how to make your own (`unset LOGBOOK_HOME`,
+  then `logbook setup`) and exits 2 without writing. `logbook demo` marks the record it writes (`"demo"` in
+  `logbook.json`); a demo 0.7.0 wrote is known by its owner (#334).
+- `init` on a folder that holds a record says so in one sentence and exits 2, never a traceback; with no
+  path it makes the record where `LOGBOOK_HOME` points, as every other command finds it (#334).
+- `doctor`'s hints name the current commands (`logbook repair index`, `logbook setup places add …`) (#334).
+- `logbook --help` says where a newcomer starts; `dream` names `person`; `init --help` describes `path` and
+  `--timezone` (#334).
+- `show person` counts the open promises with the person (`logbook promises` lists them), or says none
+  open, in place of a note about RFC 0007; the MCP `person` tool gives the same counts and command, under
+  its ceiling, never a promise's words (#334).
+- `demo --out` on a record says which `--out` to pick, and that an earlier demo may be removed (#334).
+- `setup`'s timezone question says in words which zone Enter takes and that the other is an example; `setup
+  places propose --top N` prints the total and how many it shows (#334).
+- What the Library says to someone reading the record for the first time (#334): the front page
+  links Promises, Goals, Agents and the World, as the navigation does; a Day the record holds nothing
+  for (`/today` on the demo, read months later) says so and names the record's first and last day,
+  each a link; `/gaps` and `/assets` on a record that went quiet before yesterday say when, while
+  every silence and age still runs to today; the Day's `with` row says "nobody confirmed; proposed
+  below" when a row below proposes who was there; the headers of the Manifest, Ideas, Promises, Goals
+  and Agents say "nothing read above tier N" or "no lines" for "tier N" and "tier -", the tiers
+  explained on hover; the Manifest and Ideas say why what was seen and not placed has nothing to
+  review, so the counts and the sentence under them agree.
+- The text of a trip's route names its places (`show trips`, `show year`, `show trip`, `/trips`,
+  the Journeys and a Journey's page): an unnamed stay is `near <place>, x km` or the nearest airport's
+  city (`Zurich`), the coordinates only where nothing names it or where two stays side by side would
+  read the same. The JSON keeps the label SPEC §3.2.6 gives. `show year` names an asset as it is
+  registered ("aboard Nordlys", not "aboard nordlys"), and `show year --json` gives each trip's
+  `asset_name`.
+- `logbook serve` never hangs: a page reads for at most `--limit` seconds (15 by default) and is then
+  built in the background, said in one sentence; at most two pages are read at once; a browser that
+  leaves stops its reading, and a broken pipe is no longer a traceback; an idle connection is closed.
+- A page read while a sync writes reads the record up to the last indexed line instead of rebuilding
+  the whole index from under the sync.
+- `serve --status` says "not answering" for a server that takes the connection and says nothing for
+  5 s, with the command that restarts it; the server's own watchdog leaves for its service manager to
+  start it again, and the scheduled run restarts a service that does not answer. `kill -USR1` writes
+  every thread's stack to the server's log.
+- `add transcript` stores the file a transcript/v1 JSON's `content` reference names when the export holds
+  it (at the reference's own path, `attachments/<sha256>` or `<sha256>` beside the JSON; a spans file
+  too), so Granola's and Fireflies' exports no longer leave a missing attachment behind. Bytes that do not
+  hash to the reference are refused and counted; adding an export again fills the store for lines
+  already in the record and writes no line ([the attachment store](docs/attachments.md#transcripts-what-the-export-holds)).
+
+### Changed
+- The Day page's morning looks ahead with what the record already holds: today's tasks from the task
+  tool (five at most, each linked to its line and to Notion) and the next trip as a countdown in words;
+  who you'll see, by name; one person to reconnect with, from the drift rule, in words and never the
+  same person two mornings running; the week's one proposal, in pencil. Loose ends adds the replies
+  owed for more than a week and the decisions to revisit on the day, which Looking back brings back too.
+- The Day page takes one of four shapes from the hour: morning, live, evening (from
+  `LOGBOOK_NOTIFY_EVENING_HOUR`, and every past day not signed) and signed. `?shape=` shows another
+  shape for reading. New parts, all read from the record: what the day was for (the chapter and the
+  goals it touched), Yesterday, the ribbon of the planned beside the lived, Today, Loose ends both ways,
+  People by time together, a birthday this week, Looking back 1, 2, 3, 5 and 10 years, and one line
+  naming the parts with nothing. The record is folded with counts on each fold, the dream's draft is in
+  pencil on ruled paper, and the page has a new look in light and dark. No model call and no new write.
+- The list of the Library's shelves, which was the front page, is at `/shelves`, behind the gear.
+- Every page of the Library carries the doors' header (the wordmark, Today, Life, People and Places,
+  Ask and the gear) in place of the list of fifteen links, with the door the page belongs to marked;
+  the page's own look is unchanged. Every page's policy allows fonts from the Library itself and
+  nowhere else.
+- Today's *What's open* lists the promises said in the fortnight before today, as the Day's morning
+  does, so a promise years old never fills it; every promise stays on the Promises shelf.
+- A draft's proposals of a kind this reader does not know are counted, not malformed: the Day shows
+  the proposals of the kinds it knows, counts the others as `proposals_unknown` in its JSON, and says
+  `malformed` only for a known kind of the wrong shape or a proposal with no kind; every writer still
+  writes only the kinds it knows and refuses any other (`draft/v1`, forward compatibility, 19 Oct 2026).
+- A signature never confirms the dream's draft line (RFC 0043 §6 rule 3): `day sign`, `--confirm all`,
+  `day reflect --sign`, the Day page's Sign and the door's `sign_day` leave it out of `confirmed`, and
+  naming it in `--confirm` or a disposition is refused. The page digest still covers it.
+- `logbook serve` answers every door and shelf from pages built ahead of time, at the 06:00 close and
+  after every act on a page, instead of reading the record while you wait; a built page says when it
+  was built in its footer. Today's Day is always current. `serve --build` builds them now, `serve
+  --live` renders every page as it is asked for. The pages are kept beside the index, never in the
+  record's folder, readable by you alone.
+- A new record names no one it may send what was said to: `init` and `demo` write a policy file with
+  the MCP door at tier 1 and nothing else. You add an entry for each destination yourself. A record
+  whose file already names one keeps it.
+- `logbook serve` renders every page as it is asked for by default again, with no limit on how long a
+  page reads unless `--limit SECONDS` gives one, so the heavy pages (People, a person, the Manifest,
+  the World, Promises) answer on a large record instead of *Still reading*. Pages built ahead are a
+  lab, `logbook serve --built` (15 s limit, `--limit 0` none); `--live` is still accepted. The 06:00
+  close builds the Library only on a machine where `serve --built` or `serve --build` turned it on,
+  and otherwise says `library: not built` in one line. docs/serve.md lists what the built pages do
+  not do yet.
+- `export share day` refuses a day that holds sealed lines (a tier-2 or tier-3 line of a record with
+  recipients, at a tier the page would send), in one sentence and before anything is written: the page
+  carried them opened, and the receiver's `import page` refused it because their hashes cover the sealed
+  reference. A sealed day shares after v1, when a page can carry sealed lines to the receiver (RFC 0029);
+  a day whose only sealed thing is an attachment still shares, its file opened as before (#364).
+- The Library's build renders what the lines since the last build touched: every door, a Day only when
+  a line landed on it, a journey only when it holds such a day. `serve --build --full` renders every
+  page, and is never needed in normal use.
+- The people of the whole record, the promises and each person's last real contact are kept beside the
+  index between readings and brought forward by the lines appended since, instead of read again from
+  every line: on two million lines a person's page reads in seconds rather than minutes. A
+  resolution, a retraction, a corrected line, a backfill or a changed setting reads the whole record
+  again, as before.
+- The world keeps each year before the current one beside the index and reads only the current
+  year again, unless a line comes for an earlier year's days.
+- The Manifest and each org's page read the org sightings and touches kept beside the index and the
+  lines appended since, instead of every mail, meeting and chat.
+- `serve --build` names the five pages that took longest to build.
+- The agents' shelf keeps which lines are a session's beside the index and streams only the messages
+  appended since, instead of every message of the record.
+- A year's trips and journeys are built again only when a line lands on the days they were read from
+  (a journey that ran on past the year included), or a draft is written.
+- The People page's year so far is brought forward with the record, and a closed year's ranking is
+  kept until a line lands on its days.
+- The world reads its tracks and stays from the index rather than from every line of the year, and
+  counts the lines it holds back in one query: the same page, in a third of the time.
+- Gaps keeps every source's activity beside the index and adds the lines since; of two equally long
+  silences it names the first.
+- A year's trips and journeys read only the lines a trip is made of (flights, weather, events,
+  transcripts, notes and photos) and the stays from the index: the same pages, read faster.
+- A build of a large record renders its pages on several processes, the doors first, side by side
+  (`LOGBOOK_BUILD_WORKERS` sets how many).
+- Places keeps the owner's stays and what the lines name beside the index: a day reads the owner's
+  track from a month before it, and the names of the lines appended, rather than the whole record.
+- The People page's review queue keeps each kind's observed people beside the index and reads only
+  the lines appended since.
+- The ideas keep which lines name an idea beside the index, and read those and the lines appended
+  since rather than every event, page, task and call.
+- Who was there, the owner's answers: `people city CITY --trip ID` takes the journey (`--journey` there
+  still works until the release after 1.0, saying once that it is now `--trip`; `--journey` is
+  `people nearby`'s alone); `review with --accept N[,N]` takes the queue's numbers like the rest of
+  `review`, each printed on a line of its own under the person, and a name there is refused; the
+  longest stay a stretch's day is stated at counts its waking hours only, from `day_start` to
+  midnight; `review with` refuses every option it does not take, `--since` included
+  ([who was there](docs/who-was-there.md)).
+
+### Docs
+- The pages a newcomer reads first agree with 0.7.0 (#334): install.md prints 0.7.0 and names the
+  `sealed` and `stream` extras and what `speakers` costs; the tour uses the current command names,
+  names its stores with `--only` and has its Docker and Nix lines; first-hour.md's check-up is the
+  eighteen checks; serve.md lists the Promises, Goals and Agents shelves; try-it.md's samples are
+  what 0.7.0 prints; index.md's RFC link works; and the release notes have 0.7.0.
+- The README is shorter and opens on a day; a new FAQ answers six first questions, each with the files
+  that back it; Try it ends in the browser; RULES.md and SECURITY.md say what the code does about other
+  people's words and the default tiers.
+- RFC 0043 amended after the task tool's agent read it: a task's day is its `Planned` date, else its
+  `Due` date; *let go* closes the row with a status of its own, never the task tool's archive or trash,
+  and *tomorrow* moves the planned day, never the due date; the week page's 90 days count only the
+  owner's own edits, from the row's first line; the agent carries out a verb only on the row as the
+  line saw it; an agent's meeting proposal shows under *with* as a proposal; a crossing that carries a
+  signature carries the lines it gives a disposition to.
+- The `show trips` sample in the five-minute tour and the Year's trip rows print the route as
+  `show trips` prints it, `route Zurich`, and `aboard Nordlys`; the Year's JSON names each trip's
+  `asset_name`; RFC 0043 marks as proposed what main does not do (the folded draft, promises to you
+  among loose ends, transcript consent, `--keep`) and says that Sign already writes delegations as
+  notes.
+- The launch post says encryption at rest for tiers 2 and 3 is built and off until `logbook key init`
+  turns it on, with the envelope plain and older backups still plain, as SECURITY.md does; the adapter
+  bounties no longer list Mac Screen Time, which `screentime` reads.
+
 ## 0.7.0 — 2026-10-18
 
 ### Fixed
