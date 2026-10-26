@@ -1,7 +1,8 @@
 """The Library's doors share one frame (RFC 0047 §6): the header, one stylesheet of the owner's tokens,
 and three typefaces served by the Library itself. Today (`door_today`) is the first page in it; Life,
-People and Places (`door_life`, `door_people`, `door_places`) render through `page` too, and every
-other page keeps `serve.NAV` and `serve.STYLE` until its own pull request.
+People and Places (`door_life`, `door_people`, `door_places`) render through `page` too. Every other
+page of the Library carries the same header (`header`, with `header_style`: the tokens on the header
+alone) above its own body, which keeps `serve.STYLE` and its look until its own pull request.
 
 The header, from the left: the wordmark (a link to Today), the four doors, the Ask field and the gear.
 A door not yet built links to the page that holds its moments today (`DOORS`: Life to `/days`, People
@@ -125,7 +126,7 @@ def _faces() -> str:
     )
 
 
-FRAME = f"""
+ROOT = f"""
 :root{{color-scheme:light dark;{_properties(TOKENS)};{_properties(FAMILIES)}}}
 @media (prefers-color-scheme:dark){{:root{{{_properties(DARK)}}}}}
 *,*::before,*::after{{box-sizing:border-box}}
@@ -134,47 +135,69 @@ body{{margin:0;background:var(--paper);color:var(--ink);font-size:16px;line-heig
 a{{color:inherit;text-decoration-color:var(--pencil-rule);text-underline-offset:.18em}}
 a:hover{{text-decoration-color:var(--signal)}}
 :focus-visible{{outline:2px solid var(--signal);outline-offset:2px}}
-header.doors{{display:flex;align-items:center;gap:.5rem 1.6rem;max-width:72rem;margin:0 auto;
-padding:.9rem 1.25rem;border-bottom:1px solid var(--line)}}
-header.doors a.wordmark{{font-weight:400;font-size:1.6rem;line-height:1;font-family:var(--serif);
-text-decoration:none;color:var(--ink);margin-right:.4rem}}
-nav.doors{{display:flex;gap:.2rem}}
-nav.doors a{{display:inline-flex;align-items:center;min-height:44px;padding:0 .7rem;border-radius:22px;
-font-weight:500;font-size:.95rem;text-decoration:none;color:var(--pencil)}}
-nav.doors a:hover{{color:var(--ink);background:var(--tint)}}
-nav.doors a[aria-current=page]{{color:var(--ink);background:var(--surface);
-box-shadow:inset 0 0 0 1px var(--line)}}
-form.ask{{flex:1;display:flex;justify-content:flex-end;margin:0}}
-form.ask input{{width:100%;max-width:22rem;min-height:44px;padding:0 1rem;border-radius:22px;
-border:1px solid var(--line);background:var(--surface);color:var(--ink);font:inherit;font-size:.95rem}}
-form.ask input::placeholder{{color:var(--pencil)}}
-form.ask label,.hidden{{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);
-white-space:nowrap}}
-header.doors a.gear{{display:inline-flex;align-items:center;justify-content:center;min-width:44px;
-min-height:44px;border-radius:22px;color:var(--pencil)}}
-header.doors a.gear:hover{{color:var(--ink);background:var(--tint)}}
-header.doors a.gear svg{{display:block;max-width:100%}}
-main.door{{max-width:44rem;margin:0 auto;padding:1.5rem 1.25rem 3rem}}
-footer.door{{max-width:44rem;margin:0 auto;padding:1rem 1.25rem 2rem;border-top:1px solid var(--line);
-color:var(--pencil);font-size:.8rem;overflow-wrap:anywhere}}
-footer.door code{{font-family:var(--mono);font-size:.95em}}
-.pencil{{color:var(--pencil);text-decoration:underline dotted var(--pencil-rule);text-underline-offset:.2em}}
-.ink{{font-family:var(--serif);color:var(--ink)}}
-.fact{{color:var(--pencil);font-size:.8rem;font-variant-numeric:tabular-nums}}
-@media (max-width:40rem){{
-header.doors{{flex-wrap:wrap;gap:.6rem;padding:.7rem 1rem}}
-header.doors a.wordmark{{font-size:1.4rem;margin-right:auto}}
-form.ask{{order:3;flex:1 0 100%}}
-form.ask input{{max-width:none}}
-nav.doors{{position:fixed;left:0;right:0;bottom:0;z-index:10;justify-content:space-around;gap:0;
+"""  # the tokens on :root and the page's own ground: a door's pages only
+HEADER = """header.doors{display:flex;align-items:center;gap:.5rem 1.6rem;max-width:72rem;margin:0 auto;
+padding:.9rem 1.25rem;border-bottom:1px solid var(--line)}
+header.doors a.wordmark{font-weight:400;font-size:1.6rem;line-height:1;font-family:var(--serif);
+text-decoration:none;color:var(--ink);margin-right:.4rem}
+nav.doors{display:flex;gap:.2rem}
+nav.doors a{display:inline-flex;align-items:center;min-height:44px;padding:0 .7rem;border-radius:22px;
+font-weight:500;font-size:.95rem;text-decoration:none;color:var(--pencil)}
+nav.doors a:hover{color:var(--ink);background:var(--tint)}
+nav.doors a[aria-current=page]{color:var(--ink);background:var(--surface);
+box-shadow:inset 0 0 0 1px var(--line);text-decoration:underline 2px var(--ink);text-underline-offset:.4em}
+form.ask{flex:1;display:flex;justify-content:flex-end;margin:0}
+form.ask input{width:100%;max-width:22rem;min-height:44px;padding:0 1rem;border-radius:22px;
+border:1px solid var(--line);background:var(--surface);color:var(--ink);font:inherit;font-size:.95rem}
+form.ask input::placeholder{color:var(--pencil)}
+form.ask label,.hidden{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);
+white-space:nowrap}
+header.doors a.gear{display:inline-flex;align-items:center;justify-content:center;min-width:44px;
+min-height:44px;border-radius:22px;color:var(--pencil)}
+header.doors a.gear:hover{color:var(--ink);background:var(--tint)}
+header.doors a.gear[aria-current=page]{color:var(--ink);background:var(--surface);
+box-shadow:inset 0 0 0 1px var(--line)}
+header.doors a.gear svg{display:block;max-width:100%}
+"""  # the header's rules: every page's
+REST = """main.door{max-width:44rem;margin:0 auto;padding:1.5rem 1.25rem 3rem}
+footer.door{max-width:44rem;margin:0 auto;padding:1rem 1.25rem 2rem;border-top:1px solid var(--line);
+color:var(--pencil);font-size:.8rem;overflow-wrap:anywhere}
+footer.door code{font-family:var(--mono);font-size:.95em}
+.pencil{color:var(--pencil);text-decoration:underline dotted var(--pencil-rule);text-underline-offset:.2em}
+.ink{font-family:var(--serif);color:var(--ink)}
+.fact{color:var(--pencil);font-size:.8rem;font-variant-numeric:tabular-nums}
+"""  # a door's main, footer, ink and pencil
+PHONE_HEADER = """header.doors{flex-wrap:wrap;gap:.6rem;padding:.7rem 1rem}
+header.doors a.wordmark{font-size:1.4rem;margin-right:auto}
+form.ask{order:3;flex:1 0 100%}
+form.ask input{max-width:none}
+nav.doors{position:fixed;left:0;right:0;bottom:0;z-index:10;justify-content:space-around;gap:0;
 padding:.25rem .5rem .5rem;background:var(--surface);
-border-top:1px solid var(--line)}}
-nav.doors a{{flex:1;justify-content:center;font-size:.85rem;padding:0 .3rem}}
-nav.doors a[aria-current=page]{{background:var(--ink);color:var(--paper);box-shadow:none}}
-body{{padding-bottom:4.5rem}}
-main.door,footer.door{{padding-left:1rem;padding-right:1rem}}
-}}
+border-top:1px solid var(--line)}
+nav.doors a{flex:1;justify-content:center;font-size:.85rem;padding:0 .3rem}
+nav.doors a[aria-current=page]{background:var(--ink);color:var(--paper);box-shadow:none;text-decoration:none}
+body{padding-bottom:4.5rem}
+"""  # the header on a phone, the doors a bar at the foot: every page's
+PHONE_REST = """main.door,footer.door{padding-left:1rem;padding-right:1rem}
+}
 """
+FRAME = f"{ROOT}{HEADER}{REST}@media (max-width:40rem){{\n{PHONE_HEADER}{PHONE_REST}"
+# every other page's header (`header_style`): the tokens on the header alone, so a page whose own sheet
+# names a property the same (the Day's `--ink`, the old pages' `--line`) keeps its look and the header the
+# doors'; its paper and its rule the page's whole width (a border image drawn past the box, which neither
+# scrolls nor clips the phone's door bar, fixed inside the header); and what the page's own sheet sets on
+# any `nav`, `a` or `input` undone inside it
+SCOPED = f"""
+header.doors{{color-scheme:light dark;{_properties(TOKENS)};{_properties(FAMILIES)};color:var(--ink);
+font-size:16px;line-height:1.5;font-family:var(--sans);background:var(--paper);
+border-image:linear-gradient(to top,var(--line) 1px,var(--paper) 1px) 0 fill/0/0 100vmax}}
+@media (prefers-color-scheme:dark){{header.doors{{{_properties(DARK)}}}}}
+header.doors,header.doors *,header.doors *::before,header.doors *::after{{box-sizing:border-box}}
+header.doors :focus-visible{{outline:2px solid var(--signal);outline-offset:2px}}
+nav.doors{{flex-wrap:nowrap}}
+nav.doors a{{margin:0}}
+"""
+BAND = "header.doors{border-bottom-color:transparent}\n"  # after `HEADER`: the band's own rule, edge to edge
 
 
 @functools.cache
@@ -182,6 +205,24 @@ def style(fonts: bool = True) -> str:
     """The doors' one stylesheet: the faces the server serves (`fonts`; none on an exported site), then
     the tokens and the frame. A door's own rules follow it."""
     return (_faces() if fonts else "") + FRAME
+
+
+@functools.cache
+def header_style(fonts: bool = True) -> str:
+    """The header's stylesheet on a page that is not a door's (every page of the Library but Today, until
+    its own door): the faces (`fonts`), the tokens on the header alone and the header's rules, on a
+    phone the doors a bar at the foot; nothing else of the page changes."""
+    phone = f"@media (max-width:40rem){{\n{PHONE_HEADER}}}\n"
+    return (_faces() if fonts else "") + SCOPED + HEADER + BAND + phone
+
+
+def door_of(path: str) -> str | None:
+    """The door the page at `path` is in: the door whose page it is or is under; None for a page of
+    none yet (a Day, the gear's shelves)."""
+    for name, target in DOORS:
+        if path == target or (target != "/" and path.startswith(target + "/")):
+            return name
+    return None
 
 
 def header(site: Site, door: str) -> str:
@@ -214,7 +255,10 @@ def header(site: Site, door: str) -> str:
             "</form>"
         )
         title = escape(GEAR_TITLE)
-        parts.append(f'<a class="gear" href="{GEAR}" title="{title}" aria-label="The gear">{GEAR_ICON}</a>')
+        here = ' aria-current="page"' if door == GEAR else ""  # the shelves listed: the gear's page
+        parts.append(
+            f'<a class="gear" href="{GEAR}" title="{title}" aria-label="The gear"{here}>{GEAR_ICON}</a>'
+        )
     return '<header class="doors">' + "".join(parts) + "</header>\n"
 
 

@@ -144,13 +144,10 @@ def test_no_page_references_a_url_outside_itself(tmp_path: Path, monkeypatch: py
         style = re.search(r"<style>(.*?)</style>", text, re.S)
         assert style is not None, page
         assert "@import" not in style.group(1), page
-        # a door (`doors`): its stylesheet names the faces the server serves, and nothing else
-        if path == "/":
-            faces = re.findall(r"url\(([^)]*)\)", style.group(1))
-            assert faces and set(faces) == {f"/font/{name}" for name in doors.FACES}, (page, faces)
-            assert "font-src 'self'" in csp, page
-        else:
-            assert "url(" not in style.group(1) and "font-src" not in csp, page
+        # every page's header (`doors`): its stylesheet names the faces the server serves, and nothing else
+        faces = re.findall(r"url\(([^)]*)\)", style.group(1))
+        assert faces and set(faces) == {f"/font/{name}" for name in doors.FACES}, (page, faces)
+        assert csp.count("font-src 'self'") == 1, page
         assert "http://" not in style.group(1) and "https://" not in style.group(1), page
         assert csp.startswith("default-src 'none'"), page
 
@@ -377,7 +374,9 @@ def test_today_is_the_current_day_in_the_records_timezone(
     assert 'href="/day/2026-06-21"' in late.body.decode("utf-8")
     clock[0] = datetime(2026, 6, 21, 22, 0, 0, tzinfo=UTC)
     assert site.respond("/today", "").headers["Location"] == "/day/2026-06-22"
-    assert 'href="/today"' in site.respond("/shelves", "").body.decode("utf-8"), "in the navigation"
+    front = site.respond("/", "").body.decode("utf-8")  # Today; /today, the Day it is
+    assert '<a href="/" aria-current="page">Today</a>' in front, "in the header"
+    assert 'href="/day/2026-06-22"' in front, "the Day /today names, one tap from Today"
 
 
 def test_today_west_of_utc_is_still_yesterday_there(tmp_path: Path) -> None:

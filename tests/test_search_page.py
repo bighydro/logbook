@@ -13,6 +13,7 @@ from pathlib import Path
 import page_text
 import phone_width
 import pytest
+from library_header import without_shell
 
 from logbook.contrib import search_page, serve
 from logbook.core.chain import Line
@@ -193,7 +194,7 @@ def test_an_empty_query_is_the_form_alone(lb: Logbook) -> None:
 
 def test_a_query_with_no_hit_says_so_in_one_sentence(lb: Logbook) -> None:
     page = _get(serve.Site(lb), "/search", "q=zzyzx")
-    main = page.split("</form>")[1].split("</main>")[0]
+    main = without_shell(page).split("</form>")[1].split("</main>")[0]
     assert page_text.seen(main).strip() == "Nothing in the record matches zzyzx."
     assert 'value="zzyzx"' in page  # the form keeps what was asked
 
@@ -236,7 +237,8 @@ def test_phone_width_first_and_touch_targets(lb: Logbook) -> None:
 def test_one_product_the_day_pages_tokens(lb: Logbook) -> None:
     assert search_page.TOKENS in serve.STYLE  # the copy is the Day's own, byte for byte
     assert search_page.SEARCH_STYLE.startswith(search_page.TOKENS)
-    assert '<a href="/search">search</a>' in serve.NAV
+    asked = _get(serve.Site(lb), "/days")  # Ask, in the header of every page: the search's own field
+    assert '<form class="ask" method="get" action="/search" role="search">' in asked and 'name="q"' in asked
 
 
 def test_an_exported_site_has_no_search(lb: Logbook) -> None:

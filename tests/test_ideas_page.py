@@ -193,8 +193,9 @@ def test_every_ideas_page_is_one_document_that_fetches_nothing(lb: Logbook) -> N
             assert target.startswith("/") and not target.startswith("//"), (path, target)
         assert site.respond(path, "", if_none_match=response.etag).status == 304
     assert site.respond("/idea/nobody", "").status == 404
-    front = _get(site, "/shelves")  # the shelves listed, under the old navigation
-    assert 'href="/ideas"' in front and '<a href="/manifest">manifest</a><a href="/ideas">ideas</a>' in front
+    front = _get(site, "/shelves")  # the shelves listed, behind the gear: as the old navigation had them
+    front = front[front.index("<main>") :]
+    assert 'href="/ideas"' in front and front.index('href="/manifest"') < front.index('href="/ideas"')
 
 
 def test_no_ideas_page_is_wider_than_a_phone(lb: Logbook) -> None:

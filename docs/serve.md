@@ -70,15 +70,18 @@ silence's is `logbook/contrib/gaps.py`'s. A number here points at the lines it c
 `/` is what you read at 07:00, on a phone first (RFC 0047 §4.1), in the frame every door shares: the
 wordmark, the four doors (Today, Life, People, Places; until their own pages are built, Life opens
 `/days`, People `/people` and Places `/places`), the *Ask* field (a search of the record, `/search`)
-and the gear. On a phone the doors are a bar at the foot of the screen and *Ask* is at the top. The
-other pages keep their navigation and their look until their own door is built.
+and the gear. On a phone the doors are a bar at the foot of the screen and *Ask* is at the top. Every
+other page of the Library carries the same header above its own body, the door it belongs to marked
+(the Days are Life's, a person People's, a place Places'); the body keeps its look until its own door
+is built.
 
 From the top:
 
 1. **The date and where**: the day in words, a link to its Day; where you spent the night; the weather,
    when the record holds it.
-2. **What's open**: the promises both ways that are still open (in pencil: the rules read them, and
-   they are yours to confirm), the task tool's tasks for the day (read, never run, tier 1 alone, as
+2. **What's open**: the promises both ways that are still open and were said in the fortnight before
+   today (in pencil: the rules read them, and they are yours to confirm; an older one is on the
+   Promises shelf, never here), the task tool's tasks for the day (read, never run, tier 1 alone, as
    `show plan` reads them), and the replies owed. Seven at most, the oldest first, each a link to its
    moment; the rest is one link to the Promises shelf. Who and since when are words, never a date or a
    count beside a name.
@@ -90,8 +93,8 @@ From the top:
 
 What's open, with nothing in it, says what fills it, in one sentence. Today is rendered live, as today's Day
 is: the date, last night and the memory read a day or a few, each kept until the record or the day
-moves; the promises, the plan and the replies owed are the readings the Day's morning reads, by the
-same keys, read beside the page under `logbook serve` (until they have arrived, one sentence says
+moves; the promises are the fortnight's, read on the request as today's Day reads them; the plan
+and the replies owed are the readings the Day's morning reads, by the same keys, read beside the page under `logbook serve` (until they have arrived, one sentence says
 so, and the next visit has them; the page's tag names what has arrived). On the demo record it
 answers in about 50 ms the first time and 15 ms after. A built Today (`--built`) is served only on
 the day it was built. `export site` writes it as `today.html`, as of the record's last day, with no
@@ -117,10 +120,10 @@ carries `--host`. To read the record from another device, see
 
 **One document, nothing fetched.** A page is one HTML document with one inline stylesheet. No
 stylesheet link, no frame, no script fetched; every link, form, image and tooltip points at the
-server's own paths. The one font a page names is a door's ([Today](#today-the-front-door)): its
-three faces, bundled with the package under their SIL Open Font License and served by the server
-itself at `/font/NAME` (the door's policy allows fonts from the server and nowhere else, `font-src
-'self'`); every other page names none. The one image is a Day's thumbnail of a photo, served from
+server's own paths. The one font a page names is the doors' ([Today](#today-the-front-door)), in
+the header every page carries: its three faces, bundled with the package under their SIL Open Font
+License and served by the server itself at `/font/NAME` (every page's policy allows fonts from the
+server and nowhere else, `font-src 'self'`). The one image is a Day's thumbnail of a photo, served from
 `/photo/ID` out of the record's own attachment store ([below](#the-day--photos-the-track-the-line-the-week)):
 the Day's policy allows images from the server and nowhere else (`img-src 'self'`), every other
 page's allows none. A script is inline on three pages, each named by its hash in that page's
