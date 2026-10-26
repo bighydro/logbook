@@ -1897,16 +1897,19 @@ class Site:
     # -- / --------------------------------------------------------------------------------------------------
 
     def page_index(self) -> str:
-        with self.lb.index() as idx:
-            total, first, last = idx.totals()
-        whole = self._whole()
+        """The record's size and days, then the shelves. The size is the head's seq (`current`, the
+        count `doctor` prints), the days two steps down the day_local index (`Index.span`), both kept
+        for the record as it stands (`shared`): never a pass over the lines, however many it holds."""
+        total = int(self.current().get("seq") or 0)
+        span = self.shared(("span",), lambda: reading.record_days(self.lb))
+        whole = self._record_days()
         parts = ["<h1>Logbook</h1>\n"]
-        if whole is None or first is None or last is None:
+        if whole is None or span is None:
             parts.append("<p>The record has no lines yet.</p>\n")
             return self.document("Logbook", "".join(parts))
         days = day_start.of(self.lb.meta)
         parts.append(
-            f"<p>{total:,} lines, {escape(days.day_of(first))} {EN_DASH} {escape(days.day_of(last))}"
+            f"<p>{total:,} lines, {escape(span[0])} {EN_DASH} {escape(span[1])}"
             f" ({escape(str(days.zone))}{'' if days.midnight else f', the day begins at {days.text}'}).</p>\n"
         )
         a, b = _last_window(whole)

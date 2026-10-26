@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import contextlib
 import importlib.util
+import re
 import sqlite3
 from collections import Counter
 from collections.abc import Iterator
@@ -195,3 +196,96 @@ def test_an_index_built_before_its_new_indexes_is_given_them_by_the_library(
             for row in idx.db.execute("EXPLAIN QUERY PLAN SELECT file FROM lines WHERE id = ?", ("x",))
         )
         assert "lines_id" in plan
+
+
+FRONT = ("/", "/shelves")  # the front door (Today) and the old front page, the shelves listed (#404)
+
+
+def _plans(lb: Logbook, ran: list[str]) -> list[tuple[str, str]]:
+    """Each statement `ran` names on the lines table, beside how SQLite reads it (EXPLAIN QUERY PLAN,
+    asked of a connection of its own)."""
+    found: list[tuple[str, str]] = []
+    with contextlib.closing(sqlite3.connect(lb.index_path)) as db:
+        for sql in ran:
+            if re.search(r"\bFROM lines\b", sql) is None:
+                continue
+            plan = " | ".join(str(row[-1]) for row in db.execute(f"EXPLAIN QUERY PLAN {sql}"))
+            found.append((sql, plan))
+    return found
+
+
+def test_the_front_doors_never_read_the_whole_lines_table(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Today and the shelves listed, as `logbook serve` renders them (`read_later`: what reads the whole
+    record is read off the request): every statement either runs on the lines table is a search, never
+    a scan of the table or of a whole index. The shelves' count is the head's seq (what `doctor`
+    prints) and their first and last day two steps down the day_local index (`count(*), min(at),
+    max(at)` read every row of a record of millions). A search can still read every line of one kind
+    (Today reads the record's resolutions, retractions and signatures so): the scale test below times
+    that."""
+    from persona import persona_record
+
+    lb = persona_record(tmp_path, monkeypatch)
+    with lb.index() as idx:
+        (lines,) = idx.db.execute("SELECT count(*) FROM lines").fetchone()
+    site = serve.Site(lb, read_later=True)
+    site.current()  # the index at the head, as the Library brings it when it starts
+    monkeypatch.setattr(site, "_day_later_start", lambda: None)  # what is read later is not the request's
+    ran: list[str] = []
+    opened = index_module.Index.open
+
+    def traced(lb: Logbook) -> index_module.Index:
+        idx = opened(lb)
+        idx.db.set_trace_callback(ran.append)
+        return idx
+
+    monkeypatch.setattr(index_module.Index, "open", traced)
+    for path in FRONT:
+        ran.clear()
+        response = site.respond(path)
+        assert response.status == 200, path
+        plans = _plans(lb, ran)
+        assert plans, (path, ran)  # the page read the index, and was seen here
+        scans = [(sql, plan) for sql, plan in plans if "SCAN" in plan]
+        assert not scans, (path, scans)
+    shelves = site.respond("/shelves").body.decode("utf-8")
+    assert f"{lines:,} lines, 2026-06-01 {serve.EN_DASH} 2026-06-21" in shelves
+
+
+@pytest.mark.stress
+def test_the_front_doors_answer_in_a_second_on_the_scale_record() -> None:
+    """Today and the shelves listed on the scale harness's record (`tests/perf/run.py`: 2,000,000 lines,
+    or LOGBOOK_PERF_LINES), kept in tests/perf/.record, from a server as `logbook serve` makes it
+    (`read_later`): warm, each answers in a second. Warm is the first request of a second server, once
+    a first has read the page: the index is in the system's memory and nothing is kept from the first
+    (a server's second request is the page it kept, and times nothing). What `read_later` reads off the
+    request is not started (`_day_later_start`): it is not the request's."""
+    import os
+    import time
+
+    harness = SCRIPT.parents[1] / "tests" / "perf" / "run.py"
+    perf_spec = importlib.util.spec_from_file_location("perf_run", harness)
+    assert perf_spec is not None and perf_spec.loader is not None
+    run: Any = importlib.util.module_from_spec(perf_spec)
+    perf_spec.loader.exec_module(run)
+    b = run.bench()
+    lines = int(os.environ.get("LOGBOOK_PERF_LINES", run.LINES))
+    run.record(b, run.ROOT, lines, run.PEOPLE, False)
+
+    def server(mp: pytest.MonkeyPatch) -> serve.Site:
+        site = serve.Site(Logbook(run.ROOT / "record"), now=lambda: b.NOW, read_later=True)
+        mp.setattr(site, "_day_later_start", lambda: None)
+        return site
+
+    with pytest.MonkeyPatch.context() as mp:
+        for key, value in b._environment(run.ROOT).items():
+            mp.setenv(key, value)
+        for path in FRONT:
+            assert server(mp).respond(path).status == 200, path  # cold: the index read into memory
+            warm = server(mp)
+            t = time.perf_counter()
+            response = warm.respond(path)
+            warm_s = time.perf_counter() - t
+            assert response.status == 200, path
+            assert warm_s <= 1.0, (path, warm_s)
