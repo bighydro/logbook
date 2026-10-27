@@ -39,11 +39,12 @@ SIGNED_AT = "2026-06-10T23:30:00+02:00"
 CONTENT = ("at", "end", "tz", "source", "kind", "tier", "payload")
 
 
-def _drafts() -> list[dict[str, Any]]:
-    """A day at home, then the evening at the bistro: two photos there and a recording Kari spoke in."""
+def _drafts(contact_tier: int = 1) -> list[dict[str, Any]]:
+    """A day at home, then the evening at the bistro: two photos there and a recording Kari spoke in.
+    Kari's address is a contact at `contact_tier` (1, as a phone's contacts are), her phone and Ola at 2."""
     found: list[dict[str, Any]] = [
         resolution(("phone", KARI["phone"]), KARI_ID, "Kari Nordmann"),
-        resolution(("email", KARI["email"]), KARI_ID, "Kari Nordmann"),
+        {**resolution(("email", KARI["email"]), KARI_ID, "Kari Nordmann"), "tier": contact_tier},
         resolution(("email", OLA["email"]), OLA_ID, "Ola Nordmann"),
     ]
     found += dwell(DAY, "07:00", "18:30", HOME, every_min=20)
@@ -66,12 +67,16 @@ def _drafts() -> list[dict[str, Any]]:
 
 @pytest.fixture
 def lb(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Logbook:
+    return _record(tmp_path, monkeypatch)
+
+
+def _record(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, contact_tier: int = 1) -> Logbook:
     lb = Logbook.init(tmp_path / "lb", TZ)
     monkeypatch.setenv("LOGBOOK_HOME", str(lb.root))
     for name, value in ENV.items():
         monkeypatch.setenv(name, value)
     monkeypatch.setattr(day_command, "_on_a_tty", lambda: False)
-    lb.append_many(_drafts())
+    lb.append_many(_drafts(contact_tier))
     (lb.root / "places.json").write_text(
         json.dumps(
             {
@@ -449,6 +454,24 @@ def test_accept_writes_the_line_byte_for_byte_as_the_calendar_adapter_would(
     before = _files(lb.root)
     code, _out, err = _cli("day", "sign", DAY, "--accept", "1")
     assert code == 2 and f"confirmed already as #{seq + 1}" in err and _files(lb.root) == before
+
+
+def test_a_tier_1_event_names_nobody_the_record_knows_only_at_tier_2(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, no_network
+):
+    """The owner's rule: a tier-1 output names a person only from the resolutions at its tier. Kari is
+    known only by tier-2 lines here, so the event she was at is written without her: no attendee, and
+    the model's title names her as someone."""
+    lb = _record(tmp_path, monkeypatch, contact_tier=2)
+    _dreamed(lb, monkeypatch)
+    code, _out, err = _cli("day", "sign", DAY, "--accept", "1", "--at", SIGNED_AT)
+    assert code == 0, err
+    event = _of_kind(lb, "event")[-1]
+    assert event["tier"] == 1 and event["source"] == "owner"
+    text = json.dumps(event, ensure_ascii=False)
+    assert "Kari" not in text and KARI["email"] not in text and KARI["phone"] not in text, text
+    assert not event["payload"].get("attendees"), "nobody named at tier 1, nobody attending"
+    assert event["payload"]["title"] == "Dinner with someone"
 
 
 def test_reflect_numbers_the_events_after_its_own_proposals_and_accepts_one(

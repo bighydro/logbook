@@ -21,6 +21,7 @@ from html.parser import HTMLParser
 from pathlib import Path
 from typing import NamedTuple
 
+import beside_a_name
 import ideas_record
 import page_text
 import phone_width
@@ -628,3 +629,16 @@ def test_every_page_the_library_serves_fits_a_phone(walked: dict[str, list[Page]
     for page in walked[route]:
         assert phone_width.problems(page.text) == [], page.target
         assert phone_width.phone_breakpoints(phone_width.parse(page.text)[1]), page.target
+
+
+@pytest.mark.parametrize("route", [*sorted(ROUTES), ANSWERS])
+def test_no_page_the_library_serves_sets_a_number_beside_a_name(
+    walked: dict[str, list[Page]], route: str
+) -> None:
+    """The owner's rule, no number beside a person's name (RFC 0043 §2.5), held by the strong guard
+    (`beside_a_name`) over every page of the walk, a row at a time as a reader sees it: the persona's
+    people are the demo record's (Ines, Kari and Ola Nordmann, Per Hansen), the guard's names. A
+    person's own page (/people/ID) is held to it too: it may say how many days together, never beside
+    the name."""
+    for page in walked[route]:
+        assert beside_a_name.page(page.text) == [], (page.target, beside_a_name.page(page.text))

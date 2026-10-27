@@ -39,12 +39,13 @@ RAW = re.compile(r'<a class="raw"[^>]*>#\d+</a>')  # a row's link to its line as
 
 def beside(texts: str | Iterable[str]) -> list[str]:
     """Every place in `texts` where a number stands beside a person's name (`GUARD`), the markup taken
-    out first; dates and clock times are not numbers, as `dream.figures` reads them (`dream.CALENDAR`),
-    nor is a page's link from a row to its line as written (`#SEQ`, `RAW`), the line's address."""
+    out first; a date and a clock time are numbers too, with only separators between them and a name
+    (the owner, 27 October); a page's link from a row to its line as written (`#SEQ`, `RAW`) is the
+    line's address, not a number."""
     found: list[str] = []
     for text in [texts] if isinstance(texts, str) else texts:
         for row in html.unescape(re.sub(r"<[^>]*>", " ", RAW.sub(" ", text))).splitlines():
-            if GUARD.search(dream.CALENDAR.sub(" ", row)):
+            if GUARD.search(row):
                 found.append(row.strip())
     return found
 
@@ -56,7 +57,8 @@ def test_the_guard_finds_a_count_on_either_side_and_lets_dates_and_clocks_be() -
     assert beside("12 × Kari Nordmann") and beside("you 3 min · Ola Nordmann 3 min") and beside("Ola: 4")
     assert beside(["<li>Kari Nordmann <span>3</span></li>"]), "markup is no separator"
     assert beside("with  Kari Nordmann · Ola Nordmann") == []
-    assert beside("due  “Comments by Friday.”  Kari Nordmann, 2026-06-05 (by Friday)") == []
+    assert beside("due  “Comments by Friday.”  Kari Nordmann, 2026-06-05 (by Friday)"), "a date is a number"
+    assert beside("due  “Comments by Friday.”  Kari Nordmann, due 2026-06-05 (by Friday)") == []
     assert beside("19:30  call  19 min ← Ola Nordmann, cellular") == []
 
 

@@ -145,7 +145,9 @@ def test_open_promises_due_within_seven_days_from_the_promises_reader(
     )
     assert photos["speaker"]["owner"] is True and photos["status"] == "open"
     text = _run(capsys, "2026-06-10")
-    assert "  due        “I'll send Ola the mooring photos by Friday.”  you, 2026-06-12 (by Friday)" in text
+    assert (
+        "  due        “I'll send Ola the mooring photos by Friday.”  you, due 2026-06-12 (by Friday)" in text
+    )
     assert "insurance" not in text, "due 20 July: not within the week"
     # a week later the insurance is still not within seven days; the photos were due two days ago
     data = _json(capsys, "2026-06-14")

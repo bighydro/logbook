@@ -3391,14 +3391,11 @@ class Site:
         return self.document(f"people {year}", "".join(parts))
 
     def _person_row(self, r: Mapping[str, Any]) -> str:
-        days = int(r["days"])
-        facts = [f"{_plural(days, 'day')} together" if days else "no day together"]
-        if r["nights"]:
-            facts.append(f"{_plural(int(r['nights']), 'night')} under one roof")
+        """One person of the year, by name only (RFC 0043 §2.5): the days and nights together, a
+        channel's lines and the evidence's count are never set beside the name; the shelf's order, the
+        most days together first, says it, and the person's own page counts them."""
         contact = r["last_real_contact"]
-        facts.append(
-            f"last real contact {contact['day']} ({contact['via']})" if contact else "no real contact"
-        )
+        facts = f"last real contact {contact['day']} ({contact['via']})" if contact else "no real contact"
         items: list[Evidence] = [
             (f"together at {d['where']}", d["lines"], str(d["day"])) for d in reversed(r["together"])
         ]
@@ -3406,12 +3403,10 @@ class Site:
             items.insert(0, (f"last real contact, {contact['via']}", [contact["line"]], str(contact["day"])))
         for name, c in r["channels"].items():
             span = c["first"] if c["first"] == c["last"] else f"{c['first']} {EN_DASH} {c['last']}"
-            items.append(
-                (f"{name}: {_plural(int(c['lines']), 'line')}, {span}, the last", [c["last_line"]], None)
-            )
+            items.append((f"{name}: {span}, the last", [c["last_line"]], None))
         return (
             f'<li><p class="head">{self.link(f"<b>{escape(str(r['name']))}</b>", _person_path(str(r["id"])))}'
-            f'</p>\n<p class="facts">{escape(DOT.join(facts))}</p>\n{self._evidence(items)}</li>\n'
+            f'</p>\n<p class="facts">{escape(facts)}</p>\n{self._evidence(items, counted=False)}</li>\n'
         )
 
     def _review_html(self, report: people_review.Report, year: str) -> str:
@@ -3573,11 +3568,14 @@ class Site:
 
     # -- the evidence --------------------------------------------------------------------------------------
 
-    def _evidence(self, items: Sequence[Evidence], label: str = "evidence", open_: bool = False) -> str:
+    def _evidence(
+        self, items: Sequence[Evidence], label: str = "evidence", open_: bool = False, counted: bool = True
+    ) -> str:
         """Where a derived row comes from, folded: a disclosure, closed unless `open_`, whose summary
-        counts the lines, and in it one row per piece of evidence, what it is, the day it links and
-        the ids of the lines (the whole id on hover), `places_review.SHOWN` rows shown and the rest
-        behind "… and N more" (`_folded`, the Places page's own). Nothing when there is none."""
+        counts the lines (unless not `counted`: a person's row, where no count is set beside the name),
+        and in it one row per piece of evidence, what it is, the day it links and the ids of the lines
+        (the whole id on hover), `places_review.SHOWN` rows shown and the rest behind "… and N more"
+        (`_folded`, the Places page's own). Nothing when there is none."""
         if not items:
             return ""
         lines = {i for _what, ids, _day in items for i in ids}
@@ -3594,9 +3592,10 @@ class Site:
             more = f" +{len(ids) - ID_SHOWN}" if len(ids) > ID_SHOWN else ""
             rows.append(f"{text}{' ' + shown if shown else ''}{more}")
         count = _plural(len(lines), "line") if lines else _plural(len(items), "row")
+        summary = f"{escape(label)}{DOT}{count}" if counted else escape(label)
         return (
             f'<details class="evidence"{" open" if open_ else ""}>'
-            f"<summary>{escape(label)}{DOT}{count}</summary>\n{_folded(rows)}</details>\n"
+            f"<summary>{summary}</summary>\n{_folded(rows, counted)}</details>\n"
         )
 
     # -- /manifest, /org/<id>, /manifest/people (RFC 0037 §7, §11) -----------------------------------------
@@ -3773,7 +3772,8 @@ class Site:
         seen = ", ".join(f"{kind} {count}" for kind, count in sorted(o.kinds.items()))
         items: list[Evidence] = [(why, [], None) for why in p.evidence if why != "new"]
         items.append((f"seen on {seen}, {o.first} {EN_DASH} {o.last}", [i for i, _t in o.samples], None))
-        items.extend((f"named {label} ({count})", [], None) for label, count in o.labels.most_common())
+        # a sender's name is often a person's: the names it was seen under, the most often first, uncounted
+        items.extend((f"named {label}", [], None) for label, _count in o.labels.most_common())
         items.append((f"hint {o.hint or '-'}: ranks it, decides nothing", [], None))
         form = [
             f'<form class="act" method="post" action="{MANIFEST_REVIEW}">',
@@ -5333,15 +5333,17 @@ def _texts(lines: Iterable[Line], retracted: Collection[str]) -> list[str]:
 Evidence = tuple[str, Sequence[str], str | None]  # what (plain text), the line ids, the day it links
 
 
-def _folded(rows: Sequence[str]) -> str:
+def _folded(rows: Sequence[str], counted: bool = True) -> str:
     """The evidence pattern every page shares (the Places page's first): rows already marked up,
-    `places_review.SHOWN` of them in a list, the rest behind a toggle that counts them."""
+    `places_review.SHOWN` of them in a list, the rest behind a toggle that counts them (unless not
+    `counted`: in a person's row the count would follow their days together, RFC 0043 §2.5)."""
     out = ['<ul class="evidence">\n']
     out.extend(f"<li>{row}</li>\n" for row in rows[: places_review.SHOWN])
     out.append("</ul>\n")
     rest = rows[places_review.SHOWN :]
     if rest:
-        out.append(f'<details><summary>… and {len(rest)} more</summary>\n<ul class="evidence">\n')
+        more = f"… and {len(rest)} more" if counted else "… and more"
+        out.append(f'<details><summary>{more}</summary>\n<ul class="evidence">\n')
         out.extend(f"<li>{row}</li>\n" for row in rest)
         out.append("</ul>\n</details>\n")
     return "".join(out)

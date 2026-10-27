@@ -8,6 +8,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+import beside_a_name
 import pytest
 from persona import BOAT, KARI_ID, OLA_ID, PLACES, persona_record
 
@@ -296,8 +297,11 @@ def test_people_rollup_counts_days_and_nights_together_and_the_last_real_contact
     assert ola["confirmed"] == 3 and kari["confirmed"] == 1
     assert "proposed" not in kari and len(kari["lines"]) == 1, "the face at the cafe is a proposal, left out"
     text = _run(capsys, "people")
-    assert "Ola Nordmann" in text and "3 days" in text and "2 nights" in text and "Kari Nordmann" in text
-    assert "proposed" not in text
+    rows = text.splitlines()[2:]
+    assert [r.split()[:2] for r in rows] == [["Ola", "Nordmann"], ["Kari", "Nordmann"]], "most days first"
+    assert rows[0].startswith(f"        {'Ola Nordmann':<24} last 2026-06-16 · Office"), rows[0]
+    assert beside_a_name.rows(text) == [] and " days" not in text and " nights" not in text, text
+    assert "proposed" not in text and "confirmed" not in text, "names only: the counts are --json's"
 
 
 def test_people_rollup_is_the_confirmed_set_only(
@@ -349,8 +353,10 @@ def test_places_with_is_the_place_by_person_table(
     assert ("Home", KARI_ID) not in rows, "the lunch was at the cafe, not at home"
     assert all(len(id_) == 36 for r in year["with"] for id_ in r["lines"])
     text = _run(capsys, "places", "--with")
-    assert "place" in text and "person" in text and "nights" in text
+    assert "place" in text and "people, the most days there first" in text and "nights" not in text
     assert "Office" in text and "Ola Nordmann" in text and "Solvind" in text
+    assert any(r.endswith(" with Kari Nordmann") and "near Home" in r for r in text.splitlines()), text
+    assert beside_a_name.rows(text) == [], "a place's people by name only, the counts in --json"
     with pytest.raises(SystemExit) as e:
         cli.main(["rollup", "nights", "--with"])
     assert e.value.code == 2

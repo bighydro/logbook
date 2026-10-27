@@ -100,9 +100,9 @@ have no days:
     47.3769,8.5417 (Zurich)                     24 nights · 24 stays · 468 h · with Marta Keller
     …
   people        by days together
-    Liv Berg                                    61 days · 0 nights · last 2026-12-25 · Office
-    Per Hansen                                  61 days · 0 nights · last 2026-12-25 · Office
-    Ola Nordmann                                24 days · 8 nights · last 2026-12-28 · Cabin, Marina
+    Liv Berg                                    last 2026-12-25 · Office
+    Per Hansen                                  last 2026-12-25 · Office
+    Ola Nordmann                                last 2026-12-28 · Cabin, Marina
     …
   health        by month
     2026-06  sleep 6.8 h (29 nights) · 8,425 steps (30 days) · resting 57 bpm (52–61, 30 days) · hrv —

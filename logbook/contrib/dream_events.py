@@ -11,10 +11,12 @@ the profile every calendar adapter writes, made by the calendar adapter's own ma
 would hold for the proposal's fields (`event_line`): UID `<draft id>/<number>`, DTSTART and DTEND in
 the record's zone, SUMMARY the title, LOCATION a named place's name and GEO its coordinates (an
 observed place, `place:<lat>,<lon>`, gives GEO alone), one ATTENDEE per person, their label as CN,
-accepted, by their email address. The line is what the calendar adapter writes for those fields, byte
-for byte, but for two things: `source` is `owner` (the owner confirmed it; the model only proposed
-it) and `extra.from` names the draft. A person the record knows by no email address is an attendee by
-the ref it does know, in the shape the adapter gives an address. The tier is the profile's, 1, as
+accepted, by their email address, each one the record names at tier 1, the event's: a person known only
+by tier-2 or tier-3 lines is left out, and a name of theirs in the title reads `someone`. The line is
+what the calendar adapter writes for those fields, byte for byte, but for two things: `source` is
+`owner` (the owner confirmed it; the model only proposed it) and `extra.from` names the draft. A
+person the record knows by no email address is an attendee by the ref it does know, in the shape the
+adapter gives an address. The tier is the profile's, 1, as
 every calendar entry's: a tier says where a line may travel, never who wrote it.
 
 The proposals are the draft's the Day shows (`listed`, through `drafts.for_day` under the `dream` entry
@@ -31,13 +33,14 @@ event to an external calendar would be a crossing, and nothing here sends anythi
 
 from __future__ import annotations
 
+import re
 from collections.abc import Collection, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 from zoneinfo import ZoneInfo
 
-from ..core import drafts, places, resolve, signing
+from ..core import drafts, places, reading, resolve, signing
 from ..core.chain import Line
 from ..core.store import Logbook, retractions
 
@@ -47,6 +50,8 @@ if TYPE_CHECKING:
 OWNER = drafts.OWNER  # the source of a confirmed event: the owner, not the model and not an adapter
 CALENDAR = "logbook"  # the calendar a confirmed event lives in: the record's own (X-WR-CALNAME)
 PARTSTAT_ACCEPTED = "ACCEPTED"  # the owner says they were there
+TIER = 1  # an event line's, the profile's: the tier its names must be learned at
+SOMEONE = "someone"  # a person the title names whom no line at the event's tier names
 
 
 class EventError(ValueError):
@@ -198,7 +203,8 @@ def event_line(lb: Logbook, proposal: Proposed) -> dict[str, Any]:
     add(ics.Property("UID", {}, _escape(f"{proposal.draft}/{item['number']}")))
     add(_time("DTSTART", str(item["start"]), zone))
     add(_time("DTEND", str(item["end"]), zone))
-    add(ics.Property("SUMMARY", {}, _escape(str(item["title"]))))
+    attendees, hidden = _attendees(lb, proposal)
+    add(ics.Property("SUMMARY", {}, _escape(_unnamed(str(item["title"]), hidden))))
     place = item.get("place")
     if isinstance(place, str) and place:
         at = drafts.cluster_coordinates(place)
@@ -208,7 +214,6 @@ def event_line(lb: Logbook, proposal: Proposed) -> dict[str, Any]:
             at = None if named is None else (named.lat, named.lon)
         if at is not None:
             add(ics.Property("GEO", {}, f"{at[0]};{at[1]}"))
-    attendees = _attendees(lb, proposal)
     for (kind, value), label in attendees:
         if kind == "email":
             params = {"CN": [label], "PARTSTAT": [PARTSTAT_ACCEPTED]}
@@ -227,30 +232,49 @@ def event_line(lb: Logbook, proposal: Proposed) -> dict[str, Any]:
     return line
 
 
-def _attendees(lb: Logbook, proposal: Proposed) -> list[tuple[resolve.Ref, str]]:
-    """Each person of the proposal as (the ref the line names them by, their label): their email
-    address, else their phone, else the first ref the record resolves to them; refused when the
-    record no longer resolves the person (merged into another since the dream, say)."""
+def _attendees(lb: Logbook, proposal: Proposed) -> tuple[list[tuple[resolve.Ref, str]], set[str]]:
+    """Each person of the proposal the record names at the event's tier (`TIER`), as (the ref the line
+    names them by, their label): their email address, else their phone, else the first ref a tier-1
+    resolution gives them. A person known only by lines above it is left out: a tier-1 line never
+    carries a name or an address learned from a tier-2 or tier-3 one (the owner's rule). Beside them,
+    the names learned only above the tier, which the title must not carry (`_unnamed`). Refused when
+    the record no longer resolves a person at all (merged into another since the dream, say)."""
     people = proposal.item.get("people") or []
     if not people:
-        return []
+        return [], set()
     with lb.index() as idx:
-        identities = resolve.identities_from([*idx.retractions(), *idx.resolutions()])
-    names = drafts.person_names(identities)
+        retracted, resolutions = list(idx.retractions()), list(idx.resolutions())
+    everyone = resolve.identities_from([*retracted, *resolutions])
+    at_tier = resolve.identities_from([*retracted, *reading.crossing(resolutions, range(1, TIER + 1))])
+    names, named = drafts.person_names(everyone), drafts.person_names(at_tier)
     out: list[tuple[resolve.Ref, str]] = []
     for person in people:
         entity = str(person["id"])
-        refs = sorted(ref for ref, who in identities.items() if who.entity == entity)
-        if entity not in names or not refs:
+        if entity not in names or not any(who.entity == entity for who in everyone.values()):
             raise EventError(
                 f"proposed event {proposal.number} names {entity}, whom the record no longer resolves to a"
                 " person; dream the day again"
             )
+        refs = sorted(ref for ref, who in at_tier.items() if who.entity == entity)
+        if entity not in named or not refs:
+            continue  # known only above the event's tier: left out, never named
         ref = next((r for r in refs if r[0] == "email"), None) or next(
             (r for r in refs if r[0] == "phone"), refs[0]
         )
-        out.append((ref, names[entity]))
-    return out
+        out.append((ref, named[entity]))
+    shown = {who.label for who in at_tier.values() if who.label}
+    hidden = {who.label for who in everyone.values() if who.label and who.label not in shown}
+    return out, hidden
+
+
+def _unnamed(title: str, hidden: set[str]) -> str:
+    """`title` with every name learned only above the event's tier, and its first name, as `SOMEONE`:
+    `Dinner with Kari Nordmann` is `Dinner with someone` when no tier-1 line names Kari."""
+    for name in sorted(hidden, key=len, reverse=True):
+        title = re.sub(rf"(?<!\w){re.escape(name)}(?!\w)", SOMEONE, title)
+    for name in sorted({n.split()[0] for n in hidden if " " in n}, key=len, reverse=True):
+        title = re.sub(rf"(?<!\w){re.escape(name)}(?!\w)", SOMEONE, title)
+    return title
 
 
 def _attendee(ref: resolve.Ref, label: str) -> dict[str, Any]:

@@ -231,7 +231,8 @@ def rows(data: dict[str, Any]) -> Iterator[str]:
             width = max(28, *(len(a["artist"]) for a in year["top_artists"]))
             for a in year["top_artists"]:
                 hours = f"{a['hours']:.1f} h"
-                yield f"          {a['artist']:<{width}} {hours} · {_plural(a['listens'], 'listen')}"
+                # a word between the name and its figures: an artist may be a person (RFC 0043 §2.5)
+                yield f"          {a['artist']:<{width}} played {hours} · {_plural(a['listens'], 'listen')}"
         yield from _podcast_rows(year["podcasts"])
         yield "        by month"
         for m in year["months"]:

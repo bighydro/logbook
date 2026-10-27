@@ -76,18 +76,13 @@ per place, the places in the order the rollup lists them, the people by days the
 ```
 places 2026-06-01 – 2026-06-30 · with
   2026
-        place                        person                   stays  days nights
-        Office                       Per Hansen                  10    10      0
-        Office                       Liv Berg                     9     9      0
-        Marina                       Anders Vik                   2     2      0
-        Marina                       Ola Nordmann                 2     2      0
-        Marina                       Sigrid Moen                  1     1      0
-        Cabin                        Ola Nordmann                 1     2      1
-        Nordlys (nordlys)            Anders Vik                   2     2      0
-        Nordlys (nordlys)            Ola Nordmann                 2     2      0
-        Nordlys (nordlys)            Sigrid Moen                  1     1      0
-        47.3769,8.5417 (Zurich)      Marta Keller                 1     1      1
-        55.6850,12.5500 (Copenhagen) Freja Lund                   1     1      1
+        place                        people, the most days there first
+        Office                       with Per Hansen, Liv Berg
+        Marina                       with Anders Vik, Ola Nordmann, Sigrid Moen
+        Cabin                        with Ola Nordmann
+        Nordlys (nordlys)            with Anders Vik, Ola Nordmann, Sigrid Moen
+        47.3769,8.5417 (Zurich)      with Marta Keller
+        55.6850,12.5500 (Copenhagen) with Freja Lund
 ```
 
 - **stays**: the stays at the place the person was confirmed at.
@@ -113,12 +108,12 @@ company (`present.owner_of`).
 ```
 people 2026-06-01 – 2026-06-30
   2026
-        Per Hansen               10 days · 0 nights · last 2026-06-30 · Office · 11 confirmed
-        Liv Berg                 9 days · 0 nights · last 2026-06-29 · Office · 10 confirmed
-        Ola Nordmann             3 days · 1 night · last 2026-06-15 · Cabin, Marina · 4 confirmed
-        Anders Vik               2 days · 0 nights · last 2026-06-15 · Marina · 2 confirmed
-        Jonas Weber              1 day · 0 nights · last 2026-06-09 · 47.3700,8.5300 (Zurich) · 1 confirmed
-        Marta Keller             1 day · 1 night · last 2026-06-09 · 47.3700,8.5300 (Zurich), 47.3769,8.5417 (Zurich) · 2 confirmed
+        Per Hansen               last 2026-06-30 · Office
+        Liv Berg                 last 2026-06-29 · Office
+        Ola Nordmann             last 2026-06-15 · Cabin, Marina
+        Anders Vik               last 2026-06-15 · Marina
+        Jonas Weber              last 2026-06-09 · 47.3700,8.5300 (Zurich)
+        Marta Keller             last 2026-06-09 · 47.3700,8.5300 (Zurich), 47.3769,8.5417 (Zurich)
 ```
 
 Per person: **days** together (the distinct local days of the confirmed evidence, by the
@@ -161,10 +156,10 @@ the people reader names it (an em dash when the record never put you in one plac
 
 ```
 people · drifting · recent 2026-06-15 – 2026-06-28 · earlier 2026-06-01 – 2026-06-14 · at least 2 contacts earlier
-        person                   earlier recent   fall  last real contact  quiet                      last shared place
-        Eva Nordmann                   4      0  -100%  16 days ago        messages, calls            —
-        Liv Berg                       2      0  -100%  25 days ago        calls                      —
-        Ola Nordmann                   7      1   -86%  12 days ago        calls, calendar, together  Office
+        person                   last real contact  quiet                      last shared place
+        Eva Nordmann             last 2026-06-12    messages, calls            —
+        Liv Berg                 last 2026-06-03    calls                      —
+        Ola Nordmann             last 2026-06-16    calls, calendar, together  Office
 ```
 
 Under `--json` one object: `kind` (`drifting`), `window` (`recent` and `earlier`, each `since`,
