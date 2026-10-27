@@ -11,7 +11,7 @@ record.
 ```bash
 logbook show 2026-06-09                 # read the page; the header says `unsigned`
 logbook day 2026-06-09                  # the Day: the readiness row says whether every usual source is in
-logbook day sign 2026-06-09             # sign it: every line on the page is confirmed
+logbook day sign 2026-06-09             # sign it: every line on the page is confirmed, pencil aside
 logbook day sign 2026-06-09 --confirm all          # signed before: confirm the whole page again
 logbook day sign 2026-06-09 --note "Quiet day. The call with Kari was the thing."
 logbook day sign 2026-06-09 --confirm 4181,4183   # only these lines, by seq or id as `show` lists them
@@ -29,8 +29,8 @@ One line, `signed-day/v1` (RFC 0034, `docs/rfcs/0034-the-signed-day.md`), tier 1
 `manual`, appended through the same `append` every other line goes through. It carries:
 
 - the day signed, and you as its subject (the record's `owner_id`);
-- the ids of the lines you confirmed, in the page's order: every line on the page unless
-  `--confirm` names some, or none at all with `--confirm none` (below); a day you signed before
+- the ids of the lines you confirmed, in the page's order: every line on the page but pencil
+  (below) unless `--confirm` names some, or none at all with `--confirm none` (below); a day you signed before
   keeps what you confirmed then (below);
 - the digest of the page as shown: the SHA-256 over the hashes of the lines the page listed, in
   order. Not over the text: the words are a reader's own, the lines are the record's. Anyone with
@@ -64,7 +64,7 @@ Only you sign: here, on the Day page of `logbook serve`, or through the door whe
 sign* takes your reflection (typed, the day's Wispr Flow draft offered prefilled, or a recording
 where this machine can hear one), shows the proposals the rules read in it as boxes, none ticked,
 and Sign signs the day through the code `day reflect --sign` runs: the ticked delegations written as
-notes, then `signing.sign` with every line on the page confirmed, your reflection among them, and
+notes, then `signing.sign` with every line on the page confirmed but pencil, your reflection among them, and
 the ticked dispositions in the signature. The line is byte for byte what `logbook day reflect DAY
 --sign --accept N,N` writes for the same reflection and ticks. A day you signed before is signed
 again, the new line superseding the standing one and keeping what it said, and the page then shows
@@ -273,6 +273,14 @@ entry still allows stands in on the Day, its own proposals are the ones listed. 
 before the entry changed stays in the record: it is your line, not the model's.
 
 ## Keep and sign
+
+Pencil is what a model or an agent wrote, and no signature confirms it, however it is signed
+(`day sign`, `--confirm all`, `day reflect --sign`, the Library's Sign, an agent's `sign_day`): the
+dream's draft, a note a model derived (a photo's description, a meeting's summary: `extra.derived`),
+and any line with source `description` or `mcp`. Naming one in `--confirm` or a disposition, by id or
+by its seq however written, is refused before anything is written; a disposition a signature made
+before this rule gave one is not carried into the signature that supersedes it. The page's digest
+still covers pencil: you signed what you were shown.
 
 The dream's draft is pencil: nothing in it is yours until you keep it ([RFC
 0043](https://github.com/bighydro/logbook/blob/main/rfcs/0043-the-day-page.md), §5). `logbook day DAY`

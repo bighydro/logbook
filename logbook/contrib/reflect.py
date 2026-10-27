@@ -51,7 +51,7 @@ import re
 import shutil
 import subprocess
 import sys
-from collections.abc import Callable, Collection, Sequence
+from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import UTC, date, datetime
 from pathlib import Path
@@ -61,6 +61,7 @@ from zoneinfo import ZoneInfo
 from ..core import notes, sealing, signing
 from ..core.chain import Line
 from ..core.drafts import KIND as DRAFT_KIND
+from ..core.drafts import is_pencil
 from ..core.export import parse_day
 from ..core.store import RETRACTION, Logbook, retractions
 from . import dream_events, keep, promises
@@ -143,41 +144,84 @@ def on_page(lines: Sequence[Line], retracted: Collection[str]) -> set[str]:
     }
 
 
+def named(lines: Sequence[Line], entry: str) -> Line | None:
+    """The line `entry` names as `signing.sign` reads it (`signing._on_page`): a `seq` when it is
+    digits, any digits `int` reads (`02`, `٢`), else an id; None when it names none or is blank. So a
+    check on what an entry names sees the line `sign` will, however the seq is spelled."""
+    text = entry.strip()
+    if not text:
+        return None
+    if text.isdigit():
+        return next((line for line in lines if int(line["seq"]) == int(text)), None)
+    return next((line for line in lines if str(line["id"]) == text), None)
+
+
+def pencil(lines: Iterable[Line]) -> set[str]:
+    """The ids of the pencil among `lines` (`drafts.is_pencil`): what a signature never confirms."""
+    return {str(line["id"]) for line in lines if is_pencil(line)}
+
+
 def ink(lb: Logbook, day: str, confirm: list[str] | None) -> list[str] | None:
-    """RFC 0043 §6 rule 3, the signature never confirms a draft line: `confirm` as `signing.sign`
-    takes it, every `draft` line of the page left out. None, the whole page, becomes the page's lines
-    but its drafts when it has one (else stays None, byte for byte the signature it was); a list
-    loses a draft it names, as a standing signature made before the rule may have. The page digest
-    still covers the draft: the owner signed what they were shown. Read under the caller's lock."""
+    """RFC 0043 §6 rule 3, the signature never confirms pencil (`drafts.is_pencil`: a draft line, a
+    derived note, an agent's line; R7): `confirm` as `signing.sign` takes it, every pencil line of the
+    page left out. None, the whole page, becomes the page's lines but its pencil when it has some
+    (else stays None, byte for byte the signature it was); a list loses a pencil line it names, as a
+    standing signature made before the rule may have. The page digest still covers the pencil: the
+    owner signed what they were shown. Read under the caller's lock."""
     lines, retracted = day_lines(lb, day)
     page = [line for line in lines if str(line["id"]) in on_page(lines, retracted)]
-    drafted = {str(line["id"]) for line in page if line.get("kind") == DRAFT_KIND}
+    drafted = pencil(page)
     if not drafted:
         return confirm
     if confirm is None:
         return [str(line["id"]) for line in page if str(line["id"]) not in drafted]
-    seqs = {str(line["seq"]) for line in page if str(line["id"]) in drafted}
-    return [entry for entry in confirm if entry.strip() not in drafted and entry.strip() not in seqs]
+    return [entry for entry in confirm if not _names_pencil(lines, entry, drafted)]
+
+
+def ink_dispositions(
+    lb: Logbook, day: str, dispositions: Mapping[str, Sequence[str]]
+) -> dict[str, list[str]]:
+    """The dispositions `signing.sign` is given, every pencil line of the day left out: `sign`
+    confirms each line given a disposition, so a disposition carried forward from a standing signature
+    made before the rule (`sign_again.again`, `signature`) would confirm pencil. What the owner types
+    naming pencil is refused before this (`no_draft`). Read under the caller's lock."""
+    lines, _retracted = day_lines(lb, day)
+    drafted = pencil(lines)
+    kept = {
+        word: [e for e in entries if not _names_pencil(lines, e, drafted)]
+        for word, entries in dispositions.items()
+    }
+    return {word: entries for word, entries in kept.items() if entries}
+
+
+def _names_pencil(lines: Sequence[Line], entry: str, drafted: Collection[str]) -> bool:
+    found = named(lines, entry)
+    return found is not None and str(found["id"]) in drafted
 
 
 def no_draft(lb: Logbook, day: str, entries: Collection[str]) -> None:
     """Rule 3 for what the owner typed (`--confirm`, a disposition flag, `sign_day`'s ids): an entry
-    naming a draft line of the page, by seq or id, is refused in one sentence, before anything is
-    written."""
+    naming a pencil line of the page (`drafts.is_pencil`), by seq or id, is refused in one sentence,
+    before anything is written."""
     lines, _retracted = day_lines(lb, day)
     for entry in entries:
-        text = entry.strip()
-        for line in lines:
-            if line.get("kind") == DRAFT_KIND and text in (str(line["id"]), str(line["seq"])):
+        line = named(lines, entry)
+        if line is not None and is_pencil(line):
+            if line.get("kind") == DRAFT_KIND:
                 raise signing.SignError(
                     f"#{line['seq']} is the dream's draft, a proposal: a signature never confirms it (RFC"
                     " 0043 §6 rule 3); confirm the lines it rests on, or keep its sentences with --keep"
                 )
+            raise signing.SignError(
+                f"#{line['seq']} is a proposal, written by a model or an agent (source {line.get('source')}):"
+                " a signature never confirms it (RFC 0043 §6 rule 3); write what you keep of it as a note"
+            )
 
 
 def reflections(lines: Sequence[Line], retracted: Collection[str]) -> list[Line]:
-    """The reflection notes standing on the day, the latest last."""
-    return notes.standing(lines, notes.REFLECTION, retracted)
+    """The reflection notes standing on the day, the latest last; never pencil (`drafts.is_pencil`): an
+    agent's note labelled a reflection (`note_day`) is not the owner's reflection to sign with (R5)."""
+    return [line for line in notes.standing(lines, notes.REFLECTION, retracted) if not is_pencil(line)]
 
 
 def same(text: str, standing: Sequence[Line], dictation: Dictation | None = None) -> Line | None:
@@ -732,13 +776,20 @@ class Signature:
 
 
 def signature(
-    earlier: Line | None, page: Collection[str], joined: Sequence[str], accepted: Sequence[Proposal]
+    earlier: Line | None,
+    page: Collection[str],
+    joined: Sequence[str],
+    accepted: Sequence[Proposal],
+    pencilled: Collection[str] = (),
 ) -> Signature:
     """The arguments of the signature `day reflect --sign` writes. A day not signed yet: the page
     confirmed (the reflection and the delegations among it) and the accepted dispositions. A day
     signed already is signed again, superseding the standing signature and keeping what it said: its
     confirmed lines still on the page and not retracted, the lines `joined` (the reflection, the
-    delegations) added, its dispositions, the accepted ones winning on a line they share, its note."""
+    delegations) added, its dispositions, the accepted ones winning on a line they share, its note.
+    Nothing is kept of a line in `pencilled` (`pencil`, R7): a standing signature made before the
+    rule may have confirmed one or given it a disposition, and a signature never confirms pencil."""
+    page = set(page) - set(pencilled)
     disposed: dict[str, str] = {}
     confirm: list[str] | None = None
     note: str | None = None
@@ -809,7 +860,7 @@ def close(
     and what the owner keeps (`keeping`: Keep and sign, `keep.prepared`) checked and made, the reflection
     written when it is new (`write`), the accepted delegations written as notes (`delegate`), the
     accepted events as event lines (`dream_events.write`), what is kept (`keep.write`), then the
-    signature through `signing.sign` with what `signature` says, never a draft line confirmed (`ink`),
+    signature through `signing.sign` with what `signature` says, never a pencil line confirmed (`ink`),
     at `at` or now. `say` hears what the command prints as it goes. HeadMoved and another writer are
     the store's own errors; nothing is retried."""
     zone = ZoneInfo(str(lb.meta["timezone"]))
@@ -845,11 +896,16 @@ def close(
             say(dream_events.wrote_text(e, line))
         keeps = keep.write(lb, day, today, items, say, at)
         joined += [str(line["id"]) for line in keeps]
-        args = signature(earlier, page | set(joined), joined, accepted)
+        args = signature(earlier, page | set(joined), joined, accepted, pencil(day_lines(lb, day)[0]))
         if args.kept is not None:
             say(f"  {args.kept}")
         line = signing.sign(
-            lb, day, confirm=ink(lb, day, args.confirm), note=args.note, at=at, dispositions=args.dispositions
+            lb,
+            day,
+            confirm=ink(lb, day, args.confirm),
+            note=args.note,
+            at=at,
+            dispositions=ink_dispositions(lb, day, args.dispositions),
         )
     return Closed(line, note, r.note is None, tuple(delegations), args.kept, tuple(written), tuple(keeps))
 

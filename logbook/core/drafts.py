@@ -456,11 +456,35 @@ class Allowed:
         return f"{found}; `dream --catch-up` dreams the day again under it"
 
 
+PENCIL_SOURCES = ("description", "mcp")  # a model's description of a photo; an agent's line through the door
+
+
+def is_pencil(line: Line) -> bool:
+    """Whether `line` is pencil, a proposal no signature confirms (RFC 0043 §6 rule 3; R7): the
+    dream's draft, a note a model derived (`extra.derived`: a photo's description, a meeting's summary),
+    and any line written by a model describing a photo or by an agent through the MCP door (source
+    `description` or `mcp`). Everything else on a day's page is ink, the owner's to confirm."""
+    if line.get("kind") == KIND or line.get("source") in PENCIL_SOURCES:
+        return True
+    payload = line.get("payload")
+    extra = payload.get("extra") if isinstance(payload, dict) else None
+    return line.get("kind") == "note" and isinstance(extra, dict) and extra.get("derived") is True
+
+
 def under_entry(line: Line) -> bool:
     """Whether a draft was written under an entry of the crossing policy: every draft but a video
     scene's (source `SCENE_SOURCE`), which the rules on this machine write from lines that never
     crossed, so that no entry governs it and a crossing carries it by its tier like any line."""
     return not str(line.get("source") or "").startswith(SCENE_SOURCE)
+
+
+def held_by_entry(line: Line, entries: Allowed) -> bool:
+    """A draft the entry it was written under no longer allows (`Allowed.allows`: a person's the
+    `relationship` entry, every other unit's the `dream` entry, and a sealed one this machine cannot
+    open the `dream` entry); every other line, a video scene's draft among them (written under no
+    entry, `under_entry`), is the tier's alone. The one check every crossing applies to a draft in
+    hand: an export, `share day` (R4) and the MCP door."""
+    return line.get("kind") == KIND and under_entry(line) and not entries.allows(line)
 
 
 def unit_of(line: Line) -> object:

@@ -1233,7 +1233,8 @@ logbook import page ~/Downloads/saturday.zip         # Ola's side: verified, the
 logbook day 2026-06-13                               # … and the Day ends with a `from ines` section
 ```
 
-The same ceiling as a crossing applies, per destination, and a page is a crossing: every share appends one
+The same ceiling as a crossing applies, per destination, a draft is held to the entry it was written under
+as every crossing holds it, and a page is a crossing: every share appends one
 `crossing/v1` line, so the record shows each day that left it. A page that fails any check — the signature, a
 line's hash, a file the manifest does not name — is refused with the check named and nothing of it is kept.
 The two pages under `tests/fixtures/share/` are the fixture a second implementation reads.
@@ -1254,8 +1255,9 @@ ceiling of 2. Every run appends one `crossing/v1` line, and re-running rewrites 
 `logbook serve mcp` serves the record to an agent on this machine over the Model Context Protocol, on this
 process's stdin and stdout and nothing else: no port, no socket. The host starts it, and the tools are the
 readers above — `day`, `days`, `trips`, `places`, `people`, `person`, `promises`, `gaps`, and a `search` over
-the index — plus two that write through `Logbook.append` and nothing else: `add_note` (one `note/v1` line, as
-`logbook add`) and `promise_done` (one `task/v1` line, as `logbook promises done`).
+the index — plus write tools that go through `Logbook.append` and nothing else, each refused until the `mcp` entry
+of your policy names it: `add_note` (one `note/v1` line, as `logbook add`, source `mcp`) and `promise_done`
+(one `task/v1` line, as `logbook promises done`, source `mcp`), among them.
 
 ```bash
 pipx install --force "openlogbook[mcp]"       # the official Python MCP SDK

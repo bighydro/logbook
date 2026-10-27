@@ -58,7 +58,7 @@ POLICY = {  # every destination at its highest ceiling: the registry crosses to 
     "hermes": {"max_tier": 3},  # given a recipient when the record is built: sealed lines resealed to it
     "athena": {"max_tier": 3},  # no recipient: sealed lines cross opened, with --open
     "ola": {"max_tier": 3},
-    "mcp": {"max_tier": 3, "write": ["sign_day", "note_day"]},
+    "mcp": {"max_tier": 3, "write": ["sign_day", "note_day", "add_note", "promise_done"]},
     "vault": {"max_tier": 2},
     "site": {"max_tier": 2},
     "world": {"max_tier": 3},

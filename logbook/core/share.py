@@ -34,7 +34,7 @@ from pathlib import Path
 from typing import Any, NamedTuple
 from zoneinfo import ZoneInfo
 
-from . import attachments, crossing, day_start, heard, policy, sealing, stars
+from . import attachments, crossing, day_start, drafts, heard, policy, sealing, stars
 from .chain import ENVELOPE_FIELDS, Line, canonical_json, compute_hash, is_sealed, parse_line
 from .export import SCHEMA as PACKAGE_SCHEMA
 from .export import entry, parse_day
@@ -237,6 +237,9 @@ class Selection:
     blobs: list[dict[str, Any]]  # SPEC §1.1 references the store holds, in the manifest's shape
     missing: int  # digests referenced whose file the store does not hold
     sealed: int = 0  # of the page's lines before `heard`'s hold (RFC 0046), the `sealed/v1` ones (RFC 0029)
+    held_back_by_entry: int = (
+        0  # drafts their entry no longer allows (`drafts.held_by_entry`), in `held_back`
+    )
 
     @property
     def held_back(self) -> int:
@@ -256,6 +259,7 @@ class Selection:
             "logged": self.logged,
             "crossed": len(self.lines),
             "held_back": self.held_back,
+            **({"held_back_by_entry": self.held_back_by_entry} if self.held_back_by_entry else {}),
             "by_tier": self.by_tier,
             "by_kind": self.by_kind,
             "resolutions": 0,
@@ -273,7 +277,10 @@ def select(lb: Logbook, day: str, max_tier: int, to: str | None = None) -> Selec
     retracted line stays home, and a retraction is not an event of the day it was written. A star
     (RFC 0041) is at its line's day and tier, so it crosses with its line, and never without it; so
     does a photo's star, its `memory` keeper (`stars.beside`). What a podcast or a video said
-    (`heard`, RFC 0046) is on the page only when the entry of `to` says `"heard": true`."""
+    (`heard`, RFC 0046) is on the page only when the entry of `to` says `"heard": true`. A draft
+    follows the entry it was written under, as every crossing holds it (`drafts.held_by_entry`, R4):
+    one its entry no longer allows (missing, lowered, expired) stays home and is counted in
+    `held_back`, whatever `max_tier`."""
     with lb.index() as idx:
         # `Index.day`'s own query, the lines as the file holds them, so a sealed one is seen sealed;
         # each is then opened as `Index.day` opens it
@@ -290,6 +297,10 @@ def select(lb: Logbook, day: str, max_tier: int, to: str | None = None) -> Selec
     lines = sorted(
         (line for line in rows if int(line["tier"]) <= max_tier), key=lambda r: (str(r["at"]), int(r["seq"]))
     )
+    entries = drafts.allowed(lb.root)
+    within = len(lines)
+    lines = [line for line in lines if not drafts.held_by_entry(line, entries)]
+    by_entry = within - len(lines)
     crossing_ids = {str(line["id"]) for line in lines}
     lines = [line for line in lines if stars.beside(line, crossing_ids)]
     sealed = sum(1 for line in lines if int(line["seq"]) in sealed_seqs)
@@ -303,7 +314,7 @@ def select(lb: Logbook, day: str, max_tier: int, to: str | None = None) -> Selec
         kept = [line for line in kept if stars.beside(line, kept_ids)]
     lines = kept
     blobs, missing = crossing.blobs(lb, lines)
-    return Selection(lines, len(rows), [_attachment(b) for b in blobs], missing, sealed)
+    return Selection(lines, len(rows), [_attachment(b) for b in blobs], missing, sealed, by_entry)
 
 
 def _attachment(blob: dict[str, Any]) -> dict[str, Any]:
