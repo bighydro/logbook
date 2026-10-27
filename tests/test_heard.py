@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from test_heard_sync import FEED, JSON, SRT, TEXT, VTT, _heard, _listen, _ttml, _watch, _web
+from test_heard_sync import FEED, JSON, SRT, TEXT, VTT, _heard, _listen, _ttml, _watch, _web, allow_fetch
 
 from logbook import cli
 from logbook.commands import heard as heard_command
@@ -30,6 +30,7 @@ def lb(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFi
     import os
 
     record = Logbook.init(Path(os.environ["LOGBOOK_HOME"]), TZ)
+    allow_fetch(record)  # the owner's leave to fetch a feed's transcript (S9)
     _listen(record, "2026-10-14T06:40:00Z", "EP-1", "Episode 12: the east berth", f"{FEED}/12.vtt")
     _listen(record, "2026-10-14T16:10:00Z", "EP-2", "Episode 13: the tide", f"{FEED}/13.srt")
     _watch(record, "2026-10-14T19:05:00Z", "aB3dE5fG7hI", "Splicing a three-strand rope")
@@ -366,6 +367,7 @@ def test_a_share_refuses_a_sealed_day_first_and_carries_heard_only_under_the_ent
     meta["recipients"] = [recipient for _, recipient in pairs]
     sealed._save_meta(meta)
     sealed = Logbook(sealed.root)
+    allow_fetch(sealed)  # the owner's leave to fetch a feed's transcript (S9)
     _listen(sealed, "2026-10-14T06:40:00Z", "EP-1", "Episode 12: the east berth", f"{FEED}/12.vtt")
     sealed.append(
         "2026-10-14T12:00:00Z", "manual", "note", 2, {"schema": "note/v1", "text": "Solvind at the berth"}

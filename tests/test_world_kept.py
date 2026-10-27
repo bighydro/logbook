@@ -18,7 +18,7 @@ from unittest import mock
 import pytest
 
 from logbook.contrib import demo, world
-from logbook.core import reading
+from logbook.core import policy, reading
 from logbook.core.index import local_date
 from logbook.core.store import Logbook
 
@@ -55,6 +55,10 @@ def record(tmp_path: Path) -> Iterator[Any]:
 
         with mock.patch.object(demo, "story_of", held_only):
             lb = demo.generate(tmp_path / f"Demo-{seed}", days=days, seed=seed)
+        path = policy.policy_path(lb.root)  # the owner's world entry: tiers 1 and 2 may be shown (S9)
+        data = policy.read(lb.root)
+        data[policy.WORLD_DESTINATION] = {"max_tier": 2}
+        path.write_text(json.dumps(data), encoding="utf-8")
         return lb, [by_day[day] for day in ordered[held:]]
 
     yield make

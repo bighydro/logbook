@@ -27,7 +27,7 @@ from logbook.commands import parser
 from logbook.commands import sync as sync_commands
 from logbook.contrib import first_run
 from logbook.contrib.adapters import heard as step
-from logbook.core import heard
+from logbook.core import heard, policy
 from logbook.core.store import Logbook
 
 TZ = "Europe/Oslo"
@@ -109,11 +109,23 @@ class _Response:
         return None
 
 
+FETCH_ENTRY = {"max_tier": 2, "fetch": True}  # the owner's leave to fetch a feed's transcript (S9)
+
+
+def allow_fetch(lb: Logbook) -> None:
+    """The `heard` entry that lets `sync heard` fetch a feed's transcript, written into the policy."""
+    data = policy.read(lb.root)
+    data["heard"] = FETCH_ENTRY
+    policy.policy_path(lb.root).write_text(json.dumps(data), encoding="utf-8")
+
+
 @pytest.fixture
 def lb(tmp_path: Path) -> Logbook:
     import os
 
-    return Logbook.init(Path(os.environ["LOGBOOK_HOME"]), TZ)
+    lb = Logbook.init(Path(os.environ["LOGBOOK_HOME"]), TZ)
+    allow_fetch(lb)
+    return lb
 
 
 @pytest.fixture
@@ -341,6 +353,7 @@ def test_a_failed_fetch_is_a_counted_skip_noted_and_never_a_retry_storm(
                 cache=cache,
                 store=lb.attach,
                 today=date.fromisoformat(day),
+                fetch_entry=policy.heard_fetch(lb.root),
             )
         )
         assert drafts and all(d["payload"]["title"] == "Fine" for d in drafts)
@@ -348,7 +361,14 @@ def test_a_failed_fetch_is_a_counted_skip_noted_and_never_a_retry_storm(
     before = len(web.requests)
     list(
         step.pull(
-            config, None, counts=counts, lines=lines, cache=cache, store=lb.attach, today=date(2027, 6, 1)
+            config,
+            None,
+            counts=counts,
+            lines=lines,
+            cache=cache,
+            store=lb.attach,
+            today=date(2027, 6, 1),
+            fetch_entry=policy.heard_fetch(lb.root),
         )
     )
     assert f"{FEED}/gone.vtt" not in web.requests[before:]  # three failures: given up, never again
@@ -692,6 +712,7 @@ def test_in_a_record_that_seals_the_text_is_sealed_and_read_with_the_identity_on
     sealing.write_identity_file(identity, pairs[0][0], "test")
     monkeypatch.setenv("LOGBOOK_IDENTITY_FILE", str(identity))
     record = Logbook(record.root)
+    allow_fetch(record)
     _listen(record, "2026-10-14T06:40:00Z", "EP-1", "Episode 12: the east berth", f"{FEED}/12.vtt")
     web = _web(monkeypatch, {f"{FEED}/12.vtt": (VTT, {"Content-Type": "text/vtt"})})
     monkeypatch.setenv("LOGBOOK_HEARD", "feed")

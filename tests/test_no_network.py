@@ -12,6 +12,7 @@ The same guard covers `verify` on the conformance sample, which must still print
 
 from __future__ import annotations
 
+import contextlib
 import json
 import shutil
 import sys
@@ -620,3 +621,22 @@ def test_a_month_or_a_chapter_without_the_dream_entry_sends_nothing(
         cli.main(list(argv))
     assert e.value.code == 2 and "names no 'dream' entry" in capsys.readouterr().err
     assert no_network == [], f"logbook {' '.join(argv)} tried to connect: {no_network}"
+
+
+def test_doctor_packet_with_an_endpoint_and_no_dream_entry_sends_nothing(
+    lb: Logbook,
+    no_network: list[str],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """The demo record's policy names no `dream` entry; with an endpoint, a model and a key set, as a
+    cloud model's would be, `doctor --packet` says the probe was not sent and opens no connection (S8)."""
+    monkeypatch.setenv("LOGBOOK_DREAM_ENDPOINT", "https://api.example.org/v1")
+    monkeypatch.setenv("LOGBOOK_DREAM_MODEL", "xy-chat-1")
+    monkeypatch.setenv("LOGBOOK_DREAM_KEY", "sentinel-dream-value")
+    capsys.readouterr()
+    with contextlib.suppress(SystemExit):
+        cli.main(["doctor", "--packet"])
+    out = capsys.readouterr().out
+    assert "probe: not sent" in out
+    assert no_network == [], f"logbook doctor --packet tried to connect: {no_network}"

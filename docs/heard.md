@@ -18,6 +18,20 @@ logbook sync heard --dry-run               # what it would fetch and read, nothi
 logbook sync heard
 ```
 
+`feed` fetches a transcript from the podcast's host, and each fetch tells that host which episode you
+played, a tier-2 fact like the listen itself. So the variable alone fetches nothing: `feed` needs a
+`heard` entry in `policy/crossing.json` that says so, with the tier of the listens (2) and, if you like,
+an `until`:
+
+```json
+{"heard": {"max_tier": 2, "fetch": true, "until": "2026-12-31"}}
+```
+
+Without it, or once it has expired, every feed transcript is a counted skip (`feed transcript not
+fetched`), the entry is checked before any request or lookup, and one line says what to write;
+`logbook doctor` names the entry on its crossing line. `apple` and `captions` read files on this
+machine and need no entry.
+
 Until `LOGBOOK_HEARD` is set, `sync --all` and the schedule skip the source and say so. Once set, the
 schedule runs it after every other source but the photo walk, so it sees the listens the podcasts sync
 wrote. A dry run fetches nothing: it counts what it would fetch. To switch it
@@ -40,11 +54,16 @@ off without unsetting the variable, list it in `policy/import.json` as any sourc
 (`<podcast:transcript>`); `sync apple-podcasts` keeps its URL on the listen line and never fetches it.
 `sync heard` fetches it, once: WebVTT, SRT, podcasting 2.0's JSON and plain text are kept exactly as
 they came; an HTML transcript is skipped and counted, and so is a URL that points at this machine or
-your own network (`localhost`, `127.0.0.1`, `192.168.…`), which is never requested. A host name, or an
-address not written out in full (`127.1`), is looked up first and refused if any address it gives is
-one of those; a host that does not look up is a failed fetch, never a request. A redirect is
-followed only to another public `http(s)` address, three at most: one that points at this machine,
-your network or another scheme is refused, with the same lookup, before it is requested. At most `LOGBOOK_HEARD_MAX_FETCHES` a run, two
+your own network or any address that is not on the public internet (`localhost`, `127.0.0.1`,
+`192.168.…`, the tailnet's `100.64.0.0/10` and Tailscale's `100.100.100.100`), which is never requested,
+nor a port other than 80 and 443. A host name (a MagicDNS name among them), or an address not written
+out in full (`127.1`), is looked up once and refused if any address it gives is one of those; a host
+that does not look up is a failed fetch, never a request. The connection goes to the address that was
+checked and no other, never through a proxy your environment names, while the name is still what the
+host and its certificate are checked against: a name that answers differently the second time is
+never asked twice. A redirect is followed only to another public `http(s)` address, three at most, and
+each hop is checked and connected the same way; one that points at this machine, your network, another
+scheme or port, or from an `https` page to `http`, is refused before it is requested. At most `LOGBOOK_HEARD_MAX_FETCHES` a run, two
 seconds apart. A fetch that fails is one counted skip; the same URL is not tried again for a week, and
 never after its third failure.
 

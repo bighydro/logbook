@@ -70,6 +70,14 @@ both (the next reader rebuilds it, or `logbook repair index` does now); a **fail
 a clock `HH:MM`, which every reader that groups by day refuses. A record whose day begins at midnight,
 with an index that agrees, has no such line.
 
+## What leaves, and what may be fetched
+
+The `crossing` line lists each entry of `policy/crossing.json` as it counts today (`mcp 1`, `hermes 2
+until 2026-12-31`, `heard 2 fetch`). When `LOGBOOK_HEARD` names `feed` and no `heard` entry lets a
+transcript be fetched, it says which entry to write, `{"heard": {"max_tier": 2, "fetch": true}}`. The
+`world` line says what `export world` and the Library's `/world` show: tier 1 alone when the file names
+no `world` entry, and the entry that adds the chapters, `{"world": {"max_tier": 2}}`.
+
 ## Drafts the policy no longer allows
 
 A draft follows the `dream` entry of `policy/crossing.json`, not the head ([the dream](dream.md), *When
@@ -203,8 +211,10 @@ not stay up — a collaborator needs to see this machine without seeing the reco
   timers and the service installed here); none elsewhere.
 
 The probe is the packet's one network call, and it is made only when `LOGBOOK_DREAM_ENDPOINT` is set and
-a model is named (`LOGBOOK_DREAM_MODEL`, or the `model` of the policy's `dream` entry). Without them
-nothing is fetched. Unlike `doctor`'s `serve` line, the packet does not ask the service's port whether
+a model is named (`LOGBOOK_DREAM_MODEL`, or the `model` of the policy's `dream` entry), and only while
+the policy's `dream` entry allows the dream: the probe carries your key to the endpoint, so with no
+`dream` entry, or one past its `until`, it is not sent and the packet says why (`probe: not sent, …`).
+Without them nothing is fetched. Unlike `doctor`'s `serve` line, the packet does not ask the service's port whether
 a server answers: that would be a second request.
 
 Whatever the packet quotes rather than writes — a log line, the reply, an error, a source's result — is

@@ -249,4 +249,9 @@ def world_record(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Logbook:
     lb.append_many(world_drafts())
     (lb.root / "assets.json").write_text(json.dumps({"assets": ASSETS}, indent=2), encoding="utf-8")
     (lb.root / "places.json").write_text(json.dumps(PLACES, indent=2, ensure_ascii=False), encoding="utf-8")
+    # the owner's world entry: the page shows the chapters (tier 2); without it, tier 1 alone (S9)
+    path = lb.root / "policy" / "crossing.json"
+    data = json.loads(path.read_text(encoding="utf-8"))
+    data["world"] = {"max_tier": 2}
+    path.write_text(json.dumps(data), encoding="utf-8")
     return lb

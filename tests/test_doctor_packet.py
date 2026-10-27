@@ -21,6 +21,7 @@ import pytest
 
 from logbook import __version__, cli
 from logbook.contrib import last_run, packet, schedule, service
+from logbook.core import policy
 from logbook.core.store import Logbook
 
 OWNER = {
@@ -87,7 +88,17 @@ def lb(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Logbook:
     report = last_run.Doctor(14, ("sync:mail",), ())
     run = last_run.Run(NOW - timedelta(hours=3), sources, report, "mail  failed (status 1)")
     last_run.write(root, last_run.State(run, (), None))
+    _dream(lb, {"max_tier": 2, "until": "2099-12-31"})  # the owner's leave to send the probe (S8)
     return lb
+
+
+def _dream(lb: Logbook, entry: dict[str, Any] | None) -> None:
+    """The record's `dream` entry, or none."""
+    data = policy.read(lb.root)
+    data.pop(policy.DREAM_DESTINATION, None)
+    if entry is not None:
+        data[policy.DREAM_DESTINATION] = entry
+    _write(policy.policy_path(lb.root), data)
 
 
 def _env(**more: str) -> dict[str, str]:
@@ -400,3 +411,44 @@ def test_out_without_packet_is_refused(
         cli.main(["doctor", "--out", str(tmp_path / "p.txt")])
     assert e.value.code == 2
     assert not (tmp_path / "p.txt").exists()
+
+
+@pytest.mark.parametrize(
+    ("entry", "why"),
+    [(None, "names no 'dream' entry"), ({"max_tier": 2, "until": "2026-01-31"}, "expired on 2026-01-31")],
+    ids=["no-entry", "expired"],
+)
+def test_without_the_dream_entry_the_probe_is_never_sent(
+    lb: Logbook, entry: dict[str, Any] | None, why: str
+) -> None:
+    """The probe carries the bearer key to the endpoint, a crossing like the dream's own (S8): with
+    no `dream` entry, or one that has expired, it is not sent, and one line says why."""
+    _dream(lb, entry)
+    with _endpoint(200, b"{}") as (port, seen):
+        text = packet.build(
+            lb,
+            _env(
+                LOGBOOK_DREAM_ENDPOINT=f"http://127.0.0.1:{port}/v1",
+                LOGBOOK_DREAM_MODEL=MODEL,
+                LOGBOOK_DREAM_KEY=DREAM_KEY,
+            ),
+        )
+    assert seen == [], "nothing was sent"
+    [said] = [line for line in text.splitlines() if line.startswith("probe:")]
+    assert "not sent" in said and why in said and "crossing.json" in said, said
+    assert "reply:" not in text
+    _absent(text, DREAM_KEY)
+
+
+def test_when_the_entry_s_model_and_the_variable_disagree_the_probe_is_never_sent(lb: Logbook) -> None:
+    _dream(lb, {"max_tier": 2, "until": "2099-12-31", "model": "another-model"})
+    with _endpoint(200, b"{}") as (port, seen):
+        text = packet.build(
+            lb,
+            _env(
+                LOGBOOK_DREAM_ENDPOINT=f"http://127.0.0.1:{port}/v1",
+                LOGBOOK_DREAM_MODEL=MODEL,
+                LOGBOOK_DREAM_KEY=DREAM_KEY,
+            ),
+        )
+    assert seen == [] and "probe: not sent" in text and "key: LOGBOOK_DREAM_KEY set, not sent" in text

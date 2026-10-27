@@ -22,9 +22,11 @@ first (`existing`, one SELECT), and a work that has its text is passed by withou
 taken and the next run carries on. A failed fetch is one counted skip, its URL noted in the cache
 (`state/heard-cache.json`) and not tried again for `RETRY_AFTER_DAYS`, nor ever after
 `GIVE_UP_AFTER` failures; a 429 ends the run's fetching. A URL, or a redirect's target, whose host is
-this machine or its network, written out or as any address it resolves to, or whose scheme is not
-http(s), is never requested, nor one whose host does not resolve; at most `MAX_REDIRECTS` redirects
-are followed. Without `store` (a dry run) nothing is
+this machine, its network or any address that is not global (the tailnet's 100.64.0.0/10 among them),
+written out or as any address it resolves to, whose scheme is not http(s) or whose port is not 80 or
+443, is never requested, nor one whose host does not resolve, nor an https page's redirect to http;
+the connection goes to the address that was checked and no other, on every hop, never through a
+proxy; at most `MAX_REDIRECTS` redirects are followed. Without `store` (a dry run) nothing is
 fetched and nothing stored: a fetch is counted as `would_fetch`, a local text read and counted.
 
 Not in `pyproject.toml`'s table: `logbook.commands.sync` runs it by name and as the last source of
@@ -40,16 +42,23 @@ import time
 from collections.abc import Callable, Iterable, Iterator, Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
-from http.client import HTTPException
+from http.client import HTTPConnection, HTTPException
 from pathlib import Path
 from typing import Any
-from urllib.error import HTTPError
+from urllib.error import HTTPError, URLError
 from urllib.parse import urljoin, urlsplit
-from urllib.request import HTTPRedirectHandler, Request, build_opener
+from urllib.request import (
+    HTTPHandler,
+    HTTPRedirectHandler,
+    HTTPSHandler,
+    ProxyHandler,
+    Request,
+    build_opener,
+)
 from zoneinfo import ZoneInfo
 
 from ... import __version__
-from ...core import attachments
+from ...core import attachments, policy
 from ...core import heard as profile
 from . import apple_podcasts
 
@@ -90,10 +99,14 @@ DEFAULT_TTML = (
 CAPTION_SUFFIXES = (".vtt", ".srt")
 TRACK_ID = re.compile(r"transcript_(\d+)")
 LANGUAGE_TAG = re.compile(r"[A-Za-z]{2,3}(?:-[A-Za-z0-9]{1,8})*")  # a BCP 47 tag, as far as a file name says
+NO_FETCH_ENTRY = "sync heard fetches no transcript without the record's heard entry (policy.heard_fetch)"
 FAILED = "failed"  # the cache's key: url → {"count": n, "last": "YYYY-MM-DD"}
 
 sleep = time.sleep  # tests replace it, as they replace `urlopen`
 WEB_SCHEMES = ("http", "https")
+WEB_PORTS = (80, 443)  # the only ports a fetch connects to, written out or not
+VETTED = "logbook_vetted_address"  # the attribute of a Request naming the addresses its host was checked as
+HOST_NAME = re.compile(r"[A-Za-z0-9._-]+")  # a host as a name: urllib unquotes a `%` before reading the port
 
 
 @dataclass(frozen=True)
@@ -206,12 +219,15 @@ def pull(
     timezone: str | None = None,
     notice: Callable[[str], None] | None = None,
     today: date | None = None,
+    fetch_entry: policy.Fetch | None = None,
 ) -> Iterator[dict[str, Any]]:
     """One heard/v1 draft per work that has no text yet, the works in the order of their listen or
     watch (`at`, then `seq`), from `since` on (None: every one). `lines(kind, first_day)` is the
     record's standing lines of a kind from a local day on; `existing` which `(source, raw_id)` keys
     the record holds; `store(data, tier=)` puts a text in the attachment store (None: a dry run,
-    nothing fetched, nothing stored); `cache` the step's own bookkeeping between runs."""
+    nothing fetched, nothing stored); `cache` the step's own bookkeeping between runs; `fetch_entry`
+    what the `heard` entry of the policy lets a feed's transcript be fetched for (`policy.heard_fetch`,
+    S9), checked before any request or lookup: None, as without the entry, fetches nothing."""
     if lines is None:
         raise OSError("heard reads the record's own listens and watches: run it as `logbook sync heard`")
     counts = counts if counts is not None else {}
@@ -235,9 +251,17 @@ def pull(
     captions = _Captions(config, counts) if "captions" in config.sources else None
     fetched, written, started = 0, 0, time.monotonic()
     stop_fetching = False
+    entry = fetch_entry if fetch_entry is not None else policy.Fetch(0, NO_FETCH_ENTRY)
+    told = False
     for n, work in enumerate(todo):
         text: _Text | None = None
         if work.text_source == "feed":
+            if int(work.line.get("tier") or profile.TIER) > entry.max_tier:
+                _count(counts, "skipped_not_fetched")  # the entry is checked before anything is asked
+                if not told and notice is not None:
+                    notice(entry.why_not or _under_entry(entry, int(work.line.get("tier") or profile.TIER)))
+                told = True
+                continue
             if stop_fetching:
                 counts["left_for_next_run"] = counts.get("left_for_next_run", 0) + len(todo) - n
                 break
@@ -280,6 +304,14 @@ def pull(
         yield draft
     if progress is not None:
         progress(written, time.monotonic() - started)
+
+
+def _under_entry(entry: policy.Fetch, tier: int) -> str:
+    return (
+        f"sync heard fetches no transcript of a tier-{tier} listen: the {policy.HEARD_DESTINATION!r} entry of"
+        f" {policy.POLICY_FILE.as_posix()} allows fetches up to max_tier {entry.max_tier}"
+        f' ("{policy.FETCH}": true with a max_tier of {tier} lets them through)'
+    )
 
 
 def _first_day(since: str | None, tz: str) -> str:
@@ -386,19 +418,26 @@ class _Refused(Exception):
 
 class _Redirects(HTTPRedirectHandler):
     """urllib's redirect handling, with every target checked before it is requested: a target that is
-    not http(s), or that `_refusal` refuses, raises `_Refused` and nothing is asked of it; at most
-    `MAX_REDIRECTS` are followed, and the one after is an HTTPError, a counted failed fetch."""
+    not http(s), an https page's target that is http, or one `_check` refuses raises `_Refused` and
+    nothing is asked of it; the new request carries the address its host was checked as, so the hop
+    connects there and nowhere else (`_Pinned`); at most `MAX_REDIRECTS` are followed, and the one
+    after is an HTTPError, a counted failed fetch."""
 
     max_redirections = MAX_REDIRECTS
 
     def http_error_302(self, req: Any, fp: Any, code: int, msg: str, headers: Any) -> Any:
         target = headers.get("location") or headers.get("uri")
+        self._vetted: tuple[str, ...] | None = None
         if target is not None:
             joined = urljoin(req.full_url, target)
-            if urlsplit(joined).scheme.casefold() not in WEB_SCHEMES:
-                refused: str | None = "skipped_private_host"
+            scheme = urlsplit(joined).scheme.casefold()
+            refused: str | None
+            if scheme not in WEB_SCHEMES:
+                refused = "skipped_private_host"
             else:
-                refused = _refusal(joined)
+                refused, self._vetted = _check(joined)
+            if refused is None and scheme == "http" and urlsplit(req.full_url).scheme.casefold() == "https":
+                refused = "skipped_insecure_redirect"
             if refused is not None:
                 fp.close()
                 raise _Refused(joined, refused)
@@ -406,11 +445,56 @@ class _Redirects(HTTPRedirectHandler):
 
     http_error_301 = http_error_303 = http_error_307 = http_error_308 = http_error_302
 
+    def redirect_request(self, req: Any, fp: Any, code: int, msg: str, headers: Any, newurl: str) -> Any:
+        new = super().redirect_request(req, fp, code, msg, headers, newurl)
+        if new is not None:
+            setattr(new, VETTED, getattr(self, "_vetted", None))
+        return new
+
+
+def _pinned(http_class: Any, req: Any) -> Any:
+    """`http_class` made to connect to the address `req`'s host was checked as (`VETTED`) and to no
+    other, while the name stays the connection's host: the Host header and, for https, the SNI and
+    the certificate check carry it. A request no check vetted is refused, never resolved again."""
+    addresses = getattr(req, VETTED, None)
+    if not isinstance(addresses, tuple) or not addresses:
+        raise URLError("the host was not checked before the request; nothing was asked")
+
+    def connection(host: str, **kwargs: Any) -> HTTPConnection:
+        made: HTTPConnection = http_class(host, **kwargs)
+
+        def to_vetted(where: tuple[str, int], *args: Any, **options: Any) -> socket.socket:
+            failed: OSError | None = None
+            for address in addresses:  # each checked address in turn, as `create_connection` tries a name's
+                try:
+                    return socket.create_connection((address, where[1]), *args, **options)
+                except OSError as e:
+                    failed = e
+            raise failed or OSError("no address to connect to")
+
+        made._create_connection = to_vetted  # type: ignore[attr-defined]
+        return made
+
+    return connection
+
+
+class _PinnedHTTP(HTTPHandler):
+    def do_open(self, http_class: Any, req: Any, **kwargs: Any) -> Any:
+        return super().do_open(_pinned(http_class, req), req, **kwargs)
+
+
+class _PinnedHTTPS(HTTPSHandler):
+    def do_open(self, http_class: Any, req: Any, **kwargs: Any) -> Any:
+        return super().do_open(_pinned(http_class, req), req, **kwargs)
+
 
 def urlopen(request: Request, timeout: float) -> Any:
-    """Every fetch of the step: urllib's opener with `_Redirects` in place of its redirect handler.
-    Tests replace this function with a fake web, or the HTTP handlers under it."""
-    return build_opener(_Redirects()).open(request, timeout=timeout)
+    """Every fetch of the step: urllib's opener with no proxy whatever the environment says
+    (`ProxyHandler({})`: a proxy would connect where the check never looked), `_Redirects` in place of
+    its redirect handler, and the HTTP and HTTPS handlers connecting to the checked address only
+    (`_pinned`). Tests replace this function with a fake web, or the HTTP handlers under it."""
+    opener = build_opener(ProxyHandler({}), _Redirects(), _PinnedHTTP(), _PinnedHTTPS())
+    return opener.open(request, timeout=timeout)
 
 
 class _RateLimited(Exception):
@@ -420,17 +504,18 @@ class _RateLimited(Exception):
 def _fetch(url: str, counts: dict[str, int]) -> _Text | None:
     """The transcript at `url`, or None having counted why not: the server refused, the body is
     over `MAX_BYTES`, it is HTML or a format nobody reads. A 429 raises `_RateLimited`."""
-    refused = _refusal(url)
+    refused, address = _check(url)
     if refused is not None:
         _count(counts, refused)
         return None
     request = Request(url, headers={"User-Agent": USER_AGENT, "Accept": ACCEPT})
+    setattr(request, VETTED, address)  # the addresses the connection goes to, and no second answer
     try:
         with urlopen(request, timeout=TIMEOUT_S) as response:
             data = response.read(MAX_BYTES + 1)
             content_type = response.headers.get("Content-Type")
             content_language = response.headers.get("Content-Language")
-    except _Refused as e:  # a redirect to this machine, its network, another scheme or nowhere
+    except _Refused as e:  # a redirect to this machine, its network, another scheme, port or nowhere
         _count(counts, e.count)
         return None
     except HTTPError as e:
@@ -457,30 +542,56 @@ def _fetch(url: str, counts: dict[str, int]) -> _Text | None:
 
 
 def _refusal(url: str) -> str | None:
-    """Why the step never requests `url`, as the skip it is counted as, or None when it may:
-    `skipped_private_host` when `_private_host` refuses it as written, or when any address its host
-    resolves to (`socket.getaddrinfo`) is one `_at_home` names, so `127.1`, `2130706433` or a name
-    that resolves to 127.0.0.1 are refused like `127.0.0.1`; `skipped_fetch_failed` when the host
-    does not resolve. The check is before every request, the first and each redirect's."""
-    if _private_host(url):
-        return "skipped_private_host"
+    """Why the step never requests `url`, as the skip it is counted as, or None when it may (`_check`)."""
+    return _check(url)[0]
+
+
+def _is_address(host: str) -> bool:
+    try:
+        ipaddress.ip_address(host)
+    except ValueError:
+        return False
+    return True
+
+
+def _check(url: str) -> tuple[str | None, tuple[str, ...] | None]:
+    """Why the step never requests `url`, as the skip it is counted as, and else the one address the
+    request connects to: `skipped_private_host` when the scheme is not http(s), when `_private_host`
+    refuses it as written, or when any address its host resolves to (`socket.getaddrinfo`, asked once)
+    is one `_at_home` names, so `127.1`, `2130706433` or a name that resolves to 127.0.0.1 or into the
+    tailnet are refused like `127.0.0.1`; `skipped_port` for a port other than 80 and 443;
+    `skipped_fetch_failed` when the host does not resolve. The check is before every request, the
+    first and each redirect's, and the addresses it returns are the ones it checked: the connection
+    goes to them in turn (`_pinned`), never to a second answer of the resolver. A host that is neither
+    a name nor an address (an escape in it) is refused before any lookup."""
     parts = urlsplit(url)
-    host = str(parts.hostname)
+    if parts.scheme.casefold() not in WEB_SCHEMES or _private_host(url):
+        return "skipped_private_host", None
     try:
         port = parts.port or (443 if parts.scheme.casefold() == "https" else 80)
+    except ValueError:  # a port that is not a number in range
+        return "skipped_port", None
+    if port not in WEB_PORTS:
+        return "skipped_port", None
+    host = str(parts.hostname)
+    if not HOST_NAME.fullmatch(host) and not _is_address(host):
+        return "skipped_private_host", None  # `a.example%3A22` would connect to port 22
+    try:
         found = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
-    except (OSError, ValueError):  # not found, no answer, a name the resolver cannot encode, a bad port
-        return "skipped_fetch_failed"
+    except (OSError, ValueError):  # not found, no answer, a name the resolver cannot encode
+        return "skipped_fetch_failed", None
     if not found:
-        return "skipped_fetch_failed"
+        return "skipped_fetch_failed", None
+    addresses: list[str] = []
     for *_, sockaddr in found:
         try:
             address = ipaddress.ip_address(sockaddr[0])
         except ValueError:  # an address the step cannot read is one it cannot vouch for
-            return "skipped_private_host"
+            return "skipped_private_host", None
         if _at_home(address):
-            return "skipped_private_host"
-    return None
+            return "skipped_private_host", None
+        addresses.append(str(address))
+    return None, tuple(dict.fromkeys(addresses))
 
 
 def _private_host(url: str) -> bool:
@@ -504,12 +615,15 @@ def _private_host(url: str) -> bool:
 
 
 def _at_home(address: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
-    """An address of this machine or its network, or none a fetch should go to: private, loopback,
-    link-local, reserved, multicast or unspecified, an IPv4 address inside IPv6 judged as itself."""
+    """An address of this machine or its network, or none a fetch should go to: any address that is
+    not global (the tailnet's 100.64.0.0/10 and Tailscale's 100.100.100.100 among them, which
+    `is_private` lets through), and private, loopback, link-local, reserved, multicast or unspecified
+    ones, an IPv4 address inside IPv6 judged as itself."""
     if isinstance(address, ipaddress.IPv6Address) and address.ipv4_mapped is not None:
         address = address.ipv4_mapped
     return (
-        address.is_private
+        not address.is_global
+        or address.is_private
         or address.is_loopback
         or address.is_link_local
         or address.is_reserved
