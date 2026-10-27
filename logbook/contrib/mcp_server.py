@@ -9,12 +9,15 @@ Twelve read tools answer from the index and the readers every command already us
 `trips`, `places`, `people`, `person`, `promises`, `gaps`, `search`, and the three that read the lines
 themselves, `day_lines` (`logbook show DAY`, one object per line), `line` (one line in full, a
 transcript's text from the attachment store included) and `digest` (`logbook digest`, the text as the
-command prints it) — and two write tools go through `Logbook.append` and nothing else: `add_note` is
-`logbook add "<sentence>"`, and `promise_done` is `logbook promises done <id>`. Two more write tools
-are refused unless the owner allows them by name in the `mcp` entry's `write` (ADR 0022: orchestrators
-reach the record only through the crossing): `sign_day` is `logbook day sign`, through the same
-`signing.sign`, and `note_day` appends one `note/v1` line to a day. Both take the writer lock without
-waiting and write only to a day inside the write window (`policy.mcp_door`).
+command prints it). Four write tools are refused unless the owner allows them by name in the `mcp`
+entry's `write` (ADR 0022: orchestrators reach the record only through the crossing): `add_note` is
+`logbook add "<sentence>"`, `promise_done` is `logbook promises done <id>`, `sign_day` is `logbook day
+sign`, through the same `signing.sign`, and `note_day` appends one `note/v1` line to a day. Each takes
+the writer lock without waiting and writes only to a day inside the write window (`policy.mcp_door`).
+The three that write words or close a promise write their line with source `mcp`, never `manual`: an
+agent never writes as the owner (R5), and what it wrote is pencil, which no signature confirms.
+`sign_day` alone writes `manual`, byte for byte what `day sign` writes (`signing` is the one
+implementation): the owner names it in the policy, and it never confirms pencil.
 
 Every tool's output passes the crossing gate of ADR 0016. `policy/crossing.json` names the `mcp`
 destination and the highest tier that may cross to it, 1 unless the owner raises it (`policy.mcp_ceiling`);
@@ -68,6 +71,7 @@ from ..core import (
 )
 from ..core import days as days_reader
 from ..core.chain import Line, is_sealed
+from ..core.drafts import Allowed
 from ..core.export import parse_day
 from ..core.flights import Airports
 from ..core.index import RETRACTED, EvidenceRow, Index, LocationRow, Place
@@ -107,7 +111,7 @@ LOGGED = (
 PERIODS = ("day", "week")
 NOTE_KINDS = (notes.NOTE, notes.PROPOSAL, notes.REFLECTION)  # `note_day(kind)`, in note/v1's `labels`
 NOTE_MAX = 4000  # `note_day(text)`: the most characters one note through the door may hold
-NOTE_SOURCE = "mcp"  # the source of a `note_day` line: written through the door, in the owner's words
+NOTE_SOURCE = "mcp"  # the source of every line `add_note`, `note_day` and `promise_done` write: the door
 NOTE_TIER = notes.TIER  # RFC 0010: a note/v1 line is tier 2, whoever writes it
 ABOVE_LEFT = "above the door's ceiling left unconfirmed"  # `sign_day`'s `"all"` and first signature: a count
 NOT_WAITED = "; the door does not wait for another writer, so nothing was written"
@@ -152,6 +156,7 @@ class Gate:
     withheld: set[int]
     drafts: int = policy.TIERS[-1]
     people: int | None = None  # the `relationship` entry's max_tier today; None: as `drafts`
+    entries: Allowed | None = None  # the entries themselves, for a draft in hand (`allows_line`)
     own: frozenset[int] | None = None
     held: frozenset[int] | None = None
 
@@ -169,7 +174,10 @@ class Gate:
         return tier <= self.drafts
 
     def allows_line(self, line: Line) -> bool:
-        """`allows` for a line in hand: a person draft by its own unit, read from the payload."""
+        """`allows` for a line in hand: a person draft by its own unit, read from the payload, and
+        every draft held to its entry as every crossing holds it (`drafts.held_by_entry`)."""
+        if self.entries is not None and drafts.held_by_entry(line, self.entries):
+            return False
         tier, kind = int(line["tier"]), str(line.get("kind"))
         if kind != drafts.KIND or self.people is None or drafts.unit_of(line) != drafts.UNIT_PERSON:
             return self.allows(tier, kind)
@@ -989,17 +997,20 @@ def tool_digest(lb: GatedLogbook, a: Arguments) -> dict[str, Any]:
 
 
 def tool_add_note(lb: GatedLogbook, a: Arguments) -> dict[str, Any]:
-    """`logbook add "<sentence>"`: one note/v1 line, source manual, tier 2, through `Logbook.append`."""
+    """`logbook add "<sentence>"` through the door: one note/v1 line, tier 2, through `Logbook.append`,
+    with source `mcp` and never `manual` (R5), so an agent's sentence is never read as the owner's own,
+    and at an instant whose day is inside the write window."""
     text = (_string(a, "text", required=True) or "").strip()
     if not text:
-        raise ToolError("text is empty; a note is a sentence in the owner's words")
+        raise ToolError("text is empty; a note is a sentence")
     at = _string(a, "at")
     try:
         stamp = utc(at) if at else now_utc()
     except ValueError as e:
         raise ToolError(str(e)) from e
+    _write_day(lb, {"day": day_start.of(lb.meta).day_of(stamp)})
     line = lb.append(
-        at=stamp, source="manual", kind="note", tier=2, payload={"schema": "note/v1", "text": text}
+        at=stamp, source=NOTE_SOURCE, kind="note", tier=2, payload={"schema": "note/v1", "text": text}
     )
     return _written(lb, line)
 
@@ -1027,7 +1038,7 @@ def tool_promise_done(lb: GatedLogbook, a: Arguments) -> dict[str, Any]:
     at = utc(now_utc())
     line = lb.append(
         at=at,
-        source="manual",
+        source=NOTE_SOURCE,  # through the door, never `manual` (R5)
         kind=promises.TASK,
         tier=promises.TASK_TIER,
         payload=promises.draft_done(found, at, report.extractor, None),
@@ -1085,10 +1096,10 @@ def tool_sign_day(lb: GatedLogbook, a: Arguments) -> dict[str, Any]:
     line = signing.sign(
         record,
         day,
-        confirm=reflect.ink(record, day, args.confirm),  # never a draft line (RFC 0043 §6 rule 3)
+        confirm=reflect.ink(record, day, args.confirm),  # never pencil (RFC 0043 §6 rule 3, R7)
         note=args.note,
         at=_string(a, "at"),
-        dispositions=args.dispositions,
+        dispositions=reflect.ink_dispositions(record, day, args.dispositions),
     )
     p = line["payload"]
     given = signing.dispositions_of(p).values()
@@ -1112,13 +1123,20 @@ def _shown_on_page(lb: GatedLogbook, record: Logbook, day: str) -> tuple[list[st
     0034 amendment 4, 18 and 19 October 2026): the ids of the page's lines the gate lets the agent
     see, in the page's order, and the ids of those it does not, which stay unconfirmed unless given a
     disposition. The page is read from the record itself, as `signing.sign` reads it; the caller says
-    nothing of a line above the gate but how many there are. A draft line is neither: a signature never
-    confirms one (RFC 0043 §6 rule 3)."""
+    nothing of a line above the gate but how many there are. A pencil line (`drafts.is_pencil`) is
+    never shown: a signature never confirms one (RFC 0043 §6 rule 3, R7); a draft line is not counted
+    either, and any other pencil above the gate is, as the line above the ceiling it is."""
     lines, retracted = reflect.day_lines(record, day)
     drafted = {str(line["id"]) for line in lines if line.get("kind") == drafts.KIND}
     page = reflect.on_page(lines, retracted) - drafted
-    shown = [str(line["id"]) for line in lines if str(line["id"]) in page and lb.gate.shows(line)]
-    return shown, set(page) - set(shown)
+    pencilled = reflect.pencil(lines)
+    shown = [
+        str(line["id"])
+        for line in lines
+        if str(line["id"]) in page and str(line["id"]) not in pencilled and lb.gate.shows(line)
+    ]
+    hidden = {str(line["id"]) for line in lines if str(line["id"]) in page and not lb.gate.shows(line)}
+    return shown, hidden
 
 
 def tool_note_day(lb: GatedLogbook, a: Arguments) -> dict[str, Any]:
@@ -1324,8 +1342,9 @@ TOOLS: dict[str, Tool] = {
         ),
         Tool(
             "add_note",
-            'Append one note in the owner\'s words (`logbook add "<sentence>"`): a note/v1 line, source'
-            " manual, tier 2, at `at` (RFC 3339 with a zone) or now. The one way to write a note.",
+            'Append one note (`logbook add "<sentence>"`): a note/v1 line, source mcp, tier 2, at `at`'
+            " (RFC 3339 with a zone, its day inside the write window) or now. Refused unless the mcp entry"
+            ' of policy/crossing.json names it under "write".',
             {
                 "text": {"type": "string"},
                 "at": {
@@ -1337,16 +1356,19 @@ TOOLS: dict[str, Tool] = {
             tool_add_note,
             {"text": "Called the yard about the crane."},
             writes=True,
+            named=True,
         ),
         Tool(
             "promise_done",
-            "Mark one proposal of `promises` done (`logbook promises done <id>`): one task/v1 line. A"
-            " proposal already done writes nothing.",
+            "Mark one proposal of `promises` done (`logbook promises done <id>`): one task/v1 line, source"
+            " mcp. A proposal already done writes nothing. Refused unless the mcp entry of"
+            ' policy/crossing.json names it under "write".',
             {"id": {"type": "string", "description": "a proposal id from the promises tool"}},
             ("id",),
             tool_promise_done,
             {"id": "3b9e5d0f2a71c846"},
             writes=True,
+            named=True,
         ),
         Tool(
             "sign_day",
@@ -1426,7 +1448,7 @@ def call(root: Path, name: str, arguments: Arguments, allow_tier_3: bool = False
     try:
         allowed = drafts.allowed(root)
         people = allowed.of(drafts.UNIT_PERSON).max_tier
-        gate = Gate(ceiling(root, allow_tier_3), set(), allowed.max_tier, people)
+        gate = Gate(ceiling(root, allow_tier_3), set(), allowed.max_tier, people, entries=allowed)
         lb = GatedLogbook(root, gate)
         held: contextlib.AbstractContextManager[None] = contextlib.nullcontext()
         if tool.named:  # allowed by name, under the writer lock, never waiting for another writer
@@ -1498,7 +1520,7 @@ def inspect_text() -> str:
         mark = "  [writes one line; only when the policy names it]" if tool.named else "  [writes one line]"
         lines.append(f"{tool.name}({args}){mark if tool.writes else ''}")
         lines.append(f"    {tool.description}")
-    named = ", ".join(t.name for t in TOOLS.values() if t.named)
+    named = ", ".join(name for name in policy.WRITE_TOOLS if TOOLS[name].named)
     lines += [
         "",
         f'write tools, allowed by name in the mcp entry\'s "{policy.WRITE}": {named} (none by default; e.g.'

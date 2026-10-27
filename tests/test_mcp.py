@@ -24,12 +24,13 @@ SECRET = "I'll send the mooring photos by Friday"  # a tier-2 note, below the ce
 HEALTH_DAY = "2026-06-10"
 
 
-def _policy(lb: Logbook, max_tier: int | None) -> None:
-    """The record's ceiling for the mcp destination; None leaves the destination unnamed."""
+def _policy(lb: Logbook, max_tier: int | None, write: list[str] | None = None) -> None:
+    """The record's ceiling for the mcp destination, and the write tools it names; None leaves the
+    destination unnamed."""
     path = lb.root / "policy" / "crossing.json"
-    data = {"hermes": {"max_tier": 2}}
+    data: dict[str, Any] = {"hermes": {"max_tier": 2}}
     if max_tier is not None:
-        data["mcp"] = {"max_tier": max_tier}
+        data["mcp"] = {"max_tier": max_tier, **({} if write is None else {"write": write})}
     path.write_text(json.dumps(data), encoding="utf-8")
 
 
@@ -247,7 +248,8 @@ def test_people_and_promises_are_empty_at_the_default_ceiling(
 
 def test_add_note_appends_one_note_line(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     lb = _record(tmp_path, monkeypatch)
-    _policy(lb, 1)
+    _policy(lb, 1, write=["add_note"])  # a write tool goes through the door only by name (R5)
+    monkeypatch.setattr(mcp_server, "_today", lambda _lb: "2026-06-20")  # `at` inside the write window
     seq = int(lb.meta["seq"])
     out = _call(
         lb, "add_note", {"text": "Called the yard about the crane.", "at": "2026-06-20T10:00:00+02:00"}
@@ -256,7 +258,7 @@ def test_add_note_appends_one_note_line(tmp_path: Path, monkeypatch: pytest.Monk
     assert written["seq"] == seq + 1 and written["at"] == "2026-06-20T08:00:00Z"
     assert written["kind"] == "note" and written["tier"] == 2 and written["readable"] is False
     line = lb.line_by_seq(seq + 1)
-    assert line is not None and line["source"] == "manual"
+    assert line is not None and line["source"] == "mcp"  # an agent's note, never the owner's (R5)
     assert line["payload"] == {"schema": "note/v1", "text": "Called the yard about the crane."}
     assert lb.verify()[2] == []
     assert "zone" in _call(lb, "add_note", {"text": "x", "at": "2026-06-20T10:00:00"})["error"]
@@ -266,7 +268,7 @@ def test_add_note_appends_one_note_line(tmp_path: Path, monkeypatch: pytest.Monk
 
 def test_promise_done_appends_the_task_line_once(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     lb = _record(tmp_path, monkeypatch)
-    _policy(lb, 2)
+    _policy(lb, 2, write=["promise_done"])  # a write tool goes through the door only by name (R5)
     [proposal] = [p for p in _call(lb, "promises")["data"]["proposals"] if SECRET in p["quote"]]
     seq = int(lb.meta["seq"])
     out = _call(lb, "promise_done", {"id": proposal["id"]})["data"]

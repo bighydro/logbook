@@ -39,7 +39,7 @@ the environment the record needs and nothing more: no adapter key is read here, 
 
 ## The tools
 
-Twelve read tools, two write tools, and two more write tools that are refused until your policy names them
+Twelve read tools, and four write tools that are each refused until your policy names it
 ([Write tools](#write-tools)). Each read tool is one command you already know, with the same output
 as its `--json` (or, for the three that read the lines themselves, as its text):
 
@@ -57,8 +57,8 @@ as its `--json` (or, for the three that read the lines themselves, as its text):
 | `day_lines` | `day?` (default today), `kinds?` | `logbook show DAY`, one object per line ([below](#the-lines-themselves)) |
 | `line` | `id` | one line in full, a transcript's text included ([below](#the-lines-themselves)) |
 | `digest` | `period?` (`day`, `week`), `date?` | `logbook digest DATE`, the text as printed ([below](#the-lines-themselves)) |
-| `add_note` | `text`, `at?` | `logbook add "<sentence>"`: one `note/v1` line, tier 2 |
-| `promise_done` | `id` | `logbook promises done <id>`: one `task/v1` line |
+| `add_note` | `text`, `at?` | `logbook add "<sentence>"`: one `note/v1` line, tier 2, source `mcp`; only when the policy names it |
+| `promise_done` | `id` | `logbook promises done <id>`: one `task/v1` line, source `mcp`; only when the policy names it |
 | `sign_day` | `day`, `confirm?`, `kept?`, `missed?`, `dropped?`, `carried?`, `note?`, `at?` | `logbook day sign DAY`: one `signed-day/v1` line, tier 1; a day signed before keeps its confirmations; never confirms a line above the ceiling of its own accord; only when the policy names it |
 | `note_day` | `day`, `text`, `at?`, `kind?` | one `note/v1` line on `day`, tier 2, source `mcp`; only when the policy names it |
 
@@ -171,7 +171,7 @@ not `mcp`, is the ceiling of 1.
 
 Two things the gate does not do. It does not append a `crossing/v1` line: an export hands a bundle to someone
 else and the record keeps the receipt; a tool call answers a question on this machine, and the record is not
-the place to log an agent's every question. And it does not change what the two write tools write: `add_note`
+the place to log an agent's every question. And it does not change what the write tools write: `add_note`
 is tier 2 whatever the ceiling, as `logbook add` is, so at a ceiling of 1 the agent writes notes it cannot
 read back. The answer says so (`readable: false`), and `logbook show` reads them as ever.
 
@@ -188,27 +188,31 @@ is the tool, the day, and counts: `note_day day=2026-06-09 kind=proposal seq=812
 
 ## The write tools
 
-`add_note` appends one `note/v1` line — source `manual`, tier 2, `at` the instant given (RFC 3339 with a zone)
-or now — exactly as `logbook add "<sentence>"` does. `promise_done` appends the `task/v1` line that marks one
-proposal of `promises` done, exactly as `logbook promises done <id>` does, and writes nothing for a proposal
-already done. Both return the envelope of the line written (`seq`, `id`, `at`, `kind`, `tier`), never its
+`add_note` appends one `note/v1` line — source `mcp`, tier 2, `at` the instant given (RFC 3339 with a zone,
+its day inside the write window) or now — as `logbook add "<sentence>"` does, but never as `manual`.
+`promise_done` appends the `task/v1` line that marks one proposal of `promises` done, as `logbook promises done
+<id>` does, source `mcp`, and writes nothing for a proposal already done. Like `sign_day` and `note_day`, each
+is refused unless the `mcp` entry names it under `write` and has not expired ([Write tools](#write-tools)). Both return the envelope of the line written (`seq`, `id`, `at`, `kind`, `tier`), never its
 payload. Nothing else writes, and nothing is ever rewritten: `verify` is green after every call, and the index
 is extended as a line is appended, as it is for every writer.
 
-The ARCHITECTURE's rule that an agent is an operator, not an author, holds here in the way it holds for the
-command line: the agent types what you told it to, under your name, and the line says `manual`. Whether a host
-may call a write tool at all is the host's setting, not the server's; most hosts ask before a tool that
-writes, and `--inspect` marks the ones that do.
+The ARCHITECTURE's rule is that an agent is an operator, not an author: it may never write a note or a
+confirmation in your name. So a line an agent writes through the door says so: its source is `mcp`, never
+`manual`, and `manual` stays the mark of your own words at the command line and on the Day page. A note with
+source `mcp` is pencil, as a draft is: a signature never confirms it, whoever signs ([signed day](signed-day.md#keep-and-sign)).
+And no write tool is allowed until you name it in the policy (ADR 0022); the host's own prompt before a tool
+that writes is a second check, not the first.
 
 ## Write tools
 
 ADR 0022 says it in one sentence: *orchestrators reach the record only through the crossing: read tools under
 the ceiling, and the few write tools the owner allows by name.* An orchestrator that builds the Day page used
 to print a `day sign` command for you to run by hand, and your verdicts on its proposals lived outside the
-record. With the two tools here, the proposals and your verdicts become lines, and the Day page can be rebuilt
+record. With the tools here, the proposals and your verdicts become lines, and the Day page can be rebuilt
 from the record alone.
 
-Neither is allowed until the `mcp` entry of `policy/crossing.json` names it under `write`:
+None is allowed until the `mcp` entry of `policy/crossing.json` names it under `write`: `sign_day`,
+`note_day`, `add_note` and `promise_done`, each by name.
 
 ```json
 {"mcp": {"max_tier": 1, "write": ["sign_day", "note_day"], "write_window_days": 60}}
@@ -220,13 +224,13 @@ Neither is allowed until the `mcp` entry of `policy/crossing.json` names it unde
   sign is the Day page of `logbook serve` ([Reflect and Sign](serve.md#reflect-and-sign)), which never reads
   this file; the door is for an orchestrator elsewhere.
 - An entry past its `until` day allows none, whatever it names.
-- `write` names only `sign_day` and `note_day`; anything else in it is one error naming the file, for every
-  call, as a broken ceiling is.
+- `write` names only `sign_day`, `note_day`, `add_note` and `promise_done`; anything else in it is one error
+  naming the file, for every call, as a broken ceiling is.
 - `write_window_days` (60 when absent) is how far back the door writes: a day from that many days before today
   through today, in the record's zone, and no other. A day outside it is refused naming the window.
-- `--allow-tier-3` has no effect on either. Neither writes above the tier its profile fixes: `sign_day`
-  writes `signed-day/v1` at tier 1, `note_day` writes `note/v1` at tier 2 (RFC 0010 makes a note tier 2,
-  whoever writes it), and nothing else.
+- `--allow-tier-3` has no effect on any. None writes above the tier its profile fixes: `sign_day`
+  writes `signed-day/v1` at tier 1, `note_day` and `add_note` write `note/v1` at tier 2 (RFC 0010 makes a note
+  tier 2, whoever writes it), `promise_done` writes `task/v1` at its tier, and nothing else.
 
 `logbook doctor` shows the tools on its crossing line (`mcp 1 write sign_day,note_day`), and `logbook serve mcp
 --inspect` lists them, marked `[writes one line; only when the policy names it]`.

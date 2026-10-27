@@ -722,7 +722,8 @@ def _sign_with_events(
         if confirm is not None and (confirm or keep):
             confirm = [*confirm, *written]
         confirm = reflect.ink(lb, day, confirm)
-        line = signing.sign(lb, day, confirm=confirm, note=args.note, at=at, dispositions=args.dispositions)
+        dispositions = reflect.ink_dispositions(lb, day, args.dispositions)
+        line = signing.sign(lb, day, confirm=confirm, note=args.note, at=at, dispositions=dispositions)
         return line, args.kept
 
 

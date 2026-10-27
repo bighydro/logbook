@@ -682,8 +682,8 @@ each is a guess until you tick it. The reflection, a sentence a line, is folded 
 
 **Sign.** Sign signs the day through `reflect.close`, the code `day reflect --sign` runs: under one
 hold of the writer lock, the ticked delegations are written as notes, then `signing.sign` writes the
-`signed-day/v1` line with the lines confirmed (every line on the page, your reflection and the
-delegations among them), the ticked dispositions, and the moment you clicked. It is byte for byte the
+`signed-day/v1` line with the lines confirmed (every line on the page but pencil, your reflection and
+the delegations among them; [signed day](signed-day.md#keep-and-sign)), the ticked dispositions, and the moment you clicked. It is byte for byte the
 line `logbook day reflect DAY --sign --accept N,N` writes for the same reflection and the same
 ticks. Nothing ticked accepts nothing. A day you signed before shows *Sign again* and what the new
 signature keeps from the standing one (its confirmed lines still on the page, its dispositions, an

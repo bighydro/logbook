@@ -1340,7 +1340,7 @@ class Site:
         kept = None
         if earlier is not None and r is not None and r.note is not None:
             page = reflect.on_page(lines, retracted)
-            kept = reflect.signature(earlier, page, [str(r.note["id"])], []).kept
+            kept = reflect.signature(earlier, page, [str(r.note["id"])], [], reflect.pencil(lines)).kept
         shown = json.dumps([p.to_json() for p in proposals], sort_keys=True, ensure_ascii=False)
         digest = hashlib.sha256(shown.encode("utf-8")).hexdigest()[:16]
         draft = pending[-1] if pending else None

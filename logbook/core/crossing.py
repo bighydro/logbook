@@ -316,7 +316,9 @@ def select(lb: Logbook, req: Request) -> Selection:
     # mail rule above reads mail alone, so the two rules never see the same line and their order is moot
     texts = heard.crosses(lb.root, req.destination)
     held_by_entry = len(lines)
-    lines = [line for line in lines if not _held_by_entry(line, entries) and not heard.held(line, texts)]
+    lines = [
+        line for line in lines if not drafts.held_by_entry(line, entries) and not heard.held(line, texts)
+    ]
     held_by_entry -= len(lines)
     beside = {str(line["id"]) for line in lines}
     lines = [line for line in lines if stars.beside(line, beside)]
@@ -328,14 +330,6 @@ def select(lb: Logbook, req: Request) -> Selection:
     return Selection(
         lines, len(inside), overlay, held, found, missing, carried, unsigned_held, held_by_entry, mail_held
     )
-
-
-def _held_by_entry(line: Line, entries: drafts.Allowed) -> bool:
-    """A draft the entry it was written under no longer allows (`drafts.Allowed.allows`: a person's
-    the `relationship` entry, every other unit's the `dream` entry, and a sealed one this machine
-    cannot open the `dream` entry); every other line, a video scene's draft among them (written under no
-    entry, `drafts.under_entry`), is the tier's and the signed days' alone."""
-    return line.get("kind") == drafts.KIND and drafts.under_entry(line) and not entries.allows(line)
 
 
 def _overlay(lines: list[Line], last: dict[Ref, Line], tiers: tuple[int, ...]) -> tuple[list[Line], int]:

@@ -124,6 +124,69 @@ def test_an_expired_entry_allows_no_write_tool(lb: Logbook):
     assert lb.meta["seq"] == 3
 
 
+# -- add_note and promise_done: the owner's words are never an agent's (R5) ------------------------------
+
+
+def _proposal(lb: Logbook) -> str:
+    """The id of the fixture's one promise, read from the record itself and not through the door."""
+    from logbook.contrib import promises
+
+    [found] = promises.extract(lb).proposals
+    return found.id
+
+
+AGENT_WRITES = ["add_note", "promise_done"]
+
+
+@pytest.mark.parametrize(
+    "entry",
+    [{}, {"write": []}, {"write": BOTH}, {"write": [*BOTH, *AGENT_WRITES], "until": "2026-03-01"}],
+    ids=["no-write", "write-empty", "only-the-day-tools", "expired"],
+)
+def test_add_note_and_promise_done_are_refused_unless_the_policy_names_them(
+    lb: Logbook, entry: dict[str, Any]
+):
+    _policy(lb, max_tier=2, **entry)
+    proposal = _proposal(lb)
+    said = _refused(lb, "add_note", text="Called the yard about the crane.")
+    assert "add_note" in said and "crossing.json" in said
+    said = _refused(lb, "promise_done", id=proposal)
+    assert "promise_done" in said and "crossing.json" in said
+    assert lb.meta["seq"] == 3, "the head does not move"
+
+
+def test_add_note_and_promise_done_without_a_policy_file_are_refused(lb: Logbook):
+    policy.policy_path(lb.root).unlink(missing_ok=True)
+    proposal = _proposal(lb)
+    _refused(lb, "add_note", text="Called the yard about the crane.")
+    _refused(lb, "promise_done", id=proposal)
+    assert lb.meta["seq"] == 3
+
+
+def test_add_note_named_writes_a_note_whose_source_is_mcp_never_manual(lb: Logbook):
+    _policy(lb, write=["add_note"])
+    written = _call(lb, "add_note", text="Called the yard about the crane.", at="2026-03-02T09:00:00+01:00")
+    line = _by_seq(lb)[written["seq"]]
+    assert line["kind"] == "note" and line["tier"] == 2
+    assert line["source"] == "mcp"
+    assert line["payload"] == {"schema": "note/v1", "text": "Called the yard about the crane."}
+
+
+def test_add_note_named_still_refuses_an_at_outside_the_write_window(lb: Logbook):
+    _policy(lb, write=["add_note"], write_window_days=0)
+    assert "write window" in _refused(lb, "add_note", text="Grilled.", at="2026-03-01T12:00:00+01:00")
+    assert lb.meta["seq"] == 3
+
+
+def test_promise_done_named_closes_the_promise_with_source_mcp_never_manual(lb: Logbook):
+    _policy(lb, max_tier=2, write=["promise_done"])
+    proposal = _proposal(lb)
+    written = _call(lb, "promise_done", id=proposal)
+    line = _by_seq(lb)[written["seq"]]
+    assert line["kind"] == "task" and line["source"] == "mcp"
+    assert line["payload"]["extra"]["promise"] == proposal
+
+
 def test_allow_tier_3_has_no_effect_on_writes(lb: Logbook):
     path = policy.policy_path(lb.root)
     path.write_text(json.dumps({"mcp": {"max_tier": 3}}), encoding="utf-8")
@@ -135,7 +198,7 @@ def test_allow_tier_3_has_no_effect_on_writes(lb: Logbook):
 
 
 def test_a_write_that_names_an_unknown_tool_is_a_policy_error_naming_the_file(lb: Logbook):
-    _policy(lb, write=["sign_day", "add_note"])
+    _policy(lb, write=["sign_day", "delete_line"])  # no such write tool
     assert "crossing.json" in _refused(lb, "sign_day", day=DAY)
     _policy(lb, write=BOTH, write_window_days="sixty")
     assert "write_window_days" in _refused(lb, "note_day", day=DAY, text="Grilled.")

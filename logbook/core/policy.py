@@ -75,7 +75,9 @@ TIERS = (1, 2, 3)
 UNTIL = "until"  # the last day an entry holds, `YYYY-MM-DD`; absent: for good
 EXPIRED_TIER = 0  # what an entry past its `until` day counts as: nothing crosses
 WRITE = "write"  # the write tools an entry lets through the door by name (ADR 0022); absent: none
-WRITE_TOOLS = ("sign_day", "note_day")  # the tools `write` may name: the day's signature and its note
+# the tools `write` may name: the day's signature and its note, a note at an instant, a promise closed;
+# every tool that writes a line through the door is here, so none writes without the owner naming it
+WRITE_TOOLS = ("sign_day", "note_day", "add_note", "promise_done")
 WINDOW = "write_window_days"  # how many days before today a write tool may still write to
 WRITE_WINDOW_DAYS = 60  # the window when the entry does not set one
 KEY = re.compile(r"[0-9a-fA-F]{64}")  # an Ed25519 public key as the circle file spells it

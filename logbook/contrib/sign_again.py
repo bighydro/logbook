@@ -68,7 +68,7 @@ def again(
         earlier = signing.signature_of(idx, day, str(lb.meta["owner_id"]))
     if earlier is None:
         return Again(None, given, note)
-    kept = reflect.signature(earlier, reflect.on_page(lines, retracted), [], [])
+    kept = reflect.signature(earlier, reflect.on_page(lines, retracted), [], [], reflect.pencil(lines))
     by_seq = {int(line["seq"]): str(line["id"]) for line in lines}
     typed = [entry.strip() for entries in given.values() for entry in entries]
     named = {by_seq.get(int(entry), entry) if entry.isdigit() else entry for entry in typed}  # as `sign` does
