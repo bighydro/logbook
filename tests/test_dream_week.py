@@ -33,6 +33,7 @@ from dream_fortnight import (
     set_dream_entry,
     week_answer,
 )
+from persona import KARI, KARI_ID, resolution
 
 from logbook.contrib import dream, dream_week
 from logbook.core import drafts, policy
@@ -295,6 +296,9 @@ def test_under_max_tier_1_no_tier_2_line_or_day_draft_reaches_the_week(
     fake(monkeypatch)
     assert run_cli("dream", "--catch-up")[0] in (0, 1)  # the days and weeks dreamed under max_tier 2
     set_dream_entry(lb.root, {"max_tier": 1, "until": "2026-12-31"})
+    # Kari's name at tier 1, so the week under max_tier 1 may name her: it reads the people overlay at its
+    # entry's tiers, and the fortnight names her only at tier 2 (R2, tests/test_dream_names_at_tier.py)
+    lb.append_many([{**resolution(("email", KARI["email"]), KARI_ID, "Kari Nordmann"), "tier": 1}])
     seen = fake(monkeypatch)
     code, _out, err = run_cli("dream", "week", W25)
     assert code == 2 and "has none the 'dream' entry allows" in err, "the days' tier-2 drafts are withheld"

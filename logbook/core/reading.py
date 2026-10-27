@@ -81,6 +81,8 @@ class Reading:
     points: list[stays.Point] | None = None  # read from the index (`read(kinds=)`): every subject's points
     kinds: tuple[str, ...] | None = None  # the kinds `lines` holds (`read(kinds=)`); None: every kind
     window: tuple[datetime, datetime] | None = None  # the instants the reading holds, its start and end
+    # every identity, whatever its tier: the voices hold a name above their gate themselves (`voices`)
+    every: dict[resolve.Ref, resolve.Identity] | None = None
 
     @property
     def voice_gate(self) -> tuple[int, ...] | None:
@@ -138,7 +140,8 @@ class Reading:
         """The transcripts' voices joined to who they are (RFC 0038 §3.4), one join for the reading:
         a Day asks per transcript, and the people's labels are taken once. Through the reading's gate:
         a name learned above it is `a named voice`."""
-        return attribution.Voices(self.identities, self.owner.entities, self.owner.id, self.voice_gate)
+        known = self.identities if self.every is None else self.every
+        return attribution.Voices(known, self.owner.entities, self.owner.id, self.voice_gate)
 
     @functools.cached_property
     def by_kind(self) -> Mapping[str, tuple[Line, ...]]:
@@ -210,13 +213,19 @@ def read(
     airports: Airports | None = None,
     tiers: Sequence[int] | None = None,
     kinds: Sequence[str] | None = None,
+    names_at: Sequence[int] | None = None,
 ) -> Reading:
     """The reading of `[first, last]` (local days, inclusive); through the gate `tiers` when given
     (the module's docstring). Raises `stays.SettingsError` when the settings, the places or the
     assets file is not what it should be. The settings file is never written here. With `kinds`, the
     reading of a reader that needs only those lines (the world's): its lines are those of `kinds`
     alone, and the stays are derived from the index's own columns, every subject's points and the
-    owner's evidence, as from the lines (`_tracked`; `points` holds the window's points)."""
+    owner's evidence, as from the lines (`_tracked`; `points` holds the window's points). The names
+    and identities are those every resolution line of whose walk is at one of `names_at`, which is
+    `tiers` unless given (`resolve.at_tiers`): an output through a gate names a person only from the
+    resolutions at its tiers, never from one above them (the owner, 27 October); the owner is found
+    from all of them."""
+    names_at = tiers if names_at is None else names_at
     bounds = day_start.of(lb.meta)  # DayStartError for a boundary this reader cannot parse (RFC 0036)
     tz = bounds.zone
     settings = stays.read_settings(lb.root)
@@ -256,13 +265,16 @@ def read(
     nights = [night(day) for day in days]
     nights_after = [night(day) for day in nights_of if day > last]
     standing = [line for line in window if str(line["id"]) not in retracted]
-    identities = resolve.identities_from([*marks, *resolutions])
+    every = resolve.identities_from([*marks, *resolutions])
+    identities = every
+    if names_at is not None:  # a name only a line above `names_at` gives is never learned (R2)
+        _labels, identities = resolve.at_tiers([*marks, *resolutions], names_at)
     names = {ref: who.label for ref, who in identities.items() if who.label}
     owner = present.owner_of(
         str(lb.meta.get("owner_id") or ""),
         [str(e) for e in lb.meta.get("owner_emails") or [] if isinstance(e, str)],
         policy.owner_aliases(lb.root),
-        identities,
+        every,
     )
     return Reading(
         lb=lb,
@@ -278,6 +290,7 @@ def read(
         nights=nights,
         names=names,
         identities=identities,
+        every=every,
         airports=airports,
         day_start=bounds,
         owner=owner,

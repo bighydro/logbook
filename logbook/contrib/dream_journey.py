@@ -53,7 +53,7 @@ from pathlib import Path
 from string import Template
 from typing import Any
 
-from ..core import drafts, keepers, notes, policy, reading, resolve, stays, trips
+from ..core import drafts, keepers, notes, policy, reading, stays, trips
 from ..core.chain import Line
 from ..core.export import day_range
 from ..core.flights import Airports
@@ -100,7 +100,8 @@ def locate(
 ) -> tuple[Reading, trips.Trip]:
     """The journey `ref` names (its id, or any day of it) in a reading through the entry's ceiling;
     `ValueError` as `trip_page.locate` raises it."""
-    return trip_page.locate(lb, trip_page.parse_ref(ref), airports or Airports.load(), dream.tiers_of(found))
+    tiers = dream.tiers_of(found)
+    return trip_page.locate(lb, trip_page.parse_ref(ref), airports or Airports.load(), tiers, names_at=tiers)
 
 
 def closed(rd: Reading, trip: trips.Trip, today: date) -> bool:
@@ -141,8 +142,8 @@ def material(lb: Logbook, rd: Reading, trip: trips.Trip, found: policy.Ceiling) 
     calls = [str(line["id"]) for line in on if line.get("kind") == "transcript"]
     with lb.index() as idx:
         retracted = frozenset(retractions(idx.retractions()))
-        names = resolve.labels(lb, idx)
-        identities = resolve.identities_from([*idx.retractions(), *idx.resolutions()])
+        known = dream.names_for(lb, found, idx)
+        names, identities = known.labels, known.identities
         syntheses, _held = drafts.for_transcripts(idx, calls, tiers, drafts.allowed(lb.root))
         named = journeys.names_in(idx.by_kind(notes.KIND, trip.start, trip.until), retracted)
         stars = keepers.standing([*reading.crossing(idx.by_kind(keepers.KIND), tiers), *idx.retractions()])
@@ -161,8 +162,9 @@ def material(lb: Logbook, rd: Reading, trip: trips.Trip, found: policy.Ceiling) 
         data={},
         ids=ids,
         zone=rd.tz,
-        canonical=dream.canonical(lb, identities),
+        canonical=known.canonical(lb),
         identities=identities,
+        withheld=known.withheld,
     )
     photos = [line for line in on if line.get("kind") == PHOTO]
     starred = {p for p in (keepers.photo_id_of(k) for k in stars) if p} & {str(line["id"]) for line in photos}
@@ -196,14 +198,14 @@ def material(lb: Logbook, rd: Reading, trip: trips.Trip, found: policy.Ceiling) 
             if any(i in ids for i in f["lines"])
         ],
         "people": [
-            {"id": c.person, "name": c.name, "ref": made.refs_of(c.lines)[:REFS]}
+            {"id": c.person, "name": made.canonical[c.person], "ref": made.refs_of(c.lines)[:REFS]}
             for c in trip.people
             if c.person is not None and made.person(c.person) is not None and made.refs_of(c.lines)
         ],
         "messages": _counted(dream._messages(on, names, made)),
         "notes": dream._notes(on, made),
         "decisions": _decisions(syntheses, made),
-        "promises": _promises(journeys.promises_on(lb, trip), made),
+        "promises": _promises(journeys.promises_on(lb, trip, tiers), made),
         "photos": {
             "count": len(photos),
             "ref": made.refs_of(str(line["id"]) for line in photos)[:REFS],
@@ -211,6 +213,7 @@ def material(lb: Logbook, rd: Reading, trip: trips.Trip, found: policy.Ceiling) 
             "starred": made.refs_of(sorted(starred)),
         },
     }
+    made.tier = max(made.tier, known.tier_in(made.data))  # a name read is read (R2)
     return Read(
         made, trip, frozenset(str(line["id"]) for line in photos), frozenset(starred), len(read - ids)
     )
@@ -234,7 +237,12 @@ def _decisions(syntheses: list[dict[str, Any]], made: Material) -> list[dict[str
     for block in syntheses:
         ref = made.refs_of([str(block["transcript"])])
         for segment in block["segments"]:
-            if segment["part"] == "decisions" and segment["supported"] and ref:
+            if (
+                segment["part"] == "decisions"
+                and segment["supported"]
+                and ref
+                and not made.withholds(segment["text"])
+            ):
                 out.append({"drafted": segment["text"], "ref": ref})
     return out
 
@@ -250,7 +258,7 @@ def _promises(found: list[dict[str, Any]], made: Material) -> list[dict[str, Any
             {
                 "day": p["day"],
                 "role": p["role"],
-                "counterpart": p["counterpart"],
+                "counterpart": made.name_of(p["counterpart"]),
                 "quote": p["quote"],
                 "status": p["status"],
                 "due": p["due"],
@@ -308,8 +316,9 @@ def prompt(read: Read) -> list[dict[str, str]]:
 
 def shape(found: Mapping[str, Any], read: Read) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """The answer as a draft has it: the segments in the parts' order (`dream.segments_of`), one
-    name at most, the number rule held (`dream.hold_numbers`), the evidence rule's share checked
-    again; and what `extra` keeps of it: `parts`, `star`, `name`, `dropped`, `marked`."""
+    name at most, the number rule held (`dream.hold_numbers`), no figure beside a person
+    (`dream.hold_names`, in the day's order), the evidence rule's share checked again; and what `extra`
+    keeps of it: `parts`, `star`, `name`, `dropped`, `marked`."""
     made = read.made
     segments, parts = dream.segments_of(found, made, drafts.JOURNEY_PARTS, strict=True)
     dropped: dict[str, int] = {}
@@ -318,7 +327,13 @@ def shape(found: Mapping[str, Any], read: Read) -> tuple[list[dict[str, Any]], d
         for i in reversed(names[NAMES:]):
             del segments[i], parts[i]
         dropped[MORE_THAN_ONE_NAME] = len(names) - NAMES
-    marked = dream.hold_numbers(segments, made.data, made)
+    marked: dict[str, int] = {}
+    unbacked = dream.hold_numbers(segments, made.data, made)
+    if unbacked:
+        marked[dream.UNBACKED] = unbacked
+    beside = dream.hold_names(segments, made)  # no number beside a person, whatever the lines give
+    if beside:
+        marked[dream.BESIDE_A_NAME] = beside
     dream.share_of(segments, made.unit)
     extra: dict[str, Any] = {"parts": parts}
     star: list[str] = []
@@ -336,7 +351,7 @@ def shape(found: Mapping[str, Any], read: Read) -> tuple[list[dict[str, Any]], d
     if dropped:
         extra["dropped"] = dropped
     if marked:
-        extra["marked"] = {dream.UNBACKED: marked}
+        extra["marked"] = marked
     return segments, extra
 
 
@@ -444,7 +459,9 @@ def catch_up(
     out: list[Outcome] = []
     with lb.writer():
         try:
-            rd = reading.read(lb, window[0], window[-1], airports, dream.tiers_of(found))
+            rd = reading.read(
+                lb, window[0], window[-1], airports, dream.tiers_of(found), names_at=dream.tiers_of(found)
+            )
         except (ValueError, stays.SettingsError) as e:
             return [Outcome("journeys", "refused", str(e))]
         found_trips, warning = trips.trips(rd)

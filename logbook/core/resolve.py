@@ -10,7 +10,7 @@ Nothing is written and nothing outside the record is consulted."""
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Collection, Iterable
 from typing import TYPE_CHECKING, NamedTuple
 
 from . import attribution
@@ -94,6 +94,30 @@ def identities_from(lines: Iterable[Line]) -> dict[Ref, Identity]:
             tier=tier if isinstance(tier, int) and not isinstance(tier, bool) else None,
         )
     return found
+
+
+def tiers_of(lines: Iterable[Line], tiers: Collection[int]) -> dict[Ref, int]:
+    """(ref.kind, ref.value) → the tier its name was learned at, for every ref a reader through the
+    gate `tiers` may resolve: one whose every resolution line on the walk (`walk`, the alias hops
+    included) is at one of `tiers`, the tier the highest of them. A ref resolved through a line above
+    the gate is not here, so a reader under it never learns a name only that line gives (`at_tiers`)."""
+    gate = {int(t) for t in tiers}
+    last = standing(lines)
+    found: dict[Ref, int] = {}
+    for ref in last:
+        hops = [int(hop.get("tier") or 1) for hop in walk(ref, last)]
+        if hops and all(t in gate for t in hops):
+            found[ref] = max(hops)
+    return found
+
+
+def at_tiers(lines: Iterable[Line], tiers: Collection[int]) -> tuple[dict[Ref, str], dict[Ref, Identity]]:
+    """`labels_from` and `identities_from` through the gate `tiers`: only the refs `tiers_of` keeps."""
+    lines = list(lines)
+    kept = tiers_of(lines, tiers)
+    labels = {ref: label for ref, label in labels_from(lines).items() if ref in kept}
+    identities = {ref: who for ref, who in identities_from(lines).items() if ref in kept}
+    return labels, identities
 
 
 def standing(lines: Iterable[Line]) -> dict[Ref, Line]:

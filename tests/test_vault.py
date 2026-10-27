@@ -11,7 +11,7 @@ import re
 from pathlib import Path
 
 import pytest
-from persona import KARI_ID, OLA_ID, flight, persona_record, utc
+from persona import KARI, KARI_ID, OLA, OLA_ID, flight, persona_record, resolution, utc
 
 from logbook import cli
 from logbook.contrib import vault
@@ -26,7 +26,22 @@ TRANSCRIPT_TITLE = "Boat plans"
 
 @pytest.fixture
 def lb(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Logbook:
-    return persona_record(tmp_path, monkeypatch)
+    """The persona, Kari and Ola named at tier 1 as well (a contact at tier 1): a tier-1 vault names a
+    person only from a resolution at its tiers; the persona names them at tier 2 (the owner, 27 Oct)."""
+    lb = persona_record(tmp_path, monkeypatch)
+    lb.append_many(
+        [
+            {**resolution(ref, entity, name), "tier": 1}
+            for ref, entity, name in (
+                (("email", KARI["email"]), KARI_ID, "Kari Nordmann"),
+                (("phone", KARI["phone"]), KARI_ID, "Kari Nordmann"),
+                (("provider_id", f"immich:{KARI['face']}"), KARI_ID, "Kari Nordmann"),
+                (("email", OLA["email"]), OLA_ID, "Ola Nordmann"),
+                (("phone", OLA["phone"]), OLA_ID, "Ola Nordmann"),
+            )
+        ]
+    )
+    return lb
 
 
 def _run(*args: str) -> None:

@@ -188,7 +188,10 @@ def week_draft(site: Site, week: str) -> tuple[dict[str, Any] | None, dict[str, 
                 for line in idx.day(d)
                 if str(line["id"]) not in retracted
             }
-        return drafts.for_unit(found, on_week, site.tiers, drafts.allowed(site.lb.root), drafts.NOT_ON_WEEK)
+            people = drafts.people_of(idx)
+        return drafts.for_unit(
+            found, on_week, site.tiers, drafts.allowed(site.lb.root), drafts.NOT_ON_WEEK, people=people
+        )
 
     found: tuple[dict[str, Any] | None, dict[str, Any] | None] = site.shared(("week-draft", week), build)
     return found

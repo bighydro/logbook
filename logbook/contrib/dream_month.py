@@ -70,7 +70,7 @@ from pathlib import Path
 from string import Template
 from typing import Any
 
-from ..core import drafts, goals, notes, people, policy, reading, resolve, signing, stays
+from ..core import drafts, goals, notes, people, policy, reading, signing, stays
 from ..core.chain import Line
 from ..core.day import WEEKDAYS
 from ..core.export import day_range, parse_day
@@ -173,12 +173,13 @@ def material(
     not raised here: a caller decides (`run` refuses, `catch_up` counts the month empty)."""
     tiers = dream.tiers_of(found)
     airports = airports or Airports.load()
-    rd = reading.read(lb, first, last, airports, tiers)
+    rd = reading.read(lb, first, last, airports, tiers, names_at=tiers)
     on = dream.lines_of_days(rd, first, last)
     days = day_range(first, last)
     with lb.index() as idx:
         retracted = frozenset(retractions(idx.retractions()))
-        identities = resolve.identities_from([*idx.retractions(), *idx.resolutions()])
+        known = dream.names_for(lb, found, idx)
+        identities = known.identities
         allowed = drafts.allowed(lb.root)
         every_draft = idx.by_kind(drafts.KIND)
         signatures = {
@@ -211,8 +212,9 @@ def material(
         data={},
         ids=ids,
         zone=rd.tz,
-        canonical=dream.canonical(lb, identities),
+        canonical=known.canonical(lb),
         identities=identities,
+        withheld=known.withheld,
     )
     read = Read(made, month, first, last, signed=len(signatures))
     beside: dict[str, int] = {}  # what it read beside the month's lines: id -> tier
@@ -270,6 +272,7 @@ def material(
     }
     made.tier = max([int(line.get("tier", 1)) for line in on] + list(beside.values()), default=1)
     made.tier = max([made.tier] + [int(line.get("tier") or 1) for line in signatures.values()])
+    made.tier = max(made.tier, known.tier_in([made.data, read.numbers]))  # a name read is read
     made.read_count = len(ids)
     made.read_ids_sha256 = dream.digest(ids | set(beside))
     read.beside = len(set(beside) - ids)
@@ -292,6 +295,8 @@ def _told(line: Line | None, ids: set[str], made: Material) -> list[dict[str, An
         shown = drafts.segment_json(segment, ids, drafts.NOT_ON_MONTH)
         if not shown["supported"] or len(told) >= TOLD or dream.beside_a_name(shown["text"], made):
             continue  # a day's sentence with a figure beside a person is never passed on
+        if made.withholds(shown["text"]):
+            continue  # nor one naming someone the entry's tiers do not name
         ref = made.refs_of(shown["evidence"])
         if ref:
             part = parts[i] if isinstance(parts, list) and len(parts) == len(segments) else None
@@ -672,7 +677,10 @@ def for_month(lb: Logbook, month: str) -> tuple[dict[str, Any] | None, dict[str,
             for day, line in signing.signatures(idx.by_kind(signing.KIND), retracted, owner_of(lb)).items()
             if first <= day <= last
         }
-    draft, withheld = drafts.for_unit(found, on_month, None, drafts.allowed(lb.root), drafts.NOT_ON_MONTH)
+        people = drafts.people_of(idx)
+    draft, withheld = drafts.for_unit(
+        found, on_month, None, drafts.allowed(lb.root), drafts.NOT_ON_MONTH, people=people
+    )
     return draft, withheld
 
 

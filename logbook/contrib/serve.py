@@ -2807,8 +2807,9 @@ class Site:
                 for line in idx.day(d)
                 if str(line["id"]) not in retracted
             }
+            people = drafts.people_of(idx)
         draft, withheld = drafts.for_unit(
-            found, on_week, self.tiers, drafts.allowed(self.lb.root), drafts.NOT_ON_WEEK
+            found, on_week, self.tiers, drafts.allowed(self.lb.root), drafts.NOT_ON_WEEK, people=people
         )
         if draft is None and withheld is None:
             return ""
@@ -3340,11 +3341,13 @@ class Site:
         return items
 
     def _promise_row(self, p: Mapping[str, Any]) -> str:
+        """One promise after the day it was said: a promise of theirs as `promised by NAME`, so the day's
+        date never stands beside a name (the owner, 27 October)."""
         who = {
             "promise": "you",
             "request": f"asked of you{f' by {p["speaker"]}' if p.get('speaker') else ''}",
-            "theirs": str(p.get("speaker") or "?"),
-        }.get(str(p.get("role")), str(p.get("speaker") or "?"))
+            "theirs": f"promised by {p.get('speaker') or '?'}",
+        }.get(str(p.get("role")), f"promised by {p.get('speaker') or '?'}")
         to = f" to {p['counterpart']}" if p.get("counterpart") and p.get("role") == "promise" else ""
         due = f"{DOT}due {p['due']}" if p.get("due") else ""
         status = f"{DOT}{p['status']}" if p.get("status") else ""

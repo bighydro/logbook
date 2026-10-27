@@ -358,7 +358,8 @@ class _Builder:
     def read(self) -> None:
         for first, last in _chunks(self.req.since, self.req.until):
             before = (date.fromisoformat(first) - timedelta(days=1)).isoformat()
-            rd = reading.read(self.lb, before, last, self.airports)
+            # read whole, gated line by line; its names at its tiers alone (the owner, 27 October)
+            rd = reading.read(self.lb, before, last, self.airports, names_at=self.req.tiers)
             rd = replace(rd, voice_tiers=self.req.tiers)  # read whole, gated line by line: and a voice's name
             for place in rd.places:
                 if place.name not in self.places:

@@ -45,7 +45,7 @@ from pathlib import Path
 from string import Template
 from typing import Any
 
-from ..core import drafts, policy
+from ..core import drafts, policy, resolve
 from ..core.chain import Line
 from ..core.export import parse_day
 from ..core.store import Logbook, retractions
@@ -93,7 +93,7 @@ def material(lb: Logbook, found: reader.InputSet, ceiling: int, head: str) -> Ma
     said = reader.promises(lb, found, ceiling)
     ids = {item.line for item in found.items} | {line for t in found.together for line in t.lines}
     made = Material(
-        day=f"{found.label} {found.span}",
+        day=f"{found.label} over {found.span}",  # a word between the name and the dates
         tier=found.tier,
         read_count=len(found.items),
         read_head=head,
@@ -102,6 +102,7 @@ def material(lb: Logbook, found: reader.InputSet, ceiling: int, head: str) -> Ma
         data={},
         ids=ids,
         unit=drafts.UNIT_PERSON,
+        canonical=_people(lb, found),  # whose names no figure may stand beside (`dream.hold_names`)
     )
     lines = []
     for item in found.items:
@@ -117,6 +118,16 @@ def material(lb: Logbook, found: reader.InputSet, ceiling: int, head: str) -> Ma
             for t in found.together
         ]
     return made
+
+
+def _people(lb: Logbook, found: reader.InputSet) -> dict[str, str]:
+    """Every canonical person of the record and the person the draft is of, id -> name: the names no
+    figure in a sentence may stand beside, whatever their tier, since holding a sentence shows nothing."""
+    with lb.index() as idx:
+        identities = resolve.identities_from([*idx.retractions(), *idx.resolutions()])
+    people = dream.canonical(lb, identities)
+    people.setdefault(found.person, found.label)
+    return people
 
 
 def prompt(made: Material, found: reader.InputSet) -> list[dict[str, str]]:
@@ -202,6 +213,14 @@ def run(
         except model_client.ModelError as e:
             raise AnswerError(relationship_model.scrub(str(e), ep.key)) from None
         segments, parts = dream.segments_of(dream.parse(answer), made, drafts.PERSON_PARTS, strict=True)
+        marked: dict[str, int] = {}
+        unbacked = dream.hold_numbers(segments, made.data, made)  # the day's order: numbers, then names
+        if unbacked:
+            marked[dream.UNBACKED] = unbacked
+        beside = dream.hold_names(segments, made)
+        if beside:
+            marked[dream.BESIDE_A_NAME] = beside
+        dream.share_of(segments, made.unit)
         payload: dict[str, Any] = {
             "schema": drafts.SCHEMA,
             "unit": drafts.UNIT_PERSON,
@@ -222,6 +241,8 @@ def run(
         }
         if found.together:  # the days together it read beside the lines (amendment 2)
             payload["extra"]["days_together"] = len(found.together)
+        if marked:
+            payload["extra"]["marked"] = marked
         if latest is not None:
             payload["supersedes"] = str(latest["id"])
         dream.valid(payload)

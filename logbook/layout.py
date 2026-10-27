@@ -40,6 +40,7 @@ TIERS: dict[str, tuple[str, ...]] = {
         "drifting",
         "events",
         "export",
+        "figures",
         "flights",
         "fork",
         "gifts",
@@ -292,6 +293,7 @@ NEW_IN_0_6: frozenset[str] = frozenset(
         "cancel",
         "kept",
         "pickup",
+        "figures",
     }
 )  # born in a tier: no 0.5 path to keep
 MOVED: dict[str, str] = {

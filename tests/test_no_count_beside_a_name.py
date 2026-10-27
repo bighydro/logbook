@@ -18,7 +18,7 @@ from typing import Any
 import letter_record
 import pytest
 from dream_fortnight import DAYS, ENV, KARI, OLA, W25, fake, fortnight, run_cli, week_answer
-from persona import utc
+from persona import OLA_ID, resolution, utc
 
 from logbook.contrib import digest, dream, dream_week, letter, serve, week_paper
 from logbook.core import day as day_reader
@@ -273,7 +273,10 @@ def test_no_reader_of_the_week_prints_a_number_beside_a_name(
     for p in pages:
         assert beside(p.read_text(encoding="utf-8")) == [], (p.name, beside(p.read_text(encoding="utf-8")))
 
-    vault = tmp_path / "vault"
+    vault = (
+        tmp_path / "vault"
+    )  # a tier-1 vault names Ola from a resolution at tier 1 alone (the owner, 27 October)
+    lb.append_many([{**resolution(("email", OLA["email"]), OLA_ID, "Ola Nordmann"), "tier": 1}])
     code, _out, err = run_cli("export", "vault", str(vault))
     assert code == 0, err
     notes = [p.read_text(encoding="utf-8") for p in vault.rglob("*.md")]

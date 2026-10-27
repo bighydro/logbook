@@ -54,7 +54,7 @@ DOOR_REFLECTION = (  # through the door (`note_day`), not in her hand: never in 
     "An agent wrote this through the door on Friday the nineteenth, a long and careful sentence that is"
     " longer than any reflection Ines wrote in June. It goes on."
 )
-JOURNEY_STORY = "Three nights in Zürich, a dinner with Ola and the berth agreed."
+JOURNEY_STORY = "Three nights in Zürich, a dinner and the berth agreed."  # no figure beside a name (R6)
 DINNER_NOTE = "the table by the window"
 WORKOUT_NOTE = "a hard morning on the rower"  # on a tier-3 line: never in a letter by default
 
