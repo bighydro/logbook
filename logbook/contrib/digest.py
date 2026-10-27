@@ -407,7 +407,7 @@ def _due_text(p: Mapping[str, Any]) -> str:
     speaker = p.get("speaker") or {}
     who = "you" if speaker.get("owner") else (speaker.get("label") or speaker.get("spoken") or "?")
     due = p.get("due") or {}
-    tail = f"{who}, {due.get('date')}"
+    tail = f"{who}, due {due.get('date')}"  # a word between: never a date beside a name
     if due.get("phrase"):
         tail += f" ({due['phrase']})"
     return f"{_quote(str(p['quote']))}  {tail}"

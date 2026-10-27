@@ -496,13 +496,10 @@ def aboard_text(text: str, names: Mapping[str, str]) -> str:
 
 
 def person_text(p: Mapping[str, Any]) -> str:
-    parts = [
-        _plural(p["days"], "day"),
-        _plural(p["nights"], "night"),
-        f"last {p['last_contact']}",
-        ", ".join(p["places"]) if p["places"] else "nowhere",
-    ]
-    return DOT.join(parts)
+    """A person's row, after their name: the last contact and the places, never the days or the nights
+    together beside the name (RFC 0043 §2.5); the rows' order, the most days first, says it."""
+    last = f"last {p['last_contact']}" if p["last_contact"] else "no last contact"
+    return DOT.join([last, ", ".join(p["places"]) if p["places"] else "nowhere"])
 
 
 def health_text(m: Mapping[str, Any]) -> str:
@@ -758,7 +755,7 @@ def _places_html(p: Mapping[str, Any]) -> list[str]:
         rows_.append(_visit_row(aboard_text(str(e["label"]), asset_names(p)), e))
     if not rows_:
         return ['<p class="muted">Nowhere.</p>']
-    out = table([("place", ""), ("nights", "n"), ("stays", "n"), ("hours", "n"), ("with", "")], rows_)
+    out = table([("place", ""), ("nights", "n"), ("stays", "n"), ("hours", "n"), ("people", "")], rows_)
     if p["unnamed"]:
         out.append(
             '<p class="muted">An unnamed place is one `places name` takes; its stay id is under --json.</p>'
@@ -772,7 +769,7 @@ def _visit_row(head: str, v: Mapping[str, Any]) -> list[Cell]:
         (f"{v['nights']:,}", "n"),
         (f"{v['stays']:,}", "n"),
         (f"{round(v['hours']):,}", "n"),
-        (", ".join(v["people"]), ""),
+        ("with " + ", ".join(v["people"]) if v["people"] else "", ""),  # a word apart from the hours
     ]
 
 
@@ -785,14 +782,11 @@ def _people_html(
     rows_: list[list[Cell]] = [
         [
             (linked(str(p["name"]), f"person:{p['name']}", links), ""),
-            (f"{p['days']:,}", "n"),
-            (f"{p['nights']:,}", "n"),
-            (p["last_contact"] or "", "d"),
-            (aboard_text(", ".join(p["places"]), names or {}), ""),
+            (aboard_text(person_text(p), names or {}), ""),
         ]
-        for p in people
+        for p in people  # the most days together first, and no count beside a name (RFC 0043 §2.5)
     ]
-    return table([("person", ""), ("days", "n"), ("nights", "n"), ("last", ""), ("places", "")], rows_)
+    return table([("person", ""), ("last contact · places", "")], rows_)
 
 
 def _health_html(months: Sequence[Mapping[str, Any]]) -> list[str]:

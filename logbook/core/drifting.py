@@ -15,7 +15,9 @@ the share of the earlier count lost, the larger share first, then the larger cou
 Per person: the two counts by channel, the channels that went **quiet** (heard in the earlier
 window, silent in the recent), the **last real contact** (a message, an answered call or a day
 together, the people reader's rule) with the days from it to the window's last day, and the
-**last shared place**, the latest day the record confirms them at one of the owner's stays.
+**last shared place**, the latest day the record confirms them at one of the owner's stays. The
+table names the people only, beside the day of the last real contact, the quiet channels and the
+place: no count beside a name (RFC 0043 §2.5), the order says who fell most.
 
 What it cannot see: a person you now meet in person every day looks drifting when nothing is logged
 about it — no calendar entry, no transcript, no note that says `with`, no message — and a record
@@ -189,28 +191,19 @@ def rows(data: dict[str, Any]) -> Iterator[str]:
         yield "        nobody fell below their earlier frequency"
         return
     quiet_width = max(8, *(len(_quiet(p["quiet"])) for p in data["people"]))
-    yield (
-        f"        {'person':<24} {'earlier':>7} {'recent':>6} {'fall':>6}  {'last real contact':<18} "
-        f"{'quiet':<{quiet_width}}  last shared place"
-    )
+    # names only (RFC 0043 §2.5): the order, the larger share lost first, says how far each fell; the
+    # counts, the fall and the days since the last real contact are --json's
+    yield f"        {'person':<24} {'last real contact':<17}  {'quiet':<{quiet_width}}  last shared place"
     for p in data["people"]:
         yield (
-            f"        {p['name']:<24} {p['earlier']['contacts']:>7} {p['recent']['contacts']:>6}"
-            f" {_fall(p['fell_by']):>6}  {_ago(p['days_since_real_contact']):<18} "
+            f"        {p['name']:<24} {_contact(p['last_real_contact']):<17}  "
             f"{_quiet(p['quiet']):<{quiet_width}}  {_place(p['last_place'])}"
         )
 
 
-def _fall(fell_by: float) -> str:
-    return f"-{round(fell_by * 100)}%"
-
-
-def _ago(days: int | None) -> str:
-    if days is None:
-        return "never"
-    if days == 0:
-        return "today"
-    return f"{days} day ago" if days == 1 else f"{days} days ago"
+def _contact(real: dict[str, Any] | None) -> str:
+    """`last 2026-06-12`: a word between the name and the date, never a date beside a name."""
+    return "never" if real is None else f"last {real['day']}"
 
 
 def _quiet(channels: Sequence[str]) -> str:

@@ -650,10 +650,10 @@ def _trip_contents(data: Mapping[str, Any]) -> list[str]:
         about = [d["nights"]["after"]]
         if d["flights"]:
             about.append(", ".join(_flight_text(f) for f in d["flights"]))
-        if d["people"]:
-            about.append("with " + ", ".join(d["people"]))
         if d["keepers"]:
             about.append(_plural(len(d["keepers"]), "keeper"))
+        if d["people"]:  # last, so no count stands beside a name (RFC 0043 §2.5)
+            about.append("with " + ", ".join(d["people"]))
         out.append(
             f'<li><span class="what">{escape(_weekday_date(d))}</span>'
             f'<span class="about">{escape(DOT.join(about))}</span></li>'

@@ -10,6 +10,7 @@ from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
 
+import beside_a_name
 import pytest
 from circle import ANDERS, EVA, LIV, NILS, OLA, OWNER, PER, call, mail, message
 from persona import OFFICE, OLA_ID, PLACES, TZ, attendee, dwell, event, resolution, utc
@@ -196,28 +197,19 @@ def test_the_table_reads_plainly_and_suggests_nothing(
         f"people · drifting · recent 2026-06-15 {drifting.EN_DASH} 2026-06-28 · earlier 2026-06-01 "
         f"{drifting.EN_DASH} 2026-06-14 · at least 3 contacts earlier"
     )
-    assert lines[1].split() == [
-        "person",
-        "earlier",
-        "recent",
-        "fall",
-        "last",
-        "real",
-        "contact",
-        "quiet",
-        "last",
-        "shared",
-        "place",
-    ]
-    eva, ola = lines[2], lines[3]
-    assert eva.startswith(f"        {EVA['name']:<24}") and "4" in eva and "-100%" in eva
-    assert "16 days ago" in eva and "messages, calls" in eva and eva.rstrip().endswith(drifting.EM_DASH)
-    assert (
-        "-86%" in ola
-        and "12 days ago" in ola
-        and "calls, calendar, together" in ola
-        and ola.rstrip().endswith("Office")
-    )
+    assert lines[1].split() == ["person", "last", "real", "contact", "quiet", "last", "shared", "place"]
+    eva, ola = lines[2], lines[3]  # the larger share lost first: the order says who fell most
+    assert eva.startswith(f"        {EVA['name']:<24} last 2026-06-12 "), eva
+    assert "messages, calls" in eva and eva.rstrip().endswith(drifting.EM_DASH)
+    assert ola.startswith(f"        {'Ola Nordmann':<24} last 2026-06-16 "), ola
+    assert "calls, calendar, together" in ola and ola.rstrip().endswith("Office")
+    assert beside_a_name.rows(out) == [], "names only: no count, no fall, no days ago beside a name"
+    assert "%" not in out and "days ago" not in out
+    data = _json(capsys, *DRIFTING)
+    assert [(p["name"], p["fell_by"], p["days_since_real_contact"]) for p in data["people"]] == [
+        (EVA["name"], 1.0, 16),
+        ("Ola Nordmann", 0.857, 12),
+    ], "the counts stay in --json, unchanged"
     assert len(lines) == 4
     for phrase in ("reach out", "should", "try", "suggest"):
         assert phrase not in out.casefold(), phrase

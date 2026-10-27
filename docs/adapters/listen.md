@@ -156,8 +156,8 @@ adapter wrote it: `spotify`, `apple-music`, `shazam`, `apple-podcasts`, the demo
 listen 2026-01-01 – 2026-03-20
   2026  10 listens · 2.3 h · 2 skipped · 1 without a playhead · 3 episodes · spotify 8, apple-podcasts 1, shazam 1
         top artists
-          Ola Nordmann                 0.3 h · 3 listens
-          Kari Nordmann                0.2 h · 4 listens
+          Ola Nordmann                 played 0.3 h · 3 listens
+          Kari Nordmann                played 0.2 h · 4 listens
         podcasts  3 episodes · 1.8 h
           by show
             Havnepodden                  1.5 h · 2 episodes
