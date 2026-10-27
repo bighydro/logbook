@@ -33,8 +33,9 @@ and until they have arrived the page says so in one sentence and the next visit 
 names what has arrived). A test or a build reads them on the request.
 
 An exported site (`export site`, `site.static`) has no clock: its Today is the record's last day (its
-last day with a line that observes one, `reading.record_span`, so the export's own crossing line does
-not move it), with no form, no Ask and no font."""
+last day with a line it sends that observes one, `reading.record_span` through the site's tiers, so
+the export's own crossing line does not move it, nor a line held back), with no form, no Ask and no
+font."""
 
 from __future__ import annotations
 
@@ -140,7 +141,7 @@ def page_today(site: Site) -> str:
     """`/`: Today, in the doors' frame (`doors.page`)."""
     lb = site.lb
     if site.static:
-        whole = reading.record_span(lb)
+        whole = reading.record_span(lb, site.tiers)  # the last day a line the site sends is on
         today = whole[1] if whole is not None else day_start.of(lb.meta).today(site.now()).isoformat()
     else:
         today = day_start.of(lb.meta).today(site.now()).isoformat()
@@ -388,7 +389,7 @@ def memory(lb: Logbook, today: str, airports: Airports, tiers: Sequence[int] | N
     photo or a trip (a flight, or a night away); else None, and Today shows no card. The index says
     which years hold a line at all and what each holds of the first two and of flights; an earlier year
     that holds none of them is read in full for its night, `MEMORY_READS` of them at most."""
-    whole = reading.record_span(lb)
+    whole = reading.record_span(lb, tiers)
     first = whole[0] if whole is not None else today
     owner = str(lb.meta.get("owner_id"))
     held: list[tuple[int, str, list[Line]]] = []

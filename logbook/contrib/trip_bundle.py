@@ -109,8 +109,9 @@ def prepare(
     """Find the trip (`trip_page.locate`: `ValueError` when there is none on that day or under
     that id), hold the request against the policy (`crossing.request`: `CrossingError` above the
     ceiling or for a destination the file does not name), and select what crosses. Reads only."""
-    rd, trip = trip_page.locate(lb, trip_page.parse_ref(ref_text), airports)
-    rd = replace(rd, voice_tiers=tuple(tiers))  # read whole, sent line by line; a voice's name too
+    # read whole, sent line by line; its names at its tiers alone (the owner, 27 October), a voice's too
+    rd, trip = trip_page.locate(lb, trip_page.parse_ref(ref_text), airports, names_at=tiers)
+    rd = replace(rd, voice_tiers=tuple(tiers))
     since, until = window_of(rd, trip)
     req = crossing.request(
         lb, destination, since, until, tiers, KINDS, signed_only=False
@@ -288,12 +289,19 @@ def share_of(
     crosses; else held back and counted), the photo lines that crossed — and the sender."""
     first = datetime.combine(date.fromisoformat(trip.start), datetime.min.time(), tzinfo=rd.tz)
     last = datetime.combine(date.fromisoformat(trip.until), datetime.max.time(), tzinfo=rd.tz)
+    moved = [
+        m
+        for m in rd.segments
+        if m.subject is None and m.kind == stays.MOVE and m.start < last and m.end > first
+    ]
+    crosses = _crosses(rd, req, [*away_stays(rd, trip), *moved])
     nights_at: Counter[str] = Counter()
     for night in rd.nights:
         if trip.start <= night.day <= trip.end:
-            nights_at.update({s.id for s in (night.stay, night.innermost) if s is not None})
+            nights_at.update({s.id for s in (night.stay, night.innermost) if s is not None and crosses(s)})
+    selected = {str(line["id"]) for line in sel.lines}
     stay_rows = []
-    for stay in away_stays(rd, trip):
+    for stay in filter(crosses, away_stays(rd, trip)):
         row = stay.to_json(rd.tz)
         row.pop("inside", None)
         row["label"] = (
@@ -305,11 +313,7 @@ def share_of(
         )
         row["nights"] = nights_at.get(stay.id, 0)
         stay_rows.append(row)
-    moves = [
-        m.to_json(rd.tz)
-        for m in rd.segments
-        if m.subject is None and m.kind == stays.MOVE and m.start < last and m.end > first
-    ]
+    moves = [m.to_json(rd.tz) for m in moved if crosses(m)]
     named = NAMING_TIER in req.tiers
     photos = [str(line["id"]) for line in sel.lines if line.get("kind") == "photo"]
     tier = max([1, *(int(line["tier"]) for line in sel.lines), *([NAMING_TIER] if named and people else [])])
@@ -327,7 +331,7 @@ def share_of(
         "sender": dict(sender),
         "stays": stay_rows,
         "moves": moves,
-        "flights": [dict(f) for f in trip.flights],
+        "flights": [dict(f) for f in trip.flights if f["lines"] and set(f["lines"]) <= selected],
         "people": [dict(p) for p in people] if named else [],
         "photos": {"count": len(photos), "lines": photos},
         "held_back": {
@@ -338,6 +342,25 @@ def share_of(
         "tiers": list(req.tiers),
         "tier": tier,
     }
+
+
+def _crosses(
+    rd: Reading, req: crossing.Request, segments: Sequence[stays.Segment]
+) -> Callable[[stays.Segment], bool]:
+    """Whether a stay or a move rests on lines that cross: its first and last location lines are of
+    the request's tiers. A line the record does not hold is held back, never shown."""
+    ids = {i for s in segments for i in (s.first_line, s.last_line) if i}
+    tier_of = {str(line["id"]): int(line["tier"]) for line in rd.lines if str(line["id"]) in ids}
+    if ids - tier_of.keys():
+        with rd.lb.index() as idx:
+            found = idx.by_ids(ids - tier_of.keys())
+        tier_of |= {i: int(line["tier"]) for i, line in found.items()}
+
+    def crosses(segment: stays.Segment) -> bool:
+        ends = [i for i in (segment.first_line, segment.last_line) if i]
+        return bool(ends) and all(tier_of.get(i) in req.tiers for i in ends)
+
+    return crosses
 
 
 def export(lb: Logbook, prepared: Prepared, out: Path, generated_at: str, force: bool = False) -> Export:

@@ -280,7 +280,7 @@ def test_every_new_part_is_a_segment_with_evidence_and_the_day_json_carries_it(
         and link["kept"] is None
     )
     assert draft["proposals"] == [] and draft["proposals_unknown"] == 0
-    assert "? link 1    Crew list  proposed" in out and f"lens:money {drafts.NO_ANSWER}" in out
+    assert "? Crew list (link 1)  proposed" in out and f"lens:money {drafts.NO_ANSWER}" in out
 
 
 def test_the_story_closing_line_is_the_readers_never_the_models(
@@ -455,7 +455,7 @@ def test_a_link_names_only_an_entity_the_material_gave_and_follows_the_events(
         3,
     ]
     assert "1 proposed event" in drafts.head_text(draft) and "2 proposed links" in drafts.head_text(draft)
-    assert "? link 2    Crew list · the note of the day  proposed" in out
+    assert "? Crew list · the note of the day (link 2)  proposed" in out
 
 
 def test_draft_v1_amendment_2_link_and_evening_shapes() -> None:
@@ -627,7 +627,7 @@ def test_after_a_signature_only_a_later_line_re_dreams_and_a_kept_proposal_is_no
     accepted = next(line for line in lb.lines() if line["kind"] == "event" and line["source"] == "owner")
     assert dinner["kept"] == {"line": accepted["id"], "seq": accepted["seq"]}, "kept, matched by its fields"
     rows = _cli("day", DAY, "--no-anniversaries")[1]
-    assert "since you signed" in rows and "? link 2" in rows and "event 1" not in rows
+    assert "since you signed" in rows and "(link 2)  proposed" in rows and "(event 1)" not in rows
     assert "dreamed" not in _cli("dream", "--catch-up", "--days", "1")[1], "nothing since the new draft"
 
 

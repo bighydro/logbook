@@ -198,7 +198,7 @@ def request(
                 parse_day(given)
             except ValueError as e:
                 raise WorldError(f"{flag}: {e}") from e
-    whole = reading.record_span(lb)
+    whole = reading.record_span(lb, tiers)  # the days of the lines that cross
     if whole is None:
         return None
     if today is None:

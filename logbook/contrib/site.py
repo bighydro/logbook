@@ -119,7 +119,7 @@ def request(lb: Logbook, tiers: tuple[int, ...], drafts: bool = False) -> Reques
     has its Days index, and its Year page says what the Year reader says of it), held against the
     policy: a tier above the ceiling for `site` is refused naming the file. A model's drafts are left
     out unless `drafts`. None when the record has no day at all."""
-    whole = reading.record_span(lb)
+    whole = reading.record_span(lb, tiers)  # the days of the lines that cross: a held one opens no year
     if whole is None:
         return None
     try:

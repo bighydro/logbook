@@ -186,6 +186,11 @@ def _audio(tmp_path: Path) -> Path:
 # -- 1. the reflection: one note/v1 line, labelled, tier 2 -----------------------------------------------
 
 
+def _proposal(out: str, n: int) -> str:
+    """The row of proposal `n`: its word and what it reads, then `(proposal N, line S)`."""
+    return next(row for row in out.splitlines() if f"(proposal {n}, line " in row)
+
+
 def test_text_writes_one_reflection_note_and_prints_it_back_with_line_numbers(
     lb: Logbook, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ):
@@ -199,7 +204,7 @@ def test_text_writes_one_reflection_note_and_prints_it_back_with_line_numbers(
     assert (line["kind"], line["tier"], line["source"], line["at"]) == ("note", 2, "reflect", AT_UTC)
     assert line["payload"] == {"schema": "note/v1", "text": REFLECTION, "labels": ["reflection"]}
     for n, sentence in enumerate(SENTENCES, 1):
-        assert f"  {n:>3}  {sentence}" in out
+        assert f"  {sentence}  (line {n})" in out
     assert "wrote the reflection as #6 note/v1" in out
     assert "nothing else was written" in out
     assert "signed-day" not in _kinds(lb)
@@ -225,7 +230,7 @@ def test_audio_is_heard_locally_and_written_as_the_reflection(
     assert (line["source"], line["tier"]) == ("reflect", 2)
     assert engine.loaded == [audio]
     assert engine.offline and all(flag == "1" for flag in engine.offline), "the hub is offline while hearing"
-    assert "  9  Ola soll den Anhänger zurückbringen." in out
+    assert "  Ola soll den Anhänger zurückbringen.  (line 9)" in out
 
 
 def test_no_socket_is_opened_while_a_reflection_is_heard(
@@ -383,7 +388,7 @@ def test_a_reflect_dictation_is_offered_as_the_draft_and_nothing_is_written_with
     before = _files(lb.root)
     out = _run(capsys, "day", "reflect", DAY)
     assert "Wispr Flow" in out and "21:30" in out
-    assert f"    1  {SENTENCES[0]}" in out, "the draft without the word that marks it"
+    assert f"  {SENTENCES[0]}  (line 1)" in out, "the draft without the word that marks it"
     assert "--from-wispr" in out and "nothing was written" in out
     assert _files(lb.root) == before
 
@@ -486,10 +491,10 @@ def test_proposals_of_all_three_kinds(lb: Logbook, capsys: pytest.CaptureFixture
     assert all(p.score is not None and p.score >= reflect.MATCH for p in found if p.kind == "disposition")
     out = _run(capsys, "day", "reflect", DAY, "--text", REFLECTION, "--dry-run")
     assert "a guess until you accept it" in out
-    assert "    3  delegation" in out and "to Ola" in out and "to Ines" in out
-    assert "    6  kept" in out and "#2" in out and "went out" in out
-    assert "    7  carried" in out and "#3" in out and "next week" in out
-    assert "    8  dropped" in out and "#4" in out
+    assert _proposal(out, 3).startswith("  delegation ") and "to Ola" in out and "to Ines" in out
+    assert _proposal(out, 6).startswith("  kept ") and "#2" in out and "went out" in out
+    assert _proposal(out, 7).startswith("  carried ") and "#3" in out and "next week" in out
+    assert _proposal(out, 8).startswith("  dropped ") and "#4" in out
 
 
 def test_the_commitments_are_read_from_the_day_alone(lb: Logbook):
@@ -568,7 +573,7 @@ def test_sign_off_a_terminal_without_accept_writes_nothing(lb: Logbook, capsys: 
         cli.main(["day", "reflect", DAY, "--text", REFLECTION, "--sign"])
     assert e.value.code == 2
     captured = capsys.readouterr()
-    assert "    8  dropped" in captured.out, "the proposals are printed first"
+    assert _proposal(captured.out, 8).startswith("  dropped "), "the proposals are printed first"
     assert "--accept" in captured.err and "nothing was written" in captured.err
     assert _files(lb.root) == before
 

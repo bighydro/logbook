@@ -22,7 +22,7 @@ from persona import OLA_ID, resolution, utc
 
 from logbook.contrib import digest, dream, dream_week, letter, serve, week_paper
 from logbook.core import day as day_reader
-from logbook.core import drafts, policy, speakers
+from logbook.core import drafts, figures, policy, speakers
 from logbook.core.store import Logbook
 
 NAMES = ("Kari Nordmann", "Ola Nordmann", "Per Hansen", "Kari", "Ola")
@@ -30,8 +30,11 @@ MONDAY_AFTER = "2026-06-22"  # the close of Sunday 21 June: both weeks are over
 SUNDAY = "2026-06-21"
 CALL_DAY, RECORDING_DAY = "2026-06-17", "2026-06-19"
 _ALT = "|".join(re.escape(n) for n in NAMES)
-# the guard: a digit, then nothing but a separator, then a name; or a name, then a separator, then a digit
-GUARD = re.compile(rf"(\d[\s(:×x#·,]*(?:{_ALT})\b)|(\b(?:{_ALT})\??[\s(:×x#·,]*\d)")
+# the guard: a digit, then nothing but a separator, then a name; or a name, then a separator, then a digit.
+# A separator is a space, a bracket of either kind (a wikilink's too), a colon, a semicolon, a times sign,
+# a hash, the middle dot, a comma, a dash, a bar, a slash, an arrow, a quote: what `figures.SEPARATORS` holds
+SEP = figures.SEPARATORS
+GUARD = re.compile(rf"(\d{SEP}(?:{_ALT})\b)|(\b(?:{_ALT})\??{SEP}\d)")
 
 
 RAW = re.compile(r'<a class="raw"[^>]*>#\d+</a>')  # a row's link to its line as written: an address
@@ -39,18 +42,19 @@ RAW = re.compile(r'<a class="raw"[^>]*>#\d+</a>')  # a row's link to its line as
 
 def beside(texts: str | Iterable[str]) -> list[str]:
     """Every place in `texts` where a number stands beside a person's name (`GUARD`), the markup taken
-    out first; a date and a clock time are numbers too, with only separators between them and a name
-    (the owner, 27 October); a page's link from a row to its line as written (`#SEQ`, `RAW`) is the
-    line's address, not a number."""
+    out first; a date and a clock time are numbers too, each read as one figure (`figures.CALENDAR`, so
+    `8 June` is as near a name as `8`; the owner, 27 October: words between are fine, separators
+    alone are not). A page's link from a row to its line as written (`#SEQ`, `RAW`) is the line's
+    address, not a number of the person."""
     found: list[str] = []
     for text in [texts] if isinstance(texts, str) else texts:
         for row in html.unescape(re.sub(r"<[^>]*>", " ", RAW.sub(" ", text))).splitlines():
-            if GUARD.search(row):
+            if GUARD.search(figures.CALENDAR.sub("0", row)):
                 found.append(row.strip())
     return found
 
 
-def test_the_guard_finds_a_count_on_either_side_and_lets_dates_and_clocks_be() -> None:
+def test_the_guard_finds_a_count_a_date_or_a_clock_on_either_side_and_lets_words_be() -> None:
     assert beside("contacts  Kari Nordmann 12 · Ola Nordmann 3") == [
         "contacts  Kari Nordmann 12 · Ola Nordmann 3"
     ]
@@ -59,7 +63,18 @@ def test_the_guard_finds_a_count_on_either_side_and_lets_dates_and_clocks_be() -
     assert beside("with  Kari Nordmann · Ola Nordmann") == []
     assert beside("due  “Comments by Friday.”  Kari Nordmann, 2026-06-05 (by Friday)"), "a date is a number"
     assert beside("due  “Comments by Friday.”  Kari Nordmann, due 2026-06-05 (by Friday)") == []
+    assert beside("Ola Nordmann · 19:30") and beside("8 June · Ola Nordmann"), "and so is a clock"
+    assert beside("Ola Nordmann promised you · since 8 June") == [], "words between"
+    assert beside("with Ola at 14:00") == [] and beside("dinner with Ola Nordmann at 19:30") == []
     assert beside("19:30  call  19 min ← Ola Nordmann, cellular") == []
+    assert beside("with [[Ola Nordmann]] · 2 attachments"), "a wikilink's brackets are separators"
+    for said in (
+        "Ola Nordmann; 8 June",
+        "Ola Nordmann / 14:00",
+        "Ola Nordmann → 14:00",
+        "[Ola Nordmann] 8 June",
+    ):
+        assert beside(said), said
 
 
 # -- the readers, on rows a week before this rule wrote ------------------------------------------------------
@@ -264,13 +279,15 @@ def test_no_reader_of_the_week_prints_a_number_beside_a_name(
 
     crossing = lb.root / "policy" / "crossing.json"  # the week's draft is tier 2: let tier 2 cross
     entries = json.loads(crossing.read_text(encoding="utf-8"))
-    crossing.write_text(json.dumps({**entries, "site": {"max_tier": 2}}), encoding="utf-8")
+    crossing.write_text(  # and to the vault: a tier-1 vault names nobody a tier-2 line alone names
+        json.dumps({**entries, "site": {"max_tier": 2}, "vault": {"max_tier": 2}}), encoding="utf-8"
+    )
     site = tmp_path / "site"
     code, _out, err = run_cli("export", "site", str(site), "--tier", "1,2", "--with-drafts")
     assert code == 0, err
     pages = [*site.glob("days/*.html"), *site.glob("trips/*.html")]  # the pages a draft's people are on
     assert any(W25 in p.read_text(encoding="utf-8") for p in pages), "the week's draft is on the site"
-    for p in pages:
+    for p in sorted(site.rglob("*.html")):  # and every other page of the site: its people, years, places
         assert beside(p.read_text(encoding="utf-8")) == [], (p.name, beside(p.read_text(encoding="utf-8")))
 
     vault = (
@@ -300,3 +317,24 @@ def test_a_letter_of_weeks_names_its_people_with_no_number_beside_them(
         text = (out / name).read_text(encoding="utf-8")
         assert "Kari Nordmann" in text and beside(text) == [], (name, beside(text))
     assert lb.root.is_dir()
+
+
+def test_a_dream_holds_a_date_or_a_clock_beside_a_name_and_lets_words_between_stand() -> None:
+    """A dream's sentence that sets a date or a clock beside a person's name with only separators
+    between is a number beside a name (the owner, 27 October); with words between it stands."""
+    made = dream.Material(
+        day="2026-06-10", tier=2, read_count=0, read_head="", read_ids_sha256="", language="en", data={},
+        canonical={"e-ola": "Ola Nordmann"},
+    )  # fmt: skip
+    for said in (
+        "Ola Nordmann, 8 June.",
+        "Lunch: Ola Nordmann · 12:30.",
+        "On 2026-06-10, Ola Nordmann came.",
+    ):
+        assert dream.beside_a_name(said, made), said
+    for said in (
+        "Dinner with Ola Nordmann on 8 June.",
+        "Ola promised you the photos, since 8 June.",
+        "With Ola at 14:00.",
+    ):
+        assert not dream.beside_a_name(said, made), said

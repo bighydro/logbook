@@ -309,7 +309,7 @@ def not_with(lb: Logbook, name: str, first: str, last: str, now: datetime | None
         lb,
         name,
         NOT_WITH,
-        lambda label: f"{NOT_WITH}: {label}, {since} to {to}",
+        lambda label: f"{NOT_WITH}: {label}, from {since} to {to}",  # a word between the name and the date
         {"from": since, "to": to},
         now,
     )

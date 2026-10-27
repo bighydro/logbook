@@ -378,7 +378,8 @@ def test_not_with_stops_the_proposals_for_that_stretch(
 ) -> None:
     out = _run(capsys, "people", "not-with", "Kari", "--from", "2026-06-10", "--to", "2026-06-10")
     [line] = _labelled(lb, "not-with")
-    assert out == f"#{line['seq']} note  not-with: Kari Nordmann, 2026-06-10 to 2026-06-10\n"
+    # a word between the name and the date (the owner, 27 October)
+    assert out == f"#{line['seq']} note  not-with: Kari Nordmann, from 2026-06-10 to 2026-06-10\n"
     assert line["payload"]["extra"] == {"person": KARI_ID, "from": "2026-06-10", "to": "2026-06-10"}
     assert line["tier"] == 2 and line["source"] == "manual"
     kari = _asked(_queue(capsys, "--week", WEEK))["Kari Nordmann"]
