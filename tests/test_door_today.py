@@ -556,7 +556,8 @@ def test_doors_page_is_as_404_made_it(lb: Logbook) -> None:
 
 def test_one_policy_with_fonts_from_the_server_and_the_font_address_kept(lb: Logbook) -> None:
     before = "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'"
-    assert before.replace("form-action", "font-src 'self'; form-action") == serve.CSP, "the one change"
+    fonts = before.replace("form-action", "font-src 'self'; form-action")
+    assert f"{fonts}; frame-ancestors 'none'" == serve.CSP, "the two changes: the fonts, and no frame"
     for policy in (serve.CSP, serve.DAY_CSP, serve.DAY_IMAGES, serve.PLACES_CSP, serve.WORLD_CSP, doors.CSP):
         assert policy.count("font-src 'self'") == 1, policy
     site = _site(lb)

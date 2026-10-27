@@ -74,8 +74,8 @@ You can leave at any time, with everything.
 
 Not yet. There is no app to download. The record on a phone is on the roadmap, in the passage called *Everyone*.
 
-What exists is the Library, `logbook serve`: pages your own machine serves to your browser. It answers that machine and no other. A phone reaches it through a tunnel or a private network you set up yourself. `/today` opens today's page, the one to keep on a phone.
+What exists is the Library, `logbook serve`: pages your own machine serves to your browser. It answers that machine and no other. A phone reaches it through a tunnel, or through Tailscale Serve once `logbook setup phone` names it; nothing else reads it. `/today` opens today's page, the one to keep on a phone.
 
-At the foot of each day you write a few sentences about it. Once a transcription model is installed, you can say them instead. The page proposes the promises it finds in your words, and you tick the ones you made. Then you sign. On the machine itself, or from a phone through a tunnel, the evening needs no terminal. Through a private network's own proxy, you can read the pages, and sign them too once `logbook setup phone` names your phone.
+At the foot of each day you write a few sentences about it. Once a transcription model is installed, you can say them instead. The page proposes the promises it finds in your words, and you tick the ones you made. Then you sign. On the machine itself, or from a phone through a tunnel, the evening needs no terminal. Through Tailscale Serve, once `logbook setup phone` names your phone, you can read the pages and sign them too.
 
 **Where this is written.** [ROADMAP.md](ROADMAP.md), *4 · Everyone* · [In a browser](serve.md): *Three rules*, *Reaching it from another device*, *Reflect and Sign* · `tests/test_serve.py::test_refuses_to_bind_anything_but_loopback` · `tests/test_serve.py::test_today_is_the_current_day_in_the_records_timezone` · [The signed day](signed-day.md)

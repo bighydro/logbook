@@ -118,6 +118,34 @@ never binds anywhere else: not as a service either ([As a service](#as-a-service
 carries `--host`. To read the record from another device, see
 [reaching it from another device](#reaching-it-from-another-device).
 
+**Who may read it.** Two readers, and nobody else: this machine, and your own phone through
+Tailscale Serve once `logbook setup phone` names it ([from your phone](#from-your-phone)). Never
+through Tailscale Funnel, never through any other proxy. Before it reads anything of the record,
+the server looks at who asked:
+
+- *This machine*: a request with no proxy's headers (no `Tailscale-*`, `X-Forwarded-*`,
+  `Forwarded`, `Via` or `X-Real-IP`) and one
+  `Host`, `127.0.0.1`, `[::1]` or `localhost` with the server's own port (`127.0.0.1:8765`), or no
+  `Host` at all. Read.
+- *Your phone*: a request through Tailscale Serve with one `Host`, the tailnet name the setting
+  names, one `Tailscale-User-Login`, your login, and no `Tailscale-Funnel-Request`. Read, at every
+  tier this machine reads. The login is a tailnet user, not a device: every device signed in as
+  you reads too, so keep your login to your own devices.
+- *Anything else through a proxy* (another login or none, another tailnet name, two `Host`
+  headers, a Funnel request, any proxy at all while no phone is set): a `403`, nothing read.
+- *Any other `Host`*: a `421`, nothing read. This is the website you happen to have open that
+  points its own name at `127.0.0.1` to read your pages through your browser (DNS rebinding): it
+  can choose the address, never the `Host` your browser sends, which is its own name.
+
+A proxy that adds none of those headers and rewrites the `Host` to `127.0.0.1:8765` (nginx's
+`proxy_pass` with its defaults), or a raw TCP forward, cannot be told from this machine: never put
+one in front of the server.
+
+No page can be put in another page's frame (each policy says `frame-ancestors 'none'`, each answer
+`X-Frame-Options: DENY`), and a form posted from a frame or from another site (the browser's
+`Sec-Fetch-Dest` other than `document`, or its `Sec-Fetch-Site` other than `same-origin` or `none`)
+is refused with nothing written, with an `Origin` or without one.
+
 **One document, nothing fetched.** A page is one HTML document with one inline stylesheet. No
 stylesheet link, no frame, no script fetched; every link, form, image and tooltip points at the
 server's own paths. The one font a page names is the doors' ([Today](#today-the-front-door)), in
@@ -491,20 +519,22 @@ the pages from a phone or another machine is your business, done on this machine
 tool you choose:
 
 - **an SSH tunnel** from the other device: `ssh -L 8765:127.0.0.1:8765 <this machine>`, then
-  http://127.0.0.1:8765/ there;
-- **a tailnet's own HTTPS proxy** running on this same machine and forwarding to
-  `http://127.0.0.1:8765`, so the pages are reachable over the tailnet only, with its certificate and
-  its access rules.
+  http://127.0.0.1:8765/ there. The same port on both ends: the browser names the port it opened in
+  its `Host`, and the server reads only for its own (`ssh -L 8766:127.0.0.1:8765` is a `421`);
+- **Tailscale Serve** on this same machine, `tailscale serve --bg 8765`, with `logbook setup phone`
+  naming the phone and your login ([from your phone](#from-your-phone)): the pages over the tailnet
+  only, with its certificate, to that one login.
 
-Either way the pages carry every tier the record holds (SPEC §4): the server reads them all because
-nothing it serves leaves the machine, so whatever you put in front of it decides who else can read
-them. Keep it to your own devices. The server does not know it is there and does not change for it:
-same pages, same headers, the same refusal of any other host.
+Nothing else reads them. Another proxy (Caddy, nginx, a tunnel service, Tailscale Serve without the
+setting, Tailscale Funnel ever) is refused, a `403` with nothing read ([who may read
+it](#three-rules)). The pages carry every tier the record holds (SPEC §4): the server reads them all
+because nothing it serves leaves the machine. Keep the tailnet to your own devices.
 
 ## From your phone
 
-Off by default. Behind Tailscale Serve the phone reads every page; with one setting it writes too:
-Reflect, With, Star and Sign on the Day, and the shelves' forms, each as from this machine.
+Off by default. With one setting, behind Tailscale Serve, the phone reads every page and writes too:
+Reflect, With, Star and Sign on the Day, and the shelves' forms, each as from this machine. Without
+it, the phone reads nothing: every request through a proxy is a `403`.
 
 On the machine that serves the record (the Air):
 
@@ -521,11 +551,13 @@ put the pages on the internet: never funnel this port. The origin is the address
 `tailscale status` on the Air lists each device with the login it is signed in as (or
 `tailscale whois` with the phone's tailnet address, or the admin console's Users page). `setup
 phone` prints what it will write to `logbook.json`, asks for a yes typed at a terminal, and writes
-nothing else; the server reads it with each POST, so no restart. `logbook setup phone` alone says
+nothing else; the server reads it with each request, so no restart. `logbook setup phone` alone says
 what is set, `--off` removes it, and `logbook doctor` names the origin on its `phone` line (the
 login shortened). Before you travel, star a line from the phone at home: a `303` and the star.
 
-What it allows: a POST that tailscaled forwards from your phone, all at once: from loopback, with
+What it allows: a page read when tailscaled forwards it from your phone with one `Host`, the
+setting's host, one `Tailscale-User-Login`, your login, and no `Tailscale-Funnel-Request`; and a POST
+that tailscaled forwards from your phone, all at once: from loopback, with
 the browser's `Origin` exactly the setting's (the host in any case, `:443` written or not), the
 `Host` the setting's host, and `Tailscale-User-Login`, the header Tailscale Serve sets from the
 device's tailnet identity, exactly your login, each header sent once, and not from inside a frame
@@ -545,9 +577,9 @@ name, not one of them) or when it carries any `Tailscale-*` or `X-Forwarded-*` h
 POST is answered only as the phone's, through the checks above, and never because it carries no
 `Origin`: `curl` from any device on the tailnet, with no Origin or a login it typed, is a `403` with
 nothing written, the setting on or off. Requests to `http://127.0.0.1:8765` or
-`http://[::1]:8765` from this machine are answered as before (an SSH tunnel's `127.0.0.1:8766`
-too); a request naming any other host, `localhost` included, is treated as coming through a proxy,
-so a form posted to `http://localhost:8765` is refused unless it is the phone's. That rests on tailscaled sending the tailnet name as `Host`
+`http://[::1]:8765` from this machine are answered as before; a form posted to any other host,
+`localhost` included, is treated as coming through a proxy, so a form posted to
+`http://localhost:8765` is refused unless it is the phone's (the page itself reads there). That rests on tailscaled sending the tailnet name as `Host`
 and adding its `X-Forwarded-*` headers, as Tailscale Serve does today; the star from the phone
 before you travel confirms the first, and a `curl` from another device that comes back `403` the
 second. Keep the tailnet name to your own devices all the same (every tier is on the pages it
@@ -603,9 +635,8 @@ header) is answered only as the owner's phone (*From your phone*). Anything else
 nothing is written. Every page is sent with `Referrer-Policy: same-origin`, so the browser
 names the page a form came from (`Origin: http://127.0.0.1:<port>`) and sends nothing to other sites
 (under `no-referrer` it would send `Origin: null`, and every form would be refused). Through an SSH
-tunnel the browser's origin is `127.0.0.1` and the form works; behind a proxy with its own name it is read-only, as every other page is written, and the
-naming is done here, unless the proxy is Tailscale Serve and `logbook setup phone` names it (*From
-your phone*). `GET /places/review` is a `405`.
+tunnel the browser's origin is `127.0.0.1` and the form works; behind any proxy but Tailscale Serve
+with `logbook setup phone` naming the phone (*From your phone*) the page is not read at all. `GET /places/review` is a `405`.
 
 **A Day's stay without a name** carries a small *name this place* link to the Places page at its
 cluster (`/places?at=lat,lon`, which redirects to the page the cluster is on and scrolls to it, or
@@ -632,7 +663,7 @@ and its spelling follow you.
 
 **Or say it (optional).** Where this machine can hear, a second form takes a recording: a file, or
 on a phone the recorder the browser opens for it. Where the browser can record (it has
-MediaRecorder; the page is on 127.0.0.1, or behind an HTTPS proxy, since a browser lends the
+MediaRecorder; the page is on 127.0.0.1, or on your phone behind Tailscale Serve, since a browser lends the
 microphone to a secure origin only), a *Record* button records from the microphone and sends the
 recording with that form when you press it again; that is the Day's one script. The recording goes
 up as the form's file (`multipart/form-data`, at most 64 MiB, half an hour of speech even as WAV),

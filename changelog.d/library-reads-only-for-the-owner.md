@@ -1,0 +1,3 @@
+### Security
+- `logbook serve` reads for this machine and for your phone through Tailscale Serve once `logbook setup phone` names it, and nobody else: a page asked under any other `Host` (a website pointing its name at 127.0.0.1, DNS rebinding) is a `421`, and a request through any other proxy, another login, two `Host` headers or Tailscale Funnel is a `403`, both before anything is read. Without `setup phone`, the phone no longer reads the pages through Tailscale Serve: run it once. Through an SSH tunnel, use the same port on both ends (`ssh -L 8765:127.0.0.1:8765`).
+- No Library page can be framed by another (`frame-ancestors 'none'`, `X-Frame-Options: DENY`), and a form posted from a frame or from another site (`Sec-Fetch-Dest`, `Sec-Fetch-Site`) writes nothing.
