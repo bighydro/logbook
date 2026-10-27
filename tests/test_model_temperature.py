@@ -10,11 +10,14 @@ import threading
 from collections.abc import Iterator
 from contextlib import contextmanager
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 from typing import Any
 
 import pytest
 
 from logbook.contrib import model_client, packet
+from logbook.core import policy
+from logbook.core.store import Logbook
 
 MODEL = "example-model-1"
 KEY = "sentinel-dream-value"
@@ -125,6 +128,15 @@ def test_a_400_about_something_else_says_nothing_of_temperature() -> None:
     assert "HTTP 400" in str(caught.value) and model_client.TEMPERATURE_ENV not in str(caught.value)
 
 
+def _dreaming(tmp_path: Path) -> Logbook:
+    """A record whose policy has the `dream` entry the packet's probe needs (S8)."""
+    lb = Logbook.init(tmp_path / "lb", "Europe/Oslo")
+    data = policy.read(lb.root)
+    data[policy.DREAM_DESTINATION] = {"max_tier": 2, "until": "2099-12-31"}
+    policy.policy_path(lb.root).write_text(json.dumps(data), encoding="utf-8")
+    return lb
+
+
 @pytest.mark.parametrize(
     ("value", "sent", "said"),
     [
@@ -134,20 +146,20 @@ def test_a_400_about_something_else_says_nothing_of_temperature() -> None:
     ],
 )
 def test_the_packet_probe_follows_the_variable_and_names_it(
-    value: str | None, sent: float | None, said: str
+    value: str | None, sent: float | None, said: str, tmp_path: Path
 ) -> None:
     with _endpoint(200, ANSWER) as (port, seen):
         env = _env(port) if value is None else _env(port, LOGBOOK_DREAM_TEMPERATURE=value)
-        text = packet.build(None, env)
+        text = packet.build(_dreaming(tmp_path), env)
     assert said in text
     [body] = seen
     assert json.loads(body).get("temperature") == sent
     assert ("temperature" in json.loads(body)) == (sent is not None)
 
 
-def test_the_packet_says_what_to_set_when_the_probe_is_refused_over_temperature() -> None:
+def test_the_packet_says_what_to_set_when_the_probe_is_refused_over_temperature(tmp_path: Path) -> None:
     with _endpoint(400, REFUSED) as (port, _seen):
-        text = packet.build(None, _env(port))
+        text = packet.build(_dreaming(tmp_path), _env(port))
     assert "reply: HTTP 400 Bad Request" in text
     assert "set LOGBOOK_DREAM_TEMPERATURE=none for a model that takes no temperature" in text
 

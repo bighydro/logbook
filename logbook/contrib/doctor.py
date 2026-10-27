@@ -1179,7 +1179,8 @@ def crossing_check(root: Path) -> Check:
         found = policy.ceilings(root)
     except policy.PolicyError as e:
         return Check("crossing", "fail", str(e))
-    listed = ", ".join(_ceiling_text(c) for c in found)
+    fetches = policy.heard_fetch(root).max_tier > 0
+    listed = ", ".join(_ceiling_text(c, fetches) for c in found) + _heard_text(root)
     if not policy.policy_path(root).exists():
         detail = f"no {name}; the defaults apply until the first export writes it: {listed}"
         return Check("crossing", "pass", detail)
@@ -1192,6 +1193,24 @@ def crossing_check(root: Path) -> Check:
             f"{listed}; {named} and counts as tier 0: write a new until in {name} or remove the entry",
         )
     return Check("crossing", "pass", listed)
+
+
+def world_check(root: Path) -> Check:
+    """What `export world` and the Library's `/world` may show (S9): the `world` entry's ceiling, or
+    the default of tier 1 and the entry that would raise it when the file does not name it."""
+    try:
+        named = policy.WORLD_DESTINATION in policy.read(root)
+        tier = policy.world_ceiling(root)
+    except policy.PolicyError as e:
+        return Check("world", "fail", str(e))
+    if named:
+        return Check("world", "pass", f"export world shows tiers up to {tier}, as the world entry says")
+    return Check(
+        "world",
+        "pass",
+        f"export world shows tier {tier} alone: {policy.POLICY_FILE.as_posix()} names no world entry;"
+        f' {{"{policy.WORLD_DESTINATION}": {{"max_tier": 2}}}} would add the chapters',
+    )
 
 
 def draft_lines(lb: Logbook, state: str) -> list[Line]:
@@ -1326,14 +1345,28 @@ def videos_check(lb: Logbook, state: str) -> Check | None:
     return Check("videos", "pass", text)
 
 
-def _ceiling_text(c: policy.Ceiling) -> str:
+def _heard_text(root: Path) -> str:
+    """What `sync heard`'s fetches need, when `LOGBOOK_HEARD` names the feed and the policy lets
+    none through (S9): the entry to write, named."""
+    sources = {part.strip().casefold() for part in os.environ.get("LOGBOOK_HEARD", "").split(",")}
+    found = policy.heard_fetch(root)
+    if "feed" not in sources or found.max_tier:
+        return ""
+    return (
+        f"; sync heard fetches no feed transcript until {policy.POLICY_FILE.as_posix()} has"
+        f' {{"{policy.HEARD_DESTINATION}": {{"max_tier": 2, "{policy.FETCH}": true}}}}'
+    )
+
+
+def _ceiling_text(c: policy.Ceiling, fetches: bool = False) -> str:
     """`hermes 2`, `cloud-model 2 until 2026-12-31`, `mcp 2 write sign_day,note_day`,
     `dream 2 until 2026-12-31 model qwen2.5-7b-instruct`: the ceiling as it counts today, the write
     tools it lets through the door by name (ADR 0022) and the model the entry names (RFC 0036)."""
     when = f" until {c.until.isoformat()}" if c.until is not None and not c.expired else ""
     write = f" write {','.join(c.writes)}" if c.writes else ""
     model = f" model {c.model}" if c.model else ""
-    return f"{c.destination} {c.max_tier}{when}{write}{model}"
+    fetch = f" {policy.FETCH}" if c.destination == policy.HEARD_DESTINATION and fetches else ""
+    return f"{c.destination} {c.max_tier}{when}{write}{model}{fetch}"
 
 
 NO_HOME = (
@@ -1620,6 +1653,7 @@ def run(
         checks.append(google)
     checks.extend(env_checks(lb, env, sources))
     checks.append(crossing_check(lb.root))
+    checks.append(world_check(lb.root))
     checks.append(phone_check(lb, env))
     withheld = drafts_check(lb, state)
     if withheld is not None:

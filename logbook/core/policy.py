@@ -65,8 +65,10 @@ VAULT_DEFAULT_TIER = 1  # the ceiling for a record whose file does not name it
 SITE_DESTINATION = "site"  # `logbook export site`: a folder of static HTML the owner may publish anywhere
 SITE_DEFAULT_TIER = 1  # the ceiling for a record whose file does not name it
 WORLD_DESTINATION = "world"  # `logbook export world`: one page you can scrub, for the owner and the circle
-WORLD_DEFAULT_TIER = 2  # the ceiling for a record whose file does not name it
+WORLD_DEFAULT_TIER = 1  # the ceiling for a record whose file does not name it: fail closed (S9)
 DREAM_DESTINATION = "dream"  # `logbook dream`: the model that reads a day and drafts it (RFC 0036)
+HEARD_DESTINATION = "heard"  # `sync heard`'s fetches: each tells a transcript's host what the owner played
+FETCH = "fetch"  # the `heard` entry's switch: true lets `sync heard` fetch a feed's transcript
 NOTION_DESTINATION = "notion"  # `logbook export notion`: the record's facts for the owner's Notion
 INCLUDE_UNSIGNED = "include_unsigned"  # an entry's optional key: `--include-unsigned` may lift the gate
 MODEL = "model"  # an entry's optional key: the one model the destination is
@@ -327,9 +329,9 @@ def site_ceiling(root: Path) -> int:
 
 def world_ceiling(root: Path) -> int:
     """The highest tier `logbook export world` and the Library's `/world` may put in the page: the
-    `world` entry of the policy, or tier 2 when the file does not name it. The page is where the
-    owner was, how they moved and what their boat did, for the owner and the people they hand it
-    to: tier 2 (their stays, their chapters) is its own, and tier 3 needs the entry."""
+    `world` entry of the policy, or tier 1 when the file does not name it, failing closed as the
+    vault and the site do (S9): the page is handed to people, so tier 1, where the owner was, is what
+    crosses on its own, and tier 2 (the chapters) and tier 3 need the entry."""
     return _ceiling_or_default(root, WORLD_DESTINATION, WORLD_DEFAULT_TIER)
 
 
@@ -380,6 +382,50 @@ def dream_entry(root: Path) -> Ceiling:
             " until there or remove the entry"
         )
     return found
+
+
+@dataclass(frozen=True)
+class Fetch:
+    """What the `heard` entry lets `sync heard` fetch today: a feed's transcript of a listen at or
+    under `max_tier`; 0 and `why_not`, one sentence saying what to write, when it lets none."""
+
+    max_tier: int
+    why_not: str | None = None
+
+
+def heard_fetch(root: Path) -> Fetch:
+    """The `heard` entry, for `sync heard`'s fetches (S9): a fetch tells the transcript's host which
+    episode the owner played, a fact of the listen's tier, so it is a crossing like any other and the
+    owner turns it on in the file, `{"heard": {"max_tier": 2, "fetch": true}}`, never through the
+    environment alone. No entry, `fetch` not true, an entry that is not the documented shape (the file
+    not a policy among them) or one past its `until` lets no fetch through; never raises."""
+    path = policy_path(root)
+    write = f'add {{"{HEARD_DESTINATION}": {{"max_tier": 2, "{FETCH}": true}}}} to {path} to allow them'
+    try:
+        entry = read(root).get(HEARD_DESTINATION)
+    except PolicyError as e:
+        return Fetch(EXPIRED_TIER, f"sync heard fetches no transcript: {e}")
+    if entry is None:
+        return Fetch(
+            EXPIRED_TIER, f"sync heard fetches no transcript: no {HEARD_DESTINATION!r} entry; {write}"
+        )
+    if not isinstance(entry, dict) or entry.get("max_tier") not in TIERS or entry.get(FETCH) is not True:
+        return Fetch(
+            EXPIRED_TIER,
+            f"sync heard fetches no transcript: the {HEARD_DESTINATION!r} entry has no max_tier of 1, 2 or 3"
+            f' and "{FETCH}": true; {write}',
+        )
+    try:
+        found = _entry(path, HEARD_DESTINATION, entry, today())
+    except PolicyError as e:
+        return Fetch(EXPIRED_TIER, f"sync heard fetches no transcript: {e}")
+    if found.expired and found.until is not None:
+        return Fetch(
+            EXPIRED_TIER,
+            f"sync heard fetches no transcript: the {HEARD_DESTINATION!r} entry of {path} expired on"
+            f" {found.until.isoformat()}; write a new until there or remove the entry",
+        )
+    return Fetch(found.max_tier)
 
 
 def notion_entry(root: Path) -> Ceiling:

@@ -8,6 +8,9 @@ HELD = "already_in_record_from:"  # `mail.HELD`: a mail road's count per holder,
 
 
 SKIP_PHRASES = {
+    "skipped_insecure_redirect": "redirect from https to http",
+    "skipped_port": "port other than 80 and 443",
+    "skipped_not_fetched": "feed transcript not fetched (no heard entry allows it)",
     "skipped_no_timestamp": "without a timestamp",
     "skipped_bad_coordinates": "with unusable coordinates",
     "skipped_no_ref": "without a phone or email",

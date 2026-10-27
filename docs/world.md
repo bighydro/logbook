@@ -101,13 +101,15 @@ gives stays at three.
 
 The record is read through the gate, a year at a time (`reading.read(..., tiers)`): a line whose tier is
 not asked for is not a stay, not a track, not a journey, not a band, not a count. The default is tiers 1
-and 2: where you were and how you moved (tier 1), and the chapters and the notes that make a stay a stay
-(tier 2). A journey with a price is tier 3 (RFC 0020) and is in no default page; nor is health or money,
+and 2, as far as the ceiling goes: where you were and how you moved (tier 1), and the chapters and the
+notes that make a stay a stay (tier 2). A journey with a price is tier 3 (RFC 0020) and is in no default page; nor is health or money,
 which the page does not draw at any tier.
 
-The ceiling is the `world` entry of `policy/crossing.json`, 2 when the file does not name it. `--tier
-1,2,3` needs the entry raised, and prints the tier-3 warning a crossing prints; an entry lowered to 1
-makes tier 1 the default and refuses `--tier 1,2`, naming the file:
+The ceiling is the `world` entry of `policy/crossing.json`, and 1 when the file does not name it: the
+page is one you hand to people, so it fails closed, and without the entry it shows where you were and
+nothing more (`logbook doctor` says so on its `world` line). `{"world": {"max_tier": 2}}` adds the
+chapters; `--tier 1,2,3` needs the entry raised to 3, and prints the tier-3 warning a crossing prints;
+`--tier 1,2` without an entry of 2 is refused, naming the file:
 
 ```json
 {"hermes": {"max_tier": 2}, "mcp": {"max_tier": 1}, "world": {"max_tier": 3}}

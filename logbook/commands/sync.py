@@ -836,6 +836,8 @@ def _sync_one(a: argparse.Namespace) -> None:
         options["existing"] = _existing(lb)
     if _takes(adapter, "lines", live=True):  # heard: the record's own listens and watches
         options["lines"] = _lines(lb)
+    if _takes(adapter, "fetch_entry", live=True):  # heard: what the policy lets it fetch (S9)
+        options["fetch_entry"] = policy.heard_fetch(lb.root)
     if _takes(adapter, "held", live=True):  # mail: what any mail road wrote, by Message-ID
         from ..contrib import mail_lookup
 

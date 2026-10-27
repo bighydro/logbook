@@ -19,8 +19,9 @@ diagnostic"). Plain text, one section after another:
   the dream's own request (`model_client`; the key as its bearer token when `LOGBOOK_DREAM_KEY` is set)
   with the fixed prompt `PROMPT` where a day would be, and the reply's HTTP status and body as they came
   (up to `BODY_LIMIT` bytes): a model's error is not the record's content. Made only when
-  `LOGBOOK_DREAM_ENDPOINT` is set and a model is named; it is the packet's one network call, and is never
-  retried.
+  `LOGBOOK_DREAM_ENDPOINT` is set, a model is named and the policy's `dream` entry allows the dream
+  (`policy.dream_entry`; S8): with no entry, or one expired, the key goes nowhere and one line says the
+  probe was not sent and why. It is the packet's one network call, and is never retried.
 - `environment`: the names of the variables set that logbook reads — every `LOGBOOK_*`, the proxies, the
   config and cache folders — never a value.
 - the logs: the last `LOG_LINES` lines of the schedule's and of the service's output, from
@@ -552,13 +553,16 @@ def dream_lines(lb: Logbook | None, env: Mapping[str, str], scrub: Scrub) -> lis
         return [f"endpoint: {model_client.ENDPOINT_ENV} is not an http(s) URL with a host; nothing was asked"]
     lines = [f"endpoint: {scrub(address)}"]
     named = None
+    refused: str | None = None  # why the probe is not sent: no entry lets anything cross to the model
     if lb is None:
         lines.append("policy: no record, so no dream entry")
+        refused = f"no record, so no {policy.DREAM_DESTINATION!r} entry in {policy.POLICY_FILE.as_posix()}"
     else:
         try:
             entry = policy.dream_entry(lb.root)
         except policy.PolicyError as e:
             lines.append(f"policy: {scrub(str(e))}")
+            refused = scrub(str(e))
         else:
             named = entry.model
             until = f" until {entry.until.isoformat()}" if entry.until is not None else ""
@@ -576,9 +580,14 @@ def dream_lines(lb: Logbook | None, env: Mapping[str, str], scrub: Scrub) -> lis
         else ""
     )
     lines.append(f"model: {scrub(endpoint.model)} ({whose}){disagree}")
-    key = f"{model_client.KEY_ENV} set, sent as the bearer token" if endpoint.key else "none"
+    if refused is None and disagree:  # the dream would send nothing, so neither does its probe
+        refused = f"{model_client.MODEL_ENV} and the dream entry's model disagree"
+    sent = "sent as the bearer token" if refused is None else "not sent"
+    key = f"{model_client.KEY_ENV} set, {sent}" if endpoint.key else "none"
     lines.append(f"key: {key}")
     lines.append(f"temperature: {model_client.temperature_said(endpoint, env)}")
+    if refused is not None:  # the key goes nowhere the owner has not allowed the dream to go (S8)
+        return [*lines, f"probe: not sent, as the dream sends nothing: {refused}"]
     lines.append(f"probe: the dream's request with {PROMPT!r} as its only message, sent once")
     status, body = probe(endpoint)
     lines.append(f"reply: {scrub(status)}")
