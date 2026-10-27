@@ -189,28 +189,11 @@ def rows(data: dict[str, Any]) -> Iterator[str]:
         yield "        nobody fell below their earlier frequency"
         return
     quiet_width = max(8, *(len(_quiet(p["quiet"])) for p in data["people"]))
-    yield (
-        f"        {'person':<24} {'earlier':>7} {'recent':>6} {'fall':>6}  {'last real contact':<18} "
-        f"{'quiet':<{quiet_width}}  last shared place"
-    )
+    # the person by name, the largest fall first, with the channels gone quiet and the last place shared:
+    # no count, fall or days since beside a name (VISION: no metrics near people), the JSON keeps them
+    yield f"        {'person':<24} {'quiet':<{quiet_width}}  last shared place"
     for p in data["people"]:
-        yield (
-            f"        {p['name']:<24} {p['earlier']['contacts']:>7} {p['recent']['contacts']:>6}"
-            f" {_fall(p['fell_by']):>6}  {_ago(p['days_since_real_contact']):<18} "
-            f"{_quiet(p['quiet']):<{quiet_width}}  {_place(p['last_place'])}"
-        )
-
-
-def _fall(fell_by: float) -> str:
-    return f"-{round(fell_by * 100)}%"
-
-
-def _ago(days: int | None) -> str:
-    if days is None:
-        return "never"
-    if days == 0:
-        return "today"
-    return f"{days} day ago" if days == 1 else f"{days} days ago"
+        yield f"        {p['name']:<24} {_quiet(p['quiet']):<{quiet_width}}  {_place(p['last_place'])}"
 
 
 def _quiet(channels: Sequence[str]) -> str:

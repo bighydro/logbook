@@ -331,9 +331,11 @@ def _detail(site: Site, item: Mapping[str, Any], day: str) -> str:
 
 
 def _paid(t: Mapping[str, Any]) -> str:
+    """`Havnekiosken -42.00 NOK`; a payment to a person the record names is `a transfer -250.00 NOK`:
+    an amount never stands beside a person's name (VISION: no metrics near people)."""
     amount = t.get("amount")
     money = f" {amount:.2f} {t['currency']}" if isinstance(amount, int | float) else ""
-    return escape(f"{t['merchant']}{money}")
+    return escape(f"{'a transfer' if t.get('person') else t['merchant']}{money}")
 
 
 def _dt(term: str, html: str) -> str:

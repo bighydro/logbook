@@ -757,7 +757,7 @@ def page(report: Report, person: Person) -> dict[str, Any]:
 
 
 def rows(report: Report) -> Iterator[str]:
-    """One row per person, most days together first."""
+    """One row per person, most days together first, by name only (VISION: no metrics near people)."""
     head = f"{_plural(len(report.people), 'person', 'people')} · {report.first} {EN_DASH} {report.last}"
     if report.tier is not None:
         head += f" · tier {report.tier}"
@@ -766,29 +766,8 @@ def rows(report: Report) -> Iterator[str]:
     if report.unnamed:
         head += f" · and {report.unnamed} unnamed"
     yield head
-    width = max((len(p.name) for p in report.people), default=0)
-    for p in report.people:
-        yield f"  {p.name:<{width}}  {' · '.join(_summary(p))}"
-
-
-def _summary(p: Person) -> list[str]:
-    parts = [_channels(p)]
-    if p.days:
-        together = _plural(len(p.days), "day")
-        if p.nights:
-            together += f" · {_plural(p.nights, 'night')}"
-        parts.append(together)
-    if p.real is not None:
-        parts.append(f"last real contact {p.real[0]} ({p.real[1]})")
-    if p.birthday:
-        parts.append(f"birthday {p.birthday}")
-    if p.places:
-        parts.append(", ".join(where for where, _n in p.places))
-    return parts
-
-
-def _channels(p: Person) -> str:
-    return " · ".join(f"{name} {p.channels[name].lines}" for name in CHANNELS if name in p.channels)
+    for p in report.people:  # names only: the order carries closeness, the counts stay in the JSON
+        yield f"  {p.name}"
 
 
 def person_rows(data: Mapping[str, Any]) -> Iterator[str]:

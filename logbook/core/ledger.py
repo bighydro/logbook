@@ -130,6 +130,7 @@ class Entry:
     where: Where | None
     trip: str | None
     receipt: str | None = None  # the line of the receipt this payment's evidence is (`receipts_held`)
+    person: bool = False  # the merchant is a person the record names: a transfer to them
 
     def to_json(self) -> dict[str, Any]:
         return {
@@ -150,6 +151,7 @@ class Entry:
             "where": None if self.where is None else self.where.to_json(),
             "trip": self.trip,
             "receipt": self.receipt,
+            "person": self.person,
             "lines": [self.line],
         }
 
@@ -428,6 +430,9 @@ def _entry(
         shares=tuple(shares(extra, reading.identities, reading.owner)),
         where=where,
         trip=trip,
+        person=_text(payload.get("merchant")) is not None
+        and str(payload["merchant"]).casefold()
+        in {i.label.casefold() for i in reading.identities.values() if i.type == "person" and i.label},
     )
 
 
@@ -729,7 +734,9 @@ def rows(data: dict[str, Any]) -> Iterator[str]:
 
 def _entry_row(t: dict[str, Any], tz: str) -> str:
     clock = _clock(t["at"], tz)
-    parts = [t["merchant"] or "(no merchant)"]
+    # a transfer to a person, and a share of a split, by name only: no amount beside a person's name
+    # (VISION: no metrics near people); the JSON keeps the merchant and every share's amounts
+    parts = ["a transfer" if t.get("person") else t["merchant"] or "(no merchant)"]
     where = t["where"]
     if where is None:
         parts.append("nowhere")
@@ -745,11 +752,8 @@ def _entry_row(t: dict[str, Any], tz: str) -> str:
         parts.append(f"trip {start} {EN_DASH} {end}")
     if t["shares"]:
         parts.append(
-            (f"split {len(t['shares'])} ways: " if len(t["shares"]) > 1 else "shares: ")
-            + ", ".join(
-                f"{s['name']} {money(s['owed'])}" + (f" (paid {money(s['paid'])})" if s["paid"] else "")
-                for s in t["shares"]
-            )
+            (f"split {len(t['shares'])} ways with " if len(t["shares"]) > 1 else "shared with ")
+            + ", ".join(s["name"] for s in t["shares"])
         )
     if t["deleted"]:
         parts.append("deleted")

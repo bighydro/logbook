@@ -395,13 +395,15 @@ def _starred_first(ids: Sequence[str], starred: Mapping[str, object]) -> list[st
 
 def _money_of_day(lb: Logbook, day: str, rd: reading.Reading) -> dict[str, Any] | None:
     """The day's money slot, or None when the reading's gate does not read tier 3: the transactions
-    standing on the day (merchant, amount, currency), and whether a payment source covers it — the day
+    standing on the day (merchant, amount, currency, and whether the merchant is a person the record
+    names, `person`), and whether a payment source covers it — the day
     lies between the first and last day any source has a transaction line on (`Index.span`) — with
     that last day."""
     if rd.tiers is not None and MONEY_TIER not in rd.tiers:
         return None
     span = _days_span(lb, ledger.KIND, rd.tiers)
     on_day = [line for line in ledger.standing(rd.of_kind(ledger.KIND)) if rd.day_of(line) == day]
+    persons = {i.label.casefold() for i in rd.identities.values() if i.type == "person" and i.label}
     paid = []
     for line in on_day:
         payload = line.get("payload") or {}
@@ -410,9 +412,11 @@ def _money_of_day(lb: Logbook, day: str, rd: reading.Reading) -> dict[str, Any] 
         # filed by the day only (RFC 0021 rule 5): a date given and `at` that day's local midnight
         midnight = datetime.combine(date.fromisoformat(day), time.min, tzinfo=rd.tz)
         filed = isinstance(payload.get("date"), str) and stays.instant(line.get("at")) == midnight
+        merchant = str(payload.get("merchant") or "a payment")
         paid.append(
             {
-                "merchant": str(payload.get("merchant") or "a payment"),
+                "merchant": merchant,
+                "person": merchant.casefold() in persons,  # a transfer to someone the record names
                 "amount": payload.get("amount"),
                 "currency": str(payload.get("currency") or ""),
                 "at": str(line["at"]),

@@ -10,7 +10,19 @@ from collections.abc import Callable
 from datetime import date, timedelta
 from typing import Any
 
-from ..core import apps, day_start, drifting, flights, health, ledger, listen_rollup, reading, rollup, stays
+from ..core import (
+    apps,
+    day_start,
+    drifting,
+    flights,
+    health,
+    ledger,
+    listen_rollup,
+    people,
+    reading,
+    rollup,
+    stays,
+)
 from ..core.chain import Line
 from ..core.export import parse_day
 from ..core.store import Logbook
@@ -138,8 +150,12 @@ def cmd_rollup(a: argparse.Namespace) -> None:
     if a.json:
         print(json.dumps(data, indent=2))
         return
-    text_rows = drifting.rows if a.drifting else listen_rollup.rows if a.what == "listen" else rollup.rows
-    for text in text_rows(data):
+    if a.what == "listen" and not a.drifting:
+        named = [p.name for p in people.directory(lb).known.values()]
+        texts = listen_rollup.rows(data, named)
+    else:
+        texts = (drifting.rows if a.drifting else rollup.rows)(data)
+    for text in texts:
         print(text)
 
 

@@ -46,6 +46,7 @@ from ..core.chain import Line
 from ..core.flights import Airports
 from ..core.resolve import Ref
 from ..core.store import Logbook, retractions
+from ..core.year import MONTHS
 from . import promises as promise_reader
 
 TOGETHER, MEETING, CALL, MESSAGE = "together", "meeting", "call", "message"
@@ -446,14 +447,13 @@ class Verdict:
     quiet_days: int
 
     def text(self) -> str:
-        """`drifting: 25 days together in 2022, no real contact in 1,035 days`, or why not."""
+        """`drifting: 25 days together in 2022, last seen in June 2022`, or why not: the silence as a
+        month in words, never a count of days (the person's own page, VISION: no metrics near people)."""
         if self.year is None:
             return "not drifting: no day together"
         together = f"{_plural(self.days_in_year, 'day')} together in {self.year}"
         silence = (
-            "no real contact"
-            if self.contact is None
-            else f"last real contact {self.contact.day}, {self.silent:,} days ago"
+            "no real contact" if self.contact is None else f"last seen in {_month_words(self.contact.day)}"
         )
         if self.drifted:
             return f"drifting: {together}, {silence}"
@@ -573,22 +573,14 @@ def drift_rows(found: Drift, show: bool = False) -> Iterator[str]:
     )
     count = _plural(len(found.people), "person", "people")
     yield f"drift · {count} · {floor} · no real contact in over {found.quiet_days} days · to {found.until}"
-    width = max((len(d.person.name) for d in found.people), default=0)
-    for d in found.people:
-        parts = [f"{d.year}: {_plural(d.days_in_year, 'day')}"]
-        if d.contact is None:
-            parts.append("no real contact")
-        else:
-            parts.append(f"last real contact {d.contact.day} ({d.contact.via}, {d.silent} days ago)")
-        if d.you_owe or d.they_owe:
-            parts.append(f"promises open: you owe {d.you_owe}, they owe {d.they_owe}")
-        yield f"  {d.person.name:<{width}}  {' · '.join(parts)}"
+    for d in found.people:  # names only, in the drift's order: the counts stay in the JSON
+        yield f"  {d.person.name}"
         if show:
             by_year: dict[str, list[str]] = {}
             for day in days_together(d.person):
                 by_year.setdefault(day["day"][:4], []).append(day["day"])
             for y, listed in sorted(by_year.items()):
-                yield f"      {y}  {_plural(len(listed), 'day')}: {', '.join(listed)}"
+                yield f"      {y}  {', '.join(listed)}"
             if d.contact is not None:
                 yield f"      last real contact line {d.contact.line}"
 
@@ -637,6 +629,11 @@ def _years_before(day: str, years: int) -> str | None:
         return d.replace(year=d.year - years).isoformat()
     except ValueError:  # 29 February, in a year without one
         return None
+
+
+def _month_words(day: str) -> str:
+    """`2022-06-14` as `June 2022`."""
+    return f"{MONTHS[int(day[5:7]) - 1]} {day[:4]}"
 
 
 def _plural(n: int, noun: str, plural: str | None = None) -> str:

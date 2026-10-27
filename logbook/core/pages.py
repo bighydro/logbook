@@ -316,7 +316,7 @@ def _asset_rows(p: dict[str, Any]) -> Iterator[str]:
             route = " \u2192 ".join(t["route"])
             yield f"    {t['start']} {EN_DASH} {t['end']}  {_plural(t['nights'], 'night')} · {route}"
     if p["people"]:
-        yield "  with  " + ", ".join(f"{who['name']} ({_plural(who['days'], 'day')})" for who in p["people"])
+        yield "  with  " + ", ".join(who["name"] for who in p["people"])  # names only, most days first
     track = p["track"]
     if track is None:
         yield "  no track of its own in the record (no location lines with this subject)"
@@ -342,7 +342,7 @@ def _place_rows(p: dict[str, Any]) -> Iterator[str]:
     for year, v in p["by_year"].items():
         yield f"  {year}  {_plural(v['visits'], 'visit')} · {v['hours']:g} h"
     if p["people"]:
-        yield "  with  " + ", ".join(f"{who['name']} ({_plural(who['days'], 'day')})" for who in p["people"])
+        yield "  with  " + ", ".join(who["name"] for who in p["people"])  # names only, most days first
     yield f"  {_plural(p['photos'], 'photo')}"
     yield f"  last {_plural(len(p['last_visits']), 'visit')}"
     for v in p["last_visits"]:

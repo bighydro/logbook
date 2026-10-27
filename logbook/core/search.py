@@ -100,6 +100,8 @@ SKIP_KEYS = frozenset(
         "source_uri",
     }
 )
+# a field that is an address, never words: a phone number (`+447700900001`, `07700 900123`) or an email
+ADDRESS = re.compile(r"\+?[\d\s().-]{6,}|[^\s@]+@[^\s@]+\.[^\s@]+")
 TERM = re.compile(r'"([^"]*)"?|(\S+)')  # a quoted phrase (the closing quote optional), or a word
 WEEKDAYS = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
 
@@ -269,7 +271,7 @@ def search(idx: Index, q: Query) -> Result:
             lines = idx.read((file, offset) for _seq, _day, _rank, _snippet, file, offset in batch)
             by = superseded_by(idx, lines)
             for (seq, day, rank, snippet, _file, _offset), line in zip(batch, lines, strict=True):
-                hit = Hit(line, day, rank, snippet.replace("\n", FIELD_BREAK), by.get(seq))  # one row
+                hit = Hit(line, day, rank, excerpt(snippet), by.get(seq))  # one row
                 if hit.standing or not q.standing:
                     hits.append(hit)
             read += len(batch)
@@ -305,6 +307,18 @@ def superseded_by(idx: Index, lines: Sequence[Line]) -> dict[int, tuple[int, str
 
 
 # -- the body: the words of one line ----------------------------------------------------------------------
+
+
+def excerpt(snippet: str) -> str:
+    """A snippet's fields (one per row of the body) as an excerpt: the names and the words, never an
+    address — a phone number or an email a ref carries is dropped, so it never stands beside the
+    sender's name (VISION: no metrics near people) — and a field said twice said once."""
+    kept: list[str] = []
+    for field in snippet.split("\n"):
+        bare = field.replace(MARK[0], "").replace(MARK[1], "").strip(f" {ELLIPSIS}")
+        if bare and not ADDRESS.fullmatch(bare) and field not in kept:
+            kept.append(field)
+    return FIELD_BREAK.join(kept)
 
 
 def body_of(line: Mapping[str, Any], root: Path | None) -> str | None:

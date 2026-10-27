@@ -2852,9 +2852,9 @@ class Site:
                     (escape(days_reader.km_text(r["moved_m"])), "num"),
                     escape(", ".join(days_reader.flight_text(f) for f in r["flights"])),
                     escape(days_reader.stays_text(r["stays"]) if r["sources"] else "nothing logged"),
-                    escape(people),
                     escape(day_reader.health_text(r["health"]) if r["health"] is not None else ""),
                     escape(", ".join(r["gaps"])),
+                    escape(people),  # last: the steps never stand beside a name
                 ]
             )
         span = (date.fromisoformat(last) - date.fromisoformat(first)).days + 1
@@ -2878,7 +2878,7 @@ class Site:
                 f"the record runs {whole[0]} {EN_DASH} {whole[1]}</p>\n"
             )
         body += _table(
-            ["day", "", "night", ("moved", "num"), "flights", "stays", "with", "health", "gaps"],
+            ["day", "", "night", ("moved", "num"), "flights", "stays", "health", "gaps", "with"],
             rows,
             ids if self.static else None,
         )
@@ -3124,10 +3124,10 @@ class Site:
         dates = f"{t.start} {EN_DASH} {t.end}"
         title = escape(j.name.text) if j.name else _dates(dates)
         head = self.link(f"<b>{title}</b>", f"/journeys/{t.start}/{t.end}")
-        facts = [journeys.nights_text(j.to_json()), f"home {t.until}"]
+        # the photos before the route: a count never ends the row the people follow (`2 photos with Kari`)
+        facts = [journeys.nights_text(j.to_json()), _plural(len(j.photos), "photo"), f"home {t.until}"]
         if t.route:
             facts.append(f" {ARROW} ".join(trips.route_names(t.route)))
-        facts.append(_plural(len(j.photos), "photo"))
         with_ = self._people_links(j.people, j.unplaced)
         out = [
             f'<li id="{escape(t.id.replace(":", "-"))}">\n<p class="head">{head}'
@@ -3332,14 +3332,10 @@ class Site:
         return self.document(f"people {year}", "".join(parts))
 
     def _person_row(self, r: Mapping[str, Any]) -> str:
-        days = int(r["days"])
-        facts = [f"{_plural(days, 'day')} together" if days else "no day together"]
-        if r["nights"]:
-            facts.append(f"{_plural(int(r['nights']), 'night')} under one roof")
+        """One person of the People page by name only, in the page's order (most days together first):
+        the order carries closeness, never a number beside the name (VISION: no metrics near people);
+        the evidence folded under it, uncounted. Their own page keeps the days together."""
         contact = r["last_real_contact"]
-        facts.append(
-            f"last real contact {contact['day']} ({contact['via']})" if contact else "no real contact"
-        )
         items: list[Evidence] = [
             (f"together at {d['where']}", d["lines"], str(d["day"])) for d in reversed(r["together"])
         ]
@@ -3352,7 +3348,7 @@ class Site:
             )
         return (
             f'<li><p class="head">{self.link(f"<b>{escape(str(r['name']))}</b>", _person_path(str(r["id"])))}'
-            f'</p>\n<p class="facts">{escape(DOT.join(facts))}</p>\n{self._evidence(items)}</li>\n'
+            f"</p>\n{self._evidence(items, counted=False)}</li>\n"
         )
 
     def _review_html(self, report: people_review.Report, year: str) -> str:
@@ -3514,11 +3510,14 @@ class Site:
 
     # -- the evidence --------------------------------------------------------------------------------------
 
-    def _evidence(self, items: Sequence[Evidence], label: str = "evidence", open_: bool = False) -> str:
+    def _evidence(
+        self, items: Sequence[Evidence], label: str = "evidence", open_: bool = False, counted: bool = True
+    ) -> str:
         """Where a derived row comes from, folded: a disclosure, closed unless `open_`, whose summary
-        counts the lines, and in it one row per piece of evidence, what it is, the day it links and
-        the ids of the lines (the whole id on hover), `places_review.SHOWN` rows shown and the rest
-        behind "… and N more" (`_folded`, the Places page's own). Nothing when there is none."""
+        counts the lines (unless not `counted`: beside a person's name), and in it one row per piece
+        of evidence, what it is, the day it links and the ids of the lines (the whole id on hover),
+        `places_review.SHOWN` rows shown and the rest behind "… and N more" (`_folded`, the Places
+        page's own). Nothing when there is none."""
         if not items:
             return ""
         lines = {i for _what, ids, _day in items for i in ids}
@@ -3537,7 +3536,8 @@ class Site:
         count = _plural(len(lines), "line") if lines else _plural(len(items), "row")
         return (
             f'<details class="evidence"{" open" if open_ else ""}>'
-            f"<summary>{escape(label)}{DOT}{count}</summary>\n{_folded(rows)}</details>\n"
+            f"<summary>{escape(label)}{DOT + count if counted else ''}</summary>\n"
+            f"{_folded(rows)}</details>\n"
         )
 
     # -- /manifest, /org/<id>, /manifest/people (RFC 0037 §7, §11) -----------------------------------------

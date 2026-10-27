@@ -376,8 +376,8 @@ def rows(data: Mapping[str, Any]) -> Iterator[str]:
     if not heads:
         yield "    nowhere"
     yield _row("people", "by days together")
-    for p in data["people"]:
-        yield f"    {p['name']:<{width}} {aboard_text(person_text(p), names)}"
+    for p in data["people"]:  # names only: the order carries closeness, the counts stay in the JSON
+        yield f"    {p['name']}"
     if not data["people"]:
         yield "    nobody confirmed"
     yield _row("health", "by month")
@@ -493,16 +493,6 @@ def aboard_text(text: str, names: Mapping[str, str]) -> str:
     for asset, name in names.items():
         text = re.sub(rf"\baboard {re.escape(asset)}\b", f"aboard {name}".replace("\\", "\\\\"), text)
     return text
-
-
-def person_text(p: Mapping[str, Any]) -> str:
-    parts = [
-        _plural(p["days"], "day"),
-        _plural(p["nights"], "night"),
-        f"last {p['last_contact']}",
-        ", ".join(p["places"]) if p["places"] else "nowhere",
-    ]
-    return DOT.join(parts)
 
 
 def health_text(m: Mapping[str, Any]) -> str:
@@ -634,7 +624,7 @@ def html(data: Mapping[str, Any], nav: str = "", links: Links | None = None) -> 
     out += section("trips", "Trips", _trips_html(data["trips"], links))
     out += section("flights", "Flights", _flights_html(data["flights"]))
     out += section("places", "Places, by nights", _places_html(data["places"]))
-    out += section("people", "People", _people_html(data["people"], links, asset_names(data["places"])))
+    out += section("people", "People", _people_html(data["people"], links))
     out += section("health", "Health, by month", _health_html(data["health"]))
     if data.get("weather"):
         out += section("weather", "Weather", [f"<p>{escape(weather.span_text(data['weather']))}</p>"])
@@ -776,23 +766,12 @@ def _visit_row(head: str, v: Mapping[str, Any]) -> list[Cell]:
     ]
 
 
-def _people_html(
-    people: Sequence[Mapping[str, Any]], links: Links | None = None, names: Mapping[str, str] | None = None
-) -> list[str]:
+def _people_html(people: Sequence[Mapping[str, Any]], links: Links | None = None) -> list[str]:
     if not people:
         return ['<p class="muted">Nobody confirmed.</p>']
     links = links or {}
-    rows_: list[list[Cell]] = [
-        [
-            (linked(str(p["name"]), f"person:{p['name']}", links), ""),
-            (f"{p['days']:,}", "n"),
-            (f"{p['nights']:,}", "n"),
-            (p["last_contact"] or "", "d"),
-            (aboard_text(", ".join(p["places"]), names or {}), ""),
-        ]
-        for p in people
-    ]
-    return table([("person", ""), ("days", "n"), ("nights", "n"), ("last", ""), ("places", "")], rows_)
+    rows_: list[list[Cell]] = [[(linked(str(p["name"]), f"person:{p['name']}", links), "")] for p in people]
+    return table([("person", "")], rows_)  # names only, most days together first
 
 
 def _health_html(months: Sequence[Mapping[str, Any]]) -> list[str]:

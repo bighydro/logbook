@@ -205,8 +205,11 @@ def _local_day(at: str, zone: ZoneInfo, start: time) -> str | None:
 # -- text ----------------------------------------------------------------------------------------------------
 
 
-def rows(data: dict[str, Any]) -> Iterator[str]:
-    """The rollup as text: one line per year, then its top artists and its months."""
+def rows(data: dict[str, Any], people: Iterable[str] = ()) -> Iterator[str]:
+    """The rollup as text: one line per year, then its top artists and its months. An artist who is
+    one of `people` (the record's canonical names) is named alone, in the artists' order: no hours or
+    listens beside a person's name (VISION: no metrics near people), the JSON keeps them."""
+    persons = {name.casefold() for name in people}
     window = data["window"]
     head = data["kind"]
     if window["since"]:
@@ -230,6 +233,9 @@ def rows(data: dict[str, Any]) -> Iterator[str]:
             yield "        top artists"
             width = max(28, *(len(a["artist"]) for a in year["top_artists"]))
             for a in year["top_artists"]:
+                if a["artist"].casefold() in persons:
+                    yield f"          {a['artist']}"
+                    continue
                 hours = f"{a['hours']:.1f} h"
                 yield f"          {a['artist']:<{width}} {hours} · {_plural(a['listens'], 'listen')}"
         yield from _podcast_rows(year["podcasts"])

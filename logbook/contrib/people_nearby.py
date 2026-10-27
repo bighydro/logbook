@@ -383,15 +383,8 @@ def rows(found: Nearby) -> Iterator[str]:
         yield head
         if not seen:
             yield "  nobody seen there"
-        width = max((len(s.person.name) for s in seen), default=0)
-        for s in seen:
-            parts = [
-                f"{_plural(len(s.there), 'day')} there, last seen {s.there[-1]}",
-                f"{_plural(len(s.person.days), 'day')} in all",
-            ]
-            if s.contact is not None:
-                parts.append(f"last real contact {s.contact.day} ({s.contact.via})")
-            yield f"  {s.person.name:<{width}}  {' · '.join(parts)}"
+        for s in seen:  # names only, in the reader's order: the counts stay in the JSON
+            yield f"  {s.person.name}"
     for p in found.unplaced:
         yield f"  unplaced  {p['day']} {p['kind']} {p['what']}"
 

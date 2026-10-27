@@ -983,15 +983,8 @@ def _year_rows(kind: str, year: dict[str, Any]) -> Iterator[str]:
             yield _visit_row(v["label"], v, width, nights=v["nights"] or None) + f"   {v['id']}"
     else:
         yield f"  {year['year']}" + (f" · and {year['unnamed']} unnamed" if year.get("unnamed") else "")
-        for p in [*year["people"], *year["unresolved"]]:
-            parts = [
-                _plural(p["days"], "day"),
-                _plural(p["nights"], "night"),
-                f"last {p['last_contact']}",
-                ", ".join(p["places"]) if p["places"] else "nowhere",
-                f"{p['confirmed']} confirmed",
-            ]
-            yield f"        {p['name']:<24} {' · '.join(parts)}"
+        for p in [*year["people"], *year["unresolved"]]:  # names only: the order carries closeness
+            yield f"        {p['name']}"
 
 
 def _entry_head(name: str, kind: str | None) -> str:
@@ -1008,13 +1001,17 @@ def _visit_row(head: str, v: dict[str, Any], width: int, nights: int | None = No
 
 
 def _with_table(table: Sequence[dict[str, Any]]) -> Iterator[str]:
+    """Each place with its people, names only, most days there first: the counts stay in the JSON."""
     if not table:
         yield "        nobody confirmed at any place"
         return
     width = max(28, *(len(r["label"]) for r in table))
-    yield f"        {'place':<{width}} {'person':<24} {'stays':>5} {'days':>5} {'nights':>6}"
+    yield f"        {'place':<{width}} people"
+    by_place: dict[str, list[str]] = {}
     for r in table:
-        yield f"        {r['label']:<{width}} {r['name']:<24} {r['stays']:>5} {r['days']:>5} {r['nights']:>6}"
+        by_place.setdefault(r["label"], []).append(r["name"])
+    for label, names in by_place.items():
+        yield f"        {label:<{width}} {', '.join(names)}"
 
 
 def _plural(n: int, noun: str) -> str:

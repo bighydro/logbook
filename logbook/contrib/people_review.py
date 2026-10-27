@@ -1426,20 +1426,12 @@ def written_rows(written: Iterable[Written]) -> Iterator[str]:
 
 
 def priority_rows(ranked: Priority) -> Iterator[str]:
+    """The ranking by name only, highest score first: the order is the priority, the score and its
+    parts stay in the JSON (VISION: no metrics near people)."""
     people_count = _plural(len(ranked.people), "person", "people")
     yield f"priority · {ranked.first} {EN_DASH} {ranked.last} · {people_count}"
-    width = max((len(str(r.score)) for r in ranked.people), default=1)
-    names = max((len(r.name) for r in ranked.people), default=0)
     for r in ranked.people:
-        parts = []
-        if r.days:
-            parts.append(f"{_plural(r.days, 'day')} together")
-        if r.them or r.me:
-            parts.append(f"messages {r.them} from them, {r.me} from you")
-        if r.meetings:
-            parts.append(f"meetings {r.meetings}")
-        parts.append(f"last real contact {r.last_real}" if r.last_real else "no real contact")
-        yield f"  {r.score:>{width}}  {r.name:<{names}}  {' · '.join(parts)}"
+        yield f"  {r.name}"
 
 
 def _unplaced(report: Report) -> str:
