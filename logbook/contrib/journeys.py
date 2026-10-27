@@ -39,7 +39,7 @@ writes."""
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 from typing import Any
@@ -178,8 +178,9 @@ def shelf(
         retracted = frozenset(retractions(idx.retractions()))
         named = names_in(reading.crossing(idx.by_kind(notes.KIND, since, max(until, last)), tiers), retracted)
         drafted = drafts.by_unit(idx.by_kind(drafts.KIND), retracted, drafts.UNIT_JOURNEY)
+        people = drafts.people_of(idx) if drafted else frozenset()
     allowed = drafts.allowed(lb.root)
-    out = [_journey(t, r, named, drafted, allowed, tiers) for t, r in pairs]
+    out = [_journey(t, r, named, drafted, allowed, tiers, people) for t, r in pairs]
     out.sort(key=lambda j: j.trip.start, reverse=True)
     through = (date.fromisoformat(max(until, last)) + timedelta(days=SPILL_DAYS)).isoformat()
     return Shelf(year, years, out, reads=(since, through))
@@ -192,9 +193,10 @@ def _journey(
     drafted: Mapping[str, Sequence[Line]],
     allowed: drafts.Allowed,
     tiers: Sequence[int] | None,
+    people: Collection[str] | None = None,
 ) -> Journey:
     canonical = [c for c in trip.people if c.person is not None]
-    draft, withheld = draft_of(trip, rd, drafted, allowed, tiers)
+    draft, withheld = draft_of(trip, rd, drafted, allowed, tiers, people)
     return Journey(
         trip,
         name_of(trip, named, rd.day_start),
@@ -300,17 +302,22 @@ def draft_of(
     drafted: Mapping[str, Sequence[Line]],
     allowed: drafts.Allowed | None = None,
     tiers: Sequence[int] | None = None,
+    people: Collection[str] | None = None,
 ) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
     """The standing draft of the journey and its withheld row, by the Day's rule
     (`drafts.for_unit`): of its drafts (`drafted`, `drafts.by_unit` of unit `journey`, by the
     subject that names its id), those the gate `tiers` and the `dream` entry today (`allowed`) let
-    through, the evidence checked against the lines of the journey's days, first day to return day;
-    None for either when there is none."""
+    through, the evidence checked against the lines of the journey's days, first day to return day,
+    and no figure beside one of `people` (`drafts.people_of`, read here when not given); None for
+    either when there is none."""
     found = drafted.get(trip.id, [])
     if not found:
         return None, None
     on_journey = {str(line["id"]) for line in rd.lines_of(trip.start, trip.until)}
-    return drafts.for_unit(found, on_journey, tiers, allowed, not_on=drafts.NOT_ON_JOURNEY)
+    if people is None:
+        with rd.lb.index() as idx:
+            people = drafts.people_of(idx)
+    return drafts.for_unit(found, on_journey, tiers, allowed, not_on=drafts.NOT_ON_JOURNEY, people=people)
 
 
 # -- one journey ------------------------------------------------------------------------------------------
@@ -346,14 +353,18 @@ def read(
     night_lines = {n["day"]: n["lines"] for n in row.nights_of}
     for day in data["days"]:
         day["night_lines"] = night_lines.get(str(day["day"]), [])
-    data["promises"] = promises_on(lb, trip)
+    data["promises"] = promises_on(lb, trip, tiers)
     return data
 
 
-def promises_on(lb: Logbook, trip: trips.Trip) -> list[dict[str, Any]]:
+def promises_on(lb: Logbook, trip: trips.Trip, tiers: Sequence[int] | None = None) -> list[dict[str, Any]]:
     """The promises made on the journey: every proposal of `promises` the sections show whose day
-    is one of its days, first day to return day, open or done, in day order."""
-    report = promise_reader.extract(lb, since=trip.start, until=trip.until)
+    is one of its days, first day to return day, open or done, in day order. Through the gate `tiers`
+    when given, as the page is read: a promise said on a line above it is not one, and no speaker or
+    counterpart is named from a resolution above it (`promises.extract`'s `admit`)."""
+    gate = None if tiers is None else frozenset(int(t) for t in tiers)
+    admit = None if gate is None else (lambda line: int(line.get("tier") or 0) in gate)
+    report = promise_reader.extract(lb, since=trip.start, until=trip.until, admit=admit)
     return [_promise(p) for p in report.proposals if p.shows]
 
 

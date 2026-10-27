@@ -78,6 +78,7 @@ def journey_drafts(
     with lb.index() as idx:
         retracted = frozenset(retractions(idx.retractions()))
         drafted = drafts.by_unit(idx.by_kind(drafts.KIND), retracted, drafts.UNIT_JOURNEY)
+        people = drafts.people_of(idx) if drafted else frozenset()
         for t in found:
             if t.id not in drafted:
                 out[t.id] = (None, None)
@@ -88,7 +89,9 @@ def journey_drafts(
                 for line in idx.day(day)
                 if str(line["id"]) not in retracted
             }
-            out[t.id] = drafts.for_unit(drafted[t.id], on, None, allowed, drafts.NOT_ON_JOURNEY)
+            out[t.id] = drafts.for_unit(
+                drafted[t.id], on, None, allowed, drafts.NOT_ON_JOURNEY, people=people
+            )
     return out
 
 

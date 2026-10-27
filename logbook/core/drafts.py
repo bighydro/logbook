@@ -93,7 +93,7 @@ from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from . import events, policy, resolve, signing
+from . import events, figures, policy, present, resolve, signing
 from .chain import Line
 from .flights import Airlines
 from .index import Index
@@ -205,6 +205,7 @@ SCENE_SOURCE = "model:video-rules/"  # a video scene's draft (`labs/scenes.py`):
 WINDOW = "window"  # a person draft's `{from, to}`, two local days, both inclusive; absent on every other unit
 ISO_WEEK = re.compile(r"\d{4}-W(0[1-9]|[1-4]\d|5[0-3])\Z")  # a week's subject, `2026-W25`
 NOT_A_SEGMENT = "a segment is {text, evidence} or {text, unsupported: true}, nothing else"
+HELD = "held: a number beside a name"  # a held slot's text: the words are dropped, the slot kept
 SUPERSEDED_BY_POLICY = "superseded by policy"  # the Day's row for a draft the dream entry no longer allows
 DOT = " · "
 EN_DASH = "\u2013"
@@ -645,10 +646,14 @@ def for_day(
     names: dict[str, str] = {}
     payload = latest.get("payload") or {}
     if payload.get(PROPOSALS):
-        names = person_names(resolve.identities_from([*idx.retractions(), *idx.resolutions()]))
+        overlay = [*idx.retractions(), *idx.resolutions()]
+        # a gated reader names a proposal's people only as its tiers name them (R2)
+        names = person_names(
+            resolve.identities_from(overlay) if tiers is None else resolve.at_tiers(overlay, tiers)[1]
+        )
     confirmed = confirmations(lines, retracted, str(latest["id"]))
     kept = kept_keys(lines, retracted, {str(line["id"]) for line in found})
-    block = day_json(latest, shown, on_day, names, confirmed, kept=kept)
+    block = day_json(latest, shown, on_day, names, confirmed, kept=kept, people=people_of(idx))
     signature = signing.signature_of(idx, day)
     block["since_signed"] = signature is not None and int(latest["seq"]) > int(signature["seq"])
     block["signed_seq"] = None if signature is None else int(signature["seq"])
@@ -764,32 +769,38 @@ def for_unit(
     tiers: Sequence[int] | None = None,
     allowed: Allowed | None = None,
     not_on: str = NOT_ON_DAY,
+    *,
+    people: Collection[str],
 ) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
     """The `draft` block and the `draft_withheld` row of a unit other than the day (a journey), by
     `for_day`'s rule (`through`): `found` the unit's draft lines (`by_unit`), `on_unit` the ids of the
-    lines its evidence may name, `not_on` the words for an id outside them (`NOT_ON_JOURNEY`)."""
+    lines its evidence may name, `not_on` the words for an id outside them (`NOT_ON_JOURNEY`), `people`
+    the names no figure may stand beside (`people_of`, `hold_beside`)."""
     shown, withheld = through(found, tiers, allowed)
     latest = standing(shown)
     if latest is None:
         return None, withheld
-    block = day_json(latest, shown, on_unit, not_on=not_on)
-    block.update(unit_json(latest.get("payload") or {}))
+    block = day_json(latest, shown, on_unit, not_on=not_on, people=people)
+    block.update(unit_json(latest.get("payload") or {}, people))
     return block, withheld
 
 
-def unit_json(payload: Mapping[str, Any]) -> dict[str, Any]:
+def unit_json(payload: Mapping[str, Any], people: Collection[str] = ()) -> dict[str, Any]:
     """What a journey's or a week's draft keeps beside its segments, as a reader carries it: under
     `proposed` the name and the photos to star a journey's draft proposes (`name`, `star`) and the
     review a week's proposes for each goal (`goals`: `{goal, text, disposition, segment}`) and its
     one stale question (`question`: `{entity, label, status, status_line, since, text}`); under
     `numbers` what the code computed from the lines for a week (each figure with its line ids: a
     reader that prints them prints its people by name only, `names_only`); and `dropped` and `marked`,
-    by why. Only the keys the draft has."""
+    by why. Only the keys the draft has; a proposed name that sets a figure beside one of `people` is
+    not one (`hold_beside`)."""
     extra = payload.get("extra")
     if not isinstance(extra, dict):
         return {}
     out: dict[str, Any] = {}
     proposed = {key: extra[key] for key in ("name", "star", "goals", "question") if extra.get(key)}
+    if isinstance(proposed.get("name"), str) and _beside(proposed["name"], people, payload):
+        del proposed["name"]
     if proposed:
         out["proposed"] = proposed
     for key in ("numbers", "dropped", "marked"):
@@ -822,6 +833,46 @@ def names_only(numbers: Mapping[str, Any]) -> dict[str, Any]:
             if isinstance(t, dict)
         ]
     return out
+
+
+def people_of(idx: Index) -> frozenset[str]:
+    """Every name the record gives a person, whatever the tier of the line that gives it, the owner's
+    aside (`present.owner_of`): the names no figure may stand beside in a draft a reader prints
+    (`hold_beside`). Every tier, since holding a sentence back shows nothing."""
+    lb = idx.lb
+    identities = resolve.identities_from([*idx.retractions(), *idx.resolutions()])
+    owner = present.owner_of(
+        str(lb.meta.get("owner_id") or ""),
+        [str(e) for e in lb.meta.get("owner_emails") or [] if isinstance(e, str)],
+        policy.owner_aliases(lb.root),
+        identities,
+    )
+    return frozenset(
+        who.label
+        for who in identities.values()
+        if who.label and who.entity and who.type in (None, "person") and who.entity not in owner.entities
+    )
+
+
+def _beside(text: str, people: Collection[str], payload: Mapping[str, Any]) -> bool:
+    """`figures.beside_a_name` for a stored draft's words: its language, the years of its subject."""
+    language = payload.get("language")
+    years = figures.years_of(str(payload.get("subject") or ""))
+    return figures.beside_a_name(text, people, years, language if isinstance(language, str) else None)
+
+
+def hold_beside(segments: list[dict[str, Any]], people: Collection[str], payload: Mapping[str, Any]) -> int:
+    """No number beside a person as a draft is read, in place (VISION: no metrics near people): a
+    segment as `segment_json` shows it whose text names one of `people` and writes a figure
+    (`figures.beside_a_name`, the rule the dream writes by, `dream.hold_names`) is shown as the dream
+    holds one, `HELD`, unsupported, no evidence; a draft written before the rule, or by any other
+    writer, prints its words nowhere. Returns how many were held."""
+    held = 0
+    for segment in segments:
+        if segment["text"] != HELD and people and _beside(segment["text"], people, payload):
+            segment.update({"text": HELD, "evidence": [], "supported": False, "why": None})
+            held += 1
+    return held
 
 
 def through(
@@ -920,6 +971,8 @@ def day_json(
     confirmed: Mapping[int, dict[str, Any]] | None = None,
     not_on: str = NOT_ON_DAY,
     kept: Mapping[tuple[Any, ...], dict[str, Any]] | None = None,
+    *,
+    people: Collection[str],
 ) -> dict[str, Any]:
     """The standing draft as the Day carries it: the line, its source and model, when it was
     written, what it read, its segments each with `supported` and, when a reader holding the
@@ -932,13 +985,15 @@ def day_json(
     when the owner kept it from this draft or one with the same fields from another draft of the day
     (`kept`, by `proposal_key`), and what the writer dropped or marked. Another unit's page reads its
     draft the same way, `on_day` the unit's lines and `not_on` its own words for an id outside
-    them (`NOT_ON_JOURNEY`)."""
+    them (`NOT_ON_JOURNEY`). A segment that sets a figure beside one of `people` is held as it is
+    read (`hold_beside`), whatever wrote it and whenever: its words are never printed."""
     payload = line.get("payload") or {}
     tz = ZoneInfo(str(line.get("tz") or "UTC"))
     problems = validate(payload, reader=True)
     segments = [
         segment_json(s, on_day, not_on) for s in (payload.get("segments") or []) if isinstance(s, dict)
     ]
+    hold_beside(segments, people, payload)
     parts = (payload.get("extra") or {}).get("parts") if isinstance(payload.get("extra"), dict) else None
     unit = str(payload.get("unit"))
     known = UNIT_PARTS.get(unit, DAY_PARTS)  # each unit's parts, a day's for any other

@@ -47,7 +47,7 @@ import hashlib
 import json
 import re
 from collections import Counter
-from collections.abc import Iterable, Iterator, Mapping, Sequence
+from collections.abc import Collection, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
 from html import escape
@@ -387,6 +387,7 @@ def build(lb: Logbook, req: Request, airports: Airports | None = None) -> Built:
         every_draft = idx.by_kind(drafts.KIND)
         goal_lines = reading.crossing(idx.by_kind(goals.KIND), gate)
         names, resolutions = _names(idx.resolutions(), retracted, gate)
+        people = drafts.people_of(idx)  # no figure beside one of them in a story (`drafts.hold_beside`)
         quoted = [line for kind in QUOTED for line in idx.by_kind(kind, req.first, req.last)]
     included = [d for d in window if not req.signed_only or d in signed]
     held["unsigned_days"] = len(window) - len(included)
@@ -460,7 +461,7 @@ def build(lb: Logbook, req: Request, airports: Airports | None = None) -> Built:
         if not set(u.span) <= set(included):  # a draft of the unit rests on days that do not go in
             held["stories_beyond_the_letter"] += 1
             continue
-        u.story = _story(req, u, every_draft, retracted, allowed, held, crossed)
+        u.story = _story(req, u, every_draft, retracted, allowed, held, crossed, people)
     return Built(units, sum(len(u.days) for u in units), held, crossed, above, unsigned, resolutions)
 
 
@@ -721,10 +722,12 @@ def _story(
     allowed: drafts.Allowed,
     held: Counter[str],
     crossed: dict[str, tuple[int, str]],
+    people: Collection[str] = (),
 ) -> Story | None:
     """The story of the unit's standing draft, by the Day's rule (`drafts.through`: the gate and the
-    `dream` entry): its story part's segments that name their evidence; None when the dream wrote none
-    or none may go."""
+    `dream` entry): its story part's segments that name their evidence, never one that sets a figure
+    beside one of `people` (`drafts.hold_beside`, counted unsupported, as the dream holds one); None
+    when the dream wrote none or none may go."""
     if req.unit == DAY:
         found = drafts.by_day(every_draft, retracted).get(u.key, [])
     else:
@@ -747,7 +750,10 @@ def _story(
     if not (isinstance(parts, list) and len(parts) == len(segments) and story_parts):
         held["drafts_without_a_story"] += 1  # a draft that says no part is a story is not one
         return None
-    segments = [s for s, part in zip(segments, parts, strict=True) if part in story_parts]
+    segments = [
+        drafts.segment_json(s, None) for s, part in zip(segments, parts, strict=True) if part in story_parts
+    ]
+    drafts.hold_beside(segments, people, payload)
     told = []
     for s in segments:
         if s.get("evidence") and isinstance(s.get("text"), str) and s["text"].strip():

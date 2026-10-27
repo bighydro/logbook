@@ -17,7 +17,7 @@ from typing import Any
 
 import phone_width
 import pytest
-from persona import persona_record
+from persona import KARI, KARI_ID, OLA, OLA_ID, persona_record, resolution
 
 from logbook import cli
 from logbook.contrib import site
@@ -39,6 +39,23 @@ REFERENCE = re.compile(
 @pytest.fixture
 def lb(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Logbook:
     return persona_record(tmp_path, monkeypatch)
+
+
+def _named_at_tier_1(lb: Logbook) -> None:
+    """Kari and Ola named at tier 1 as well (a contact at tier 1): a tier-1 page names a person only from
+    a resolution at its tiers, and the persona names them at tier 2 (the owner, 27 October)."""
+    lb.append_many(
+        [
+            {**resolution(ref, entity, name), "tier": 1}
+            for ref, entity, name in (
+                (("email", KARI["email"]), KARI_ID, "Kari Nordmann"),
+                (("phone", KARI["phone"]), KARI_ID, "Kari Nordmann"),
+                (("provider_id", f"immich:{KARI['face']}"), KARI_ID, "Kari Nordmann"),
+                (("email", OLA["email"]), OLA_ID, "Ola Nordmann"),
+                (("phone", OLA["phone"]), OLA_ID, "Ola Nordmann"),
+            )
+        ]
+    )
 
 
 def _run(*args: str) -> None:
@@ -79,6 +96,7 @@ def _text(html: str) -> str:
 def test_the_site_is_a_year_page_a_days_index_every_trip_the_places_and_the_people(
     lb: Logbook, tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
+    _named_at_tier_1(lb)
     folder = tmp_path / "Site"
     _run(str(folder))
     out = capsys.readouterr().out
@@ -229,6 +247,7 @@ def test_a_day_page_the_root_and_the_tables_hold_a_phone_s_column(lb: Logbook, t
 def test_tier_1_is_the_shape_of_the_record_and_names_nobody_a_tier_2_line_places(
     lb: Logbook, tmp_path: Path
 ) -> None:
+    _named_at_tier_1(lb)
     folder = tmp_path / "Site"
     _run(str(folder))
     whole = "\n".join(raw.decode("utf-8") for raw in _tree(folder).values())
@@ -292,6 +311,7 @@ def test_health_never_goes_to_a_site(tmp_path: Path, monkeypatch: pytest.MonkeyP
 def test_every_run_appends_one_crossing_line_naming_the_site_and_the_folder_digest(
     lb: Logbook, tmp_path: Path
 ) -> None:
+    _named_at_tier_1(lb)
     folder = tmp_path / "Site"
     before = lb.meta["seq"]
     _run(str(folder))
@@ -519,3 +539,15 @@ def test_the_owners_reflection_follows_its_own_tier_with_or_without_drafts(
         narrow = tmp_path / ("Narrow" + "".join(flags))
         _run(str(narrow), *flags)
         assert not any(REFLECTION_TEXT in raw.decode("utf-8") for raw in _tree(narrow).values())
+
+
+def test_a_tier_1_site_names_nobody_a_resolution_above_tier_1_names(lb: Logbook, tmp_path: Path) -> None:
+    """The persona names Kari and Ola at tier 2 only: the tier-1 site names Ola nowhere, not even at the
+    Zürich dinner, a tier-1 calendar entry that gives his address and no name, and has no page of him.
+    Kari is named where a tier-1 line names her itself: the lunch's attendee (the owner, 27 October)."""
+    folder = tmp_path / "Site"
+    _run(str(folder))
+    whole = "\n".join(_text(raw.decode("utf-8")) for raw in _tree(folder).values())
+    assert "Ola Nordmann" not in whole
+    assert "Ola Nordmann" not in _text(_read(folder, "trips", f"{ZURICH_TRIP}.html"))
+    assert not (folder / "people" / "ola-nordmann.html").exists()

@@ -109,7 +109,15 @@ from ..core import (
 from ..core import stars as starred
 from ..core.chain import Line
 from ..core.export import parse_day
+from ..core.figures import CALENDAR as CALENDAR
+from ..core.figures import MONTHS as MONTHS
+from ..core.figures import NUMBER as NUMBER
+from ..core.figures import NUMBER_WORDS as NUMBER_WORDS
+from ..core.figures import WORD, figures, years_of
+from ..core.figures import YEAR as YEAR
+from ..core.figures import beside_a_name as named_beside
 from ..core.flights import Airports
+from ..core.index import Index
 from ..core.reading import Reading
 from ..core.resolve import Ref
 from ..core.store import HeadMoved, Logbook, now_utc, retractions
@@ -183,38 +191,10 @@ STOPWORDS: dict[str, frozenset[str]] = {
     "es": frozenset({"y", "con", "para", "era", "desde", "el", "la", "los", "las", "es", "no", "yo"})
     | frozenset({"tú", "en", "una", "un", "del", "al", "que"}),
 }
-WORD = re.compile(r"[^\W\d_]+", re.UNICODE)
 # -- the number rule (`hold_numbers`): a figure a sentence writes is one the code computed from lines --
 UNBACKED = "a number the lines do not give"  # the key of `extra.marked`: a segment marked for a figure
 BESIDE_A_NAME = "a number beside a person"  # the key of `extra.marked` for a figure beside a name
-HELD = "held: a number beside a name"  # a held segment's text: the model's words are dropped, the slot kept
-# a figure: digits, a decimal point or comma and more digits, glued to a unit or not (`45min`, `7,5t`),
-# never a piece of an id (`L12`, `6bc0`)
-NUMBER = re.compile(r"(?<![\w.,])\d+(?:[.,]\d+)?(?![.,]?\d)(?!\w*\d)")
-MONTHS = (
-    "january|february|march|april|june|july|august|september|october|november|december"
-    "|januar|februar|mars|mai|juni|juli|oktober|desember"
-    "|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|okt|nov|dec|des|(?-i:May)"  # `may`, lower-case, is a verb
-)
-# what a figure in a sentence may be without being a number: a date (ISO, `16.06.2026`, `16/6`), a
-# clock (`19:30`, `kl. 19`, `9am`), an ISO week, a day of the month beside its month's name, an ordinal
-CALENDAR = re.compile(
-    r"\d{4}-\d{2}-\d{2}(?:T[\d:]+(?:Z|[+-]\d{2}:\d{2})?)?"
-    r"|\b\d{4}-W\d{2}\b|\bW\d{1,2}\b|\b(?:week|uke|woche|semaine|semana)\s+\d{1,2}\b"
-    r"|\b\d{1,2}\.\d{1,2}\.\d{2,4}\b|\b\d{1,2}/\d{1,2}(?:/\d{2,4})?\b"
-    r"|\b\d{1,2}:\d{2}\b|\b(?:kl\.?|klokka|klokken)\s*\d{1,2}(?:[:.]\d{2})?\b|\b\d{1,2}\s?(?:am|pm)\b"
-    rf"|\b\d{{1,2}}(?:\.|st|nd|rd|th)?\s+(?:{MONTHS})\b|\b(?:{MONTHS})\.?\s+\d{{1,2}}(?:st|nd|rd|th)?\b"
-    r"|\b\d{1,2}(?:st|nd|rd|th)\b",
-    re.IGNORECASE,
-)
-YEAR = re.compile(r"\b(?:19|20)\d{2}\b")  # a year, when it is one of the unit's (`figures`)
-# numbers written in words, in the languages a draft is most often in: a word is a figure too
-NUMBER_WORDS: dict[str, dict[str, int]] = {
-    "en": {"two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7, "eight": 8, "nine": 9}
-    | {"ten": 10, "eleven": 11, "twelve": 12},
-    "nb": {"to": 2, "tre": 3, "fire": 4, "fem": 5, "seks": 6, "sju": 7, "syv": 7, "åtte": 8, "ni": 9}
-    | {"ti": 10, "elleve": 11, "tolv": 12},
-}
+HELD = drafts.HELD  # a held segment's text: the model's words are dropped, the slot kept
 # the keys whose words are the record's own, whose figures an item gives (a model's are under `drafted`)
 SCANNED = frozenset(
     {"title", "flight", "where", "place", "subject", "quote", "text", "name", "chat", "thread", "counterpart"}
@@ -250,6 +230,7 @@ class Material:
     canonical: dict[str, str] = field(default_factory=dict)  # every canonical person: id -> name
     people: dict[str, str] = field(default_factory=dict)  # the canonical people the material names
     identities: dict[Ref, resolve.Identity] = field(default_factory=dict)
+    withheld: frozenset[str] = frozenset()  # the names only a resolution above the ceiling gives (`Names`)
     unit: str = drafts.UNIT_DAY  # what the material is of: a day, a journey, a week
     compared: dict[str, int] = field(default_factory=dict)  # the ids `--catch-up` compares -> seq (rule 4)
     photos: set[str] = field(default_factory=set)  # the references of the day's photos the material gave
@@ -285,6 +266,17 @@ class Material:
             return None
         self.people.setdefault(entity, self.canonical[entity])
         return entity
+
+    def name_of(self, name: str | None) -> str | None:
+        """`name` as the material may carry it: None for one only a resolution above the entry's
+        tiers gives (`withheld`), as a reader that resolves the whole record (the promises) names it."""
+        return None if name is not None and name in self.withheld else name
+
+    def withholds(self, text: str) -> bool:
+        """Whether `text` names someone by a name only a resolution above the entry's tiers gives
+        (`withheld`, whole words): a drafted sentence a unit reads (a day's in a week, a week's in a
+        chapter) written before the dream read names at its entry's tiers, never passed on (R2)."""
+        return any(re.search(rf"(?<!\w){re.escape(name)}(?!\w)", text) for name in self.withheld)
 
     def person_of(self, ref: Ref | None) -> str | None:
         """The canonical person a ref resolves to, noted as one the day names; else None."""
@@ -374,7 +366,7 @@ def material(lb: Logbook, day: str, found: policy.Ceiling, airports: Airports | 
     about the record rather than the day left out (`EXCLUDED_KINDS`)."""
     day = parse_day(day).isoformat()
     tiers = tiers_of(found)
-    data = day_reader.read(lb, day, airports, tiers)
+    data = day_reader.read(lb, day, airports, tiers, names_at=tiers)
     days = day_start.of(lb.meta)
     with lb.index() as idx:
         retracted = retractions(idx.retractions())
@@ -383,8 +375,8 @@ def material(lb: Logbook, day: str, found: policy.Ceiling, airports: Airports | 
             for line in reading.crossing(idx.day(day), tiers)
             if str(line["id"]) not in retracted and line.get("kind") not in EXCLUDED_KINDS
         ]
-        names = resolve.labels(lb, idx)
-        identities = resolve.identities_from([*idx.retractions(), *idx.resolutions()])
+        known = names_for(lb, found, idx)
+        names, identities = known.labels, known.identities
         dreamed = {str(line["id"]) for line in drafts.of_day(idx.by_kind(drafts.KIND), retracted, day)}
     on_day.sort(key=lambda line: (str(line["at"]), int(line["seq"])))
     ids = {str(line["id"]) for line in on_day}
@@ -401,11 +393,13 @@ def material(lb: Logbook, day: str, found: policy.Ceiling, airports: Airports | 
         ids=ids,
         zone=days.zone,
         span=days.span(day),
-        canonical=canonical(lb, identities),
+        canonical=known.canonical(lb),
         identities=identities,
+        withheld=known.withheld,
         compared={str(line["id"]): int(line["seq"]) for line in on_day if not kept(line, dreamed)},
     )
     made.data = _data(data, on_day, names, made, found.max_tier)
+    made.tier = max(made.tier, known.tier_in(made.data))
     return made
 
 
@@ -489,14 +483,72 @@ def enrich(lb: Logbook, made: Material, found: policy.Ceiling) -> None:
     made.enriched = True
 
 
-def canonical(lb: Logbook, identities: Mapping[Ref, resolve.Identity]) -> dict[str, str]:
+@dataclass(frozen=True)
+class Names:
+    """The people overlay as a unit's material may read it under the entry's ceiling (`names_for`):
+    the labels and the identities of the refs whose every resolution line, the alias hops included,
+    is at one of the entry's tiers, and the tier each name was learned at (the highest of those
+    lines)."""
+
+    labels: dict[Ref, str]
+    identities: dict[Ref, resolve.Identity]
+    tiers: dict[Ref, int]
+    every: dict[Ref, resolve.Identity]  # every identity, whatever its tier: whom the owner is found from
+    withheld: frozenset[str]  # every label only a ref resolved through a line above the ceiling has
+
+    def canonical(self, lb: Logbook) -> dict[str, str]:
+        """The canonical people the material may name (`canonical`), the owner found from every tier."""
+        return canonical(lb, self.identities, self.every)
+
+    def tier_in(self, data: Any) -> int:
+        """The highest tier of a resolution that supplied a name `data` carries (a label, whole words,
+        anywhere in it); 1 when it carries none. The draft's tier rises to it: a name is read as much
+        as a line is (RFC 0036)."""
+        text = json.dumps(data, ensure_ascii=False)
+        top = 1
+        for ref, tier in self.tiers.items():
+            label = self.labels.get(ref)
+            if tier > top and label and re.search(rf"(?<!\w){re.escape(label)}(?!\w)", text):
+                top = tier
+        return top
+
+
+def names_for(lb: Logbook, found: policy.Ceiling, idx: Index | None = None) -> Names:
+    """The people overlay at the entry's tiers, the one way every unit's material learns who is who:
+    the record's resolutions and retractions read as `resolve.identities_from` reads them, then every
+    ref whose walk passes through a resolution line above the entry's `max_tier` left out, so a name
+    learned only above the ceiling, or a ref resolved through such a line, is never in the material
+    (R2). Through the caller's open index, else a fresh one closed before returning."""
+    if idx is None:
+        with lb.index() as own:
+            return names_for(lb, found, own)
+    lines = [*idx.retractions(), *idx.resolutions()]
+    allowed = resolve.tiers_of(lines, tiers_of(found))
+    labels, identities = resolve.at_tiers(lines, tiers_of(found))
+    every = resolve.identities_from(lines)
+    given = set(labels.values())
+    withheld = {who.label for who in every.values() if who.label} | set(resolve.labels_from(lines).values())
+    withheld -= given
+    # a withheld name's first name too (three letters or more, as `beside_a_name` reads one), unless a
+    # name the entry gives shares it: "Per" is withheld for Per Hemmelig, not while Per Hansen is given
+    firsts = {n.split()[0] for n in given if n.split()}
+    withheld |= {n.split()[0] for n in withheld if len(n.split()[0]) >= 3} - firsts - given
+    return Names(labels, identities, allowed, every, frozenset(withheld))
+
+
+def canonical(
+    lb: Logbook,
+    identities: Mapping[Ref, resolve.Identity],
+    every: Mapping[Ref, resolve.Identity] | None = None,
+) -> dict[str, str]:
     """Every canonical person of the record, id -> name: the entities the resolution lines name as
-    a person after the alias walk (a person merged into another is not one), never the owner."""
+    a person after the alias walk (a person merged into another is not one), never the owner, who is
+    found from `every` identity when given (a material's are those at the entry's tiers, `Names`)."""
     owner = present.owner_of(
         str(lb.meta.get("owner_id") or ""),
         [str(e) for e in lb.meta.get("owner_emails") or [] if isinstance(e, str)],
         policy.owner_aliases(lb.root),
-        identities,
+        identities if every is None else every,
     )
     return {e: name for e, name in drafts.person_names(identities).items() if e not in owner.entities}
 
@@ -1628,30 +1680,6 @@ def numbers_by_id(data: Any, made: Material) -> dict[str, set[float]]:
     return found
 
 
-def figures(
-    text: str, calendar: bool = True, years: Collection[str] | None = None, language: str | None = None
-) -> set[float]:
-    """The numbers written in `text`: in figures, a decimal comma read as a point and a thousands
-    comma dropped (`1,250`), and, in `language`, in words (`NUMBER_WORDS`). With `calendar`, dates,
-    clocks, ISO weeks and days of the month beside their month are not numbers (`CALENDAR`), nor is a
-    year: any (`YEAR`), or only one of `years` when they are given, so `2000 kroner` is a number."""
-    if calendar:
-        text = CALENDAR.sub(" ", text)
-        text = YEAR.sub(lambda m: " " if years is None or m.group(0) in years else m.group(0), text)
-    out: set[float] = set()
-    for token in NUMBER.findall(text):
-        if re.fullmatch(r"\d{1,3}(,\d{3})+", token):
-            token = token.replace(",", "")
-        try:
-            out.add(float(token.replace(",", ".")))
-        except ValueError:
-            continue
-    words = NUMBER_WORDS.get(language or "", {})
-    if words:
-        out |= {float(words[w]) for w in WORD.findall(text.lower()) if w in words}
-    return out
-
-
 def own_words(made: Material) -> set[float]:
     """The figures of the material's own words that rest on no line of the day, so carry no reference:
     the chapter's name and rule, the goals', the named ideas' and orgs' names, the lenses' texts. A
@@ -1677,7 +1705,7 @@ def hold_numbers(
     one of the given numbers and the sentence says so. `also` are figures any sentence may write, the
     material's own words that rest on no line (`own_words`)."""
     given = numbers_by_id(data, made)
-    years = {str(y + d) for y in map(int, re.findall(r"\b(?:19|20)\d{2}\b", made.day)) for d in (-1, 0, 1)}
+    years = years_of(made.day)
     marked = 0
     for i, segment in enumerate(segments):
         evidence = segment.get("evidence")
@@ -1694,13 +1722,10 @@ def hold_numbers(
 def beside_a_name(text: str, made: Material) -> bool:
     """Whether `text` names a canonical person of the record (their full name, or their first name,
     whole words, as written) and writes a figure (`figures`: dates, clock times and the unit's years
-    are not figures): a number beside a person (VISION: no metrics near people)."""
-    years = {str(y + d) for y in map(int, re.findall(r"\b(?:19|20)\d{2}\b", made.day)) for d in (-1, 0, 1)}
-    if not figures(text, years=years, language=made.language):
-        return False
-    names = {n.strip() for n in made.canonical.values() if n and n.strip()}
-    names |= {n.split()[0] for n in list(names) if len(n.split()[0]) >= 3}
-    return any(re.search(rf"(?<!\w){re.escape(name)}(?!\w)", text) is not None for name in names)
+    are not figures): a number beside a person (VISION: no metrics near people). The rule every reader
+    holds a stored draft to as well (`logbook.core.figures.beside_a_name`, `drafts.hold_beside`)."""
+    names = [*made.canonical.values(), *made.withheld]  # a name the entry withholds is a name too
+    return named_beside(text, names, years_of(made.day), made.language)
 
 
 def hold_names(segments: list[dict[str, Any]], made: Material) -> int:

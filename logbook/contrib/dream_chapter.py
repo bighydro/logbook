@@ -54,7 +54,7 @@ from string import Template
 from typing import Any
 
 from ..core import chapter as chapters
-from ..core import day_start, drafts, goals, policy, reading, resolve, signing, stays
+from ..core import day_start, drafts, goals, policy, reading, signing, stays
 from ..core.chain import Line
 from ..core.export import day_range
 from ..core.flights import Airports
@@ -247,7 +247,8 @@ def material(lb: Logbook, ch: Chapter, found: policy.Ceiling) -> Read:
     months = months_of(ch.first, ch.last)
     with lb.index() as idx:
         retracted = frozenset(retractions(idx.retractions()))
-        identities = resolve.identities_from([*idx.retractions(), *idx.resolutions()])
+        known = dream.names_for(lb, found, idx)
+        identities = known.identities
         allowed = drafts.allowed(lb.root)
         every_draft = idx.by_kind(drafts.KIND)
         month_drafts = drafts.by_unit(every_draft, retracted, drafts.UNIT_MONTH)
@@ -300,8 +301,9 @@ def material(lb: Logbook, ch: Chapter, found: policy.Ceiling) -> Read:
         data={},
         ids=ids,
         zone=bounds.zone,
-        canonical=dream.canonical(lb, identities),  # whose names no figure may stand beside
+        canonical=known.canonical(lb),  # whose names no figure may stand beside
         identities=identities,
+        withheld=known.withheld,
     )
     read = Read(made, ch)
     beside: dict[str, int] = {}
@@ -377,6 +379,7 @@ def material(lb: Logbook, ch: Chapter, found: policy.Ceiling) -> Read:
     tiers_read = [int(ch.line.get("tier") or chapters.TIER), *on_stretch.values(), *beside.values()]
     tiers_read += [int(r.get("tier") or goals.TIER) for r in closing]
     made.tier = max(tiers_read, default=1)
+    made.tier = max(made.tier, known.tier_in(made.data))  # a name read is read
     made.read_count = len(ids)
     made.read_ids_sha256 = dream.digest(ids | set(beside))
     read.beside = len(set(beside) - ids)
@@ -426,6 +429,8 @@ def _told(line: Line, on_stretch: Mapping[str, int], made: Material) -> list[dic
         shown = drafts.segment_json(segment, set(on_stretch), drafts.NOT_ON_CHAPTER)
         if not shown["supported"] or not shown["evidence"] or dream.beside_a_name(shown["text"], made):
             continue  # a sentence with a figure beside a person (a week's `people`) is never passed on
+        if made.withholds(shown["text"]):
+            continue  # nor one naming someone the entry's tiers do not name
         part = parts[i] if isinstance(parts, list) and len(parts) == len(segments) else None
         told.append({"part": part, "drafted": shown["text"], "ref": made.refs_of(shown["evidence"])})
     return told
@@ -659,7 +664,10 @@ def for_chapter(lb: Logbook, ch: Chapter) -> tuple[dict[str, Any] | None, dict[s
                     line = None if str(line_id) in retracted else idx.by_id(str(line_id))
                     if line is not None and ch.first <= bounds.day_of(str(line["at"])) <= ch.last:
                         on_chapter.add(str(line_id))
-    return drafts.for_unit(found, on_chapter, None, drafts.allowed(lb.root), drafts.NOT_ON_CHAPTER)
+        people = drafts.people_of(idx)
+    return drafts.for_unit(
+        found, on_chapter, None, drafts.allowed(lb.root), drafts.NOT_ON_CHAPTER, people=people
+    )
 
 
 def rows(payload: Mapping[str, Any], indent: str = "  ") -> list[str]:

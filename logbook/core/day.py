@@ -174,16 +174,19 @@ def read(
     airports: Airports | None = None,
     tiers: Sequence[int] | None = None,
     held: bool = False,
+    names_at: Sequence[int] | None = None,
 ) -> dict[str, Any]:
     """The Day as one JSON-ready object; through the gate `tiers` when given (`reading.read`), the
     health and story lines included. With `held` (the Day page's folds, `logbook serve`), each row's
     messages by conversation and every line of the day, `hold`, from this same reading; the Day's
-    object (SPEC §3.2.7) is otherwise unchanged and `day --json` never asks for them. `ValueError`
-    for a day that is not one; `stays.SettingsError` when the record's settings, places or assets
-    file is not what it should be. Nothing is written, not even the settings file."""
+    object (SPEC §3.2.7) is otherwise unchanged and `day --json` never asks for them. With `names_at`
+    (a dream's material), the reading learns only the names its resolution lines give at those tiers
+    (`reading.read`). `ValueError` for a day that is not one; `stays.SettingsError` when the record's
+    settings, places or assets file is not what it should be. Nothing is written, not even the settings
+    file."""
     d = parse_day(day)
     before = (d - timedelta(days=1)).isoformat()
-    rd = reading.read(lb, before, day, airports, tiers)
+    rd = reading.read(lb, before, day, airports, tiers, names_at=names_at)
     owner, tz = str(lb.meta["owner_id"]), str(rd.tz)
     with lb.index() as idx:
         found = reading.crossing(idx.by_kind(health.KIND, before, day), tiers)

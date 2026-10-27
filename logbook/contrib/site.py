@@ -535,16 +535,18 @@ class _Builder:
         rows: list[list[serve.Cell]] = [
             [
                 self._people_links(here, [p.name]),
+                escape(
+                    f"in {p.span}" if p.span else "on a trip alone"
+                ),  # a word beside the name, never a number
                 serve._num(p.days),
                 serve._num(p.nights),
-                escape(p.span),
                 escape(p.last_contact),
                 serve._num(len(p.trips)),
             ]
             for p in found
         ]
         body += serve._table(
-            ["person", ("days", "num"), ("nights", "num"), "years", "last", ("trips", "num")], rows
+            ["person", "years", ("days", "num"), ("nights", "num"), "last", ("trips", "num")], rows
         )
         return self._document(here, "people", body)
 

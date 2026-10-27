@@ -361,14 +361,18 @@ def journey_answer(material: dict[str, Any]) -> dict[str, Any]:
 def week_answer(material: dict[str, Any]) -> dict[str, Any]:
     """A plausible answer from a week's material, every figure as the material gives it and none
     beside a person (`dream-week/2`), two proposals for next week (one is kept) and a review proposed
-    for the first goal."""
+    for the first goal; the sentence of the person most seen only when the week names one (a week under
+    `max_tier` 1 names nobody whose name only a tier-2 resolution gives)."""
     time = material["time"]
-    place, person = time["places"][0], time["people"][0]
+    place = time["places"][0]
     first = re.findall(r'"(L\d+)"', json.dumps(material["days"]))[:1]
     found: dict[str, Any] = {
         "time": [
             {"text": f"{place['hours']} hours at {place['place']}.", "evidence": place["ref"][:1]},
-            {"text": f"Most of all with {person['name']}.", "evidence": person["ref"][:1]},
+            *(
+                {"text": f"Most of all with {person['name']}.", "evidence": person["ref"][:1]}
+                for person in time["people"][:1]
+            ),
         ],
         "energy": [],
         "people": [],

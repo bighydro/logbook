@@ -211,15 +211,15 @@ def material(
     day with lines under the ceiling has no draft the entry allows."""
     tiers = dream.tiers_of(found)
     airports = airports or Airports.load()
-    rd = reading.read(lb, monday, sunday, airports, tiers)
+    rd = reading.read(lb, monday, sunday, airports, tiers, names_at=tiers)
     on = dream.lines_of_days(rd, monday, sunday)
     ids = {str(line["id"]) for line in on}
     days = day_range(monday, sunday)
     before, _this = drifting.windows(sunday, WEEK_DAYS)
     with lb.index() as idx:
         retracted = frozenset(retractions(idx.retractions()))
-        names = resolve.labels(lb, idx)
-        identities = resolve.identities_from([*idx.retractions(), *idx.resolutions()])
+        known = dream.names_for(lb, found, idx)
+        names, identities = known.labels, known.identities
         allowed = drafts.allowed(lb.root)
         every_draft = idx.by_kind(drafts.KIND)
         day_drafts = {
@@ -258,8 +258,9 @@ def material(
         data={},
         ids=ids,
         zone=rd.tz,
-        canonical=dream.canonical(lb, identities),
+        canonical=known.canonical(lb),
         identities=identities,
+        withheld=known.withheld,
     )
     read = Read(made, week, monday, sunday)
     beside: dict[str, int] = {}  # what it read beside the week's lines: id -> tier
@@ -306,6 +307,7 @@ def material(
         "days": shown_days,
     }
     made.tier = max([int(line.get("tier", 1)) for line in on] + list(beside.values()), default=1)
+    made.tier = max(made.tier, known.tier_in([made.data, read.numbers]))  # a name read is read
     # at or below the tier the draft has already, so it never raises it; its lines are kept in the
     # question (`read`), out of the digest, so a question alone never sends the week to the model again
     read.question, _asked = stale_question(lb, week, sunday, tiers, made.tier)
@@ -413,7 +415,7 @@ def _persons(report: people.Report, ids: set[str], made: Material) -> list[dict[
     for p in report.known.values():
         if made.person(p.entity) is None:
             continue
-        counts: dict[str, Any] = {"name": p.name, "id": p.entity}
+        counts: dict[str, Any] = {"name": made.canonical[p.entity], "id": p.entity}
         refs: list[str] = []
         for channel in CONTACT_CHANNELS:
             found = p.channels.get(channel)
@@ -513,7 +515,7 @@ def _promises(
         lines[p.line] = tier_of[p.line]
         item: dict[str, Any] = {
             "day": p.day,
-            "counterpart": p.counterpart,
+            "counterpart": made.name_of(p.counterpart),
             "quote": p.match.quote,
             "due": p.due,
         }
@@ -572,7 +574,9 @@ def _goals(
 
 def _day(day: str, line: Line | None, ids: set[str], made: Material) -> dict[str, Any]:
     """One day as its standing draft told it: its supported sentences, a model's words (`drafted`),
-    each with the references of the week's lines it rests on; `no draft` for a day with no line."""
+    each with the references of the week's lines it rests on, never one with a figure beside a person
+    (`dream.beside_a_name`) or a name the entry's tiers do not give (`Material.withholds`); `no draft`
+    for a day with no line."""
     weekday = WEEKDAYS[date.fromisoformat(day).weekday()]  # the Day's words, never the machine's locale
     if line is None:
         return {"day": day, "weekday": weekday, "draft": None}
@@ -583,6 +587,8 @@ def _day(day: str, line: Line | None, ids: set[str], made: Material) -> dict[str
     for i, segment in enumerate(segments):
         shown = drafts.segment_json(segment, ids, drafts.NOT_ON_WEEK)
         ref = made.refs_of(shown["evidence"]) if shown["supported"] else []
+        if dream.beside_a_name(shown["text"], made) or made.withholds(shown["text"]):
+            continue  # a figure beside a person, or a name the entry's tiers do not give: never passed on
         if ref:
             part = parts[i] if isinstance(parts, list) and len(parts) == len(segments) else None
             told.append({"part": part, "drafted": shown["text"], "ref": ref})
@@ -929,7 +935,10 @@ def on_sunday(lb: Logbook, day: str) -> tuple[str | None, dict[str, Any] | None,
             for line in idx.day(d)
             if str(line["id"]) not in retracted
         }
-    draft, withheld = drafts.for_unit(found, on_week, None, drafts.allowed(lb.root), drafts.NOT_ON_WEEK)
+        people = drafts.people_of(idx)
+    draft, withheld = drafts.for_unit(
+        found, on_week, None, drafts.allowed(lb.root), drafts.NOT_ON_WEEK, people=people
+    )
     if draft is not None and isinstance(draft.get("numbers"), dict):
         draft["numbers"] = drafts.names_only(draft["numbers"])
     return week, draft, withheld

@@ -103,12 +103,16 @@ def parse_ref(text: str) -> Ref:
 
 
 def locate(
-    lb: Logbook, ref: Ref, airports: Airports | None = None, tiers: Sequence[int] | None = None
+    lb: Logbook,
+    ref: Ref,
+    airports: Airports | None = None,
+    tiers: Sequence[int] | None = None,
+    names_at: Sequence[int] | None = None,
 ) -> tuple[Reading, trips.Trip]:
     """The trip `ref` names and the reading it was found in: the days from `MARGIN_DAYS` before
     the trip to as many after, clipped to the days the owner's track covers, widened by `WIDEN`
     while the run touches an edge of the window that is not the record's; through the gate `tiers`
-    when given (`reading.read`). `ValueError` when the
+    when given (`reading.read`), its names those at `names_at` when given. `ValueError` when the
     record has no days, the day is at home or outside the record, no stay places the owner
     anywhere around it, the id names no trip (the trip on its first day is named instead), or
     `places.json` names no home (the `trips` warning)."""
@@ -122,7 +126,7 @@ def locate(
         until = min(whole[1], (date.fromisoformat(last) + timedelta(days=margin)).isoformat())
         if not since <= ref.day <= until:
             raise ValueError(f"no trip on {ref.day}: the record runs {whole[0]} {EN_DASH} {whole[1]}")
-        rd = reading.read(lb, since, until, airports, tiers)
+        rd = reading.read(lb, since, until, airports, tiers, names_at=names_at)
         found, warning = trips.trips(rd)
         if warning:
             raise ValueError(warning)

@@ -1200,7 +1200,10 @@ def week_proposal(lb: Logbook, day: str, tiers: Sequence[int] | None) -> dict[st
             for line in idx.day(d)
             if str(line["id"]) not in retracted
         }
-    draft, _withheld = drafts.for_unit(found, on_week, tiers, drafts.allowed(lb.root), drafts.NOT_ON_WEEK)
+        people = drafts.people_of(idx)
+    draft, _withheld = drafts.for_unit(
+        found, on_week, tiers, drafts.allowed(lb.root), drafts.NOT_ON_WEEK, people=people
+    )
     if draft is None:
         return None
     for segment in draft["segments"]:
