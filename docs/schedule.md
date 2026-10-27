@@ -259,7 +259,10 @@ Your question for 2026-10-16: What were you glad of today?
 - **the morning**: after the 06:00 close, for the day it closed: the date, how many lines the day holds
   (a retracted line not counted), and the link to its Day page when `LOGBOOK_NOTIFY_LINK_HOST` names
   the host `logbook serve` answers on (`logbook.example.org`, or `https://logbook.example.org:8443`;
-  `https://` when no scheme is given). Without it there is no link.
+  `https://` when no scheme is given). Without it there is no link. The Library reads only for this
+  machine and your phone through Tailscale Serve ([who may read it](serve.md#three-rules)), so the
+  host is the tailnet name `logbook setup phone` names (`server.tail1234.ts.net`); any other host's
+  link opens a refusal.
 - **the evening**: at `LOGBOOK_NOTIFY_EVENING_HOUR` (a local hour, 0 to 23), the day's question, the
   one `logbook digest` closes with ([the digest](digest.md#delivery)). Without the variable there is
   no evening message. An hour that is not one of the four runs is one more time the runs' job runs, set

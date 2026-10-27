@@ -546,24 +546,27 @@ command for each message.
 ## 10. The Library on your phone, over a private network (5 minutes, once the network exists)
 
 The pages bind 127.0.0.1 and nothing else, as a service as by hand, and no flag changes that
-([serve](serve.md#reaching-it-from-another-device)). The phone reaches them through something you put
-in front, on this machine's terms. The pattern, whatever product you use for it:
+([serve](serve.md#reaching-it-from-another-device)). The Library reads for two only: this machine,
+and your phone through Tailscale Serve once `logbook setup phone` names it
+([from your phone](serve.md#from-your-phone)); never through Funnel, and any other proxy is a `403`
+with nothing read. The pattern:
 
 1. **A private network of your own devices.** The server and the phone are members; nothing else is.
    Traffic between them is encrypted end to end, and no relay in between can read it.
-2. **A proxy on the server** that listens on the server's address in that network only (never on all
-   interfaces, never on the home network's address, never a port opened on the router), serves HTTPS
-   with a certificate for the server's private name, and forwards to `http://127.0.0.1:8765`.
-3. **The phone** bookmarks the private name and `/today`: `https://server.example/today`, which is
-   today's page by the record's clock and `day_start`, whatever the phone's clock says.
+2. **Tailscale Serve on the server**, `tailscale serve --bg 8765`: HTTPS on the tailnet only, with
+   a certificate for the server's tailnet name, forwarding to `http://127.0.0.1:8765` (never
+   `tailscale funnel`, never a port opened on the router), and `logbook setup phone` naming that
+   name and your login.
+3. **The phone** bookmarks the tailnet name and `/today`: `https://server.tail1234.ts.net/today`,
+   which is today's page by the record's clock and `day_start`, whatever the phone's clock says.
 
 What it means:
 
 - **Every tier is on the pages.** The server reads them all because nothing it serves leaves the
-  machine; whoever reaches the proxy reads everything. Keep the private network to your own devices:
+  machine; every device signed in as your tailnet login reads everything. Keep the private network to your own devices:
   no shared or borrowed ones, and never a cloud machine between the phone and the pages.
-- **The forms are read-only behind the proxy**, unless it is Tailscale Serve and `logbook setup phone`
-  names your phone ([from your phone](serve.md#from-your-phone)). A naming is accepted only from
+- **The phone reads and writes as this machine**, once `logbook setup phone` names it
+  ([from your phone](serve.md#from-your-phone)); without the setting it reads nothing. A naming is accepted only from
   127.0.0.1 with the server's own origin, so from the phone the Places page reads and its buttons
   are refused. To name places from the laptop, use a tunnel, through which the form works:
 

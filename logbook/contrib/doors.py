@@ -63,8 +63,9 @@ LATIN = (  # the fontsource cuts' Latin range: a glyph outside it is the system 
 )
 CSP = (
     "default-src 'none'; style-src 'unsafe-inline'; font-src 'self'; img-src 'self'; form-action 'self';"
-    " base-uri 'none'"
-)  # a door's policy: its fonts and a memory's thumbnail from the server, its forms to it, nothing else
+    " base-uri 'none'; frame-ancestors 'none'"
+)  # a door's policy: its fonts and a memory's thumbnail from the server, its forms to it, nothing else,
+# and no frame around it
 
 # the owner's tokens (RFC 0047, the brief of 24 October 2026), as custom properties on :root
 TOKENS = (

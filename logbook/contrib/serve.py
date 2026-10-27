@@ -80,7 +80,11 @@ Three rules, each enforced here and tested in `tests/test_serve.py`:
 
 - The server binds 127.0.0.1 and refuses any other host (`HostError`, raised before a socket is
   opened), so the record is readable from this machine and nowhere else. It never resolves a
-  name, not even its own.
+  name, not even its own. A request is read only when it is this machine's (one Host, 127.0.0.1,
+  [::1] or localhost with the server's port, or none, and no proxy's header) or the owner's named
+  phone's through Tailscale Serve, never Funnel (`Site.gate`): any other Host is a 421 (DNS
+  rebinding), any other proxied request a 403, nothing read. No page may be framed (`UNFRAMED` in
+  every policy, `X-Frame-Options: DENY` on every answer).
 - A page is one HTML document with one inline stylesheet: no font, no stylesheet link, no script
   fetched, and no reference to any URL but the server's own paths. The one image is a Day's
   thumbnail of a photo, from `/photo/ID`, the record's own attachment store and nothing else: the
@@ -221,7 +225,11 @@ STUCK_AFTER = 2  # this many in a row, and the server leaves for its service man
 STUCK_EXIT = 70  # EX_SOFTWARE: a non-zero exit, which launchd's KeepAlive and systemd's on-failure restart
 WINDOW_DAYS = 14  # `/days` without a window: the record's last fortnight
 HEAD_CHARS = 12
-CSP = "default-src 'none'; style-src 'unsafe-inline'; font-src 'self'; form-action 'self'; base-uri 'none'"
+UNFRAMED = "frame-ancestors 'none'"  # no page in another's frame, which could borrow the owner's click
+CSP = (
+    "default-src 'none'; style-src 'unsafe-inline'; font-src 'self'; form-action 'self'; base-uri 'none';"
+    f" {UNFRAMED}"
+)  # every policy below is this one with a script or images allowed, and none is framed
 SHOWN_MESSAGES, LONG_CONVERSATION = 10, 30  # a conversation of more than 30 shows 10, the rest folded
 DAY_PATH = re.compile(r"^/day/(\d{4}-\d{2}-\d{2})$")
 TODAY = "/today"
@@ -656,7 +664,7 @@ class Response(NamedTuple):
     def headers(self) -> dict[str, str]:
         found = {
             "Content-Type": self.content_type,
-            "Content-Security-Policy": self.csp,
+            "Content-Security-Policy": _unframed(self.csp),
             "Cache-Control": "no-store" if self.etag is None else "no-cache",
             "X-Content-Type-Options": "nosniff",
             # no referrer to any other site; to its own, the page's origin, which a form's POST
@@ -670,6 +678,23 @@ class Response(NamedTuple):
         if self.status not in (204, 304):
             found["Content-Length"] = str(len(self.body))
         return found
+
+
+def refused(status: int, message: str) -> Response:
+    """A request the Library does not read (`Site.gate`): one sentence on a page that reads nothing of
+    the record, no header and no footer (each of which names the record's head and its doors)."""
+    body = (
+        '<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n'
+        f"<title>{status} · Logbook</title>\n</head>\n<body>\n<h1>{status}</h1>\n<p>{escape(message)}</p>\n"
+        "</body>\n</html>\n"
+    )
+    return Response(status, body.encode("utf-8"))
+
+
+def _unframed(csp: str) -> str:
+    """`csp` forbidding every frame, as every policy here does: a page built before it did keeps its
+    policy in the build's `pages.json`, and is sent with the clause added."""
+    return csp if "frame-ancestors" in csp else f"{csp.rstrip().rstrip(';')}; {UNFRAMED}"
 
 
 # -- the site --------------------------------------------------------------------------------------------
@@ -769,6 +794,37 @@ class Site:
         if self.library is not None and (built := self._built(path, query, if_none_match)) is not None:
             return built  # what the build wrote: no index opened, nothing read
         return None
+
+    def gate(self, asked: phone.Asked, port: int, post: bool = False) -> Response | None:
+        """Whether a request is read at all, before anything is (a POST's body too, and then the write
+        gate, `write`, has its own say): None when it is this machine's
+        (`phone.here`: no proxy, and a Host this machine reads the Library at, with the server's `port`,
+        or none) or the owner's phone through Tailscale Serve (`phone.reads`: one Host, the setting's;
+        one login, the setting's; never Funnel), the setting read from `logbook.json` with each
+        request, as the write gate reads it; else the refusal (`refused`), and nothing of the record
+        read. A website the owner opens that points its own name at 127.0.0.1 (DNS rebinding) names
+        itself in the Host and is a 421; a request through a proxy that is not the phone's is a 403. A
+        `logbook.json` that cannot be read names no phone. A refused POST says nothing was written."""
+        if phone.here(asked, port):
+            return None
+        written = "; nothing was written" if post else ""
+        if phone.looks_proxied(asked):
+            try:
+                meta = self.lb.meta
+            except (OSError, ValueError):  # a logbook.json that cannot be read names no phone
+                meta = {}
+            if phone.reads(meta, asked):
+                return None
+            return refused(
+                403,
+                "This Library is read from this machine only, or from your phone through Tailscale Serve"
+                f" once `logbook setup phone` names it, never through Funnel{written}.",
+            )
+        return refused(
+            421,
+            f"This server answers at http://{HOST}:{port} only, the address `logbook serve` names;"
+            f" the name this page was asked at is not this machine's{written}.",
+        )
 
     def still_reading(self, path: str, query: str, limit_s: float) -> Response:
         """The page a reading over the limit is answered with (503): what happened and when the page
@@ -968,7 +1024,9 @@ class Site:
         not 127.0.0.1 or [::1], or carry a `Tailscale-*` or `X-Forwarded-*` header) is answered only
         when `logbook.json` names the owner's phone (`phone`, off by default) and the headers are the
         phone's (`phone.allows`: the Origin, the Host and the login the setting names, read with each
-        POST), and never by the Origin's absence. A
+        POST), and never by the Origin's absence. From this machine, a POST its browser says was sent
+        from inside a frame or from another site (`phone.cross`: `Sec-Fetch-Dest` and `Sec-Fetch-Site`)
+        is refused too, with an Origin or without one. A
         field sent more than once (the Sign form's boxes) arrives as its values joined with commas,
         as `--accept N,N` takes them; `upload` is the file a form carried, the Day's recording. One
         write at a time (`_write_lock`)."""
@@ -988,6 +1046,7 @@ class Site:
             not _loopback(client)
             or (proxied and not phone.allows(self.lb.meta, origin, asked))
             or (not proxied and origin is not None and not _loopback_origin(origin))
+            or (not proxied and phone.cross(asked))
         ):
             where = f"from {client!r}" + (f", origin {origin!r}" if origin is not None else "")
             what = {
@@ -5428,9 +5487,15 @@ class Handler(BaseHTTPRequestHandler):
         """A page's form: read in full (a field sent more than once, its values joined with commas;
         a recording as `multipart/form-data`, to a Day only, up to `AUDIO_BYTES`), then `Site.write`
         with the connection's address and the Origin header, which decide whether it is answered at
-        all."""
+        all. Before any of it, the request is this machine's or the phone's (`Site.gate`), or it is
+        refused with nothing read."""
         assert isinstance(self.server, Server)
         site = self.server.site
+        asked = phone.Asked.of(self.headers)
+        if (refusal := site.gate(asked, self.server.server_port, post=True)) is not None:
+            self.close_connection = True  # the body is left unread
+            self._send(refusal, body=True)
+            return
         path = self.path.partition("?")[0]
         kind = self.headers.get("Content-Type") or ""
         multipart = kind.strip().lower().startswith("multipart/form-data")
@@ -5453,7 +5518,7 @@ class Handler(BaseHTTPRequestHandler):
             query = parse_qs(raw.decode("utf-8", "replace"), keep_blank_values=True)
             form = {k: ",".join(v) for k, v in query.items()}
         client, origin = str(self.client_address[0]), self.headers.get("Origin")
-        response = site.write(path, form, client, origin, upload, asked=phone.Asked.of(self.headers))
+        response = site.write(path, form, client, origin, upload, asked=asked)
         self._send(response, body=True)
 
     def _answer(self, body: bool) -> None:
@@ -5461,9 +5526,13 @@ class Handler(BaseHTTPRequestHandler):
         the server's pool (`Server.read`), at most `renders` at a time, under the limit. Over it, the
         reading is stopped and the page is the one that says so (`Site.still_reading`), with the page
         built in the background when the server builds; a browser that leaves stops its reading, and
-        is sent nothing."""
+        is sent nothing. Before any of it, the request is this machine's or the phone's (`Site.gate`),
+        or it is refused with nothing read."""
         assert isinstance(self.server, Server)
         server = self.server
+        if (refusal := server.site.gate(phone.Asked.of(self.headers), server.server_port)) is not None:
+            self._send(refusal, body)
+            return
         path, _, query = self.path.partition("?")
         inm = self.headers.get("If-None-Match")
         quick = server.site.quick(path, query, inm)
@@ -5499,6 +5568,11 @@ class Handler(BaseHTTPRequestHandler):
         if response is None:  # stopped before it was read: the limit, answered above, or a closing server
             response = server.site.still_reading(path, query, server.limit_s)
         self._send(response, body)
+
+    def end_headers(self) -> None:
+        """Every answer, `http.server`'s own errors among them, says no page may be framed."""
+        self.send_header("X-Frame-Options", "DENY")
+        super().end_headers()
 
     def _gone(self) -> bool:
         """Whether the browser closed the connection while its page is read: readable, and nothing to

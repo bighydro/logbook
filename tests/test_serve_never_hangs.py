@@ -171,7 +171,7 @@ def test_a_browser_that_leaves_stops_its_reading_and_logs_no_traceback(
     port: int, slow: Slow, stderr: io.StringIO
 ) -> None:
     with socket.create_connection((LOOPBACK, port), timeout=5) as conn:
-        conn.sendall(f"GET {SLOW} HTTP/1.1\r\nHost: {LOOPBACK}\r\n\r\n".encode())
+        conn.sendall(f"GET {SLOW} HTTP/1.1\r\nHost: {LOOPBACK}:{port}\r\n\r\n".encode())
         assert _until(lambda: slow.now == 1)
     assert _until(lambda: slow.stopped == 1, 5), "stopped when the browser left, before the limit"
     time.sleep(0.3)
