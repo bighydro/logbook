@@ -295,6 +295,7 @@ class TripPage:
     stem: str
     people: list[tuple[str, str]]  # (key, name), gated
     asset_name: str | None
+    flights: list[dict[str, Any]] = field(default_factory=list)  # the trip's flights whose lines cross
 
 
 @dataclass(frozen=True)
@@ -370,9 +371,9 @@ class _Builder:
             pages: list[DayPage] = []
             for day in day_range(first, last):
                 lines = by_day.get(day, [])
-                if not lines:
-                    continue
                 self._count(lines)
+                if not any(gate.ok(line["id"]) for line in lines):
+                    continue  # a day whose every line is held back has no page, nor its date
                 data = day_reader.of_reading(rd, day, None, lines)
                 page = self._day(data, lines, rd, gate)
                 self.days[day] = page
@@ -430,7 +431,8 @@ class _Builder:
         notes = [n for n in notes if n]
         if notes:
             page.sections.append("## Notes\n\n" + "\n\n".join(_quote(n) for n in notes) + "\n")
-        sources = [f"{s['source']} {s['lines']}" for s in data["sources"]]
+        crossed = Counter(str(line.get("source")) for line in lines if gate.ok(line["id"]))
+        sources = [f"{source} {n}" for source, n in sorted(crossed.items(), key=lambda s: (-s[1], s[0]))]
         page.sections.append("## Sources\n\n" + ", ".join(sources) + "\n")
         for place in page.places:
             self.places[place].days.setdefault(day, PlaceDay())
@@ -450,6 +452,8 @@ class _Builder:
     ) -> Iterator[str]:
         indent = "    " * depth
         if e["kind"] == day_reader.FLIGHT:
+            if not gate.ok(e["line"]):
+                return  # a flight whose line is held back is on no page
             text = _flight_text(e)
             page.flights.append(text)
             span = _clock(e["start"], self.tz, day_end)
@@ -557,7 +561,8 @@ class _Builder:
                 people.append((key, c.name))
                 self._person(key, c.name).trips.append(stem)
         asset = trip_reader.asset_name(trip.asset, rd.assets) if trip.asset else None
-        self.trips.append(TripPage(trip, stem, people, asset))
+        flights = [f for f in trip.flights if f["lines"] and all(gate.ok(i) for i in f["lines"])]
+        self.trips.append(TripPage(trip, stem, people, asset, flights))
         for place in trip.places:
             if place in self.places:
                 self.places[place].trips.append(stem)
@@ -711,9 +716,10 @@ class _Builder:
         head = [nights]
         if t.route:
             head.append("route " + f" {ARROW} ".join(self._route_label(label) for label in t.route))
-        for label, flights in (("in", t.flights_in), ("out", t.flights_out)):
-            for f in flights:
-                head.append(f"{label} {_flight_line(f)}")
+        for label, day in (("in", t.start), ("out", t.until)):
+            for f in page.flights:
+                if f["date"] == day:
+                    head.append(f"{label} {_flight_line(f)}")
         head.append(link(self.names.claim(t.start[:4])))
         body = [f"# {page.stem}", "", DOT.join(head), ""]
         rows = []
@@ -733,8 +739,8 @@ class _Builder:
         if page.people:
             rows = [f"- {link(self.names.claim(name))}" for _key, name in page.people]
             body.append("## People\n\n" + "\n".join(rows) + "\n")
-        if t.flights:
-            rows = [f"- {f['date']} {_flight_line(f)}" for f in t.flights]
+        if page.flights:
+            rows = [f"- {f['date']} {_flight_line(f)}" for f in page.flights]
             body.append("## Flights\n\n" + "\n".join(rows) + "\n")
         return _front_matter(front) + "\n".join(body)
 
@@ -796,13 +802,13 @@ class _Builder:
         parts = [p.weekday[:3], f"night {self._night_link(p.after)}"]
         if p.places:
             parts.append(", ".join(link(self.names.claim(place)) for place in p.places))
-        if p.people:
-            parts.append("with " + ", ".join(link(self.names.claim(n)) for _k, n in p.people))
         parts.extend(p.flights)
         if p.attached:
             parts.append(_plural(p.attached, "attachment"))
         if p.trip:
             parts.append(link(p.trip))
+        if p.people:  # last, after the word `with`: no figure stands beside a name
+            parts.append("with " + ", ".join(link(self.names.claim(n)) for _k, n in p.people))
         return f"- {link(self.names.claim(p.day))} {DOT.join(parts)}"
 
     def _days_in(self, year: str) -> int:

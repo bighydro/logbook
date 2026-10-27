@@ -1064,7 +1064,7 @@ def _print_reflection(day: str, r: reflect.Reflection, zone: ZoneInfo) -> None:
         head = "the reflection, typed"
     print(f"{day}  {head}:")
     for n, sentence in enumerate(reflect.sentences(r.text), 1):
-        print(f"  {n:>3}  {sentence}")
+        print(f"  {sentence}  (line {n})")  # the number after the owner's words, which may open with a name
 
 
 def _proposal_rows(proposals: Sequence[reflect.Proposal]) -> Iterator[str]:
@@ -1076,7 +1076,8 @@ def _proposal_rows(proposals: Sequence[reflect.Proposal]) -> Iterator[str]:
     yield "proposals, by rules alone; each is a guess until you accept it:"
     for p in proposals:
         word, what = reflect.proposal_words(p)
-        yield f"  {p.number:>3}  {word:<11} line {p.sentence}  {what}"
+        # the numbers after the words, never before them: the evidence may open with a name (the owner)
+        yield f"  {word:<11} {what}  (proposal {p.number}, line {p.sentence})"
 
 
 def _confirm_draft() -> tuple[bool, str | None]:

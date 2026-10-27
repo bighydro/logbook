@@ -186,16 +186,55 @@ def record_days(lb: Logbook, kind: str | None = None) -> tuple[str, str] | None:
 BOOKKEEPING = frozenset({"crossing", RETRACTION, "resolution", "migration"})
 
 
-def record_span(lb: Logbook) -> tuple[str, str] | None:
+def record_span(lb: Logbook, tiers: Sequence[int] | None = None) -> tuple[str, str] | None:
     """The first and last local day with a line that observes a day — every kind but the record's
     own bookkeeping (`BOOKKEEPING`) — so that an export's run does not move the window of the next
-    (`export site`, `export world`). None when the record has no such line."""
+    (`export site`, `export world`). Through the gate `tiers` when given: only the lines whose tier is
+    in it count, so a line held back is not a day of the span. None when the record has no such line.
+    The span of one record at one head through one gate is found once (`_SPANS`): an export asks for
+    it from several pages, and a kind whose lines are all held back is a walk down its index."""
+    gate = None if tiers is None else tuple(sorted({int(t) for t in tiers}))
+    key = (str(lb.root), str(lb.meta.get("head") or ""), gate)
+    if key in _SPANS:
+        return _SPANS[key]
     with lb.index() as idx:
-        spans = [idx.span(kind) for kind in idx.kind_names() if kind not in BOOKKEEPING]
+        spans = [_span(idx, kind, gate) for kind in idx.kind_names() if kind not in BOOKKEEPING]
     found = [span for span in spans if span is not None]
-    if not found:
+    whole = (min(a for a, _b in found), max(b for _a, b in found)) if found else None
+    if len(_SPANS) >= SPANS_KEPT:
+        _SPANS.clear()
+    _SPANS[key] = whole
+    return whole
+
+
+SPANS_KEPT = 16  # the record spans `record_span` keeps, by record, head and gate
+_SPANS: dict[tuple[str, str, tuple[int, ...] | None], tuple[str, str] | None] = {}
+
+
+def _span(idx: Index, kind: str, tiers: Sequence[int] | None) -> tuple[str, str] | None:
+    """`Index.span` of one kind through the gate `tiers`. The kind's own first and last day stand when
+    a line of an admitted tier is on them, one step down the (kind, day_local) index each; else the
+    nearest day that has one is looked for in day order."""
+    span = idx.span(kind)
+    if span is None or tiers is None:
+        return span
+    allowed = [int(t) for t in tiers]
+    gate = f"tier IN ({','.join('?' * len(allowed))})"
+
+    def on(day: str) -> bool:
+        query = f"SELECT 1 FROM lines WHERE kind = ? AND day_local = ? AND {gate} LIMIT 1"
+        return idx.db.execute(query, (kind, day, *allowed)).fetchone() is not None
+
+    def edge(order: str) -> str | None:
+        query = f"SELECT day_local FROM lines WHERE kind = ? AND {gate} ORDER BY day_local {order} LIMIT 1"
+        row = idx.db.execute(query, (kind, *allowed)).fetchone()
+        return None if row is None else str(row[0])
+
+    first = span[0] if on(span[0]) else edge("ASC")
+    if first is None:
         return None
-    return min(a for a, _b in found), max(b for _a, b in found)
+    last = span[1] if on(span[1]) else edge("DESC")
+    return first, last or first
 
 
 def crossing(lines: Iterable[Line], tiers: Sequence[int] | None) -> list[Line]:

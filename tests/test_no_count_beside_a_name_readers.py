@@ -226,3 +226,51 @@ def test_rollup_places_with_keeps_two_places_of_one_label_apart() -> None:
     ]
     rows = list(rollup._with_table(table))[1:]
     assert [r.split()[-2:] for r in rows] == [["Ola", "Nordmann"], ["Per", "Hansen"]], rows
+
+
+STARTS, ENDS = (
+    "Ola Nordmann visits",
+    "Dinner with Ola Nordmann",
+)  # a proposal's text opens, or closes, with a name
+
+
+def test_a_proposal_s_number_stands_after_its_words_in_logbook_day_and_on_the_day_page(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, no_network: list[str]
+) -> None:
+    """The strong guard over `logbook day` and /day/DATE, on a draft whose proposed events and links open
+    and close with a person's name: a proposal's number (`event 1`, `link 3`) is printed after its words,
+    `Ola Nordmann visits · … (event 1)`, never before them, where it would stand beside the name; the
+    command still takes the same numbers (`--accept 1`). The Day page lists the events and no link.
+    The dream's day of `test_dream_events`, its
+    draft written again with these proposals (the Oslo persona: nobody here exists)."""
+    import test_dream_events as events
+
+    from logbook.core import drafts
+
+    record = events._record(tmp_path, monkeypatch)
+    draft = events._dreamed(record, monkeypatch)
+    payload = json.loads(json.dumps(draft["payload"]))
+    event = payload["proposals"][0]
+    link = {
+        "kind": drafts.LINK,
+        "entity": "019cadd3-6bc0-7dcd-9133-0000000000c1",
+        "evidence": event["evidence"],
+    }
+    payload["proposals"] = [
+        {**event, "title": STARTS},
+        {**event, "title": ENDS},
+        {**link, "text": f"{STARTS} the sailing club"},
+        {**link, "text": f"The sailing club with {ENDS.split(' with ')[1]}"},
+    ]
+    payload["supersedes"] = str(draft["id"])
+    record.append(draft["at"], draft["source"], drafts.KIND, int(draft["tier"]), payload, tz=draft.get("tz"))
+    day = events.DAY
+    out = _run("day", day)
+    page = serve.Site(Logbook(record.root)).page_day(day)
+    for said in (STARTS, ENDS, "(event 1)", "(event 2)", "(link 3)", "(link 4)"):
+        assert said in out, (said, out)
+    for said in (STARTS, ENDS, "(event 1)", "(event 2)"):
+        assert said in page, said
+    assert "link 3" not in page and "link 4" not in page, "the Day page lists a draft's events, not its links"
+    assert beside_a_name.rows(out) == [], beside_a_name.rows(out)
+    assert beside_a_name.page(page) == [], beside_a_name.page(page)

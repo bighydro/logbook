@@ -87,12 +87,15 @@ def beside_a_name(
 
 
 # what may stand between a name and a digit and still leave them side by side: no letter, no word
-SEPARATORS = "[\\s(:×x#·,\\-\u2013\u2014/|;=•.'\u2190\u2192]*"  # the dashes and arrows by code point
+# (a bracket of either kind, a wikilink's too, and a quote as well: the owner, 27 October)
+SEPARATORS = "[\\s()\\[\\]:×x#·,\\-\u2013\u2014/|;=•.'\"\u2018\u2019\u201c\u201d\u2190\u2192]*"
 
 
 def adjacent(text: str, name: str) -> bool:
     """Whether a digit stands beside `name` in `text` with only `SEPARATORS` between them, on either
-    side: `Ola Nordmann, 14:00`, `2026-06-17 · Ola`; `with Ola at 14:00` has a word between."""
+    side: `Ola Nordmann, 14:00`, `2026-06-17 · Ola`, `8 June · Ola` (a date in words is one figure,
+    `CALENDAR`); `with Ola at 14:00` has a word between."""
+    text = CALENDAR.sub(" 0 ", text)
     alt = re.escape(name)
     return (
         re.search(rf"\d{SEPARATORS}(?<!\w){alt}(?!\w)|(?<!\w){alt}(?!\w)\??{SEPARATORS}\d", text) is not None

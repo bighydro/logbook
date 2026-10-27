@@ -22,7 +22,7 @@ from persona import CAFE, HOME, KARI, KARI_ID, OLA, OLA_ID, dwell, photo, resolu
 
 from logbook import cli
 from logbook.commands import day as day_command
-from logbook.contrib import dream, model_client, serve
+from logbook.contrib import dream, dream_events, model_client, serve
 from logbook.contrib.adapters import ics
 from logbook.core import day as day_reader
 from logbook.core import drafts, policy
@@ -169,6 +169,13 @@ def _files(root: Path) -> dict[Path, bytes]:
     }
 
 
+def _proposed(out: str, n: int) -> str:
+    """The row of proposed event `n` in `logbook day`, without its indent: `? ` and its words, then
+    `(event N)  proposed`; empty when none is proposed."""
+    rows = [r.lstrip() for r in out.splitlines() if r.lstrip().startswith("? ") and f"(event {n})  " in r]
+    return rows[0] if rows else ""
+
+
 def _dreamed(lb: Logbook, monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     _fake(monkeypatch)
     code, _out, err = _cli("dream", "day", DAY)
@@ -217,7 +224,8 @@ def test_a_stay_with_photos_and_a_transcript_yields_one_proposed_event(
     }
     assert set(photos) | {recording} <= set(proposal["evidence"]) <= set(on_day)
     assert "dropped" not in p["extra"]
-    assert "1 proposed event" in out and f"event 1   {stay['start_local'][11:16]}" in out
+    assert "1 proposed event" in out and _proposed(out, 1).startswith(f"? {TITLE} · ")
+    assert f"from {stay['start_local'][11:16]} to " in out, "the clocks behind a word, never beside a name"
     assert TITLE in out and "with Kari Nordmann" in out
 
 
@@ -323,7 +331,7 @@ def test_a_reader_counts_a_proposal_of_an_unknown_kind_and_shows_the_event(lb: L
     assert shown["number"] == 1 and shown["kind"] == "event" and shown["title"] == "Dinner"
     assert draft["proposals_unknown"] == 1 and draft["malformed"] == []
     _code, out, _err = _cli("day", DAY, "--no-anniversaries")
-    assert "? event 1" in out and "malformed" not in out
+    assert _proposed(out, 1) and "malformed" not in out
 
 
 def test_a_writer_still_refuses_a_proposal_of_a_kind_it_does_not_know(lb: Logbook) -> None:
@@ -370,7 +378,7 @@ def test_nothing_is_written_without_accept(lb: Logbook, monkeypatch: pytest.Monk
     assert _files(lb.root) == before
     code, out, err = _cli("day", "reflect", DAY, "--text", "A good dinner.", "--sign", "--at", SIGNED_AT)
     assert code == 2 and "--accept" in err and "nothing was written" in err
-    assert "proposed events, from the dream" in out and "    1  event      " in out
+    assert "proposed events, from the dream" in out and f"  {TITLE} · " in out and "(event 1)" in out
     assert _files(lb.root) == before
     serve.Site(lb).page_day(DAY)
     assert _files(lb.root) == before
@@ -482,7 +490,8 @@ def test_reflect_numbers_the_events_after_its_own_proposals_and_accepts_one(
     text = "Ola should book the ferry for Sunday."  # proposal 1, a delegation; the dinner is 2
     code, out, err = _cli("day", "reflect", DAY, "--text", text, "--sign", "--accept", "2", "--at", SIGNED_AT)
     assert code == 0, err
-    assert "    1  delegation" in out and "    2  event      " in out
+    assert "  delegation " in out and "(proposal 1, line 1)" in out
+    assert any(r.startswith(f"  {TITLE} · ") and r.endswith("(event 2)") for r in out.splitlines())
     kinds = [line["kind"] for line in lb.lines()][seq:]
     assert kinds == ["note", "event", "signed-day"]  # the reflection, the dinner, the signature
     event = _of_kind(lb, "event")[-1]
@@ -519,7 +528,7 @@ def test_the_day_shows_a_proposed_event_greyed_and_a_confirmed_one_as_an_event(
     assert all(e["title"] != TITLE for e in _bistro(data)["attached"]["events"])
     _code, out, _err = _cli("day", DAY, "--no-anniversaries")
     row = next(r for r in out.splitlines() if TITLE in r)
-    assert row.lstrip().startswith("? event 1") and row.endswith("]") and "proposed" in row
+    assert row.lstrip().startswith(f"? {TITLE} · ") and "(event 1)  proposed" in row and row.endswith("]")
     html = serve.Site(lb).page_day(DAY)
     assert 'class="proposal proposed mute"' in html and TITLE in html
     assert html.index(TITLE) < html.index("<h2>Timeline</h2>")
@@ -536,7 +545,7 @@ def test_the_day_shows_a_proposed_event_greyed_and_a_confirmed_one_as_an_event(
     kari = next(c for c in bistro["with"]["confirmed"] if c["person"] == KARI_ID)
     assert "calendar" in kari["sources"]  # the confirmed event places her, as a calendar entry would
     _code, out, _err = _cli("day", DAY, "--no-anniversaries")
-    assert f"confirmed as #{seq + 1}" in out and "? event 1" not in out
+    assert f"(event 1)  confirmed as #{seq + 1}" in out and _proposed(out, 1) == ""
     assert any(r.strip().startswith("event") and TITLE in r and "19:" in r for r in out.splitlines())
     html = serve.Site(lb).page_day(DAY)
     assert 'class="proposal proposed mute"' not in html and 'class="proposal confirmed"' in html
@@ -585,7 +594,7 @@ def test_a_draft_the_policy_withholds_withholds_its_proposed_events_with_it(
     assert draft["tier"] == 2 and draft["payload"]["proposals"]  # it read the recording, a tier-2 line
     _entry(lb, 1)
     out = _cli("day", DAY, "--no-anniversaries")[1]
-    assert TITLE not in out and "? event" not in out
+    assert TITLE not in out and "(event " not in out
     (row,) = [r for r in out.splitlines() if r.startswith("  draft ")]
     assert "superseded by policy" in row
     raw = _cli("day", DAY, "--json", "--no-anniversaries")[1]
@@ -629,7 +638,7 @@ def test_the_draft_the_policy_still_allows_stands_in_with_its_own_proposed_event
     assert [p["title"] for p in data["draft"]["proposals"]] == [EVENING]
     out = _cli("day", DAY, "--no-anniversaries")[1]
     assert TITLE not in out
-    assert any(r.lstrip().startswith("? event 1") and EVENING in r for r in out.splitlines())
+    assert EVENING in _proposed(out, 1)
     html = serve.Site(lb).page_day(DAY)
     assert TITLE not in html and 'class="proposal proposed mute"' in html and EVENING in html
 
@@ -658,5 +667,19 @@ def test_an_event_confirmed_from_a_draft_the_policy_later_withholds_stays_in_the
     # the proposal and its `confirmed as` row go with the draft; the event is the owner's line and stays
     assert [e["title"] for e in _bistro(data)["attached"]["events"]] == [TITLE]
     out = _cli("day", DAY, "--no-anniversaries")[1]
-    assert f"confirmed as #{seq + 1}" not in out and "? event" not in out
+    assert f"confirmed as #{seq + 1}" not in out and "(event " not in out
     assert any(r.strip().startswith("event") and TITLE in r for r in out.splitlines())
+
+
+def test_a_confirmed_title_holds_every_name_learned_above_tier_1_and_nothing_else() -> None:
+    """Every name learned only above the event's tier is held out of the title: the full name, a first
+    name or a surname of more than three letters no name shown at tier 1 shares, a genitive's `s` with
+    it (the owner, 27 October); a tier-1 name and a short word stand."""
+    words = dream_events._held_words({"Kari Nordmann", "Ola Berg", "May Olsen"}, {"Kari Hansen"})
+    held = dream_events._unnamed
+    assert held("Dinner with Kari Nordmann and Ola Berg", words) == "Dinner with someone and someone"
+    assert held("Dinner with Kari Hansen", words) == "Dinner with Kari Hansen", "a tier-1 name stands"
+    assert held("Coffee with the Nordmanns", words) == "Coffee with the someone's"
+    assert held("Bergs bursdag", words) == "someone's bursdag", "a genitive with no apostrophe"
+    assert held("Lunch in May", words) == "Lunch in May", "a word of three letters is no name to hold"
+    assert held("Olsen's boat", words) == "someone's boat"

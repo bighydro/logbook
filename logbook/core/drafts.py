@@ -1586,8 +1586,9 @@ def unit_rows(
 
 
 def proposal_rows(proposals: Iterable[Mapping[str, Any]], indent: str = "    ") -> Iterator[str]:
-    """One row per proposal, after the segments: `event N`, the span, the title, the place and the
-    people, or `link N` and what it links; then `proposed` and the evidence, set apart with a leading
+    """One row per proposal, after the segments: the title, the place, the span and the people, or what
+    a link links, then `(event N)` or `(link N)`, the number `--accept` and `--keep` take, after the
+    words so it never stands beside a name; then `proposed` and the evidence, set apart with a leading
     `?` (greyed on the page), or `confirmed as #seq` once the owner accepted it (`kept as #seq` when
     it was kept from another draft of the day), or `~` and `unsupported` when a reader found its
     evidence not on the day."""
@@ -1601,19 +1602,21 @@ def proposal_rows(proposals: Iterable[Mapping[str, Any]], indent: str = "    ") 
             mark, tail = "~ ", f"{UNSUPPORTED}: {p['why']}" if p.get("why") else UNSUPPORTED
         else:
             mark, tail = "? ", "proposed  [" + ", ".join(short_id(e) for e in p["evidence"]) + "]"
-        yield f"{indent}{mark}{label:<9} {proposal_text(p)}  {tail}"
+        # the number after the words, never before them: a proposal's text may open with a name (the owner)
+        yield f"{indent}{mark}{proposal_text(p)} ({label})  {tail}"
 
 
 def proposal_text(p: Mapping[str, Any]) -> str:
-    """The span (the two clocks with an en dash between), the title, the place, the people:
-    `19:30` to `22:10  Dinner with Kari Nordmann · Bistro Eksempel · with Kari Nordmann`; a link's
-    text, and its note when it has one."""
+    """The title, the place, the span in words, the people: `Dinner with Kari Nordmann · Bistro
+    Eksempel · from 19:30 to 22:10 · with Kari Nordmann`; a link's text, and its note when it has
+    one. A title may open or close with a name, so the clocks stand behind a word, never beside it
+    (the owner, 27 October)."""
     if p.get("kind") == LINK:
         return DOT.join(str(x) for x in (p["text"], p.get("note")) if x)
-    clock = f"{str(p['start_local'])[11:16]}{EN_DASH}{str(p['end_local'])[11:16]}"
-    parts = [f"{clock}  {p['title']}"]
+    parts = [str(p["title"])]
     if p.get("where"):
         parts.append(str(p["where"]))
+    parts.append(f"from {str(p['start_local'])[11:16]} to {str(p['end_local'])[11:16]}")
     people = [str(who.get("name") or who["id"]) for who in p.get("people") or []]
     if people:
         parts.append("with " + ", ".join(people))

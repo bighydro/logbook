@@ -34,7 +34,7 @@ event to an external calendar would be a crossing, and nothing here sends anythi
 from __future__ import annotations
 
 import re
-from collections.abc import Collection, Iterator, Mapping, Sequence
+from collections.abc import Collection, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
@@ -157,7 +157,8 @@ def rows(found: Sequence[Proposed]) -> Iterator[str]:
             state = f"{drafts.DOT}{drafts.UNSUPPORTED}: {p.item['why']}"
         else:
             state = ""
-        yield f"  {p.number:>3}  {drafts.EVENT:<11} {drafts.proposal_text(p.item)}{state}"
+        # the number after the words, never before them: a title may open with a name (the owner)
+        yield f"  {drafts.proposal_text(p.item)} ({drafts.EVENT} {p.number}){state}"
 
 
 def prepared(
@@ -232,16 +233,15 @@ def event_line(lb: Logbook, proposal: Proposed) -> dict[str, Any]:
     return line
 
 
-def _attendees(lb: Logbook, proposal: Proposed) -> tuple[list[tuple[resolve.Ref, str]], set[str]]:
+def _attendees(lb: Logbook, proposal: Proposed) -> tuple[list[tuple[resolve.Ref, str]], list[str]]:
     """Each person of the proposal the record names at the event's tier (`TIER`), as (the ref the line
     names them by, their label): their email address, else their phone, else the first ref a tier-1
     resolution gives them. A person known only by lines above it is left out: a tier-1 line never
     carries a name or an address learned from a tier-2 or tier-3 one (the owner's rule). Beside them,
-    the names learned only above the tier, which the title must not carry (`_unnamed`). Refused when
+    the words of the names learned only above the tier, which the title must not carry (`_held_words`,
+    `_unnamed`). Refused when
     the record no longer resolves a person at all (merged into another since the dream, say)."""
-    people = proposal.item.get("people") or []
-    if not people:
-        return [], set()
+    people = proposal.item.get("people") or []  # none or several: the title is held to the tier either way
     with lb.index() as idx:
         retracted, resolutions = list(idx.retractions()), list(idx.resolutions())
     everyone = resolve.identities_from([*retracted, *resolutions])
@@ -264,16 +264,32 @@ def _attendees(lb: Logbook, proposal: Proposed) -> tuple[list[tuple[resolve.Ref,
         out.append((ref, named[entity]))
     shown = {who.label for who in at_tier.values() if who.label}
     hidden = {who.label for who in everyone.values() if who.label and who.label not in shown}
-    return out, hidden
+    return out, _held_words(hidden, shown)
 
 
-def _unnamed(title: str, hidden: set[str]) -> str:
-    """`title` with every name learned only above the event's tier, and its first name, as `SOMEONE`:
-    `Dinner with Kari Nordmann` is `Dinner with someone` when no tier-1 line names Kari."""
-    for name in sorted(hidden, key=len, reverse=True):
-        title = re.sub(rf"(?<!\w){re.escape(name)}(?!\w)", SOMEONE, title)
-    for name in sorted({n.split()[0] for n in hidden if " " in n}, key=len, reverse=True):
-        title = re.sub(rf"(?<!\w){re.escape(name)}(?!\w)", SOMEONE, title)
+def _held_words(hidden: Iterable[str], shown: Iterable[str]) -> list[str]:
+    """The words a title must not carry: each name learned only above the event's tier, whole, then
+    each of its words of more than three letters no name shown at the tier also has (a first name, a
+    surname), the longest first."""
+    kept = {w.casefold() for label in shown for w in label.split()}
+    found: set[str] = set()
+    for label in hidden:
+        if label.strip():
+            found.add(" ".join(label.split()))
+            found |= {w for w in label.split() if len(w) > 3 and w.casefold() not in kept}
+    return sorted(found, key=lambda w: (-len(w), w))
+
+
+def _unnamed(title: str, words: Sequence[str]) -> str:
+    """`title` with each of `words` (`_held_words`), whole words, a genitive's `s` with it, as
+    `SOMEONE` (`someone's` for a genitive): `Dinner with Kari Nordmann` is `Dinner with someone` and
+    `Karis bursdag` is `someone's bursdag` when no tier-1 line names Kari."""
+    for said in words:
+        title = re.sub(
+            rf"(?<!\w){re.escape(said)}(['\u2019]s|s)?(?!\w)",
+            lambda m: SOMEONE + ("'s" if m.group(1) else ""),
+            title,
+        )
     return title
 
 

@@ -2629,8 +2629,8 @@ class Site:
                 word, what = reflect.proposal_words(p)
                 out.append(
                     f'<li><label><input type="checkbox" name="accept" value="{p.number}">'
-                    f' <span><b>{p.number}</b> <span class="kind">{escape(word)}</span> line {p.sentence}'
-                    f"{DOT}{escape(what, quote=False)}</span></label></li>\n"
+                    f' <span><span class="kind">{escape(word)}</span> {escape(what, quote=False)}'
+                    f" <small>(proposal {p.number}, line {p.sentence})</small></span></label></li>\n"
                 )
             out.append("</ol>\n")
         else:
@@ -4759,7 +4759,10 @@ def _proposal_html(p: Mapping[str, Any], star: Toggle | None = None) -> str:
     it (`day sign --accept N`), then plain and marked with the event line it became, and that line's
     star (`star`); muted and marked `unsupported` when its evidence is no longer on the day. A
     proposal is the model's and takes no star until the owner has made it a line."""
-    head = f'<span class="kind">event {int(p["number"])}</span> {escape(drafts.proposal_text(p))}'
+    label = (
+        f"{p.get('kind') or drafts.EVENT} {int(p['number'])}"  # after the words: a text may open with a name
+    )
+    head = f'{escape(drafts.proposal_text(p))} <span class="kind">({escape(label)})</span>'
     confirmed = p.get("confirmed")
     if confirmed:
         line = escape(str(confirmed["line"]))
