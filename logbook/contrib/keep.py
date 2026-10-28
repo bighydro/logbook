@@ -154,12 +154,14 @@ class Item:
     photo: str | None = None
 
 
-def prepared(lb: Logbook, day: str, a: Asked) -> list[Item]:
+def prepared(lb: Logbook, day: str, a: Asked, tiers: Sequence[int] | None = None) -> list[Item]:
     """Every item `a` asks for, checked and made, in the order `write` writes them, before the first is
-    written; read under the writer lock the caller holds. `KeepError` names the first refusal."""
-    items = _sentences(lb, day, a) if a.keep or a.mend or a.revisit else []
+    written; read under the writer lock the caller holds. The draft kept from is read through the gate
+    `tiers` when given (the Day page's, so a page never keeps a sentence it could not show); the command
+    reads every tier. `KeepError` names the first refusal."""
+    items = _sentences(lb, day, a, tiers) if a.keep or a.mend or a.revisit else []
     if a.word is not None:
-        items.append(_word(lb, day, a.word))
+        items.append(_word(lb, day, a.word, tiers))
     if a.tasks:
         items += _tasks(lb, day, a.tasks)
     return items
@@ -213,11 +215,14 @@ def moment(lb: Logbook, day: str, today: str, at: str | None) -> str:
 # -- the draft's sentences, links and photo ----------------------------------------------------------------
 
 
-def _sentences(lb: Logbook, day: str, a: Asked) -> list[Item]:
+def _sentences(lb: Logbook, day: str, a: Asked, tiers: Sequence[int] | None = None) -> list[Item]:
     with lb.index() as idx:
-        draft, withheld = drafts.for_day(idx, day, allowed=drafts.allowed(lb.root))
+        draft, withheld = drafts.for_day(idx, day, tiers, allowed=drafts.allowed(lb.root))
     if draft is None:
         why = f"; the standing draft is {drafts.withheld_text(withheld)}" if withheld is not None else ""
+        if tiers is not None:
+            gate = ", ".join(str(t) for t in sorted({int(t) for t in tiers}))
+            why = f" at the tiers this page reads ({gate})"
         raise KeepError(f"{day} has no draft to keep from{why}; `logbook dream day {day}` dreams one")
     keepable: dict[int, tuple[str, dict[str, Any], int | None]] = {}  # number → (part, block, segment n)
     for i, segment in enumerate(draft["segments"]):
@@ -330,7 +335,7 @@ def _photo(lb: Logbook, segment: Mapping[str, Any], n: int, head: str, text: str
 # -- the word ----------------------------------------------------------------------------------------------
 
 
-def _word(lb: Logbook, day: str, text: str) -> Item:
+def _word(lb: Logbook, day: str, text: str, tiers: Sequence[int] | None = None) -> Item:
     word = text.strip()
     if not word:
         raise KeepError("--word is empty; give one word, or leave it out")
@@ -344,6 +349,11 @@ def _word(lb: Logbook, day: str, text: str) -> Item:
     standing = notes.standing(lines, WORD, retracted)
     if standing:
         first = standing[0]
+        if tiers is not None and int(first.get("tier") or 0) not in {int(t) for t in tiers}:
+            raise KeepError(  # a word above the page's gate: said to stand, never quoted
+                f"{day} has its word already, at a tier this page does not read, and a re-sign keeps it;"
+                f" `logbook day {day}` shows it"
+            )
         said = (first.get("payload") or {}).get("text")
         raise KeepError(
             f"{day} has its word already, “{said}” (#{first['seq']}), and a re-sign keeps it; to change it,"
@@ -384,7 +394,16 @@ def _tasks(lb: Logbook, day: str, answers: Mapping[str, Sequence[int]]) -> list[
         title = str(row.get("title") or plan.UNTITLED)
         if row.get("answered"):
             was = plan.ANSWERED[row["answered"]["outcome"]]
-            raise KeepError(f"task {n} is answered on {day} already ({was}); a re-sign keeps it")
+            raise KeepError(
+                f"{_task_named(title, n)} is answered on {day} already ({was}); a re-sign keeps it"
+            )
         extra = {"task": str(row["id"]), "line": row["line"], "outcome": outcome}
-        items.append(Item(f"the answer to task {n}, {plan.ANSWERED[outcome]},", title, plan.TASK, extra))
+        head = f"the answer to {_task_named(title, n)}, {plan.ANSWERED[outcome]},"
+        items.append(Item(head, title, plan.TASK, extra))
     return items
+
+
+def _task_named(title: str, n: int) -> str:
+    """A task in a sentence: its title first, then its number, “Ola: ferry tickets” (task 3), so a
+    number never sits beside a name a title opens with."""
+    return f"\u201c{title}\u201d (task {n})"

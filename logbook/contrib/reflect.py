@@ -63,7 +63,7 @@ from ..core.chain import Line
 from ..core.drafts import KIND as DRAFT_KIND
 from ..core.drafts import is_pencil
 from ..core.export import parse_day
-from ..core.store import RETRACTION, Logbook, retractions
+from ..core.store import RETRACTION, HeadMoved, Logbook, retractions
 from . import dream_events, keep, promises
 
 SOURCE = "reflect"  # the `source` of the lines `day reflect` writes
@@ -852,33 +852,53 @@ def close(
     events: Sequence[dream_events.Proposed] = (),
     first: int = 1,
     keeping: keep.Asked | None = None,
+    tiers: Sequence[int] | None = None,
 ) -> Closed:
     """The day closed: `day reflect --sign`, and the Sign of the Day page. Under one hold of the
     writer lock: the page read again (a disposition's line retracted since the proposals were read
     is refused, nothing written), the dream's proposed events accepted read again, numbered from
     `first`, and every one made into its line before the first is written (`dream_events.prepared`),
-    and what the owner keeps (`keeping`: Keep and sign, `keep.prepared`) checked and made, the reflection
-    written when it is new (`write`), the accepted delegations written as notes (`delegate`), the
-    accepted events as event lines (`dream_events.write`), what is kept (`keep.write`), then the
-    signature through `signing.sign` with what `signature` says, never a pencil line confirmed (`ink`),
-    at `at` or now. `say` hears what the command prints as it goes. HeadMoved and another writer are
-    the store's own errors; nothing is retried."""
+    and what the owner keeps (`keeping`: Keep and sign, `keep.prepared`, its draft read through the gate
+    `tiers` when the Day page reads through one) checked and made, the reflection
+    written when it is new (`write`), the accepted events as event lines (`dream_events.write`), what
+    is kept (`keep.write`), the accepted delegations written as notes (`delegate`), in RFC 0043 §5's
+    order, then the signature through `signing.sign` with what `signature` says, never a pencil line
+    confirmed (`ink`), at `at` or now. `say` hears what the command prints as it goes. HeadMoved and
+    another writer are the store's own errors; nothing is retried. A head moved while all of it was
+    read and checked (by a writer that did not take the lock) is HeadMoved before the first line, and
+    nothing is written."""
     zone = ZoneInfo(str(lb.meta["timezone"]))
     with lb.writer():
+        read = lb.meta
         lines, retracted = day_lines(lb, day)
         page = on_page(lines, retracted)
         gone = [p for p in accepted if p.kind == DISPOSITION and p.line not in page]
         if gone:
             raise ReflectError(f"#{gone[0].seq} is no longer on the page of {day}; nothing was written")
         prepared = dream_events.prepared(lb, day, events, first)
-        items = keep.prepared(lb, day, keeping) if keeping else []
+        items = keep.prepared(lb, day, keeping, tiers) if keeping else []
         with lb.index() as idx:
             earlier = signing.signature_of(idx, day, str(lb.meta["owner_id"]))
+        now = lb.meta
+        if now["head"] != read["head"]:
+            raise HeadMoved(
+                f"the record's head moved from seq {read['seq']} to seq {now['seq']} while the close of"
+                f" {day} was read and checked, so what it would write is not what was read; nothing was"
+                " written"
+            )
         note = r.note
         if note is None:
             note = write(lb, day, r, at, today)
             say(wrote_text(note, zone))
         joined = [str(note["id"])]
+        written: list[Line] = []
+        for e, made in prepared:
+            line = dream_events.write(lb, made)
+            joined.append(str(line["id"]))
+            written.append(line)
+            say(dream_events.wrote_text(e, line))
+        keeps = keep.write(lb, day, today, items, say, at)  # RFC 0043 §5: what is kept, then the delegations
+        joined += [str(line["id"]) for line in keeps]
         delegations: list[Line] = []
         for p in accepted:
             if p.kind == COMMITMENT:
@@ -888,14 +908,6 @@ def close(
                 joined.append(str(line["id"]))
                 delegations.append(line)
                 say(f"wrote delegation {p.number} to {p.counterpart} as #{line['seq']} {notes.SCHEMA}")
-        written: list[Line] = []
-        for e, made in prepared:
-            line = dream_events.write(lb, made)
-            joined.append(str(line["id"]))
-            written.append(line)
-            say(dream_events.wrote_text(e, line))
-        keeps = keep.write(lb, day, today, items, say, at)
-        joined += [str(line["id"]) for line in keeps]
         args = signature(earlier, page | set(joined), joined, accepted, pencil(day_lines(lb, day)[0]))
         if args.kept is not None:
             say(f"  {args.kept}")
