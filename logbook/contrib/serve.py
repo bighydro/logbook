@@ -391,13 +391,16 @@ STYLE = """
 :root{color-scheme:light dark;--fg:#1c1c1c;--bg:#fff;--mute:#6a6a6a;--line:#ddd;--accent:#2f5d7c}
 @media (prefers-color-scheme:dark){
 :root{--fg:#e8e8e8;--bg:#141414;--mute:#9b9b9b;--line:#333;--accent:#8fb8d6}}
+:root{--stay:#2e7d4f;--move:#3a62b0;--aboard:#1f6f88;--flight:#a0521f;--gap:#c43b3b}
+@media (prefers-color-scheme:dark){
+:root{--stay:#6cc08a;--move:#88a8ea;--aboard:#6fc2da;--flight:#e39a55;--gap:#ec7a7a}}
 body{margin:0;font:15px/1.45 system-ui,sans-serif;color:var(--fg);background:var(--bg)}
 header{border-bottom:1px solid var(--line);padding:.6rem 1rem}
 nav{display:flex;flex-wrap:wrap;row-gap:.3rem}
 nav a{margin-right:1rem;color:var(--accent);text-decoration:none}
 nav a:first-child{font-weight:600}
 main{max-width:66rem;margin:0 auto;padding:1rem}
-footer{color:var(--mute);font-size:.85rem;padding:1rem;border-top:1px solid var(--line)}
+footer{color:var(--mute);font-size:.875rem;padding:1rem;border-top:1px solid var(--line)}
 a{color:var(--accent)}
 h1{margin:.2rem 0 .6rem}
 h1 small{color:var(--mute);font-weight:400;font-size:.6em}
@@ -414,25 +417,29 @@ ol.timeline,ol.inside,ul.attached,ul.unplaced,ul.plain,ul.proposals{list-style:n
 li.proposal{padding:.15rem 0}
 .row{padding:.4rem 0;border-bottom:1px solid var(--line)}
 .clock{display:inline-block;min-width:7.5rem;font-variant-numeric:tabular-nums;color:var(--mute)}
-.kind{display:inline-block;min-width:5.5rem;font-size:.78rem;text-transform:uppercase;letter-spacing:.05em;color:var(--mute)}
-.row.stay>.kind{color:#2e8b57}
-.row.move>.kind{color:#3a6ec4}
-.row.flight>.kind{color:#c0652a}
-.row.aboard>.kind{color:#1f7f9a}
-.row.gap>.kind{color:#c43b3b}
+.kind{display:inline-block;min-width:5.5rem;font-size:.875rem;text-transform:uppercase;letter-spacing:.05em;
+color:var(--mute)}
+.row.stay>.kind{color:var(--stay)}
+.row.move>.kind{color:var(--move)}
+.row.flight>.kind{color:var(--flight)}
+.row.aboard>.kind{color:var(--aboard)}
+.row.gap>.kind{color:var(--gap)}
 ol.inside{margin:.3rem 0 0 2rem}
 ol.inside .row{border:0;padding:.15rem 0}
 details{margin:.3rem 0 0 7.5rem}
-summary{cursor:pointer;color:var(--accent)}
+summary{cursor:pointer;color:var(--accent);min-height:44px;box-sizing:border-box;padding:.6rem 0}
 ul.attached{margin:.3rem 0 0 1rem}
 details.synthesis,p.synthesis{margin:.2rem 0 .3rem 1.5rem;font-size:.92rem}
 details.synthesis p.segment{margin:.15rem 0}
 ul.attached li,ul.unplaced li{padding:.15rem 0}
 p.with{margin:.3rem 0 0 1rem;color:var(--mute)}
 form.window{display:flex;gap:.6rem;align-items:center;flex-wrap:wrap;margin:0 0 1rem}
+form.window input,form.window button{min-height:44px}
+td.day a{display:inline-block;min-height:44px;line-height:44px}
 input,button{font:inherit;padding:.2rem .4rem;background:var(--bg);color:var(--fg);
 border:1px solid var(--line);border-radius:3px}
 p.pager,p.mute,.mute{color:var(--mute)}
+p.pager a{display:inline-block;min-height:44px;line-height:44px}
 a.name{font-size:.8rem;margin-left:.5rem}
 form.star{display:inline;margin:0 0 0 .3rem}
 form.star button{border:0;padding:0 .15rem;background:none;color:var(--mute);cursor:pointer;
@@ -459,8 +466,9 @@ ul.evidence{list-style:none;padding:0;margin:0;color:var(--mute);font-size:.9rem
 li.cluster details{margin:0;font-size:.9rem}
 form.name{display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;margin:.3rem 0 0}
 form.name input[type=text]{min-width:16rem;flex:1}
-a.skip{display:inline-block;padding:.2rem .4rem;border:1px solid var(--line);border-radius:3px;
-text-decoration:none}
+form.name input[type=text],form.name button{min-height:44px}
+a.skip{display:inline-flex;align-items:center;min-height:44px;box-sizing:border-box;padding:.2rem .6rem;
+border:1px solid var(--line);border-radius:3px;text-decoration:none}
 @media (max-width:40rem){li.cluster{grid-template-columns:1fr}li.cluster svg{grid-row:auto}}
 section.close form{margin:.6rem 0 1rem}
 section.close textarea{display:block;width:100%;box-sizing:border-box;min-height:7rem;font:inherit;
@@ -487,10 +495,10 @@ ol.shelf p{margin:.1rem 0}
 p.head{display:flex;flex-wrap:wrap;gap:.1rem .8rem;align-items:baseline}
 p.head .mute{font-size:.9rem;font-variant-numeric:tabular-nums}
 details.evidence,details.draft{margin:.25rem 0 0}
-details.evidence>summary{color:var(--mute);font-size:.85rem}
-details.evidence ul.evidence{font-size:.85rem;margin:.2rem 0 0 .8rem}
+details.evidence>summary{color:var(--mute);font-size:.875rem}
+details.evidence ul.evidence{font-size:.875rem;margin:.2rem 0 0 .8rem}
 details.evidence details{margin:0 0 0 .8rem}
-span.id{font:.78rem ui-monospace,monospace;color:var(--mute)}
+span.id{font:.875rem ui-monospace,monospace;color:var(--mute)}
 details.draft>summary{font-size:.9rem}
 div.draft p.segment{margin:.3rem 0}
 p.segment.unsupported{border-left:2px solid var(--line);padding-left:.5rem}
@@ -505,10 +513,10 @@ li.proposal form{display:flex;flex-wrap:wrap;gap:.5rem;margin:.3rem 0 0}
 MANIFEST_STYLE = """
 .badge{display:inline-block;font-size:.75rem;text-transform:uppercase;letter-spacing:.05em;padding:0 .35rem;
 border:1px solid var(--line);border-radius:3px}
-.badge.passed{color:#c0652a}.badge.hold,.badge.add,.badge.sell{color:#2e8b57}
+.badge.passed{color:var(--flight)}.badge.hold,.badge.add,.badge.sell{color:var(--stay)}
 .badge.exited,.badge.let-go{color:var(--mute)}
-.stale-flag{color:#c43b3b}
-ol.shelf>li.stale{border-left:3px solid #c43b3b;padding-left:.5rem}
+.stale-flag{color:var(--gap)}
+ol.shelf>li.stale{border-left:3px solid var(--gap);padding-left:.5rem}
 p.reason{margin:.2rem 0 0;font-style:italic}
 form.act{display:flex;flex-wrap:wrap;gap:.4rem;align-items:center;margin:.4rem 0}
 form.act input[type=text]{flex:1 1 10rem;min-width:0}
@@ -525,7 +533,9 @@ li.cluster svg{max-width:100%}
 IDEAS_STYLE = MANIFEST_STYLE + "p.refs{overflow-wrap:anywhere}\n"  # the Ideas pages: a Notion id is long
 DAY_STYLE = """
 p.tiers{color:var(--mute);font-size:.9rem;margin:0 0 1rem}
-a.raw{font-size:.75rem;margin-left:.35rem;color:var(--mute);text-decoration:none;font-variant-numeric:tabular-nums}
+a.raw{display:inline-block;min-width:44px;min-height:44px;line-height:44px;text-align:center;font-size:.875rem;
+margin-left:.35rem;vertical-align:middle;color:var(--mute);text-decoration:none;
+font-variant-numeric:tabular-nums}
 ul.strip{list-style:none;display:flex;flex-wrap:wrap;gap:.4rem;padding:0;margin:.35rem 0 0 7.5rem}
 ul.strip li{display:flex;flex-direction:column;align-items:flex-start;max-width:8rem;font-size:.85rem}
 ul.strip img,ul.review img{display:block;max-width:100%;width:8rem;height:auto;border-radius:3px;

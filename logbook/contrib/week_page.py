@@ -102,6 +102,7 @@ WEEK_STYLE = """
 ol.week{list-style:none;padding:0;margin:0}
 ol.week>li{padding:4px 0;border-bottom:1px solid var(--line)}ol.week>li:last-child{border-bottom:0}
 ol.week p.day{margin:0;font-size:13.5px}
+ol.week p.day a{display:inline-flex;align-items:center;min-height:44px}
 p.line,li.line{overflow-wrap:anywhere}
 p.ids{margin:0;font-size:11.5px;color:var(--mute);overflow-wrap:anywhere}div.paper p.ids{line-height:28px}
 code.cmd{font-family:var(--mono);font-size:12.5px;overflow-wrap:anywhere;white-space:normal}

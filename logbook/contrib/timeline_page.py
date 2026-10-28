@@ -63,9 +63,10 @@ STYLE = (
     + """
 :root{--home:#2e8b57;--family:#b07d2b;--aboard:#1f7f9a;--away:#c0652a;--transit:#9b9b9b}
 p.zooms{display:flex;flex-wrap:wrap;gap:.2rem .4rem;margin:.2rem 0 .6rem}
-p.zooms a,p.zooms b,p.pager a{display:inline-block;min-height:2.75rem;line-height:2.75rem;padding:0 .4rem}
+p.zooms a,p.zooms b,p.pager a{display:inline-block;min-height:2.75rem;min-width:2.75rem;box-sizing:border-box;
+line-height:2.75rem;padding:0 .4rem;text-align:center}
 p.zooms b{color:var(--fg)}
-a.tap{display:inline-block;min-height:2.75rem;line-height:2.75rem}
+a.tap{display:inline-block;min-height:2.75rem;min-width:2.75rem;line-height:2.75rem;text-align:center}
 p.pager{display:flex;flex-wrap:wrap;gap:.2rem .8rem;margin:0 0 .4rem}
 p.pager span{display:inline-block;line-height:2.75rem;padding:0 .4rem;color:var(--mute)}
 div.timeline{display:flex;flex-direction:column;gap:1rem}

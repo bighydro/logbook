@@ -178,7 +178,7 @@ STYLE = f"""
 body{{font-size:15px;line-height:1.5;font-family:var(--sans);background:var(--bg);color:var(--fg)}}
 main a{{color:var(--accent)}}
 section.part{{margin:0}}
-section.part>h2,p.eyebrow,div.paper p.eyebrow{{font-weight:600;font-size:11px;line-height:1.4;
+section.part>h2,p.eyebrow,div.paper p.eyebrow{{font-weight:600;font-size:13px;line-height:1.4;
 font-family:var(--sans);letter-spacing:.13em;
 text-transform:uppercase;color:var(--mute);margin:26px 0 8px}}
 section.part>h2 small,p.eyebrow small{{text-transform:none;letter-spacing:0;font-weight:400;float:right}}
@@ -201,7 +201,7 @@ ul.rows li:last-child{{border-bottom:0}}
 ul.rows div.t{{flex:0 0 3.2rem;color:var(--mute);font-size:12.5px;padding-top:1px}}
 ul.rows span.sub{{display:block;color:var(--mute);font-size:12.5px}}
 svg.ribbon{{display:block;width:100%;max-width:100%;height:auto;margin:4px 0 2px}}
-svg.ribbon text{{font-size:10px;fill:var(--mute)}}
+svg.ribbon text{{font-size:12px;fill:var(--mute)}}
 svg.ribbon text.lane{{letter-spacing:.13em}}
 svg.ribbon line.hour{{stroke:var(--line)}}
 svg.ribbon rect.plan.filled{{fill:var(--plan)}}
@@ -218,7 +218,7 @@ p.nothing,p.quiet{{color:var(--mute);font-size:13.5px;margin:14px 0}}
 section.record details.fold{{margin:0;padding:0;border-top:1px solid var(--line)}}
 section.record{{border-bottom:1px solid var(--line)}}
 details.fold>summary{{list-style:none;cursor:pointer;display:flex;flex-wrap:wrap;align-items:center;
-column-gap:.5rem;min-height:44px}}
+column-gap:.5rem;min-height:44px;padding:0}}
 details.fold>summary::marker{{content:""}}
 details.fold>summary::before{{content:"\\25B8";font-size:11px;color:var(--mute);display:inline-block;
 transition:transform .15s}}

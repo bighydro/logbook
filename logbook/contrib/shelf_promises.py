@@ -51,7 +51,7 @@ NOTE_WHO = "(note)"  # a promise in a note names nobody it is to
 SHELF_STYLE = """
 .badge{display:inline-block;font-size:.75rem;text-transform:uppercase;letter-spacing:.05em;padding:0 .35rem;
 border:1px solid var(--line);border-radius:3px;color:var(--mute)}
-.badge.open{color:#c0652a}.badge.kept{color:#2e8b57}
+.badge.open{color:var(--flight)}.badge.kept{color:var(--stay)}
 p.facts{margin:.1rem 0;color:var(--mute);overflow-wrap:anywhere}
 q.said{overflow-wrap:anywhere}
 p.people{display:flex;flex-wrap:wrap;gap:.2rem .8rem;overflow-wrap:anywhere}
