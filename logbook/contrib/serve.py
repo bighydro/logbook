@@ -46,7 +46,12 @@ Wispr Flow draft offered prefilled, a recording heard through `day reflect --aud
 command wired one in, `Voice`), and the proposals the rules read in it are checkboxes whose form
 posts to `/day/YYYY-MM-DD/sign`, which signs the day through `reflect.close`, the code `day reflect
 --sign` runs: `signing.sign` with the lines confirmed, the accepted dispositions and the reflection,
-a signed day signed again superseding its signature. The Day also carries the owner's two acts on
+a signed day signed again superseding its signature. In the evening and when signed again that form
+is Keep and sign (RFC 0043 §5): the pencil's sentences kept, a decision's revisit day, the day in a
+word and the day's tasks answered, parsed by `keep.asked` and written through `keep.prepared` and
+`keep.write` inside `reflect.close`, the lines `day sign --keep` writes; and today's evening offers
+*Dream the day so far*, `dream day TODAY --evening`, posted to the reflect route under the owner's
+`dream` entry alone (`Site._dream`). The Day also carries the owner's two acts on
 lines already in the record: a star on every row that is a line, posting to `/star` (`Site._star`:
 `stars.star` and `stars.unstar`, the lines `logbook star` and `unstar` write; the photo review at the
 Day's foot posts there too, its Star a star and its Not a keeper `day_photos.pass_over`, the review's
@@ -116,6 +121,7 @@ from __future__ import annotations
 import base64
 import contextlib
 import contextvars
+import dataclasses
 import email
 import faulthandler
 import functools
@@ -191,6 +197,7 @@ from . import (
     gaps,
     ideas,
     journeys,
+    keep,
     library_build,
     orgs,
     person_page,
@@ -208,6 +215,7 @@ from . import (
     week_paper,
     world,
 )
+from . import plan as plan_reader
 
 if TYPE_CHECKING:  # the review reads the adapters' phone rules: loaded by the People page, never by `--help`
     from . import people_review
@@ -262,6 +270,9 @@ IDEAS_PATHS = (IDEAS_REVIEW, IDEAS_STATUS)  # likewise: a 409 when another comma
 WRITE_PATHS = (REVIEW_PATH, NAME_PATH, PEOPLE_REVIEW_PATH, *MANIFEST_PATHS, *IDEAS_PATHS)
 DAY_ACT = re.compile(r"^/day/(\d{4}-\d{2}-\d{2})/(reflect|sign)$")  # the Day's two acts: POST only, likewise
 REFLECT, HEAR, SIGN = "reflect", "hear", "sign"  # the acts a Day's forms name
+DREAM = "dream"  # the evening's *Dream the day so far*, posted to the Day's reflect route (`Site._dream`)
+REVISIT, TASK = "revisit-", "task-"  # Keep and sign's fields: a decision's day by number, a task by its id
+PENCIL = "pencil"  # the anchor of the evening's pencil, where Dream the day so far sends the owner back
 STAR_PATH = "/star"  # the Day page's star on a row (RFC 0041), through `stars.star` and `stars.unstar`
 WITH_PATH = "/with"  # the Day page's "with…" field, through `presence.state`
 LINE_ACTS = (STAR_PATH, WITH_PATH)  # the Day's acts on its lines: POST only, likewise; a 409 when busy
@@ -299,6 +310,7 @@ TYPED = {
     "reason": "the reason",
     "portfolio": "the portfolio",
     "intention": "next week's intention",
+    "word": "the day in a word",
 }
 AUDIO_BYTES = 64 * 1024 * 1024  # the most a recording may carry: half an hour of speech, even as WAV
 STATE_FILES = (
@@ -484,6 +496,34 @@ ol.proposals li{padding:.35rem 0;border-bottom:1px solid var(--line)}
 ol.proposals label{display:flex;gap:.6rem;align-items:baseline;cursor:pointer}
 ol.proposals input{flex:none;width:1.1rem;height:1.1rem}
 ul.signed{color:var(--mute);margin:.4rem 0}
+section.close button,section.close input[type=text],section.close input[type=date]{min-height:44px;
+box-sizing:border-box}
+section.close details>summary{min-height:44px;display:flex;align-items:center}
+section.close code{overflow-wrap:anywhere}
+ol.proposals label{min-height:44px;align-items:flex-start;padding:.3rem 0;box-sizing:border-box}
+fieldset.keep{border:0;padding:0;margin:.9rem 0;min-width:0}
+fieldset.keep legend{padding:0;font-weight:600;font-size:11px;letter-spacing:.13em;text-transform:uppercase;
+color:var(--mute)}
+fieldset.keep input[type=text]{width:100%;max-width:20rem}
+ol.keep{list-style:none;padding:0;margin:.3rem 0}
+ol.keep>li{padding:.3rem 0;border-bottom:1px solid var(--line)}
+ol.keep label.pick{display:flex;gap:.6rem;align-items:flex-start;min-height:44px;cursor:pointer;
+padding:.3rem 0;box-sizing:border-box}
+ol.keep input[type=checkbox],ol.keep input[type=radio],ol.proposals input{flex:none;width:1.5rem;
+height:1.5rem;margin:0}
+ol.keep span.head{display:block;font-size:11px;letter-spacing:.08em;text-transform:uppercase;
+color:var(--mute)}
+ol.keep li.pencil span.words{font-family:var(--serif);color:var(--graphite);background:var(--paper);
+border-radius:3px;padding:0 .3rem}
+ol.keep li.kept span.words,ol.keep li.task span.words{font-family:var(--serif);color:var(--ink)}
+ol.keep label.revisit{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;min-height:44px;
+margin-left:1.85rem;color:var(--mute)}
+ol.keep span.answers{display:flex;flex-wrap:wrap;gap:.4rem;margin:.3rem 0 0}
+ol.keep span.answers label{display:inline-flex;align-items:center;gap:.4rem;min-height:44px;
+padding:0 .8rem;border:1px solid var(--line);border-radius:999px;cursor:pointer;box-sizing:border-box}
+ol.keep span.answers input{margin:0}
+form.dream{display:flex;flex-wrap:wrap;align-items:center;gap:.6rem .8rem;margin:.6rem 0 1rem}
+form.dream p{margin:0;flex:1 1 16rem}
 code.sha{overflow-wrap:anywhere}
 footer .footnote{display:inline-block;margin-top:.3rem}
 @media (max-width:40rem){details{margin-left:1rem}.clock{min-width:0;margin-right:.5rem}
@@ -630,7 +670,10 @@ class Closing(NamedTuple):
     """What the Day page's Reflect and Sign read of a day, at the head: its lines and those retracted,
     the reflection standing (as `day reflect` reads it with no input) and the proposals the rules
     read in it, the Wispr Flow draft not yet taken, the standing signature and what signing again
-    would keep from it, and `digest`, the proposals as shown, which the Sign form carries back."""
+    would keep from it, and `digest`, the proposals as shown, which the Sign form carries back. For
+    Keep and sign: `pencil`, the standing draft as `--keep` reads it (`drafts.for_day` under the `dream`
+    entry and through the page's tier gate, its sentences and links numbered and marked kept), and
+    `word`, the day in a word standing."""
 
     lines: list[Line]
     retracted: set[str]
@@ -640,6 +683,8 @@ class Closing(NamedTuple):
     earlier: Line | None
     kept: str | None
     digest: str
+    pencil: Mapping[str, Any] | None = None
+    word: Line | None = None
 
 
 class Stale(Exception):
@@ -1191,9 +1236,13 @@ class Site:
         --audio`, and written the same way. The same words on the day already are never written
         twice. Done, a 303 to the Day at Reflect and sign, where its proposals are now boxes."""
         act = form.get("act", "")
+        if act == DREAM:
+            return self._dream(day)
         if act not in (REFLECT, HEAR):
             return self._error(
-                400, "the form names an act: reflect, with your words, or hear, with a recording"
+                400,
+                "the form names an act: reflect, with your words, hear, with a recording, or dream, the"
+                " day so far",
             )
         try:
             day, today = self._closing_day(day)
@@ -1288,18 +1337,25 @@ class Site:
         return reflect.dictated(found[0], text)
 
     def _sign(self, day: str, form: Mapping[str, str]) -> Response:
-        """Sign: the day signed through `reflect.close`, the code `day reflect --sign` runs, with the
-        reflection standing on the day and the proposals ticked (`accept`, N,N as `--accept` takes
-        them; none ticked accepts none): the accepted delegations written as notes, then
-        `signing.sign` with the lines confirmed, the accepted dispositions and the reflection, now.
-        A day signed already is signed again, the new signature superseding it and keeping what it
-        said. Refused (409, nothing written) when the reflection or its proposals are not those the
-        page showed (`reflection`, `proposals`), and when there is no reflection to sign with."""
+        """Keep and sign (RFC 0043 §5): the day signed through `reflect.close`, the code `day reflect
+        --sign` runs, with the reflection standing on the day, the proposals ticked (`accept`, N,N as
+        `--accept` takes them; none ticked accepts none) and what the owner keeps (`_keeping`: the
+        pencil's sentences and links `keep`, N,N as `--keep` takes them, a kept decision's day
+        `revisit-N`, the day in a word `word`, a task's answer `task-ID`, by the task's Notion id, never
+        the number the page does not show), all under one hold of the
+        writer lock: every item checked and made before the first line (`keep.prepared`), then the
+        delegations as notes, the kept lines (`keep.write`), and `signing.sign` with the lines
+        confirmed, the accepted dispositions and the reflection, now. A day signed already is signed
+        again, the new signature superseding it and keeping what it said. Refused (409, nothing
+        written) when the reflection, its proposals, the pencil kept from (`draft`) or the tasks
+        answered (`tasks`) are not those the page showed, and when there is no reflection to sign
+        with; what Keep and sign refuses is a 400 in its one sentence (`keep.KeepError`)."""
         if form.get("act") != SIGN:
             return self._error(400, "the form names the act: sign")
         try:
             day, today = self._closing_day(day)
             wanted = reflect.numbers(form.get("accept") or reflect.NONE)
+            asking, answering = _keeping(form)
         except ValueError as e:
             return self._error(400, str(e))
         with self._write_lock:
@@ -1319,13 +1375,70 @@ class Site:
                             f"the reflection or its proposals changed since this page was read; /day/{day}"
                             " is the day as it stands, and nothing was written"
                         )
+                    pencil = "" if found.pencil is None else str(found.pencil["line"])
+                    if (asking.keep or asking.revisit) and form.get("draft", "") != pencil:
+                        raise Stale(
+                            f"the pencil changed since this page was read (dreamed again, or no longer"
+                            f" shown); /day/{day} is the day as it stands, and nothing was written"
+                        )
+                    if answering:
+                        plan_now = self._plan_now(day)
+                        if form.get("tasks", "") != _tasks_digest(plan_now):
+                            raise Stale(
+                                f"today's tasks changed since this page was read; /day/{day} is the day as"
+                                " it stands, and nothing was written"
+                            )
+                        asking = dataclasses.replace(asking, tasks=_numbered(day, plan_now, answering))
                     accepted = reflect.chosen(found.proposals, wanted)
-                    reflect.close(self.lb, day, today, r, accepted)
+                    reflect.close(self.lb, day, today, r, accepted, keeping=asking, tiers=self.tiers)
             except (HeadMoved, Stale) as e:
                 return self._error(409, str(e))
             except ValueError as e:  # ReflectError, SignError, NoteError
                 return self._error(400, str(e))
         return Response(303, b"", location=f"/day/{day}#{CLOSE}")
+
+    def _plan_now(self, day: str) -> plan_reader.Plan | None:
+        """Today's tasks as `keep` will read them when it answers one, read now under the lock: None
+        for a mapping that cannot be read (`keep` says why in its own sentence)."""
+        try:
+            return plan_reader.read(self.lb, day)
+        except plan_reader.PlanError:
+            return None
+
+    def _dream(self, day: str) -> Response:
+        """*Dream the day so far* (RFC 0043 §6 rule 1): `dream day TODAY --evening` through
+        `dream.dream`, the function the command runs, under the record's writer lock, the draft it
+        writes shown in pencil above the form. Today only, and only under the owner's `dream` entry:
+        no entry, an expired one, an endpoint not set, a day with nothing to dream, a 400 in the
+        dream's own sentence, and nothing sent; the model's answer failing, a 502, nothing written.
+        Done, a 303 to the Day at its pencil."""
+        try:
+            day, today = self._closing_day(day)
+        except ValueError as e:
+            return self._error(400, str(e))
+        if day != today:
+            return self._error(
+                400,
+                f"Dream the day so far is for today, {today}; `logbook dream day {day}` dreams {day} whole",
+            )
+        try:
+            above = self._dream_above(policy.dream_today(self.lb.root))
+        except policy.PolicyError:  # the dream says why in its own sentence
+            above = None
+        if above is not None:
+            return self._error(400, above)
+        with self._write_lock:
+            try:
+                with self.lb.writer(command="logbook serve", wait=False):
+                    self.current()
+                    dream.dream(self.lb, day, airports=self.airports, evening=True)
+            except HeadMoved as e:
+                return self._error(409, str(e))
+            except dream.AnswerError as e:
+                return self._error(502, str(e))
+            except (dream.DreamError, stays.SettingsError, ValueError) as e:
+                return self._error(400, str(e))
+        return Response(303, b"", location=f"/day/{day}#{PENCIL}")
 
     def _closing_day(self, day: str) -> tuple[str, str]:
         """The day and today as the record defines them (its zone and `day_start`); `ReflectError` for
@@ -1347,6 +1460,8 @@ class Site:
             proposals = reflect.propose(r.text, day, reflect.commitments(self.lb, day, {mine}))
         with self.lb.index() as idx:
             earlier = signing.signature_of(idx, day, str(self.lb.meta["owner_id"]))
+            # through the page's gate, as the rest of the Day reads it: a draft above it is not there
+            pencil, _withheld = drafts.for_day(idx, day, self.tiers, allowed=drafts.allowed(self.lb.root))
         kept = None
         if earlier is not None and r is not None and r.note is not None:
             page = reflect.on_page(lines, retracted)
@@ -1354,7 +1469,10 @@ class Site:
         shown = json.dumps([p.to_json() for p in proposals], sort_keys=True, ensure_ascii=False)
         digest = hashlib.sha256(shown.encode("utf-8")).hexdigest()[:16]
         draft = pending[-1] if pending else None
-        return Closing(lines, retracted, r, proposals, draft, earlier, kept, digest)
+        # through the page's gate, as every line on it: a word above it is absent, never quoted
+        words = reading.crossing(notes.standing(lines, keep.WORD, retracted), self.tiers)
+        word = words[0] if words else None
+        return Closing(lines, retracted, r, proposals, draft, earlier, kept, digest, pencil, word)
 
     def _star(self, form: Mapping[str, str]) -> Response:
         """The Day page's star: `act` `star` or `unstar` on the `line` of a row of `day`, through
@@ -1585,7 +1703,7 @@ class Site:
                     self._day_kept.pop(next(iter(self._day_kept)))
         return found
 
-    def _day_later(self, key: tuple[str, ...], build: Callable[[], T]) -> T | None:
+    def _day_later(self, key: tuple[str, ...], build: Callable[[], T], stand_in: bool = True) -> T | None:
         """A reading the Day shows a part of that reads more than the day (the drift for one reconnect,
         the replies owed, the decisions to revisit), kept by `key`: the part, the day, and for one that a
         sync changes the head. Seconds to minutes on a record of millions of lines. With `read_later`
@@ -1593,7 +1711,8 @@ class Site:
         (`_day_later_start`), so no page waits for it and none is slowed while it renders: until it has
         arrived, the latest reading of the same part and day stands in (None when there is none), and
         the Day's tag names what has arrived, so the page is read again once it has. Without it (a test,
-        a script) it is read on the request. `DAY_LATER_KEPT` at most, the oldest going first."""
+        a script) it is read on the request. `DAY_LATER_KEPT` at most, the oldest going first. Without
+        `stand_in`, nothing stands in: a form that answers what it shows waits for its own reading."""
         with self._kept_lock:
             if key in self._day_later_kept and self._day_later_kept[key] is not None:
                 kept: T = self._day_later_kept[key]
@@ -1603,6 +1722,8 @@ class Site:
                     self._day_later_kept[key] = None
                     self._day_later_queue.append((key, build))
                     self._day_later_trim()
+                if not stand_in:
+                    return None
                 earlier: T | None = next(
                     (
                         v
@@ -2102,13 +2223,7 @@ class Site:
         empty_ahead: list[str] = []  # the morning's parts with nothing, named in Nothing from
         # the morning's plan from the task tool, tier 1 alone as `show plan` reads it: every `sync notion`
         # line, seconds on a record of millions, so beside the page on `logbook serve` (`_day_later`)
-        plan = (
-            self._day_later(
-                ("plan", day, str(self.current().get("head"))), lambda: day_rhythm.plan_of(self.lb, day)
-            )
-            if not self.static and morning and (self.tiers is None or 1 in self.tiers)
-            else None
-        )
+        plan = self._day_plan(day) if not self.static and morning else None
         ticks = day_rhythm.task_ticks(plan, tz)
         ribbon = day_rhythm.ribbon(data, marks.lines, span, now if live else None, ticks)
         pieces["the-day"] = ribbon
@@ -2207,8 +2322,8 @@ class Site:
             said = f"{confirmed} of {len(proposed)} proposals confirmed" if proposed else "the model's draft"
             folds["pencil"] = day_rhythm.fold("Pencil", said, pencil, expanded)
             pieces["pencil"] = folds["pencil"] if shown == day_rhythm.SIGNED else ""
-        elif pencil:
-            pieces["pencil"] = pencil
+        elif pencil:  # open, where Dream the day so far sends the owner back
+            pieces["pencil"] = f'<span id="{PENCIL}"></span>{pencil}'
         pieces["photos"] = self._photos_html(day, marks, expanded)
         if not pieces["photos"]:
             empty.append("photos")
@@ -2225,7 +2340,7 @@ class Site:
         pieces["quiet"] = f'<p class="quiet">No pencil yet.{asked_at} {reflect_now}</p>\n' if quiet else ""
         script = None
         if not self.static:
-            closing, records = self._close_html(day, day_rhythm.CLOSE_HEADING[shown])
+            closing, records = self._close_html(day, day_rhythm.CLOSE_HEADING[shown], shown)
             pieces["add" if shown in (day_rhythm.MORNING, day_rhythm.LIVE) else "close"] = closing
             script = DAY_SCRIPT if records else None
         pieces["foot"] = f'<p class="foot">{escape(day_rhythm.FOOTER)}</p>\n'
@@ -2543,22 +2658,29 @@ class Site:
             out.append(self._photo_review_html(day, marks))
         return "".join(out)
 
-    def _close_html(self, day: str, heading: str = "Reflect and sign") -> tuple[str, bool]:
+    def _close_html(
+        self, day: str, heading: str = "Reflect and sign", shape: str | None = None
+    ) -> tuple[str, bool]:
         """Reflect and sign, at the foot of the Day: the reflection's field (the Wispr Flow draft
         prefilled when one is waiting, else the reflection standing), the recording form when the
         server can hear one, then the standing signature as `day sign` prints it, and the Sign form:
-        the proposals as boxes, none ticked. Nothing here is written until a button is clicked. With
-        it, whether the page carries the recording form (and so its script)."""
+        the proposals as boxes, none ticked. In the evening and signed shapes (`shape`) the form is
+        Keep and sign (`_keep_html`), and today's evening opens with *Dream the day so far*, or the
+        sentence that says how to allow it (`_dream_html`). Nothing here is written until a button is
+        clicked. With it, whether the page carries the recording form (and so its script)."""
         tz = self.tz
         out = [f'<section class="close">\n<h2 id="{CLOSE}">{escape(heading)}</h2>\n']
         try:
-            self._closing_day(day)
+            day, today = self._closing_day(day)
         except reflect.ReflectError:
             out.append(
                 f'<p class="mute">{day} is ahead of today in {escape(str(tz))}; a day is reflected on and'
                 " signed on it or after it</p>\n</section>\n"
             )
             return "".join(out), False
+        keeping = shape in (day_rhythm.EVENING, day_rhythm.SIGNED)
+        if shape == day_rhythm.EVENING and day == today:
+            out.append(self._dream_html(day))
         found = self._closing(day)
         r = found.reflection
         if found.earlier is not None:  # the signature first: what Sign leaves the owner looking at
@@ -2615,14 +2737,15 @@ class Site:
                 f" {day}</code> signs it without one.</p>\n</section>\n"
             )
             return "".join(out), records
-        out.append(self._sign_html(day, found, r.note))
+        out.append(self._sign_html(day, found, r.note, keeping))
         out.append("</section>\n")
         return "".join(out), records
 
-    def _sign_html(self, day: str, found: Closing, note: Line) -> str:
-        """The Sign form: the proposals, a box each as `day reflect` numbers them (rules alone, none
-        ticked: a guess until the owner accepts it), the reflection a sentence a line folded beside
-        them, what signing confirms or keeps, and the button."""
+    def _sign_html(self, day: str, found: Closing, note: Line, keeping: bool = False) -> str:
+        """The Sign form: with `keeping`, Keep and sign's controls first (`_keep_html`), then the
+        proposals, a box each as `day reflect` numbers them (rules alone, none ticked: a guess until
+        the owner accepts it), the reflection a sentence a line folded beside them, what signing
+        confirms or keeps, and the button."""
         r = found.reflection
         assert r is not None
         out = [
@@ -2630,6 +2753,9 @@ class Site:
             f'<input type="hidden" name="reflection" value="{escape(str(note["id"]))}">\n'
             f'<input type="hidden" name="proposals" value="{escape(found.digest)}">\n'
         ]
+        if keeping:  # the delegations follow the kept lines, under their own head (RFC 0043 §4.14)
+            out.append(self._keep_html(day, found))
+            out.append('<fieldset class="keep">\n<legend>Asked of you</legend>\n')
         if found.proposals:
             out.append(
                 '<p class="mute">proposals, by rules alone; each is a guess until you accept it:</p>\n'
@@ -2648,6 +2774,8 @@ class Site:
                 '<p class="mute">no proposals: the rules read no commitment, delegation or disposition in'
                 " it</p>\n"
             )
+        if keeping:
+            out.append("</fieldset>\n")
         sentences = "".join(f"<li>{escape(text)}</li>" for text in reflect.sentences(r.text))
         out.append(
             f'<details><summary>the reflection, a sentence a line</summary><ol class="sentences">{sentences}'
@@ -2667,8 +2795,172 @@ class Site:
             )
             button = "Sign again"
         out.append(f'<p class="mute">{escape(said)}</p>\n')
+        if keeping:
+            out.append(
+                '<details class="cli"><summary>the same at the command line</summary><p class="mute">'
+                "<code>logbook day reflect"
+                f" {day} --sign --keep N,N --revisit N=YYYY-MM-DD --word WORD --done T,T --tomorrow T,T"
+                " --let-go T,T --accept N,N</code>; or <code>logbook day sign"
+                f" {day}</code> with the same flags but <code>--accept</code>.</p></details>\n"
+            )
         out.append(f'<button name="act" value="{SIGN}">{button}</button>\n</form>\n')
         return "".join(out)
+
+    def _keep_html(self, day: str, found: Closing) -> str:
+        """Keep and sign's controls (RFC 0043 §5), in the order they are written: the pencil's
+        keepable sentences and links, a box each numbered as `--keep` takes them (`found.pencil`, read
+        as `keep` reads it), the sentence in pencil until kept and in ink once it is, a kept decision's
+        revisit day beside its box; the day in a word, one field, or the word standing; then today's
+        tasks (`_tasks_html`). The hidden `draft` says which pencil the page showed."""
+        pencil = found.pencil
+        shown = "" if pencil is None else str(pencil["line"])
+        out = [f'<input type="hidden" name="draft" value="{escape(shown)}">\n']
+        items: list[str] = []
+        if pencil is not None:
+            keepable: list[tuple[int, str, Mapping[str, Any]]] = [
+                (int(segment["keep"]), str(segment["part"]), segment)
+                for segment in pencil["segments"]
+                if segment.get("keep") is not None
+            ]
+            keepable += [(int(link["keep"]), drafts.LINK, link) for link in pencil.get("links") or []]
+            for n, part, block in sorted(keepable, key=lambda item: item[0]):
+                if block.get("kept") or block.get("supported"):
+                    items.append(_keep_item(day, n, part, block))
+        out.append('<fieldset class="keep">\n<legend>Keep from the pencil</legend>\n')
+        if items:
+            out.append('<ol class="keep">\n' + "".join(items) + "</ol>\n")
+        else:
+            nothing = "nothing in it to keep" if pencil is not None else "no pencil on the day to keep from"
+            out.append(f'<p class="mute">{nothing}</p>\n')
+        out.append("</fieldset>\n")
+        out.append('<fieldset class="keep">\n<legend>The day in a word</legend>\n')
+        if found.word is not None:
+            said = escape(str((found.word.get("payload") or {}).get("text") or ""))
+            out.append(
+                f'<p><span class="ink">“{said}”</span> <small class="mute">kept as'
+                f" #{found.word['seq']}; a re-sign keeps it</small></p>\n"
+            )
+        else:
+            out.append(
+                '<input type="text" name="word" maxlength="60" autocomplete="off" spellcheck="true"'
+                ' aria-label="the day in a word" placeholder="one word, or leave it empty">\n'
+            )
+        out.append("</fieldset>\n")
+        out.append(self._tasks_html(day))
+        return "".join(out)
+
+    def _day_plan(self, day: str, stand_in: bool = True) -> object:
+        """The task tool's plan for `day` as `show plan` reads it (tier 1 alone), beside the page on
+        `logbook serve` (`_day_later`): a `Plan`, the mapping's error in a sentence, None while it is
+        read (an earlier head's reading standing in, with `stand_in`), or when the page's gate holds
+        no tier 1. By the head the index holds (`current`), as every reading beside the Day."""
+        if not self._plan_seen():
+            return None
+        return self._day_later(
+            ("plan", day, str(self.current().get("head"))), lambda: day_rhythm.plan_of(self.lb, day), stand_in
+        )
+
+    def _plan_seen(self) -> bool:
+        """Whether the page's gate holds tier 1, the plan's tier."""
+        return self.tiers is None or 1 in self.tiers
+
+    def _tasks_html(self, day: str) -> str:
+        """Today's tasks answered (RFC 0043 §9): each by its title alone, no number on the page (a title
+        may open or end with a name, and a number never sits beside one), with three choices, done,
+        tomorrow and let go, none chosen, their field the task's id (`task-ID`); a task answered already
+        says how, and offers none. Nothing but the hidden `tasks`, the tasks the page showed, when the
+        record maps no tasks database or the page's gate holds no tier 1. The plan at this head alone:
+        one read at an earlier head (before this close was signed) would offer a task answered since."""
+        found = self._day_plan(day, stand_in=False)
+        hidden = f'<input type="hidden" name="tasks" value="{escape(_tasks_digest(found))}">\n'
+        if not self._plan_seen():
+            return hidden
+        if isinstance(found, str):
+            body = f'<p class="mute">{escape(found)}</p>\n'
+        elif found is None:
+            body = (
+                '<p class="mute">the tasks of the day are being read beside the page; reload to answer</p>\n'
+            )
+        elif not isinstance(found, plan_reader.Plan) or not found.mapped or not found.tasks:
+            return hidden
+        elif not found.tasks["rows"]:
+            body = '<p class="mute">no task for the day</p>\n'
+        else:
+            rows = []
+            for row in found.tasks["rows"]:
+                title = escape(str(row.get("title") or plan_reader.UNTITLED))
+                answered = row.get("answered")
+                if answered:
+                    said = plan_reader.ANSWERED[answered["outcome"]]
+                    rows.append(
+                        f'<li class="task kept"><span class="words">{title}</span>'
+                        f' <small class="mute">{escape(said)}, #{answered["seq"]}</small></li>\n'
+                    )
+                    continue
+                field = escape(f"{TASK}{row['id']}")
+                choices = "".join(
+                    f'<label><input type="radio" name="{field}" value="{outcome}"> {words}</label>'
+                    for outcome, words in (
+                        (plan_reader.DONE_TODAY, "done"),
+                        (plan_reader.TOMORROW, "tomorrow"),
+                        (plan_reader.LET_GO, "let go"),
+                    )
+                )
+                rows.append(  # the title alone: the field carries the id, `keep` the number (`_numbered`)
+                    f'<li class="task"><span class="words">{title}</span><span class="answers"'
+                    f' role="radiogroup" aria-label="{title}">{choices}</span></li>\n'
+                )
+            body = '<ol class="keep">\n' + "".join(rows) + "</ol>\n"
+        return f'{hidden}<fieldset class="keep">\n<legend>The tasks of the day</legend>\n{body}</fieldset>\n'
+
+    def _dream_html(self, day: str) -> str:
+        """Today's evening, before the close: *Dream the day so far* (`_dream`), only when the owner's
+        `dream` entry stands; else the one sentence that says how to allow it, and no button, since
+        nothing of the day is sent without the entry."""
+        name = policy.POLICY_FILE.as_posix()
+        try:
+            entry = policy.dream_today(self.lb.root)
+        except policy.PolicyError as e:
+            return f'<p class="mute dream">{escape(str(e))}</p>\n'
+        if entry is None:
+            return (
+                f'<p class="mute dream">No <code>"dream"</code> entry in <code>{name}</code>, so nothing of'
+                " the day is sent to a model: add"
+                ' <code>"dream": {"max_tier": 2, "until": "YYYY-MM-DD"}</code>'
+                f" to dream the day so far here, as <code>logbook dream day {day} --evening</code>"
+                " does.</p>\n"
+            )
+        above = self._dream_above(entry)
+        if above is not None:
+            return f'<p class="mute dream">{escape(above)}</p>\n'
+        if entry.expired:
+            until = entry.until.isoformat() if entry.until is not None else "its until"
+            return (
+                f'<p class="mute dream">The <code>"dream"</code> entry expired on {until}, so nothing of'
+                f" the day is sent: give it a new <code>until</code> in <code>{name}</code> to dream the"
+                " day so far here.</p>\n"
+            )
+        to = f"the model {escape(entry.model)}" if entry.model else "the model your endpoint names"
+        return (
+            f'<form class="dream" method="post" action="/day/{day}/reflect">\n'
+            f'<button name="act" value="{DREAM}">Dream the day so far</button>\n'
+            f'<p class="mute">Sends today so far, up to tier {entry.max_tier}, to {to}, as <code>logbook'
+            f" dream day {day} --evening</code> does; its draft comes back in pencil above, and nothing"
+            " of it is kept until you keep it.</p>\n</form>\n"
+        )
+
+    def _dream_above(self, entry: policy.Ceiling | None) -> str | None:
+        """Why the page offers no dream when its gate is below what the `dream` entry lets the dream
+        read: the draft would rest on lines the page never shows, so it would never be shown here, nor
+        kept from; None when the gate holds every tier up to the entry's `max_tier`, or no entry."""
+        if entry is None or self.tiers is None or set(range(1, entry.max_tier + 1)) <= set(self.tiers):
+            return None
+        gate = sorted({int(t) for t in self.tiers})
+        reads = f"tier{'s' if len(gate) != 1 else ''} {', '.join(map(str, gate))}"
+        return (
+            f"The dream reads the day up to tier {entry.max_tier} and this page reads {reads} alone, so"
+            " it would never show the draft written; `logbook serve` reads every tier"
+        )
 
     def _day_marks(self, day: str) -> DayMarks:
         """What the Day page reads of the day's lines besides the Day, through the gate `tiers`: the
@@ -5316,6 +5608,95 @@ def _multipart(body: bytes, content_type: str) -> tuple[dict[str, str], Upload |
         elif data:
             upload = Upload(filename, headers.get_content_type(), data)
     return {k: ",".join(v) for k, v in fields.items()}, upload
+
+
+def _keep_item(day: str, n: int, part: str, block: Mapping[str, Any]) -> str:
+    """One keepable sentence or link of the pencil in the Keep and sign form. Kept: in ink, with the
+    line it became, and no box. Not yet: in pencil, its box numbered as `--keep` takes it, the number
+    on the line above the words (never beside a name a sentence opens with), a decision's revisit day
+    beside it (a later day than `day`), and what a photo's or a link's keeping writes."""
+    label = escape(drafts.PART_LABELS.get(part, part))
+    text = escape(str(block.get("text") or ""), quote=False)
+    kept = block.get("kept")
+    if kept:
+        return (
+            f'<li class="kept"><span class="head">{label}, kept</span> <span class="words">{text}</span>'
+            f' <small class="mute">kept as #{int(kept["seq"])}</small></li>\n'
+        )
+    what = {drafts.PHOTO: "the photo starred, these words its note", drafts.LINK: "the link"}.get(part)
+    sub = f' <small class="mute">{what}</small>' if what else ""
+    revisit = ""
+    if part == drafts.DECISION:
+        after = (date.fromisoformat(day) + timedelta(days=1)).isoformat()
+        revisit = (
+            f'<label class="revisit">revisit on <input type="date" name="{REVISIT}{n}" min="{after}"></label>'
+        )
+    return (
+        f'<li class="pencil"><label class="pick"><input type="checkbox" name="keep" value="{n}">'
+        f'<span><span class="head">keep {n}{DOT}{label}</span> <span class="words">{text}</span>{sub}</span>'
+        f"</label>{revisit}</li>\n"
+    )
+
+
+def _keeping(form: Mapping[str, str]) -> tuple[keep.Asked, dict[str, str]]:
+    """What the Keep and sign form asks to keep, parsed by the function `day sign --keep` parses its
+    flags with (`keep.asked`), so a click means what the command's flags mean: `keep` the numbers
+    ticked, N,N; `revisit-N` a kept decision's day, a field left empty giving none; `word`, blank
+    giving none. Beside it the tasks answered, task id → `done`, `tomorrow` or `let-go` (`task-ID`;
+    none chosen, no line), numbered as `--done` takes them under the lock (`_numbered`). `KeepError`
+    names a field the form never sends as it is."""
+    revisit = [
+        f"{name[len(REVISIT) :]}={value.strip()}"
+        for name, value in form.items()
+        if name.startswith(REVISIT) and value.strip()
+    ]
+    answering: dict[str, str] = {}
+    for name, value in form.items():
+        if not name.startswith(TASK):
+            continue
+        if value not in plan_reader.OUTCOMES:  # the three choices, as the form words them
+            raise keep.KeepError(f"a task's answer is done, tomorrow or let go, not {value!r}")
+        answering[name[len(TASK) :]] = value
+    asked = keep.asked(
+        keep=form.get("keep") or None,
+        revisit=revisit,
+        word=form.get("word") if (form.get("word") or "").strip() else None,
+    )
+    return asked, answering
+
+
+def _numbered(day: str, found: object, answering: Mapping[str, str]) -> dict[str, tuple[int, ...]]:
+    """The tasks the form answers by id, as `keep` takes them: outcome → the numbers `show plan` gives
+    them (`--done 3`), from the plan read under the lock. A task the plan does not hold, or one
+    answered since the page was read, is a `KeepError` naming it by its title alone."""
+    rows = found.tasks["rows"] if isinstance(found, plan_reader.Plan) and found.tasks else []
+    numbers = {str(row["id"]): (n, row) for n, row in enumerate(rows, 1)}
+    by_outcome: dict[str, list[int]] = {}
+    for task, outcome in answering.items():
+        if task not in numbers:
+            raise keep.KeepError(
+                f"the form answers a task that is not among the tasks of {day}; /day/{day} lists them,"
+                " and nothing was written"
+            )
+        n, row = numbers[task]
+        if row.get("answered"):
+            title = str(row.get("title") or plan_reader.UNTITLED)
+            was = plan_reader.ANSWERED[row["answered"]["outcome"]]
+            raise keep.KeepError(
+                f"\u201c{title}\u201d is answered on {day} already ({was}); a re-sign keeps it"
+            )
+        by_outcome.setdefault(outcome, []).append(n)
+    return {outcome: tuple(sorted(found_)) for outcome, found_ in by_outcome.items()}
+
+
+def _tasks_digest(found: object) -> str:
+    """The tasks the form answers, as the page showed them: their Notion ids in the order `show plan`
+    numbers them, digested; "" for no tasks. The form carries it back, so a plan that moved since the
+    page was read (a task done in Notion and synced, one added) is refused, never answered by number."""
+    if not isinstance(found, plan_reader.Plan) or not found.tasks or not found.tasks["rows"]:
+        return ""
+    ids = json.dumps([str(row["id"]) for row in found.tasks["rows"]])
+    return hashlib.sha256(ids.encode("utf-8")).hexdigest()[:16]
 
 
 def _signed_html(signed: Mapping[str, Any] | None) -> str:
