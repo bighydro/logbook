@@ -93,7 +93,7 @@ def test_people_lists_every_resolved_person_with_evidence_and_never_the_owner(
         "via": "meeting",
         "line": ola["last_real_contact"]["line"],
     }
-    assert {p["where"] for p in ola["places"]} >= {"Office", "aboard solvind"}
+    assert {p["where"] for p in ola["places"]} >= {"Office", "aboard Solvind"}
     assert all(p["days"] == 1 for p in ola["places"]) and len(ola["places"]) == 3
     assert ola["birthday"] == OLA_BIRTHDAY and ola["tier"] == 2
     assert all(len(id_) == 36 for id_ in ola["lines"]) and len(ola["lines"]) == 3, "the shared days' evidence"
@@ -149,7 +149,7 @@ def test_people_text_is_one_row_per_person(
     ola = next(row for row in text.splitlines() if "Ola Nordmann" in row)
     assert "3 days" in ola and "2 nights" in ola and "messages 5" in ola and "2026-06-16" in ola
     assert OLA_BIRTHDAY in text
-    assert "Office" in text and "aboard solvind" in text
+    assert "Office" in text and "aboard Solvind" in text and "aboard solvind" not in text
     jonas = next(row for row in text.splitlines() if JONAS["name"] in row)
     assert "calendar 1" in jonas and "days" not in jonas
 
@@ -251,7 +251,7 @@ def test_a_person_page_is_found_by_name_first_name_ref_or_id_and_lists_the_share
     assert by_name["last_real_contact"]["day"] == "2026-06-16"
     shared = by_name["shared_days"]
     assert [s["day"] for s in shared] == ["2026-06-16", "2026-06-13", "2026-06-11"], "most recent first"
-    assert shared[1]["where"] == "aboard solvind" and shared[1]["sources"] == ["note"]
+    assert shared[1]["where"] == "aboard Solvind" and shared[1]["sources"] == ["note"]
     assert shared[2]["where"] == "Office" and shared[2]["reasons"] == ["spoke in Boat plans"]
     assert all(s["night"] is not None for s in shared[:2]) and shared[2]["night"] is None
     assert all(len(id_) == 36 for s in shared for id_ in s["lines"]) and all(s["stay"] for s in shared)
@@ -263,7 +263,7 @@ def test_a_person_page_is_found_by_name_first_name_ref_or_id_and_lists_the_share
     assert "last real contact 2026-06-16 (meeting)" in text
     days = [row for row in rows if row.startswith("    2026-06-")]
     assert [row.strip()[:10] for row in days] == ["2026-06-16", "2026-06-13", "2026-06-11"]
-    assert "note says with Ola Nordmann" in days[1] and "aboard solvind" in days[1]
+    assert "note says with Ola Nordmann" in days[1] and "aboard Solvind" in days[1]
 
 
 def test_a_person_with_no_evidence_has_a_page_that_says_so(

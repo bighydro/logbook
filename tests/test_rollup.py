@@ -246,7 +246,7 @@ def test_places_rollup_counts_stays_hours_nights_visits_and_company(
     [aboard_ola] = solvind["people"]
     assert aboard_ola["id"] == OLA_ID and aboard_ola["nights"] == 1, "the note at anchor, the night at anchor"
     text = _run(capsys, "places")
-    assert "Home" in text and "10 nights" in text and "Solvind (solvind) (yacht)" in text
+    assert "Home" in text and "10 nights" in text and "Solvind (yacht)" in text and "(solvind)" not in text
     assert "aboard, by hours" in text and "Ola Nordmann" in text
 
 
@@ -277,7 +277,8 @@ def test_places_rollup_lists_the_top_unnamed_clusters(
     assert anchorage["nearest"]["name"] == "Marina" and anchorage["nearest"]["metres"] > 5000
     assert len(hotel["lines"]) == 2 and all(len(id_) == 36 for id_ in hotel["lines"])
     text = _run(capsys, "places")
-    assert "unnamed" in text and "(Zurich)" in text and "3 nights" in text and f"aboard {BOAT}" in text
+    assert "unnamed" in text and "(Zurich)" in text and "3 nights" in text and "aboard Solvind" in text
+    assert f"aboard {BOAT}" not in text, "the asset by its name, as the Day and the trips print it"
 
 
 def test_people_rollup_counts_days_and_nights_together_and_the_last_real_contact(

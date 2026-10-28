@@ -471,7 +471,8 @@ def _place_head(p: Mapping[str, Any]) -> str:
 
 
 def _asset_head(a: Mapping[str, Any]) -> str:
-    head = f"{a['name']} ({a['asset']})" if a.get("name") else str(a["asset"])
+    """`Nordlys (yacht)`: the asset by its name, once (`rollup.asset_text`), and its kind."""
+    head = rollup.asset_text(a)
     return f"{head} ({a['kind']})" if a.get("kind") else head
 
 
@@ -487,12 +488,7 @@ def asset_names(places: Mapping[str, Any]) -> dict[str, str]:
     return {str(a["asset"]): str(a["name"]) for a in places["assets"] if a.get("name")}
 
 
-def aboard_text(text: str, names: Mapping[str, str]) -> str:
-    """`aboard <asset id>` in a label of the rollups (`rollup places`, `rollup people`, whose JSON
-    keeps the id, SPEC §6.1) as text names the asset: `aboard <registered name>`, as a trip does."""
-    for asset, name in names.items():
-        text = re.sub(rf"\baboard {re.escape(asset)}\b", f"aboard {name}".replace("\\", "\\\\"), text)
-    return text
+aboard_text = rollup.aboard_text  # `aboard <id>` in a rollup's label as text: `aboard <name>`
 
 
 def person_text(p: Mapping[str, Any]) -> str:

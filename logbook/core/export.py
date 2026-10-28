@@ -107,11 +107,14 @@ def day_package(lb: Logbook, day: str, generated_at: str | None = None) -> dict[
     return day_packages(lb, [day], generated_at)[day]
 
 
-def write_package(package: dict[str, Any], out: Path) -> None:
-    """Write `out/package.json` (canonical JSON). Re-running overwrites in place."""
+def write_package(package: dict[str, Any], out: Path) -> bytes:
+    """Write `out/package.json` (canonical JSON) and return the bytes written: encoded once, written as
+    bytes, so the file and its digest are the same on every platform. Re-running overwrites in place."""
     out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
-    (out / "package.json").write_text(canonical_json(package) + "\n", encoding="utf-8")
+    raw = (canonical_json(package) + "\n").encode("utf-8")
+    (out / "package.json").write_bytes(raw)
+    return raw
 
 
 def write_day_package(lb: Logbook, day: str, out: Path, generated_at: str | None = None) -> int:

@@ -642,7 +642,7 @@ def _together(
             if not first <= day <= last:
                 continue
             if where is None:
-                where = _where(stay, track.places, airports)
+                where = _where(stay, track.places, airports, track.assets)
             person = people[p.person]
             shared = person.shared.setdefault((day, stay.id), SharedDay(day, stay.id, where))
             shared.add(p, tiers.get(p.line, 0))
@@ -664,14 +664,20 @@ def _together(
                 at_night.night = day
 
 
-def _where(stay: stays.Segment, places: list[named_places.Place], airports: Airports) -> str:
-    """How a stay reads: its named place; `aboard <asset>`; else its coordinates with `near
-    <place>, x km` for a named place within `trips.NEAR_KM`, or the city of the nearest large
-    airport in parentheses (the rollups' rule for an unnamed place)."""
+def _where(
+    stay: stays.Segment,
+    places: list[named_places.Place],
+    airports: Airports,
+    assets: Mapping[str, Any] | None = None,
+) -> str:
+    """How a stay reads: its named place; `aboard <the asset's registered name>`; else its coordinates
+    with `near <place>, x km` for a named place within `trips.NEAR_KM`, or the city of the nearest
+    large airport in parentheses (the rollups' rule for an unnamed place)."""
     if stay.place:
         return stay.place
     if stay.aboard:
-        return f"aboard {stay.aboard}"
+        asset = (assets or {}).get(stay.aboard)
+        return f"aboard {getattr(asset, 'name', None) or stay.aboard}"
     if stay.lat is None or stay.lon is None:
         return "somewhere"
     label = f"{stay.lat:.4f},{stay.lon:.4f}"

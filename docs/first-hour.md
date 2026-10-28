@@ -292,17 +292,17 @@ pass  owner             policy/owner.json names 2 names, 1 emails, 1 phones
 pass  places            1 place(s), home: Home
 pass  assets            no assets.json; nothing is tracked as a subject
 pass  dates             every line is dated inside its source's plausible range (policy/plausible.json)
-warn  extra:ais         websockets not installed: PIPX_HOME=/Users/ines/.local/pipx pipx runpip openlogbook install "openlogbook[ais]==0.7.1"
-warn  extra:crypto      cryptography not installed: PIPX_HOME=/Users/ines/.local/pipx pipx runpip openlogbook install "openlogbook[crypto]==0.7.1"
-warn  extra:sealed      pyrage not installed: PIPX_HOME=/Users/ines/.local/pipx pipx runpip openlogbook install "openlogbook[sealed]==0.7.1"
-warn  extra:speakers    pyannote.audio not installed: PIPX_HOME=/Users/ines/.local/pipx pipx runpip openlogbook install "openlogbook[speakers]==0.7.1"
-warn  extra:transcribe  mlx-whisper or faster-whisper not installed: PIPX_HOME=/Users/ines/.local/pipx pipx runpip openlogbook install "openlogbook[transcribe]==0.7.1"
+warn  extra:ais         websockets not installed: pipx inject openlogbook "openlogbook[ais]==0.7.1"
+warn  extra:crypto      cryptography not installed: pipx inject openlogbook "openlogbook[crypto]==0.7.1"
+warn  extra:sealed      pyrage not installed: pipx inject openlogbook "openlogbook[sealed]==0.7.1"
+warn  extra:speakers    pyannote.audio not installed: pipx inject openlogbook "openlogbook[speakers]==0.7.1"
+warn  extra:transcribe  mlx-whisper or faster-whisper not installed: pipx inject openlogbook "openlogbook[transcribe]==0.7.1"
 pass  crossing          mcp 1
 pass  world             export world shows tier 1 alone: policy/crossing.json names no world entry; {"world": {"max_tier": 2}} would add the chapters
 pass  phone             the Library is written from this machine only; `logbook setup phone` lets your phone write too
-pass  home              no home set; `logbook sync --install-schedule` on the machine that keeps the record names it (ADR 0022)
+pass  schedule          no machine runs the scheduled syncs yet: `logbook sync --install-schedule` on the one that keeps the record makes it that machine (ADR 0022)
 pass  last-run          no schedule on this machine; `logbook sync --install-schedule` runs `sync --all` and `doctor` four times a day and writes it
-warn  restore-test      no restore test yet: `logbook backup --restore-test` restores the latest snapshot into a temporary folder and verifies it; the schedule runs it on the first Sunday of the month
+warn  restore-test      no restore test yet: run `logbook backup DEST` once, then `logbook backup --restore-test`, which restores the latest snapshot into a temporary folder and verifies it; the schedule runs it on the first Sunday of the month
 pass  serve             no serve service on this machine; `logbook serve --install-service` keeps the pages at http://127.0.0.1:8765/ from load (docs/serve.md)
 pass  disk              29.8 GiB free on the record's volume
 pass  folder            a plain local folder, no sync client

@@ -115,7 +115,10 @@ def test_the_text_reads_the_same_trip(lb: Logbook, capsys: pytest.CaptureFixture
     text = _run(capsys, "show", "trip", YACHT_WEEK)
     lines = text.splitlines()
     assert lines[0].startswith(f"{YACHT_WEEK}  2026-06-15 {EN_DASH} 2026-06-20")
-    assert f"6 nights aboard {demo.BOAT_NAME}" in lines[0] and "until 2026-06-21" in lines[0]
+    assert f"6 nights aboard {demo.BOAT_NAME}" in lines[0] and lines[0].endswith("back on 21 June"), (
+        "the last night is the 20th's: the 21st is the morning home (SPEC §3.2.6 rule 3), said in words"
+    )
+    assert "until 2026-06-21" not in lines[0]
     assert "  route" in text
     assert re.search(r"^\s+1\s+2026-06-15\s+1 night\s+59\.85", text, re.M), "the first anchorage"
     assert re.search(r"^\s+3\s+2026-06-17 \u2013 2026-06-18\s+2 nights", text, re.M), "the harbour"

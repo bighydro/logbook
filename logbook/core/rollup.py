@@ -8,6 +8,7 @@ never append (ADR 0013); the same record gives the same rollup."""
 
 from __future__ import annotations
 
+import re
 from collections import Counter
 from collections.abc import Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
@@ -859,8 +860,10 @@ def _spread_of(found: Sequence[dict[str, Any]], field: str) -> dict[str, Any] | 
 # -- text ----------------------------------------------------------------------------------------------------
 
 
-def rows(data: dict[str, Any]) -> Iterator[str]:
-    """The rollup as a few lines of text: one per year, or per period for health."""
+def rows(data: dict[str, Any], names: Mapping[str, str] | None = None) -> Iterator[str]:
+    """The rollup as a few lines of text: one per year, or per period for health. An asset is printed by
+    its registered name (`names`, id → name, the asset registry's; and what a year's `aboard` entries
+    name), once, wherever the JSON keeps its id (SPEC §6.1)."""
     window = data["window"]
     head = data["kind"]
     if window["since"]:
@@ -884,7 +887,9 @@ def rows(data: dict[str, Any]) -> Iterator[str]:
         yield "  nothing in the window"
         return
     for year in data["years"]:
-        yield from _year_rows(data["kind"], year)
+        aboard = year.get("aboard") if data["kind"] == "places" else None  # `places` names its assets
+        known = {**{str(v["asset"]): str(v["name"]) for v in aboard or () if v.get("name")}, **(names or {})}
+        yield from _year_rows(data["kind"], year, known)
     if data["kind"] == "countries":
         yield f"  method: {data['method']}"
 
@@ -927,7 +932,21 @@ def _attention_rows(period: dict[str, Any]) -> Iterator[str]:
         yield f"        +{_plural(rest, 'more app')}"
 
 
-def _year_rows(kind: str, year: dict[str, Any]) -> Iterator[str]:
+def aboard_text(text: str, names: Mapping[str, str]) -> str:
+    """`aboard <asset id>` in a label of the rollups (`rollup places`, `rollup people`, whose JSON
+    keeps the id, SPEC §6.1) as text names the asset: `aboard <registered name>`, as a trip does."""
+    for asset, name in names.items():
+        text = re.sub(rf"\baboard {re.escape(asset)}\b", f"aboard {name}".replace("\\", "\\\\"), text)
+    return text
+
+
+def asset_text(entry: Mapping[str, Any]) -> str:
+    """An asset of the year's places by its name, once (`Nordlys`, never `Nordlys (nordlys)`); its id
+    when the registry gives it no name."""
+    return str(entry.get("name") or entry["asset"])
+
+
+def _year_rows(kind: str, year: dict[str, Any], names: Mapping[str, str]) -> Iterator[str]:
     if kind == "countries":
         parts = [f"{c['country']} {_plural(c['days'], 'day')}" for c in year["countries"]]
         parts.append(f"in transit {year['in_transit']['days']}")
@@ -949,7 +968,7 @@ def _year_rows(kind: str, year: dict[str, Any]) -> Iterator[str]:
     elif kind == "nights":
         parts = [f"{year['home']} home", f"{year['away']} away", f"{year['in_transit']} in transit"]
         for asset, n in sorted(year["aboard"].items()):
-            parts.append(f"{_plural(n, 'night')} aboard {asset}")
+            parts.append(f"{_plural(n, 'night')} aboard {names.get(asset, asset)}")
         trip = year["longest_trip"]
         if trip:
             parts.append(
@@ -960,13 +979,13 @@ def _year_rows(kind: str, year: dict[str, Any]) -> Iterator[str]:
         yield from ledger.rollup_rows(year)
     elif kind == "places" and "with" in year:
         yield f"  {year['year']}"
-        yield from _with_table(year["with"])
+        yield from _with_table(year["with"], names)
     elif kind == "places":
         yield f"  {year['year']}"
         heads = [
             *(_entry_head(v["place"], v.get("kind")) for v in year["places"]),
-            *(_entry_head(_entry_label("asset", v), v.get("kind")) for v in year["aboard"]),
-            *(v["label"] for v in year["unnamed"]),
+            *(_entry_head(asset_text(v), v.get("kind")) for v in year["aboard"]),
+            *(aboard_text(v["label"], names) for v in year["unnamed"]),
         ]
         width = max(28, *(len(h) for h in heads)) if heads else 28
         for v in year["places"]:
@@ -974,17 +993,17 @@ def _year_rows(kind: str, year: dict[str, Any]) -> Iterator[str]:
         if year["aboard"]:
             yield "        aboard, by hours (a stay is one run aboard, whatever the asset did inside it):"
         for v in year["aboard"]:
-            yield _visit_row(
-                _entry_head(_entry_label("asset", v), v.get("kind")), v, width, nights=v["nights"]
-            )
+            yield _visit_row(_entry_head(asset_text(v), v.get("kind")), v, width, nights=v["nights"])
         if year["unnamed"]:
             yield "        unnamed, by hours (the ids `places name` takes):"
         for v in year["unnamed"]:
-            yield _visit_row(v["label"], v, width, nights=v["nights"] or None) + f"   {v['id']}"
+            label = aboard_text(v["label"], names)
+            yield _visit_row(label, v, width, nights=v["nights"] or None) + f"   {v['id']}"
     else:
         yield f"  {year['year']}" + (f" · and {year['unnamed']} unnamed" if year.get("unnamed") else "")
         for p in [*year["people"], *year["unresolved"]]:  # the most days together first: no count shown
-            parts = [f"last {p['last_contact']}", ", ".join(p["places"]) if p["places"] else "nowhere"]
+            where = aboard_text(", ".join(p["places"]), names) if p["places"] else "nowhere"
+            parts = [f"last {p['last_contact']}", where]
             yield f"        {p['name']:<24} {' · '.join(parts)}"
 
 
@@ -1001,17 +1020,26 @@ def _visit_row(head: str, v: dict[str, Any], width: int, nights: int | None = No
     return f"        {head:<{width}} {' · '.join(parts)}"
 
 
-def _with_table(table: Sequence[dict[str, Any]]) -> Iterator[str]:
+def _with_table(table: Sequence[dict[str, Any]], names: Mapping[str, str] | None = None) -> Iterator[str]:
+    names = names or {}
     if not table:
         yield "        nobody confirmed at any place"
         return
-    width = max(28, *(len(r["label"]) for r in table))
+
+    def label_of(r: Mapping[str, Any]) -> str:  # an asset by its name, once; an unnamed place's own
+        return (
+            names.get(str(r["place"]), str(r["place"]))
+            if r["kind"] == "asset"
+            else aboard_text(r["label"], names)
+        )
+
+    width = max(28, *(len(label_of(r)) for r in table))
     yield f"        {'place':<{width}} people, the most days there first"
     by_place: dict[tuple[str, str], tuple[str, list[str]]] = {}
     for r in table:  # a row per place, its people by name only (RFC 0043 §2.5); the counts are --json's
-        by_place.setdefault((r["kind"], r["place"]), (r["label"], []))[1].append(r["name"])
-    for label, names in by_place.values():
-        yield f"        {label:<{width}} with {', '.join(names)}"
+        by_place.setdefault((r["kind"], r["place"]), (label_of(r), []))[1].append(r["name"])
+    for label, people in by_place.values():
+        yield f"        {label:<{width}} with {', '.join(people)}"
 
 
 def _plural(n: int, noun: str) -> str:

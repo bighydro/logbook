@@ -76,7 +76,10 @@ The `crossing` line lists each entry of `policy/crossing.json` as it counts toda
 until 2026-12-31`, `heard 2 fetch`). When `LOGBOOK_HEARD` names `feed` and no `heard` entry lets a
 transcript be fetched, it says which entry to write, `{"heard": {"max_tier": 2, "fetch": true}}`. The
 `world` line says what `export world` and the Library's `/world` show: tier 1 alone when the file names
-no `world` entry, and the entry that adds the chapters, `{"world": {"max_tier": 2}}`.
+no `world` entry, and the entry that adds the chapters, `{"world": {"max_tier": 2}}`. A folder that
+`export --day` or `--days` writes reads its ceiling from the `folder` entry, tier 1 without one, as the
+vault and the site read theirs; `--tier` may lower it, never raise it; and the record keeps a crossing
+line for it, as for every export ([a day to a folder](export.md)).
 
 ## Drafts the policy no longer allows
 
@@ -168,7 +171,7 @@ its install line ([optional extras](install.md#optional-extras)). They are this 
 pass  extra:ais         websockets is installed
 pass  extra:crypto      cryptography is installed
 pass  extra:sealed      pyrage is installed
-warn  extra:speakers    pyannote.audio not installed: pip install "openlogbook[speakers]"
+warn  extra:speakers    pyannote.audio not installed: pipx inject openlogbook "openlogbook[speakers]==0.7.0"
 pass  extra:transcribe  faster-whisper is installed
 ```
 

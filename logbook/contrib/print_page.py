@@ -430,8 +430,8 @@ def _day(
         "of": of,
         "weekday": page["weekday"],
         "nights": {
-            "before": day_reader.night_text(page["nights"]["before"]),
-            "after": day_reader.night_text(page["nights"]["after"]),
+            "before": day_reader.night_said(page, "before"),
+            "after": day_reader.night_said(page, "after"),
         },
         "country": page["country"]["code"],
         "places": places,

@@ -224,7 +224,9 @@ def test_the_page_takes_its_shape_from_the_clock_and_the_evening_hour(
     assert _eyebrow(_page(_site(lb, SATURDAY, "11:00"), SATURDAY)) == "Saturday · live · 11:00"
     assert _eyebrow(_page(_site(lb, SATURDAY, "19:59"), SATURDAY)) == "Saturday · live · 19:59"
     assert _eyebrow(_page(_site(lb, SATURDAY, "20:00"), SATURDAY)) == "Saturday · evening · 20:00"
-    assert _eyebrow(_page(_site(lb, SATURDAY, "08:30"), FRIDAY)) == "Friday · evening"
+    assert _eyebrow(_page(_site(lb, SATURDAY, "08:30"), FRIDAY)) == "Friday", (
+        "the shape is named on today alone: a past day read weeks later is no evening (the stranger test)"
+    )
     assert _eyebrow(_page(_site(lb, FRIDAY, "07:50"), FRIDAY)).startswith("Friday · morning")
     assert _eyebrow(_page(_site(lb, FRIDAY, "08:30"), FRIDAY)).startswith("Friday · live"), "at the office"
     _sign(FRIDAY, "2026-06-19T21:52:00+02:00")
@@ -768,7 +770,9 @@ def test_a_static_day_reads_no_promise_and_no_year_back(lb: Logbook) -> None:
     assert "Made on the day" not in page and "<summary><h2>Looking back" not in page
     said = re.search(r'<p class="nothing">Nothing from: (.*?)</p>', page)
     assert said is None or ("loose ends" not in said.group(1) and "looking back" not in said.group(1))
-    assert "<form" not in page and "<script" not in page and _eyebrow(page) == "Wednesday · evening"
+    assert "<form" not in page and "<script" not in page and _eyebrow(page) == "Wednesday", (
+        "no today: no shape"
+    )
 
 
 def test_a_birthday_a_week_on_is_a_week_today(lb: Logbook) -> None:
@@ -853,7 +857,8 @@ def test_a_site_without_drafts_carries_no_pencil_in_the_evening_or_signed(
         if when is not None:
             _sign(WEDNESDAY, when)
         pages = _export(lb, tmp_path / f"site-{shape}")
-        assert _eyebrow(pages[WEDNESDAY]).split(" · ")[1].startswith(shape)
+        brow = _eyebrow(pages[WEDNESDAY])  # a file has two shapes, and names only the signed one
+        assert brow == "Wednesday" if shape == "evening" else brow.startswith("Wednesday · signed"), brow
         for day, page in pages.items():
             text = _text(page[page.index("<main>") :])  # what the page says, its stylesheet aside
             for words in (

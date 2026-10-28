@@ -70,22 +70,24 @@ def person(reading: Reading, name: str) -> dict[str, Any]:
     places: list[str] = []
     proposed = 0
     for stay in reading.owner_stays:
-        proposed += sum(
-            1
+        found = [
+            p
             for p in present.present(
                 stay, reading.lines, reading.identities, reading.places, reading.owner, reading.voice_gate
             )
-            if p.person == who.entity and p.status == present.PROPOSED
-        )
+            if p.person == who.entity
+        ]
+        proposed += sum(1 for p in found if p.status == present.PROPOSED)
+        # the days together are `rollup people`'s (SPEC §3.2.8): the days of the confirmed evidence, never
+        # of a face that rides along with it, so the page and the rollup say one number
+        days |= {days_of.get(p.line, _day(stay, reading)) for p in found if p.status == present.CONFIRMED}
         for c in present.company(
             stay, reading.lines, reading.identities, reading.places, reading.owner, reading.voice_gate
         ):
             if c.person != who.entity:
                 continue
-            evidence_days = {days_of.get(id_, _day(stay, reading)) for id_ in c.lines}
             if c.status == present.CONFIRMED:
-                days |= evidence_days
-                where = _where(stay)
+                where = _where(stay, reading)
                 if where not in places:
                     places.append(where)
             shared.append(
@@ -94,7 +96,7 @@ def person(reading: Reading, name: str) -> dict[str, Any]:
                     "start": stays.instant_text(stay.start),
                     "end": stays.instant_text(stay.end),
                     "day": _day(stay, reading),
-                    "where": _where(stay),
+                    "where": _where(stay, reading),
                     "status": c.status,
                     "confidence": c.confidence,
                     "sources": list(c.sources),
@@ -129,7 +131,8 @@ def asset(reading: Reading, asset_id: str) -> dict[str, Any]:
     if registered is None:
         raise PageError(f"{asset_id!r} is not in assets.json; `logbook assets list`")
     found, _warning = trips.trips(reading)
-    aboard = [s for s in reading.owner_stays if s.aboard == asset_id]
+    # the runs aboard, folded, as `rollup places` reads an asset (SPEC §3.2.8): its stays, hours and people
+    aboard = [s for s in reading.derived.folded if s.kind == stays.STAY and s.aboard == asset_id and s.inside]
     people = _people(aboard, reading)
     nights = sum(1 for n in reading.nights if n.stay is not None and n.stay.aboard == asset_id)
     own = [s for s in reading.segments if s.subject == asset_id]
@@ -202,6 +205,7 @@ def place(reading: Reading, name: str) -> dict[str, Any]:
                 "day": _day(s, reading),
                 "hours": round(s.duration_s / 3600, 1),
                 "aboard": s.aboard,
+                **({"asset_name": _asset_name(s.aboard, reading)} if s.aboard else {}),
                 "lines": _stay_lines(s),
             }
             for s in last
@@ -226,12 +230,18 @@ def _end_day(stay: stays.Segment, reading: Reading) -> str:
     return reading.day_start.day(stay.end).isoformat()
 
 
-def _where(stay: stays.Segment) -> str:
+def _where(stay: stays.Segment, reading: Reading) -> str:
+    """The stay's named place; `aboard <the asset's registered name>`; else its coordinates."""
     if stay.place:
         return stay.place
     if stay.aboard:
-        return f"aboard {stay.aboard}"
+        return f"aboard {_asset_name(stay.aboard, reading)}"
     return f"{stay.lat:.4f},{stay.lon:.4f}" if stay.lat is not None and stay.lon is not None else "somewhere"
+
+
+def _asset_name(asset_id: str, reading: Reading) -> str:
+    asset = reading.assets.get(asset_id)
+    return asset.name if asset is not None and asset.name else asset_id
 
 
 def _stay_lines(stay: stays.Segment) -> list[str]:
@@ -279,12 +289,12 @@ def rows(page: dict[str, Any]) -> Iterator[str]:
 
 def _person_rows(p: dict[str, Any]) -> Iterator[str]:
     yield f"{p['name']}  ({', '.join(r['value'] for r in p['refs'])})"
-    if p["first_contact"]:
-        yield f"  first contact {p['first_contact']} · last {p['last_contact']}"
+    if p["first_contact"]:  # confirmed, as `rollup people` counts: a proposal is not contact
+        yield f"  first confirmed {p['first_contact']} · last confirmed {p['last_contact']}"
     else:
         yield "  no confirmed contact yet" + (f" ({p['proposed']} proposed)" if p["proposed"] else "")
     for year, n in p["days_together"].items():
-        yield f"  {year}  {_plural(n, 'day')} together"
+        yield f"  {year}  {_plural(n, 'day')} together, by the confirmed evidence"
     if p["places"]:
         yield f"  places  {', '.join(p['places'])}"
     owed = p["commitments"]
@@ -296,7 +306,7 @@ def _person_rows(p: dict[str, Any]) -> Iterator[str]:
     else:
         yield "  commitments  none open"
     if p["shared_stays"]:
-        yield f"  last {_plural(len(p['shared_stays']), 'shared stay')}"
+        yield f"  last {_plural(len(p['shared_stays']), 'shared stay')}, confirmed or proposed"
         for s in p["shared_stays"]:
             mark = "" if s["status"] == present.CONFIRMED else " (proposed)"
             yield f"    {s['day']}  {s['where']} · {', '.join(s['reasons'])}{mark}"
@@ -346,7 +356,7 @@ def _place_rows(p: dict[str, Any]) -> Iterator[str]:
     yield f"  {_plural(p['photos'], 'photo')}"
     yield f"  last {_plural(len(p['last_visits']), 'visit')}"
     for v in p["last_visits"]:
-        aboard = f" · aboard {v['aboard']}" if v["aboard"] else ""
+        aboard = f" · aboard {v.get('asset_name') or v['aboard']}" if v["aboard"] else ""
         yield f"    {v['day']}  {v['hours']:g} h{aboard}"
 
 

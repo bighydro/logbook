@@ -373,6 +373,33 @@ def test_the_voice_says_what_this_machine_lacks(monkeypatch: pytest.MonkeyPatch,
     assert "openlogbook[transcribe]" in str(day_command.voice().missing)
 
 
+def test_without_an_engine_the_voice_gives_the_command_for_this_install(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The stranger test (26 October): the Day and Today said `install openlogbook[transcribe]`, which is
+    no command. The page gives the line doctor gives for how this Logbook was installed."""
+    from logbook.contrib import doctor
+
+    def nothing(*_a: Any, **_k: Any) -> Any:
+        raise transcribe.EngineMissing(
+            "no transcription engine is installed; install openlogbook[transcribe]"
+        )
+
+    monkeypatch.setattr(transcribe, "detect", nothing)
+    pipx = doctor.Install("pipx", frozenset({"crypto"}), "==0.7.0", venv="openlogbook")
+    monkeypatch.setattr(doctor, "detect_install", lambda: pipx)
+    missing = str(day_command.voice().missing)
+    assert missing.endswith('pipx inject openlogbook "openlogbook[crypto,transcribe]==0.7.0"'), missing
+    assert "install openlogbook[transcribe]" not in missing and "restart" in missing
+    clone = doctor.Install(
+        "checkout", folder="/home/ines/src/logbook", python="/home/ines/src/logbook/.venv/bin/python"
+    )
+    monkeypatch.setattr(doctor, "detect_install", lambda: clone)
+    assert str(day_command.voice().missing).endswith(
+        "in the clone, /home/ines/src/logbook: uv sync --inexact --extra transcribe"
+    )
+
+
 # -- Sign ----------------------------------------------------------------------------------------------------
 
 

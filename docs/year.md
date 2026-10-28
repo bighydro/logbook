@@ -95,7 +95,7 @@ have no days:
     Cabin (other)                               8 nights · 8 stays · 208 h · with Ola Nordmann
     Marina (asset-berth)                        7 nights · 23 stays · 194 h · with Anders Vik, Ola Nordmann, Sigrid Moen
     Office (other)                              0 nights · 91 stays · 672 h · with Liv Berg, Per Hansen
-    Nordlys (nordlys) (yacht)                   46 nights · 62 stays · 963 h · with Anders Vik, Ola Nordmann, Sigrid Moen
+    Nordlys (yacht)                             46 nights · 62 stays · 963 h · with Anders Vik, Ola Nordmann, Sigrid Moen
     unnamed:
     47.3769,8.5417 (Zurich)                     24 nights · 24 stays · 468 h · with Marta Keller
     …
@@ -212,7 +212,7 @@ The sections, in order:
 On the demo record's yacht week (`logbook demo`; nobody in it is real):
 
 ```
-trip:2026-06-15:2026-06-20  2026-06-15 – 2026-06-20 · 6 nights aboard Nordlys · until 2026-06-21
+trip:2026-06-15:2026-06-20  2026-06-15 – 2026-06-20 · 6 nights aboard Nordlys · back on 21 June
   route
      1  2026-06-15               1 night   59.8500,10.6000 · aboard Nordlys
      2  2026-06-16               1 night   59.4300,10.4800 (Sandefjord) · aboard Nordlys

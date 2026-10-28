@@ -41,9 +41,10 @@ The checks, in the order they print:
 - `extra:<name>`: each optional extra (`ais`, `crypto`, `sealed`, `speakers`, `transcribe`) is installed,
   with its install line when not (a warn): the line adds the extra to this Logbook exactly as it is
   installed (its Python, its venv's options, its source and version, a pipx suffix, uv's companions):
-  this venv's pip at the installed version, `pipx runpip` in pipx's venv, `uv tool install --force
-  --python` this interpreter, or, in a checkout, `uv sync --python` this interpreter `--inexact
-  --no-default-groups`. Where doctor proves no such line (Homebrew, whose formula adds no extra, a
+  this venv's pip at the installed version, `pipx inject` into pipx's venv (with `PIPX_HOME` only when
+  the venv is not in the home a bare `pipx` uses), `uv tool install --force` with every extra (and the
+  `--python` the receipt asked for, if any), or, in a clone, `uv sync --inexact --extra <name>`, run in
+  the clone the warn names. Where doctor proves no such line (Homebrew, whose formula adds no extra, a
   receipt it cannot read, a source that may have changed since, uv's cache) it prints none: the warn
   says why and points to docs/install.md, in one sentence. Nothing is imported to find out: a module's
   spec is looked for, and pyannote.audio (`speakers`) is asked by its installed distribution, as
@@ -64,7 +65,10 @@ The checks, in the order they print:
   which it never changes.
 - `crossing`: `policy/crossing.json` is the documented shape and every destination's ceiling is listed
   as it counts today (ADR 0016); an entry past its `until` day counts as tier 0 and is a warn naming
-  it (ADR 0022). No file is the defaults; a file that is not the shape is a fail naming it.
+  it (ADR 0022). No file is the defaults; a file that is not the shape is a fail naming it. A folder
+  `export --day` or `--days` writes reads its ceiling from the `folder` entry, tier 1 without one;
+  `--tier` may lower it, never raise it; and the record keeps a crossing line for it as for every export
+  (docs/export.md).
 - `phone`: whether the owner's own phone may write through the Library (`logbook setup phone`,
   docs/serve.md): this machine only, as by default, or the origin it may write from and the login,
   the part before @ shortened, never whole. A warn when the setting is not the shape (it lets nothing
@@ -89,9 +93,9 @@ The checks, in the order they print:
   owner confirmed, and the cache's size against its cap. A pass; a cache over its cap, or a
   `state/videos.json` that is not the shape, is a warn naming it. Read from this machine alone, as the
   `drafts` line reads; a record with no video and no cache has no line.
-- `home`: `state/home.json`, written by `sync --install-schedule` on the record's home (ADR 0022),
-  names this machine, or no home is set (a pass either way); another machine is a warn: writers
-  belong on the home.
+- `schedule`: which machine runs the scheduled syncs, the record's home (ADR 0022): `state/home.json`,
+  written by `sync --install-schedule` there, names this machine, or no machine yet (a pass either
+  way); another machine is a warn: writers belong on that one.
 - `last-run`: when the schedule (`sync --install-schedule`) last ran `sync --scheduled`, from
   `state/last-run.json` whichever install wrote it (the user's agents or timers, the system's with
   `--system`, or none on this machine), and whether it was clean: a run older than 26 hours, or one in
@@ -100,7 +104,7 @@ The checks, in the order they print:
   whatever the run said: each runs every source at the same times.
 - `restore-test`: the last `backup --restore-test` (`state/last-restore-test.json`) passed within 35
   days (the schedule runs it on the first Sunday of the month); none, older, or skipped is a warn saying
-  what to do; failed is a fail with the reason.
+  what to do (with no backup recorded yet, `backup DEST` first); failed is a fail with the reason.
 - `serve`: whether this machine keeps the pages served (`serve --install-service`, docs/serve.md): no
   service is a pass saying how to install one; one installed (the user's agent or unit, or the
   system's daemon or unit) passes when a logbook server answers on its port, and is a warn naming
@@ -127,7 +131,7 @@ import sqlite3
 import sys
 import tomllib
 import urllib.parse
-from collections.abc import Callable, Iterator, Mapping
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -160,9 +164,9 @@ GIB = 1024**3
 DISK_WARN_BYTES = 5 * GIB
 DISK_FAIL_BYTES = GIB // 2
 #: how this Logbook was installed, each with the one line that adds an extra to it as it is (`install_line`):
-#: pip and pipx's `runpip` add to the environment this Logbook runs in, `uv tool install --force` and `uv
-#: sync` make it again with exactly what they are given, so the line names every extra, the Python and the
-#: version; Homebrew's formula installs no extra, and where doctor proves no line it prints none
+#: pip, `pipx inject` and `uv sync --inexact` add to the environment this Logbook runs in, `uv tool install
+#: --force` makes it again with exactly what it is given, so its line names every extra and the version;
+#: Homebrew's formula installs no extra, and where doctor proves no line it prints none
 HowInstalled = Literal["pipx", "uv-tool", "checkout", "pip", "homebrew"]
 PIPX_RECEIPT = "pipx_metadata.json"  # in the venv pipx made, which is `sys.prefix`
 UV_TOOL_RECEIPT = "uv-receipt.toml"  # in the environment `uv tool install` made, likewise
@@ -708,11 +712,12 @@ def _source(here: Here) -> tuple[str, str]:
 
 
 def _pipx(path: Path, here: Here) -> Install:
-    """pipx's venv (`path` is its receipt): the line runs pip in that venv, `pipx runpip`, so its Python
-    and its options (`--system-site-packages`) stay, with `PIPX_HOME` naming the home the venv is in,
-    which every pipx honours, so the line never depends on where this pipx looks by default (a version,
-    a platform, `--global`). The venv's name keeps a `--suffix`. Its pip may be given the index options
-    the receipt's `pip_args` name, and nothing else; injected packages are not touched."""
+    """pipx's venv (`path` is its receipt): the line is `pipx inject` into that venv, which installs into it
+    as it is, so its Python and its options (`--system-site-packages`) stay, and writes the extras back to
+    the receipt. `PIPX_HOME` names the home the venv is in when a bare `pipx` here would look elsewhere
+    (`_pipx_default_home`: `--global`, a home of its own). The venv's name keeps a `--suffix`. Its pip
+    may be given the index options the receipt's `pip_args` name (`--pip-args`), and nothing else;
+    injected packages are not touched."""
     receipt = json.loads(path.read_text(encoding="utf-8"))
     package = receipt["main_package"]
     spec, args = package["package_or_url"], package.get("pip_args") or []
@@ -739,24 +744,52 @@ def _pipx(path: Path, here: Here) -> Install:
         if word == "--no-index":
             carried.append(word)
         elif option in INDEX_OPTIONS and eq:
-            carried.append(f"{option}={_arg(value)}")
+            carried.append(f"{option}={_plain(value)}")
         elif word in INDEX_OPTIONS and rest:
-            carried += [word, _arg(rest.pop(0))]
+            carried += [word, _plain(rest.pop(0))]
         else:
             raise NoLine(f"its receipt, {path}, gives pip an option doctor does not carry ({word})")
     requirement, folder = _source(here)
-    home, name = str(venv.parent.parent), _arg(venv.name)
-    _arg(home)
+    home, name = venv.parent.parent, _arg(venv.name)
+    _arg(str(home))
     return Install(
         "pipx",
         extras,
         requirement,
         folder,
-        home=home,
+        home="" if _pipx_default_home(home, here) else str(home),
         venv=name,
-        options=tuple(carried),
+        options=(f"--pip-args={_arg(' '.join(carried))}",) if carried else (),
         windows=here.windows,
     )
+
+
+def _plain(value: str) -> str:
+    """An index option's value as it goes inside `--pip-args="…"`: one word, or `NoLine`."""
+    if not PLAIN.fullmatch(value):
+        raise NoLine("an index option pipx's receipt gives pip has a character doctor does not quote")
+    return value
+
+
+def _pipx_default_home(home: Path, here: Here) -> bool:
+    """Whether `home` is the pipx home a bare `pipx` in this shell uses: the one `PIPX_HOME` names when it
+    is set, else `~/.local/pipx` when that folder exists (every pipx still honours it), else
+    `~/.local/share/pipx` (Linux) or `~/Library/Application Support/pipx` (macOS). On Windows, and for
+    any other home (`--global`'s among them), the line names it: `PIPX_HOME=… pipx inject`."""
+    named = here.env.get("PIPX_HOME")
+    if named:
+        return _same(home, Path(named))
+    if here.windows or sys.platform == "win32":
+        return False
+    legacy = Path.home() / ".local" / "pipx"
+    if legacy.is_dir():
+        return _same(home, legacy)
+    platform = (
+        Path.home() / "Library" / "Application Support" / "pipx"
+        if sys.platform == "darwin"
+        else Path.home() / ".local" / "share" / "pipx"
+    )
+    return _same(home, platform)
 
 
 def _python_agrees(request: object, here: Here) -> bool:
@@ -859,8 +892,22 @@ def _uv_tool(path: Path, here: Here) -> Install:
         raise NoLine(f"its receipt, {path}, is in a shape doctor does not read")
     options = _uv_options(tool.get("options", {}))
     withs = tuple(_uv_with(r, r.get("name") in sources, here) for r in others)
-    _arg(here.executable)
-    return Install("uv-tool", extras, requirement, folder, here.executable, options=options + withs)
+    request = tool.get("python")
+    if not isinstance(request, str) or _inside(Path(request), path.parent):
+        request = ""  # none asked; or this environment's own interpreter, which `--force` makes again
+    if request:
+        _arg(request)
+    return Install("uv-tool", extras, requirement, folder, request, options=options + withs)
+
+
+def _inside(path: Path, folder: Path) -> bool:
+    """`path` names a file in `folder`, by their parts (macOS and Windows ignore case)."""
+    try:
+        parts = [p.casefold() for p in path.absolute().parts]
+        within = [p.casefold() for p in folder.absolute().parts]
+    except (OSError, ValueError):
+        return False
+    return parts[: len(within)] == within
 
 
 def _homebrew(prefix: Path) -> bool:
@@ -994,28 +1041,31 @@ def install_line(install: Install, extras: set[str] | frozenset[str]) -> str | N
     """The line that adds `extras`, all of them, to this Logbook as it is installed, keeping its Python,
     its venv's options, its source and version, its suffix and its companions; None when doctor proves
     no such line (`install.why`)."""
-    needs = {"pipx": (install.home, install.venv), "checkout": (install.folder, install.python)}.get(
+    needs = {"pipx": (install.venv,), "checkout": (install.folder,), "uv-tool": ()}.get(
         install.how, (install.python,)
     )
     if install.why or install.how == "homebrew" or not all(needs):
         return None
     names = ",".join(sorted(extras))
     try:
-        if install.how == "checkout":
-            flags = "".join(f" --extra {e}" for e in sorted(extras))
-            project = f"--project {_arg(install.folder)} --python {_arg(install.python)}"
-            return f"uv sync {project} --inexact --no-default-groups{flags}"
+        if (
+            install.how == "checkout"
+        ):  # run in the clone (`extras_checks` names it); `--inexact` removes nothing
+            return "uv sync --inexact" + "".join(f" --extra {e}" for e in sorted(extras))
         if install.folder:
             requirement = f"--editable {_arg(f'{install.folder}[{names}]')}"
         else:
             requirement = _arg(f"openlogbook[{names}]{install.requirement}")
         options = "".join(f"{o} " for o in install.options)
         if install.how == "pipx":
-            home = _arg(install.home)  # PowerShell's right side is an expression: a path there is quoted
-            set_home = f'$env:PIPX_HOME = "{install.home}"; ' if install.windows else f"PIPX_HOME={home} "
-            return f"{set_home}pipx runpip {install.venv} install {options}{requirement}"
+            set_home = ""
+            if install.home:  # PowerShell's right side is an expression: a path there is quoted
+                home = _arg(install.home)
+                set_home = f'$env:PIPX_HOME = "{install.home}"; ' if install.windows else f"PIPX_HOME={home} "
+            return f"{set_home}pipx inject {options}{install.venv} {requirement}"
         if install.how == "uv-tool":
-            return f"uv tool install --force --python {_arg(install.python)} {options}{requirement}"
+            python = f"--python {_arg(install.python)} " if install.python else ""
+            return f"uv tool install --force {python}{options}{requirement}"
         if install.uv_pip:
             return f"uv pip install --python {_arg(install.python)} {requirement}"
         return f"{_command(install.python, install.windows)} -m pip install {requirement}"
@@ -1036,9 +1086,7 @@ def extras_checks(
     installed: Callable[[str], bool] = module_installed, install: Install | None = None
 ) -> Iterator[Check]:
     how = install or detect_install()
-    present = set(how.extras) | {
-        extra for extra, modules in (*EXTRAS, *UNCHECKED_EXTRAS) if any(installed(m) for m in modules)
-    }
+    present = _present(installed, how)
     missing = [extra for extra, modules in EXTRAS if not any(installed(m) for m in modules)]
     for extra, modules in EXTRAS:
         found = [m for m in modules if installed(m)]
@@ -1046,17 +1094,46 @@ def extras_checks(
             yield Check(f"extra:{extra}", "pass", f"{found[0].replace('_', '-')} is installed")
             continue
         wanted = " or ".join(m.replace("_", "-") for m in modules)
-        # pip, pipx's runpip and `uv sync --inexact` add and remove nothing else, so they name the extra
-        # (and what pipx's receipt names, which pipx writes back); `uv tool install --force` names them all
-        line = install_line(how, (present if how.how == "uv-tool" else set(how.extras)) | {extra})
-        if line is None:
-            yield Check(f"extra:{extra}", "warn", f"{wanted} not installed: {no_line(how, extra)}")
-            continue
-        # said before the line, so the line is the last thing on it and copies whole
-        notes = ""
-        if how.how == "uv-tool" and len(missing) > 1:
-            notes += "; the line installs exactly the extras it names, so add any other one wanted to it"
-        yield Check(f"extra:{extra}", "warn", f"{wanted} not installed{notes}: {line}")
+        yield Check(
+            f"extra:{extra}", "warn", f"{wanted} not installed{_remedy(how, extra, present, missing)}"
+        )
+
+
+def _present(installed: Callable[[str], bool], how: Install) -> set[str]:
+    """The extras this Logbook has: what its installer's receipt names, and each whose package is here."""
+    return set(how.extras) | {
+        extra for extra, modules in (*EXTRAS, *UNCHECKED_EXTRAS) if any(installed(m) for m in modules)
+    }
+
+
+def _remedy(how: Install, extra: str, present: set[str], missing: Sequence[str]) -> str:
+    """What follows `<package> not installed` for `extra`: `: <line>`, with what the reader must know said
+    before it (`; in the clone, <folder>: <line>`), so the line is the last thing and copies whole; or
+    `: <why doctor proves none>`."""
+    # pip, `pipx inject` and `uv sync --inexact` add and remove nothing else, so they name the extra
+    # (and what pipx's receipt names, which pipx writes back); `uv tool install --force` names them all
+    line = install_line(how, (present if how.how == "uv-tool" else set(how.extras)) | {extra})
+    if line is None:
+        return f": {no_line(how, extra)}"
+    notes = ""
+    if how.how == "uv-tool" and len(missing) > 1:
+        notes += "; the line installs exactly the extras it names, so add any other one wanted to it"
+    if how.how == "checkout":
+        notes += f"; in the clone, {how.folder}"
+    return f"{notes}: {line}"
+
+
+def how_to_add(
+    extra: str, installed: Callable[[str], bool] = module_installed, install: Install | None = None
+) -> str:
+    """How to add `extra` to this Logbook as it is installed, as a clause a message ends with: doctor's
+    line for it (`pipx inject openlogbook "openlogbook[transcribe]==0.7.1"`, `in the clone, <folder>: uv
+    sync --inexact --extra transcribe`), or why doctor proves none and where to read. What the Day page
+    and Today say in place of the recording form, the same line as `doctor`'s `extra:` row."""
+    how = install or detect_install()
+    present = _present(installed, how)
+    missing = [e for e, modules in EXTRAS if not any(installed(m) for m in modules)]
+    return _remedy(how, extra, present, missing).removeprefix("; ").removeprefix(": ")
 
 
 def disabled_sources(lb: Logbook) -> set[str]:
@@ -1369,24 +1446,34 @@ def _ceiling_text(c: policy.Ceiling, fetches: bool = False) -> str:
     return f"{c.destination} {c.max_tier}{when}{write}{model}{fetch}"
 
 
+#: the record's home (ADR 0022) is the machine that runs the scheduled syncs; the row says so in those
+#: words, since `home` beside the Home place `setup` names read as that place (the stranger test)
 NO_HOME = (
-    "no home set; `logbook sync --install-schedule` on the machine that keeps the record names it (ADR 0022)"
+    "no machine runs the scheduled syncs yet: `logbook sync --install-schedule` on the one that keeps the"
+    " record makes it that machine (ADR 0022)"
 )
-NOT_HOME = "this machine is not the record's home ({host}); writers belong on the home"
+NOT_HOME = "the scheduled syncs run on {host}, not on this machine; writers belong on that one"
 
 
 def home_check(root: Path) -> Check:
+    """The `schedule` row: which machine runs the scheduled syncs (`state/home.json`, the record's home)."""
     try:
         found = home.read(root)
     except home.HomeError as e:
-        return Check("home", "fail", str(e))
+        return Check("schedule", "fail", str(e))
     if found is None:
-        return Check("home", "pass", NO_HOME)
+        return Check("schedule", "pass", NO_HOME)
     if home.same_machine(found.host, home.hostname()):
-        return Check("home", "pass", f"this machine ({found.host}) is the record's home since {found.since}")
-    return Check("home", "warn", NOT_HOME.format(host=found.host))
+        return Check(
+            "schedule", "pass", f"this machine ({found.host}) runs the scheduled syncs, since {found.since}"
+        )
+    return Check("schedule", "warn", NOT_HOME.format(host=found.host))
 
 
+#: before any record exists: what to do next, in a sentence (the exit code stays 1)
+NO_RECORD = (
+    "No record yet: run `logbook demo --out ~/Demo/Logbook` to try one, or `logbook setup` to start yours."
+)
 RESTORE_TEST_WITHIN = timedelta(days=35)  # the first Sundays of two months are at most five weeks apart
 INSTALL = "`logbook sync --install-schedule` runs `sync --all` and `doctor` four times a day and writes it"
 RESTORE_TEST = (
@@ -1477,8 +1564,13 @@ def restore_test_check(lb: Logbook) -> Check:
         test = backup.read_restore_test(lb.root)
     except ValueError as e:
         return Check("restore-test", "warn", str(e))
-    if test is None:
-        return Check("restore-test", "warn", f"no restore test yet: {RESTORE_TEST}")
+    if test is None:  # with no backup yet, `--restore-test` alone answers that there is no snapshot
+        if backup.last_backup(lb.root):
+            return Check("restore-test", "warn", f"no restore test yet: {RESTORE_TEST}")
+        then = RESTORE_TEST.replace("` restores", "`, which restores", 1)
+        return Check(
+            "restore-test", "warn", f"no restore test yet: run `logbook backup DEST` once, then {then}"
+        )
     when = f"{test.at:%Y-%m-%d}"
     name = test.snapshot.name if test.snapshot is not None else "no snapshot"
     if test.status == "failed":
@@ -1628,7 +1720,7 @@ def run(
     how this Logbook was installed, which the extras' lines follow (`detect_install` when None)."""
     checks: list[Check] = []
     if lb is None:
-        checks.append(Check("record", "fail", "no logbook found; run `logbook init`, or set LOGBOOK_HOME"))
+        checks.append(Check("record", "fail", NO_RECORD))
         checks.extend(extras_checks(installed, install))
         return checks
     checks.append(record_check(lb))

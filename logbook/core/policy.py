@@ -64,6 +64,8 @@ VAULT_DESTINATION = "vault"  # `logbook export vault`: a folder of Markdown on t
 VAULT_DEFAULT_TIER = 1  # the ceiling for a record whose file does not name it
 SITE_DESTINATION = "site"  # `logbook export site`: a folder of static HTML the owner may publish anywhere
 SITE_DEFAULT_TIER = 1  # the ceiling for a record whose file does not name it
+FOLDER_DESTINATION = "folder"  # `logbook export --day`/`--days`: day packages in a folder the owner names
+FOLDER_DEFAULT_TIER = 1  # the ceiling for a record whose file does not name it
 WORLD_DESTINATION = "world"  # `logbook export world`: one page you can scrub, for the owner and the circle
 WORLD_DEFAULT_TIER = 1  # the ceiling for a record whose file does not name it: fail closed (S9)
 DREAM_DESTINATION = "dream"  # `logbook dream`: the model that reads a day and drafts it (RFC 0036)
@@ -325,6 +327,13 @@ def site_ceiling(root: Path) -> int:
     when the file does not name it, as the vault. A site is pages the owner may publish anywhere, so
     tier 1 is what crosses on its own (ADR 0016) and `--tier 1,2` needs the entry; tier 3 never."""
     return _ceiling_or_default(root, SITE_DESTINATION, SITE_DEFAULT_TIER)
+
+
+def folder_ceiling(root: Path) -> int:
+    """The highest tier `logbook export --day` and `--days` may put in a folder: the `folder` entry of the
+    policy, or tier 1 when the file does not name it, as the vault and the site (ADR 0016, ADR 0026).
+    `--tier` may lower it, never raise it."""
+    return _ceiling_or_default(root, FOLDER_DESTINATION, FOLDER_DEFAULT_TIER)
 
 
 def world_ceiling(root: Path) -> int:

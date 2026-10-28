@@ -169,11 +169,12 @@ def day_words(day: str, year: bool = False) -> str:
 
 def last_night(lb: Logbook, day: str, airports: Airports, tiers: Sequence[int] | None) -> dict[str, Any]:
     """The night before `day` as the Day's header says a night (`day.of_reading`'s `nights`): the night
-    after the day before, from a reading of that one day."""
+    after the day before, from a reading of that one day, with `moving` when that day holds a move or a
+    flight across it (`day.moving_across`, as the Day says it)."""
     before = (date.fromisoformat(day) - timedelta(days=1)).isoformat()
     rd = reading.read(lb, before, before, airports, tiers)
     night: dict[str, Any] = day_reader.of_reading(rd, before, None)["nights"]["after"]
-    return night
+    return {**night, "moving": day_reader.moving_across(rd, str(night["day"]))}
 
 
 def weather_of(lb: Logbook, day: str, night: Mapping[str, Any], tiers: Sequence[int] | None) -> str:
@@ -193,7 +194,7 @@ def date_html(site: Site, today: str) -> str:
     )
     said = site._day_reading(("today-weather", today), lambda: weather_of(site.lb, today, night, site.tiers))
     if night["in_transit"]:
-        where = "Last night in transit"
+        where = "Last night in transit" if night["moving"] else f"Last night: {day_reader.NOT_RECORDED}"
     elif night["where"] is None:
         where = "No place the record knows for last night"
     else:

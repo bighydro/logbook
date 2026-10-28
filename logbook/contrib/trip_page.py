@@ -61,6 +61,20 @@ MARGIN_DAYS = 7  # the reading starts this many days before the trip and ends th
 WIDEN = 4  # … and widens by this factor while the run of nights away touches the window's edge
 TRANSACTION = "transaction"
 MINUS = "\u2212"
+MONTHS = (
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
+)  # the return day in words: `back on 21 June`
 MAP_WIDTH = 640.0  # px, the page's; the viewBox is the same so the drawing scales with the page
 MAP_MAX_HEIGHT = 640.0
 MAP_MIN_HEIGHT = 240.0
@@ -446,7 +460,9 @@ def _row(label: str, text: str) -> str:
 
 def head_text(data: Mapping[str, Any]) -> str:
     """The dates, the nights (`6 nights aboard Nordlys` for an asset trip; a mixed trip counts its
-    nights aboard in parentheses, as `trips` does) and the return day, `until 2026-06-21`."""
+    nights aboard in parentheses, as `trips` does) and the return day in words, `back on 21 June`: the
+    JSON's `until`, the morning after the last night (SPEC §3.2.6 rule 3), with its year when the
+    trip began in another."""
     nights = _plural(int(data["nights"]), "night")
     aside: list[str] = []
     if data["asset"]:
@@ -460,7 +476,15 @@ def head_text(data: Mapping[str, Any]) -> str:
         aside.append(f"{data['in_transit']} in transit")
     if aside:
         nights += f" ({', '.join(aside)})"
-    return f"{data['start']} {EN_DASH} {data['end']}{DOT}{nights}{DOT}until {data['until']}"
+    back = _day_words(data["until"], data["start"])
+    return f"{data['start']} {EN_DASH} {data['end']}{DOT}{nights}{DOT}back on {back}"
+
+
+def _day_words(day: str, since: str) -> str:
+    """`21 June`, with the year when `since` is in another (`1 January 2027` after a New Year's trip)."""
+    d = date.fromisoformat(day)
+    said = f"{d.day} {MONTHS[d.month - 1]}"
+    return said if since[:4] == day[:4] else f"{said} {d.year}"
 
 
 def _dates(s: Mapping[str, Any]) -> str:

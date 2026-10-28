@@ -191,7 +191,12 @@ def test_propose_lists_unnamed_stays_ranked_by_hours_with_what_is_near(
     assert all(abs(p["lat"] - HOME[0]) > 0.001 for p in proposals), "named places are never proposed"
     assert lb.meta["head"] == head, "propose appends nothing"
     text = _run(capsys, "propose", "--since", "2026-06-08", "--until", "2026-06-21")
-    assert "Restaurant" in text and "Marina" in text and "aboard solvind" in text
+    assert (
+        "Restaurant" in text
+        and "Marina" in text
+        and "aboard Solvind" in text
+        and "aboard solvind" not in text
+    )
     assert "stay:owner:" in text
 
 

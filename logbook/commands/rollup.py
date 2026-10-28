@@ -138,9 +138,21 @@ def cmd_rollup(a: argparse.Namespace) -> None:
     if a.json:
         print(json.dumps(data, indent=2))
         return
-    text_rows = drifting.rows if a.drifting else listen_rollup.rows if a.what == "listen" else rollup.rows
-    for text in text_rows(data):
+    if a.drifting or a.what == "listen":
+        found = drifting.rows(data) if a.drifting else listen_rollup.rows(data)
+    else:  # an asset by its registered name, as every reader prints it
+        found = rollup.rows(data, _asset_names(lb) if a.what in ("places", "nights", "people") else {})
+    for text in found:
         print(text)
+
+
+def _asset_names(lb: Logbook) -> dict[str, str]:
+    """The registered name of each asset, by its id; none when the registry does not read (the reading
+    already said so, or had no need of it)."""
+    try:
+        return {k: v.name for k, v in stays.read_assets(lb.root).items() if v.name}
+    except stays.SettingsError:
+        return {}
 
 
 def _drifting(lb: Logbook, a: argparse.Namespace) -> dict[str, Any]:

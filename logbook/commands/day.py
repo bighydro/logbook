@@ -1025,14 +1025,19 @@ def voice(model: str = TRANSCRIBE_DEFAULT_MODEL) -> serve.Voice:
     """Whether the Day page of `serve` can hear a recording, asked once when the server starts: the
     engine of the `openlogbook[transcribe]` extra and its model on this machine, then `heard` for each
     recording, never fetching; or why not, which the page says in place of the recording form."""
-    from ..contrib import serve
+    from ..contrib import doctor, serve
     from ..labs import transcribe
 
     try:
         engine = transcribe.detect(model)
         ready = engine.ready()
-    except transcribe.EngineMissing as e:
-        return serve.Voice(None, str(e))
+    except transcribe.EngineMissing:  # the command for this install, as `doctor` gives it
+        return serve.Voice(
+            None,
+            "no transcription engine is installed here (mlx-whisper on Apple silicon, faster-whisper"
+            " elsewhere); add openlogbook[transcribe] and restart `serve`:"
+            f" {doctor.how_to_add('transcribe')}",
+        )
     except (ImportError, OSError) as e:
         return serve.Voice(
             None, f"the transcription engine could not be asked whether its model is here: {e}"

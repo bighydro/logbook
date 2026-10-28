@@ -5,14 +5,17 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from collections import Counter
 from collections.abc import Callable, Iterator
+from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 from ..contrib import letter, notion_export, site, trip_bundle, vault, world, world_chart
-from ..core import crossing, flights, policy, sealing, share, stays
+from ..core import crossing, day_start, flights, policy, sealing, share, stays
 from ..core.chain import Line, is_sealed
 from ..core.export import day_packages, day_range, parse_day, write_package
-from ..core.store import Logbook, UnsortedFile, now_utc
+from ..core.store import Logbook, UnsortedFile, now_utc, uuid7
 from .common import ARROW, EN_DASH, Subparsers, _airports, _plural
 
 
@@ -83,9 +86,11 @@ def export_arguments(sub: Subparsers) -> None:
     s.add_argument(
         "--tier",
         metavar="1|1,2|1,2,3",
-        help="crossing: tiers to cross (default 1); vault, site: 1 or 1,2, never 3; share: the highest tier"
-        " to share (default 1; never above the ceiling); world: 1, 1,2 or 1,2,3 (default 1,2, under the"
-        " ceiling); letter: up to the letter entry's ceiling, tier 3 only when typed",
+        help="crossing: tiers to cross (default 1); --day, --days: 1, 1,2, 1,2,3 or a bare 2 or 3, never"
+        " above the folder entry's ceiling (default: up to it, tier 1 without an entry); vault, site: 1 or"
+        " 1,2, never 3; share: the highest tier to share (default 1; never above the ceiling); world: 1, 1,2"
+        " or 1,2,3 (default 1,2, under the ceiling); letter: up to the letter entry's ceiling, tier 3 only"
+        " when typed",
     )
     s.add_argument("--kinds", metavar="a,b", help="crossing: only these kinds")
     s.add_argument(
@@ -185,6 +190,7 @@ def export_arguments(sub: Subparsers) -> None:
 
 
 SHARE = "share"  # `export share day`: the command `share day` until 0.6
+FOLDER = "folder"  # `export --day`/`--days`: the crossing line's destination, a folder the owner names
 LETTER_ONLY = (
     ("--unit", "unit"),
     ("--title", "title"),
@@ -297,31 +303,134 @@ def _write_lines(
 
 
 def _export_days(lb: Logbook, a: argparse.Namespace) -> None:
-    """--day DATE [--out DIR]: one package at DIR (default <root>/export/DATE).
-    --days FROM TO [--out DIR] [--empty]: one package per day at DIR/DATE (default <root>/export/DATE)."""
+    """--day DATE [--out DIR] [--tier N|1,2|1,2,3]: one package at DIR (default <root>/export/DATE).
+    --days FROM TO [--out DIR] [--empty] [--tier …]: one package per day at DIR/DATE (default
+    <root>/export/DATE). A package holds the lines up to the ceiling of the policy's `folder` entry, tier
+    1 when there is none (ADR 0016, ADR 0026); `--tier` may lower it, never raise it. The run leaves one
+    crossing/v1 line (RFC 0011) naming the folder, as every export does."""
     try:
+        ceiling = policy.folder_ceiling(lb.root)
+        tiers = (
+            _folder_tiers(a.tier, ceiling)
+            if a.tier is not None
+            else crossing.TIER_SETS.get(",".join(str(t) for t in range(1, ceiling + 1)), ())
+        )
+        if not tiers or max(tiers) > ceiling:
+            asked = a.tier if a.tier is not None else "1"
+            raise crossing.CrossingError(
+                f"--tier {asked} is above the ceiling for {FOLDER!r}: {policy.policy_path(lb.root)} allows"
+                f" max_tier {ceiling}{policy.expiry_note(lb.root, FOLDER)}; write"
+                f' {{"{FOLDER}": {{"max_tier": {max(tiers or (1,))}}}}} in it to let that tier leave'
+            )
         if a.day:
             days = [parse_day(a.day).isoformat()]
             dirs = [Path(a.out).expanduser() if a.out else lb.root / "export" / a.day]
+            folder = dirs[0]
         else:
             days = day_range(*a.days)
             base = Path(a.out).expanduser() if a.out else lb.root / "export"
             dirs = [base / d for d in days]
-    except ValueError as e:
+            folder = base
+    except (ValueError, crossing.CrossingError, policy.PolicyError) as e:
         print(f"export: {e}", file=sys.stderr)
         sys.exit(2)
-    written = 0
-    packages = day_packages(lb, days)  # one read of the log for the whole range
+    generated_at = now_utc()  # the packages' `generated_at` and the crossing line's `at`
+    written: dict[str, bytes] = {}  # the folder's files by their path inside it, as written
+    logged: list[dict[str, Any]] = []
+    crossed: list[dict[str, Any]] = []
+    packages = day_packages(lb, days, generated_at)  # one read of the log for the whole range
     for day, out in zip(days, dirs, strict=True):
         package = packages[day]
+        logged += package["entries"]
+        package["entries"] = [e for e in package["entries"] if e["tier"] in tiers]
         n = len(package["entries"])
         if a.days and not a.empty and n == 0:
             continue
-        write_package(package, out)
-        written += 1
+        written[day if a.days else "package.json"] = write_package(package, out)
+        crossed += package["entries"]
         print(f"{day}: {n} entries → {out}")
     if a.days:
-        print(f"wrote {written} day package(s)")
+        print(f"wrote {len(written)} day package(s)")
+    if not written:  # no folder written, nothing left: no line says it did
+        print("  nothing was written, so nothing is recorded")
+        return
+    files = {(f"{key}/package.json" if a.days else key): raw for key, raw in written.items()}
+    found = list(written) if a.days else days
+    line = _record_folder(lb, folder, found, days, tiers, ceiling, logged, crossed, files, generated_at)
+    line_said = f"#{line['seq']} {crossing.LINE_SCHEMA}"
+    print(
+        f"  recorded as {line_said}: the folder {folder.name!r}, tier {','.join(map(str, tiers))},"
+        f" {_plural(len(crossed), 'line')}"
+    )
+
+
+def _record_folder(
+    lb: Logbook,
+    folder: Path,
+    written_days: list[str],
+    days: list[str],
+    tiers: tuple[int, ...],
+    ceiling: int,
+    logged: list[dict[str, Any]],
+    crossed: list[dict[str, Any]],
+    files: dict[str, bytes],
+    generated_at: str,
+) -> Line:
+    """The crossing/v1 line (RFC 0011) a folder of day packages leaves, after it is written: destination
+    `folder`, the window of the days asked for, the tiers, the counts (per tier and kind, of the lines that
+    crossed), the folder's last part, the days written and the kinds, never a path of this machine. The
+    digest is the folder's, as `export vault` hashes one: each file's sha256 and path, in path order. The
+    ceiling is the policy's `folder` entry's, tier 1 without one (`policy.folder_ceiling`)."""
+    bounds = day_start.of(lb.meta)
+    since, until = bounds.span(days[0])[0], bounds.span(days[-1])[1]
+    head = str(lb.meta["head"])  # the head the packages reflect: the one before this line
+    by_kind = Counter(str(e["kind"]) for e in crossed)
+    return lb.append(
+        at=generated_at,
+        source=crossing.SOURCE,
+        kind=crossing.KIND,
+        tier=1,
+        payload={
+            "schema": crossing.LINE_SCHEMA,
+            "destination": FOLDER,
+            "bundle_id": uuid7(),
+            "window": {"from": _utc_text(since), "to": _utc_text(until)},
+            "tiers": list(tiers),
+            "counts": {
+                "logged": len(logged),
+                "crossed": len(crossed),
+                "held_back": len(logged) - len(crossed),
+                "by_tier": {str(t): sum(1 for e in crossed if e["tier"] == t) for t in tiers},
+                "by_kind": dict(sorted(by_kind.items())),
+                "resolutions": 0,
+                "resolutions_held_back": 0,
+                "attachments": {"included": 0, "bytes": 0, "missing": 0},
+            },
+            "policy": {"file": policy.POLICY_FILE.as_posix(), "max_tier": ceiling},
+            "logbook_head": head,
+            "package_sha256": vault.digest(files),
+            "extra": {
+                "folder": folder.name,
+                "days": written_days,
+                "kinds": sorted(by_kind),
+                "lines": len(crossed),
+            },
+        },
+        recorded_at=generated_at,
+    )
+
+
+def _folder_tiers(text: str, ceiling: int) -> tuple[int, ...]:
+    """`--tier` for a folder: `1`, `1,2` or `1,2,3` as `export crossing` takes it, or a bare `2` or `3`,
+    every tier up to it. The ceiling is checked by the caller, so a tier above it is refused naming the
+    entry, never read as another value."""
+    if text.strip() in ("2", "3"):
+        return tuple(range(1, int(text) + 1))
+    return crossing.parse_tiers(text)
+
+
+def _utc_text(instant: datetime) -> str:
+    return instant.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def _export_crossing(lb: Logbook, a: argparse.Namespace) -> None:

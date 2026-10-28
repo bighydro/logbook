@@ -217,7 +217,7 @@ def test_stats_json_holds_every_number(lb: Logbook, capsys):
 def test_stats_prints_the_same_numbers_on_one_screen(lb: Logbook, capsys):
     out = _stats(capsys)
     lines = out.splitlines()
-    assert lines[0] == f"logbook/0.3  head {lb.meta['head']}"
+    assert lines[0] == f"record format logbook/0.3  head {lb.meta['head']}", "beside a program that says 0.7"
     assert lines[1] == "15 lines  first 2024-01-15T11:00:00Z  last 2026-02-05T00:00:00Z"
     assert "  location        5   2024-06-01  2025-07-01   2 sources" in lines
     assert "  event           1   2025-05-05  2025-05-05   1 source" in lines
