@@ -72,8 +72,8 @@ shell profile so every command finds it. If a record is already in the folder yo
 ── Step 2 of 6: your timezone ───────────────────────────────────────────────
 Why: Every time in the record is stored in UTC; your zone is how the days are cut and shown
      (SPEC §3.2). A flight landing at 23:30 your time is on that day, not the next.
-Your timezone, as the zone database names it [Europe/Oslo] (Europe/Oslo):
-Timezone: Europe/Oslo.
+Your timezone, as the zone database names it [Etc/UTC] (the record's zone now, which Enter keeps; or type another, such as Europe/Oslo): Europe/Oslo
+Timezone set to Europe/Oslo (was Etc/UTC).
 ```
 
 The answer in brackets is what this computer thinks its zone is; Enter accepts it. A zone is spelled
@@ -81,10 +81,10 @@ as a continent, a slash, and the nearest big city: `Europe/Oslo`, `America/New_Y
 name this machine does not know is refused and the question asked again, never swapped for a guess:
 
 ```
-Your timezone, as the zone database names it [Etc/UTC] (Europe/Oslo): Mars/Olympus
+Your timezone, as the zone database names it [Etc/UTC] (the record's zone now, which Enter keeps; or type another, such as Europe/Oslo): Mars/Olympus
 'Mars/Olympus' is not a zone this machine knows; Europe/Oslo, America/New_York and
 Asia/Tokyo are: a continent, a slash, the nearest big city.
-Your timezone, as the zone database names it [Etc/UTC] (Europe/Oslo): Europe/Oslo
+Your timezone, as the zone database names it [Etc/UTC] (the record's zone now, which Enter keeps; or type another, such as Europe/Oslo): Europe/Oslo
 Timezone set to Europe/Oslo (was Etc/UTC).
 ```
 
@@ -270,6 +270,10 @@ Live sources pull on their own with `logbook sync <name>`; each needs a variable
   ais: set LOGBOOK_AISSTREAM_KEY — a free key from aisstream.io, for the vessels registered in assets.json
   adsb: works without a key; optional LOGBOOK_OPENSKY_USER and LOGBOOK_OPENSKY_PASS — an account at opensky-network.org (optional: anonymous access works, with a lower rate)
   gmail: set LOGBOOK_DRIVE_SA_KEY and LOGBOOK_DRIVE_USER — the same service account and address as drive, with Gmail's read-only scope delegated too
+  beeper: set LOGBOOK_BEEPER_TOKEN — Beeper Desktop → Settings → Developers → Approved connections (+); the token reads every chat and can send as you, so it is a password; the app must be running, Remote Access off
+  telegram: set LOGBOOK_TELEGRAM_BOT_TOKENS and LOGBOOK_TELEGRAM_OWNER_ID — @BotFather → /mybots → each bot of yours → API Token, comma-separated (each reads and sends as its bot, so it is a password); your numeric user id is personal_information.user_id in Telegram Desktop's export
+  notion: set LOGBOOK_NOTION_TOKEN — Notion → Settings → Connections → Develop or manage integrations → New integration (internal, Read content only), then share each top-level page with it (••• → Connections)
+  github: set LOGBOOK_GITHUB_TOKEN and LOGBOOK_GITHUB_REPOS — GitHub → Settings → Developer settings → Personal access tokens → Fine-grained tokens: read-only Metadata, Contents, Issues and Pull requests on the repos LOGBOOK_GITHUB_REPOS names (owner/name, or --all); your logins go under handles in policy/owner.json
 A key goes in the variable in your shell profile, never in a file of the record, never here.
 ```
 
@@ -282,25 +286,27 @@ you can see it took; never what they hold. Setting one is a line in your shell p
 ```
 ── Step 6 of 6: a check-up ──────────────────────────────────────────────────
 Why: `logbook doctor` is the check-up: one line per check, pass, warn or fail. Run it any time.
-pass  record            11 lines, head 53c3dffd3261…, verified; /Users/ines/Logbook
+pass  record            11 lines, head b9f126fcd8fc…, verified; /Users/ines/Logbook
 pass  index             index.sqlite is current with logbook.json
 pass  owner             policy/owner.json names 2 names, 1 emails, 1 phones
 pass  places            1 place(s), home: Home
 pass  assets            no assets.json; nothing is tracked as a subject
 pass  dates             every line is dated inside its source's plausible range (policy/plausible.json)
-pass  extra:ais         websockets is installed
-pass  extra:crypto      cryptography is installed
-pass  extra:sealed      pyrage is installed
-warn  extra:speakers    pyannote.audio not installed: pip install "openlogbook[speakers]"
-warn  extra:transcribe  mlx-whisper or faster-whisper not installed: pip install "openlogbook[transcribe]"
+warn  extra:ais         websockets not installed: PIPX_HOME=/Users/ines/.local/pipx pipx runpip openlogbook install "openlogbook[ais]==0.7.1"
+warn  extra:crypto      cryptography not installed: PIPX_HOME=/Users/ines/.local/pipx pipx runpip openlogbook install "openlogbook[crypto]==0.7.1"
+warn  extra:sealed      pyrage not installed: PIPX_HOME=/Users/ines/.local/pipx pipx runpip openlogbook install "openlogbook[sealed]==0.7.1"
+warn  extra:speakers    pyannote.audio not installed: PIPX_HOME=/Users/ines/.local/pipx pipx runpip openlogbook install "openlogbook[speakers]==0.7.1"
+warn  extra:transcribe  mlx-whisper or faster-whisper not installed: PIPX_HOME=/Users/ines/.local/pipx pipx runpip openlogbook install "openlogbook[transcribe]==0.7.1"
 pass  crossing          mcp 1
+pass  world             export world shows tier 1 alone: policy/crossing.json names no world entry; {"world": {"max_tier": 2}} would add the chapters
+pass  phone             the Library is written from this machine only; `logbook setup phone` lets your phone write too
 pass  home              no home set; `logbook sync --install-schedule` on the machine that keeps the record names it (ADR 0022)
 pass  last-run          no schedule on this machine; `logbook sync --install-schedule` runs `sync --all` and `doctor` four times a day and writes it
 warn  restore-test      no restore test yet: `logbook backup --restore-test` restores the latest snapshot into a temporary folder and verifies it; the schedule runs it on the first Sunday of the month
 pass  serve             no serve service on this machine; `logbook serve --install-service` keeps the pages at http://127.0.0.1:8765/ from load (docs/serve.md)
-pass  disk              29.0 GiB free on the record's volume
+pass  disk              29.8 GiB free on the record's volume
 pass  folder            a plain local folder, no sync client
-18 checks: 15 pass, 3 warn, 0 fail
+20 checks: 14 pass, 6 warn, 0 fail
 
 Setup is complete. Your record is at ~/Logbook.
 Next:
