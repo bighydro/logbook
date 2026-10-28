@@ -1256,7 +1256,13 @@ noscript th,noscript td{text-align:left;padding:.2rem .6rem;border-bottom:1px so
 """
 LIBRARY_STYLE = """
 #globe,#bands{max-width:100%}
-"""  # the Library's `/world` only, its canvases held to a phone's column; the exported file keeps STYLE
+body{box-sizing:border-box}
+header nav{display:flex;flex-wrap:wrap;row-gap:.3rem}
+#tools button,#play{min-width:44px;min-height:44px}
+#panel{top:calc(1rem + 44px);max-height:calc(100% - 1.9rem - 44px)}
+"""  # the Library's `/world` only: its canvases held to a phone's column, the doors' bar (its padding on
+# the body, on a phone) inside the screen's height, its own navigation wrapped and its buttons 44 px
+# targets, the panel under them; the exported file keeps STYLE
 
 
 def page(json_text: str, nav: str = "", standalone: bool = True, shell: str = "", style: str = "") -> str:

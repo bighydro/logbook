@@ -1,0 +1,3 @@
+### Fixed
+- The Library on a phone: every target the pages name is 44 px or more (a Day's line as written, every fold's summary, the Places review's name, skip and reject, the week's keep box and day links, the life's years and zooms, the Days' links, window and show button, the pagers, the world's map buttons); a Day's eyebrows, its ribbon, a row's kind, ids, evidence and the footer are at least 13, 12 or 14 px; and a row's kind and a promise's or an asset's badge keep 4.5:1 on the page in the light face and the dark.
+- `/world` on a phone: its play button and scrubber sit above the doors' bar instead of under it, and a navigation of its own wraps inside the screen.
