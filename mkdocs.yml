@@ -129,6 +129,7 @@ nav:
   - The world (a globe you can scrub): world.md
   - The map (offline, drawn as SVG): map.md
   - The crossing: crossing.md
+  - A day to a folder: export.md
   - Export for Notion: export-notion.md
   - The letter: letter.md
   - Promises: promises.md

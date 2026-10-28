@@ -16,7 +16,7 @@
     Marina (asset-berth)                        1 night · 3 stays · 27 h · with Anders Vik, Ola Nordmann, Sigrid Moen
     Cabin (other)                               1 night · 1 stay · 26 h · with Ola Nordmann
     Office (other)                              0 nights · 14 stays · 107 h · with Per Hansen, Liv Berg
-    Nordlys (nordlys) (yacht)                   6 nights · 3 stays · 148 h · with Anders Vik, Ola Nordmann, Sigrid Moen
+    Nordlys (yacht)                             6 nights · 3 stays · 148 h · with Anders Vik, Ola Nordmann, Sigrid Moen
     unnamed:
     47.3769,8.5417 (Zurich)                     3 nights · 3 stays · 58 h · with Marta Keller
     59.0500,10.0300 aboard Nordlys (Sandefjord) 2 nights · 2 stays · 41 h

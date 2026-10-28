@@ -423,7 +423,7 @@ def _health_rows(days: list[dict[str, Any]]) -> Iterator[str]:
 
 
 def _stats_rows(s: dict[str, Any]) -> Iterator[str]:
-    yield f"{s['format']}  head {s['head']}"
+    yield f"record format {s['format']}  head {s['head']}"  # the folder's format, not the program's version
     if not s["lines"]:
         yield "0 lines"
     else:
@@ -923,12 +923,12 @@ def cmd_doctor(a: argparse.Namespace) -> None:
         return
     if getattr(a, "attachments", False):
         if lb is None:
-            sys.exit("no logbook found; run `logbook init`, or set LOGBOOK_HOME")
+            sys.exit(doctor_checks.NO_RECORD)
         doctor_checks.report_attachments(lb, sys.stdout)
         return
     if getattr(a, "implausible", False):
         if lb is None:
-            sys.exit("no logbook found; run `logbook init`, or set LOGBOOK_HOME")
+            sys.exit(doctor_checks.NO_RECORD)
         status = doctor_checks.report_implausible(lb, sys.stdout)
         if status:
             sys.exit(status)

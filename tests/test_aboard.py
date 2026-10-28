@@ -222,7 +222,8 @@ def test_rollup_places_has_an_aboard_section_and_nights_counts_the_night_aboard(
     text = _run(capsys, "rollup", "places", "--since", FRI, "--until", SAT)
     assert (
         "aboard, by hours" in text
-        and f"{REDUCE_NAME} ({REDUCE}) (yacht)" in text
+        and f"{REDUCE_NAME} (yacht)" in text
+        and f"({REDUCE})" not in text
         and "1 night · 1 stay" in text
     )
     nights = _json(capsys, "rollup", "nights", "--since", FRI, "--until", SAT)

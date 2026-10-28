@@ -1,4 +1,4 @@
-trip:2026-06-08:2026-06-10  2026-06-08 – 2026-06-10 · 3 nights · until 2026-06-11
+trip:2026-06-08:2026-06-10  2026-06-08 – 2026-06-10 · 3 nights · back on 11 June
   route
      1  2026-06-08 – 2026-06-10  3 nights  Zurich
   flights       in XY 561 OSL → ZRH · out XY 562 ZRH → OSL

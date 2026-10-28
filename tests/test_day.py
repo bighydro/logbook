@@ -372,7 +372,7 @@ def test_a_day_with_no_lines_and_a_bad_date(
     assert data["nights"]["after"]["in_transit"] is True and data["nights"]["after"]["where"] is None
     assert data["country"] == {"code": None, "method": None, "by": None, "from": None}
     text = _run(capsys, "2026-07-20")
-    assert "nothing logged" in text and "in transit" in text
+    assert "nothing logged" in text and "not recorded" in text and "in transit" not in text
     with pytest.raises(SystemExit) as e:
         cli.main(["day", "2026-13-01"])
     assert e.value.code == 2 and "not a date" in capsys.readouterr().err

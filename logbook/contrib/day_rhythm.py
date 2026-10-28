@@ -337,16 +337,16 @@ def clock_tag(day: str, meta: Mapping[str, Any], now: datetime) -> str:
 def eyebrow(
     weekday: str, shape: str, now: datetime | None, signed: Mapping[str, Any] | None, day: str
 ) -> str:
-    """`Saturday · evening · 21:40` on today; the clock left out on any other day; a signed day
-    `Saturday · signed 21:52`, with the date when it was signed on a later one."""
+    """`Saturday · evening · 21:40` on today; any other day its weekday alone, since a day read weeks
+    later is in no morning or evening (the stranger test); a signed day `Saturday · signed 21:52`, with
+    the date when it was signed on a later one."""
     if shape == SIGNED and signed is not None:
         local = str(signed["at_local"])
         when = local[11:16] if local[:10] == day else f"{local[:10]} {local[11:16]}"
         return f"{weekday}{DOT}signed {when}"
-    parts = [weekday, shape]
-    if now is not None:
-        parts.append(now.strftime("%H:%M"))
-    return DOT.join(parts)
+    if now is None:
+        return weekday
+    return DOT.join([weekday, shape, now.strftime("%H:%M")])
 
 
 def meta_line(
@@ -355,7 +355,12 @@ def meta_line(
     """The header's one line: where the night after was spent, the weather when the record has it,
     and who was there, as the `with` row says them."""
     night = data["nights"]["after"]
-    parts = [escape("in transit" if night["in_transit"] else str(night["where"] or "unknown"))]
+    if night["in_transit"]:  # `in transit` only with a move or a flight across the night (`day.night_moving`)
+        said = day_reader.night_said(data, "after")
+        where = said if said == "in transit" else f"night {said}"
+    else:
+        where = str(night["where"] or "unknown")
+    parts = [escape(where)]
     if data.get("weather"):
         short = weather.short_text(data["weather"])
         if short:

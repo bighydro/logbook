@@ -142,7 +142,8 @@ from . import countries as country_table
 from . import flights as flight_lines
 from . import places as named_places
 from .chain import Line, is_sealed
-from .day_start import MIDNIGHT, span_words
+from .day_start import MIDNIGHT, DayStart, span_words
+from .day_start import clock as day_start_clock
 from .export import parse_day
 from .flights import Airports
 from .reading import Reading
@@ -152,6 +153,7 @@ from .store import Logbook, retractions
 ABOARD, FLIGHT, GAP = "aboard", "flight", "gap"
 NAMED = ("event", "transcript", "note", "mail", "call", keepers.KIND)  # attachments listed by name
 COUNTED = ("message", "photo")  # attachments counted
+NOT_RECORDED = "not recorded"  # a night with no stay and no move or flight across it: the record does not say
 STATED = "you said"  # how the Day marks a person the owner stated present (`logbook with`)
 PLACED = ("event", "transcript", "note", "mail", "call")  # the kinds `unplaced` lists
 NOTE_CHARS = 72
@@ -175,7 +177,7 @@ def read(
     tiers: Sequence[int] | None = None,
     held: bool = False,
     names_at: Sequence[int] | None = None,
-) -> dict[str, Any]:
+) -> DayData:
     """The Day as one JSON-ready object; through the gate `tiers` when given (`reading.read`), the
     health and story lines included. With `held` (the Day page's folds, `logbook serve`), each row's
     messages by conversation and every line of the day, `hold`, from this same reading; the Day's
@@ -242,7 +244,13 @@ def read(
         day, (d - timedelta(days=readiness.WINDOW_DAYS - 1)).isoformat(), on_day, logged, days_of, disabled
     )
     data["received"] = received(lb, day)
-    return data
+    day_data = DayData(data)
+    day_data.moving = {
+        which: bool(day_data["nights"][which]["in_transit"])
+        and moving_across(rd, str(day_data["nights"][which]["day"]))
+        for which in ("before", "after")
+    }
+    return day_data
 
 
 def of_reading(
@@ -1201,10 +1209,10 @@ def rows(data: dict[str, Any]) -> Iterator[str]:
     yield head
     marks = _marks(data)
     company = company_of_day(data)
-    yield _row("night before", night_text(data["nights"]["before"]))
+    yield _row("night before", night_said(data, "before"))
     if data.get("night"):  # the night that ended on the day, slept through the night before's place
         yield _row("night", slept_text(data["night"], data["tz"]))
-    yield _row("night after", night_text(data["nights"]["after"]) + _weather_beside(data))
+    yield _row("night after", night_said(data, "after") + _weather_beside(data))
     yield _row("country", country_text(data["country"]))
     if data["all_day"]:
         entries = (
@@ -1416,16 +1424,74 @@ def _row(label: str, text: str) -> str:
     return f"  {label:<13} {text}"
 
 
-def night_text(night: dict[str, Any]) -> str:
+def night_text(night: Mapping[str, Any], moving: bool) -> str:
     """`Home · home`; aboard an asset, the asset's position that night between: `aboard Solvind ·
-    59.8500,10.6000 · away`."""
+    59.8500,10.6000 · away`. A night with no stay is `in transit` only when the record holds a move or
+    a flight across it (`moving`, `night_moving`); else the record does not place it: `not recorded`."""
     if night["in_transit"]:
-        return "in transit"
+        return "in transit" if moving else NOT_RECORDED
     parts = [str(night["where"])]
     if night["aboard"] and night.get("position"):
         parts.append(f"{night['position']['lat']:.4f},{night['position']['lon']:.4f}")
     parts.append("home" if night["home"] else "away")
     return DOT.join(parts)
+
+
+class DayData(dict[str, Any]):
+    """The Day's object as `read` returns it, a plain dict to `json.dumps` (SPEC §3.2.7 unchanged), with
+    `moving` beside it: for `before` and `after`, whether a move or a flight crosses that night
+    (`moving_across`, from the reading of the whole night), which the text says and the JSON does not."""
+
+    moving: dict[str, bool]
+
+
+def moving_across(rd: Reading, night: str) -> bool:
+    """Whether the reading holds a move the tracker saw (never a gap: a silence is no journey) or a standing
+    flight whose span overlaps the night of date `night`, its window as the record's settings give it. One
+    answer per night, whichever Day asks: the Day before and the Day after read the same reading of it."""
+    start, end = stays.night_window(night, rd.tz, rd.settings)
+    for s in rd.derived.folded:
+        moved = s.subject is None and s.kind == stays.MOVE and not _is_gap(s, rd.settings)
+        if moved and s.start < end and s.end > start:
+            return True
+    for line in flight_lines.standing(rd.of_kind(flight_lines.KIND)).values():
+        at = stays.instant(line.get("at"))
+        if at is None:
+            continue
+        until = stays.instant(line.get("end")) or at
+        if at < end and until >= start:
+            return True
+    return False
+
+
+def night_said(data: Mapping[str, Any], which: str) -> str:
+    """The Day's night `which` (`before` or `after`) as text: `night_text`, moving or not by what `read`
+    found across the whole night (`DayData.moving`), else by the Day's own rows (`night_moving`)."""
+    moving = getattr(data, "moving", None)
+    found = moving[which] if moving is not None else night_moving(data, which)
+    return night_text(data["nights"][which], found)
+
+
+def night_moving(data: Mapping[str, Any], which: str) -> bool:
+    """Whether the Day `data` holds a move or a flight across its night `which` (`before` or `after`), from
+    its own rows alone, for a Day object that was copied or read back from JSON and lost `DayData.moving`:
+    a move the tracker saw or a flight overlapping the part of that night's default window (22:00 to
+    08:00) that lies on the day."""
+    night = data["nights"][which]
+    tz = ZoneInfo(str(data["tz"]))
+    start, end = stays.night_window(str(night["day"]), tz, stays.Settings())
+    first, last = DayStart(tz, day_start_clock(data.get("day_start"))).span(str(data["day"]))
+    a, b = max(start, first), min(end, last)
+    if a >= b:
+        return False
+    for row in data["timeline"]:
+        if row["kind"] not in (stays.MOVE, FLIGHT) or row.get("gap"):
+            continue
+        since = _instant(row["start"])
+        until = _instant(row["end"]) or since
+        if since < b and until >= a:
+            return True
+    return False
 
 
 def _weather_beside(data: Mapping[str, Any]) -> str:

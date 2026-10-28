@@ -131,8 +131,12 @@ def test_show_asset_and_show_place_name_who_was_aboard_and_there_without_their_d
         assert beside_a_name.rows(_run("show", *args)) == [], args
     asset = _json("show", "asset", "nordlys")
     assert [(p["name"], p["days"]) for p in asset["people"]] == [
-        ("Anders Vik", 2), ("Ola Nordmann", 2), ("Sigrid Moen", 1)
+        ("Anders Vik", 3), ("Ola Nordmann", 3), ("Sigrid Moen", 1)
     ], "the counts stay in the JSON, the order with them"  # fmt: skip
+    [aboard] = _json("rollup", "places")["years"][0]["aboard"]
+    assert [(p["name"], p["days"]) for p in asset["people"]] == [
+        (p["name"], p["days"]) for p in aboard["people"]
+    ], "the asset's page reads the runs aboard as rollup places does (the stranger test)"
     assert [(p["name"], p["days"]) for p in _json("show", "place", "Cabin")["people"]] == [
         ("Ola Nordmann", 2)
     ]

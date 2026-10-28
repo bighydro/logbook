@@ -48,7 +48,7 @@ never observes one and never proposes one, even a bot named after someone the re
 
 ```
 11 people · 2026-06-01 – 2026-06-21 · tier 2
-  Ola Nordmann  messages 5 · calendar 1 · transcripts 1 · 3 days · 2 nights · last real contact 2026-06-16 (meeting) · birthday 1985-03-12 · Office, aboard solvind, 47.3769,8.5417 (Zürich)
+  Ola Nordmann  messages 5 · calendar 1 · transcripts 1 · 3 days · 2 nights · last real contact 2026-06-16 (meeting) · birthday 1985-03-12 · Office, aboard Solvind, 47.3769,8.5417 (Zürich)
   Liv Berg      calendar 1 · 1 day · last real contact 2026-06-09 (meeting) · Office
   Eva Nordmann  calls 1 · last real contact 2026-06-17 (call)
   Jonas Weber   calendar 1
@@ -109,7 +109,7 @@ Ola Nordmann  (ola@example.org, +4790000001) · tier 2
   first contact 2026-06-09 · last 2026-06-16 · last real contact 2026-06-16 (meeting)
   channels  messages 5 (2026-06-09 – 2026-06-14) · calendar 1 (2026-06-16) · transcripts 1 (2026-06-11)
   3 days together · 2 nights under one roof
-  places  Office (1 day), aboard solvind (1 day), 47.3769,8.5417 (Zürich) (1 day)
+  places  Office (1 day), aboard Solvind (1 day), 47.3769,8.5417 (Zürich) (1 day)
   shared days
     2026-06-16  47.3769,8.5417 (Zürich) · attendee of Dinner · night
     2026-06-13  aboard solvind · note says with Ola Nordmann · night

@@ -36,7 +36,7 @@ def test_a_person_page_is_the_arc_of_the_relationship(
     assert sorted(r["kind"] for r in data["refs"]) == ["email", "phone"]
     assert data["first_contact"] == "2026-06-11" and data["last_contact"] == "2026-06-16"
     assert data["days_together"] == {"2026": 3}
-    assert set(data["places"]) >= {"Office", "aboard solvind"}
+    assert set(data["places"]) >= {"Office", "aboard Solvind"}, "the asset by its registered name"
     assert data["commitments"] == {"open": [], "you_owe": 0, "they_owe": 0}, "no promise with Ola here"
     stays = data["shared_stays"]
     assert len(stays) == 3 and stays[0]["start"] > stays[-1]["start"], "the last stays first"

@@ -210,10 +210,24 @@ def test_cli_export_days_reads_the_log_once(
         calls.append(self.root)
         return original(self)
 
+    read_before: list[int] = []  # the reads made when the run's one crossing line is appended
+    by_append: list[int] = []  # the files() calls the append makes itself, to find its month file
+    appending = Logbook.append
+
+    def append(self: Logbook, *args: object, **kwargs: object) -> object:
+        read_before.append(len(calls))
+        line = appending(self, *args, **kwargs)  # type: ignore[arg-type]
+        by_append.append(len(calls) - read_before[-1])
+        return line
+
     monkeypatch.setattr(Logbook, "files", counting)
+    monkeypatch.setattr(Logbook, "append", append)
     monkeypatch.setenv("LOGBOOK_HOME", str(two_days.root))
     cli.main(["export", "--days", "2026-02-01", "2026-03-31", "--out", str(tmp_path / "o")])
-    assert len(calls) == 1
+    assert read_before == [1], (
+        "one read of the log for the whole range, then the crossing line (its own write)"
+    )
+    assert len(calls) == 1 + sum(by_append), "and no read of the log after it"
     made = sorted(p.name for p in (tmp_path / "o").iterdir())
     assert made == ["2026-03-01", "2026-03-02"]
     assert [e["seq"] for e in _manifest(tmp_path / "o" / "2026-03-02")["entries"]] == [3, 4]

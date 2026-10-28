@@ -6,12 +6,12 @@ import argparse
 import dataclasses
 import json
 import sys
-from collections.abc import Iterable, Iterator, Sequence
+from collections.abc import Iterable, Iterator, Mapping, Sequence
 from datetime import date
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from ..core import places, reading, stays
+from ..core import places, reading, rollup, stays
 from ..core.chain import Line
 from ..core.export import parse_day
 from ..core.store import Logbook
@@ -252,6 +252,7 @@ def _places_propose(lb: Logbook, a: argparse.Namespace) -> None:
         if s.place is None and s.lat is not None and s.lon is not None
     ]
     proposals = places.propose(unnamed, read.places, read.timeline_visits)
+    names = {k: v.name for k, v in read.assets.items() if v.name}  # the text names an asset by its name
     total = len(proposals)
     if a.top is not None:
         proposals = proposals[: a.top]
@@ -284,7 +285,11 @@ def _places_propose(lb: Logbook, a: argparse.Namespace) -> None:
     cut = f"; the first {len(proposals)} shown (--top)" if len(proposals) < total else ""
     print(f"{first} {EN_DASH} {last}: {_plural(total, 'unnamed place')}, by hours{cut}")
     for n, proposal in enumerate(proposals, 1):
-        for text in _proposal_rows(n, proposal):
+        if (
+            proposal.aboard
+        ):  # `aboard Nordlys`, as the text and the name written say it; the JSON keeps the id
+            proposal = dataclasses.replace(proposal, suggested=rollup.aboard_text(proposal.suggested, names))
+        for text in _proposal_rows(n, proposal, names):
             print(text)
         for c in nearby[proposal.id][:3]:
             print(f"      saved: {_saved_row(c)}")
@@ -324,10 +329,10 @@ def _say_saved_elsewhere(elsewhere: list[takeout_maps.Candidate]) -> None:
         print(f"      {_saved_row(c)}")
 
 
-def _proposal_rows(n: int, p: places.Proposal) -> Iterator[str]:
+def _proposal_rows(n: int, p: places.Proposal, names: Mapping[str, str]) -> Iterator[str]:
     parts = [f"{p.hours:6.1f} h", f"{p.lat:.4f},{p.lon:.4f}", _plural(len(p.stays), "stay")]
     if p.aboard:
-        parts.append(f"aboard {p.aboard}")
+        parts.append(f"aboard {names.get(p.aboard, p.aboard)}")
     if p.nearest is not None:
         parts.append(f"{_distance_text(p.nearest[1])} from {p.nearest[0].name}")
     yield f"{n:3}. {' · '.join(parts)}   {p.id}"

@@ -141,10 +141,10 @@ logbook setup places propose --top 4
 ```
 2026-06-01 – 2026-06-30: 14 unnamed places, by hours; the first 4 shown (--top)
   1.   58.5 h · 47.3769,8.5417 · 3 stays · 1400 km from Marina   stay:owner:20260608T0830Z@47.3769,8.5417
-  2.   40.7 h · 59.0500,10.0300 · 2 stays · aboard nordlys · 103 km from Marina   stay:owner:20260617T1200Z@59.0500,10.0300
-      suggested: aboard nordlys
-  3.   40.0 h · 59.8500,10.6000 · 2 stays · aboard nordlys · 9.7 km from Marina   stay:owner:20260615T1100Z@59.8500,10.6000
-      suggested: aboard nordlys
+  2.   40.7 h · 59.0500,10.0300 · 2 stays · aboard Nordlys · 103 km from Marina   stay:owner:20260617T1200Z@59.0500,10.0300
+      suggested: aboard Nordlys
+  3.   40.0 h · 59.8500,10.6000 · 2 stays · aboard Nordlys · 9.7 km from Marina   stay:owner:20260615T1100Z@59.8500,10.6000
+      suggested: aboard Nordlys
   4.   33.1 h · 55.6850,12.5500 · 2 stays · 481 km from Marina   stay:owner:20260625T1630Z@55.6850,12.5500
 ```
 
@@ -228,7 +228,7 @@ countries 2026-06-01 – 2026-06-30
 
 ```
 nights 2026-06-01 – 2026-06-30
-  2026  18 home · 12 away · 0 in transit · 6 nights aboard nordlys · longest trip 2026-06-15 – 2026-06-20 (6 nights)
+  2026  18 home · 12 away · 0 in transit · 6 nights aboard Nordlys · longest trip 2026-06-15 – 2026-06-20 (6 nights)
 ```
 
 `--json` on any of them carries the ids of the lines every number came from.

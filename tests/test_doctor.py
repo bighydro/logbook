@@ -110,9 +110,13 @@ def test_a_healthy_record_passes_every_check(lb: Logbook) -> None:
 
 
 def test_no_record_is_one_failure_and_the_extras(tmp_path: Path) -> None:
+    """The stranger test: before any record, the first words say what to do next, in a sentence."""
     checks = _run(None)
-    assert checks["record"].status == "fail"
-    assert "logbook init" in checks["record"].detail
+    assert checks["record"].status == "fail", "the exit code stays 1"
+    assert checks["record"].detail == (
+        "No record yet: run `logbook demo --out ~/Demo/Logbook` to try one,"
+        " or `logbook setup` to start yours."
+    )
     assert "index" not in checks and "disk" not in checks
     assert {n for n in checks if n.startswith("extra:")} == {
         "extra:ais",
@@ -301,14 +305,14 @@ def test_under_pipx_the_hint_is_pipx_and_keeps_every_extra_already_there(lb: Log
         )
     }
     assert checks["extra:ais"].detail == (
-        f"websockets not installed: PIPX_HOME={PIPX_HOME} pipx runpip openlogbook install"
+        f"websockets not installed: PIPX_HOME={PIPX_HOME} pipx inject openlogbook"
         ' "openlogbook[ais,judge,sealed]==0.7.0"'
     ), "what pipx's receipt names, which pipx writes back, and the extra; a module found is not named"
 
 
 INSTALLS: dict[str, doctor.Install] = {
     "pipx": doctor.Install("pipx", requirement=f"=={VERSION}", home=PIPX_HOME, venv="openlogbook"),
-    "uv-tool": doctor.Install("uv-tool", requirement=f"=={VERSION}", python=PYTHON),
+    "uv-tool": doctor.Install("uv-tool", requirement=f"=={VERSION}"),
     "checkout": doctor.Install("checkout", folder="openlogbook", python=VENV_PYTHON),
     "pip": PIP,
     "homebrew": doctor.Install("homebrew", why=doctor.HOMEBREW),
@@ -318,13 +322,9 @@ INSTALLS: dict[str, doctor.Install] = {
 @pytest.mark.parametrize(
     ("how", "line"),
     [
-        ("pipx", f'PIPX_HOME={PIPX_HOME} pipx runpip openlogbook install "openlogbook[ais,crypto]==0.7.0"'),
-        ("uv-tool", f'uv tool install --force --python {PYTHON} "openlogbook[ais,crypto]==0.7.0"'),
-        (
-            "checkout",
-            f"uv sync --project openlogbook --python {VENV_PYTHON} --inexact --no-default-groups"
-            " --extra ais --extra crypto",
-        ),
+        ("pipx", f'PIPX_HOME={PIPX_HOME} pipx inject openlogbook "openlogbook[ais,crypto]==0.7.0"'),
+        ("uv-tool", 'uv tool install --force "openlogbook[ais,crypto]==0.7.0"'),
+        ("checkout", "uv sync --inexact --extra ais --extra crypto"),
         ("pip", f'{VENV_PYTHON} -m pip install "openlogbook[ais,crypto]==0.7.0"'),
         ("homebrew", None),
     ],
@@ -353,9 +353,7 @@ def test_how_this_logbook_was_installed_is_read_from_its_prefix(tmp_path: Path) 
     (uv / "uv-receipt.toml").write_text(
         '[tool]\nrequirements = [{ name = "openlogbook", extras = ["mcp"] }]\n', encoding="utf-8"
     )
-    assert doctor.install_of(uv, HERE) == doctor.Install(
-        "uv-tool", frozenset({"mcp"}), "==0.7.0", python=PYTHON
-    )
+    assert doctor.install_of(uv, HERE) == doctor.Install("uv-tool", frozenset({"mcp"}), "==0.7.0")
 
     checkout = tmp_path / "src" / "logbook"
     (checkout / ".venv").mkdir(parents=True)
@@ -401,7 +399,7 @@ def test_an_editable_or_pinned_install_keeps_where_it_came_from(tmp_path: Path) 
             venv="openlogbook",
         )
         assert doctor.install_line(pipx, {"ais", "crypto"}) == (
-            f"PIPX_HOME={doctor._arg(str(tmp_path / 'pipx'))} pipx runpip openlogbook install"
+            f"PIPX_HOME={doctor._arg(str(tmp_path / 'pipx'))} pipx inject openlogbook"
             f' --editable "{checkout}[ais,crypto]"'
         )
 
@@ -415,7 +413,7 @@ def test_an_editable_or_pinned_install_keeps_where_it_came_from(tmp_path: Path) 
         )
         pinned = doctor.install_of(venv, _here(version=installed))
         assert doctor.install_line(pinned, {"ais"}) == (
-            f"PIPX_HOME={doctor._arg(str(tmp_path / 'pipx'))} pipx runpip openlogbook install"
+            f"PIPX_HOME={doctor._arg(str(tmp_path / 'pipx'))} pipx inject openlogbook"
             f' "openlogbook[ais]=={installed}"'
         ), spec
 
@@ -426,19 +424,15 @@ def test_an_editable_or_pinned_install_keeps_where_it_came_from(tmp_path: Path) 
     )
     editable = _here(direct_url=json.dumps({"url": checkout.as_uri(), "dir_info": {"editable": True}}))
     uv = doctor.install_of(tmp_path, editable)
-    assert uv == doctor.Install("uv-tool", folder=str(checkout), python=PYTHON)
-    assert doctor.install_line(uv, {"ais"}) == (
-        f'uv tool install --force --python {PYTHON} --editable "{checkout}[ais]"'
-    )
+    assert uv == doctor.Install("uv-tool", folder=str(checkout))
+    assert doctor.install_line(uv, {"ais"}) == f'uv tool install --force --editable "{checkout}[ais]"'
     assert doctor.install_line(doctor.install_of(tmp_path, HERE), {"ais"}) is None, (
         "receipt and package differ"
     )
 
-    checkout_line = doctor.install_line(
-        doctor.Install("checkout", folder=str(checkout), python=VENV_PYTHON), {"ais"}
-    )
-    project = f"--project {doctor._arg(str(checkout))} --python {VENV_PYTHON}"
-    assert checkout_line == f"uv sync {project} --inexact --no-default-groups --extra ais"
+    clone = doctor.Install("checkout", folder=str(checkout), python=VENV_PYTHON)
+    assert doctor.install_line(clone, {"ais"}) == "uv sync --inexact --extra ais"
+    assert _hint(clone).endswith(f"; in the clone, {checkout}: uv sync --inexact --extra ais")
 
 
 def test_a_broken_receipt_is_still_the_installer_with_no_extras_named(tmp_path: Path) -> None:
@@ -476,9 +470,11 @@ def _receipt(tmp_path: Path, fixture: str, here: doctor.Here = HERE) -> doctor.I
     return doctor.install_of(venv, here)
 
 
-def _runpip(tmp_path: Path, venv: str = "openlogbook") -> str:
-    """How a line for a pipx venv `_receipt` made begins."""
-    return f"PIPX_HOME={doctor._arg(str(tmp_path / 'pipx'))} pipx runpip {venv} install "
+def _inject(tmp_path: Path, venv: str = "openlogbook", pip_args: str = "") -> str:
+    """How a line for a pipx venv `_receipt` made begins: its home named, since it is not the one a bare
+    `pipx` uses (the tests' home is a temporary folder), and the index options pip is given."""
+    options = f'--pip-args="{pip_args}" ' if pip_args else ""
+    return f"PIPX_HOME={doctor._arg(str(tmp_path / 'pipx'))} pipx inject {options}{venv} "
 
 
 def _hint(install: doctor.Install, extra: str = "ais") -> str:
@@ -495,7 +491,7 @@ def test_a_uv_pin_stays_pinned_on_its_python_and_index(tmp_path: Path) -> None:
     uv = _receipt(tmp_path, "uv-pinned.toml")
     assert uv.extras == {"mcp"}
     assert doctor.install_line(uv, {"ais", "mcp"}) == (
-        f"uv tool install --force --python {PYTHON} --no-index --find-links file:///home/ines/src/dist"
+        "uv tool install --force --python 3.12 --no-index --find-links file:///home/ines/src/dist"
         ' "openlogbook[ais,mcp]==0.7.0"'
     )
 
@@ -505,7 +501,7 @@ def test_a_uv_install_from_git_stays_on_its_repository_and_revision(tmp_path: Pa
     the receipt's tag or branch, which may have moved; and only when the receipt says git too."""
     uv = _receipt(tmp_path, "uv-git.toml", _here(direct_url=GIT))
     assert doctor.install_line(uv, {"ais", "mcp"}) == (
-        f"uv tool install --force --python {PYTHON}"
+        "uv tool install --force --python 3.12"
         f' "openlogbook[ais,mcp] @ git+https://example.org/ines/logbook.git@{COMMIT}"'
     )
     assert doctor.install_line(_receipt(tmp_path, "uv-git.toml"), {"ais"}) is None, "installed from an index"
@@ -537,7 +533,7 @@ def test_a_uv_companion_installed_with_with_stays(tmp_path: Path) -> None:
     """At the version installed now: `--with ijson` alone moved it to a newer one (third review)."""
     uv = _receipt(tmp_path, "uv-with.toml")
     assert doctor.install_line(uv, {"ais", "mcp"}) == (
-        f'uv tool install --force --python {PYTHON} --with ijson==3.5.1 "openlogbook[ais,mcp]==0.7.0"'
+        'uv tool install --force --python 3.12 --with ijson==3.5.1 "openlogbook[ais,mcp]==0.7.0"'
     )
     unknown = _receipt(tmp_path, "uv-with.toml", _here(version_of=lambda name: None))
     assert doctor.install_line(unknown, {"ais"}) is None and "ijson" in unknown.why
@@ -562,7 +558,7 @@ def test_a_pipx_install_from_a_bare_git_url_becomes_a_requirement_with_the_extra
     """`"git+https://…[ais]"` is not a requirement; `"openlogbook[ais] @ git+https://…@<commit>"` is, on the
     commit installed (third review: the bare URL moved to whatever the branch had become)."""
     pipx = _receipt(tmp_path, "pipx-git.json", _here(direct_url=GIT))
-    line = f'{_runpip(tmp_path)}"openlogbook[ais] @ git+https://example.org/ines/logbook.git@{COMMIT}"'
+    line = f'{_inject(tmp_path)}"openlogbook[ais] @ git+https://example.org/ines/logbook.git@{COMMIT}"'
     assert doctor.install_line(pipx, {"ais"}) == line
     receipt = json.loads((RECEIPTS / "pipx-git.json").read_text(encoding="utf-8"))
     receipt["main_package"]["package_or_url"] += "@v0.7.0"
@@ -578,8 +574,8 @@ def test_a_pipx_suffix_and_pip_args_stay(tmp_path: Path) -> None:
     own options. pipx's own `--force-reinstall` is not pip's to carry."""
     pipx = _receipt(tmp_path, "pipx-suffix.json")
     assert doctor.install_line(pipx, {"ais", "mcp"}) == (
-        f"{_runpip(tmp_path, 'openlogbook-ola')}--no-index --find-links /home/ines/src/dist"
-        ' "openlogbook[ais,mcp]==0.7.0"'
+        f"{_inject(tmp_path, 'openlogbook-ola', '--no-index --find-links /home/ines/src/dist')}"
+        '"openlogbook[ais,mcp]==0.7.0"'
     )
     receipt = json.loads((RECEIPTS / "pipx-suffix.json").read_text(encoding="utf-8"))
     receipt["main_package"]["pip_args"] = ["--pre"]
@@ -597,17 +593,18 @@ def test_a_pipx_injected_package_is_named_never_lost(tmp_path: Path) -> None:
     injected package stays where it is; no `--force` makes the venv again."""
     pipx = _receipt(tmp_path, "pipx-injected.json")
     assert pipx.extras == {"mcp"}
-    assert _hint(pipx) == f'websockets not installed: {_runpip(tmp_path)}"openlogbook[ais,mcp]==0.7.0"'
+    assert _hint(pipx) == f'websockets not installed: {_inject(tmp_path)}"openlogbook[ais,mcp]==0.7.0"'
     assert "--force" not in _hint(pipx) and "ijson" not in _hint(pipx)
 
 
 def test_a_pipx_venv_keeps_its_python_and_options(tmp_path: Path) -> None:
     """The third review's first finding: `pipx install --force` made a 3.12 venv again on pipx's own 3.14
-    and dropped `--system-site-packages`, and pipx ignores `--python` under `--force`. `pipx runpip` runs
-    pip in the venv as it is; the line names no Python and no venv option, and needs none."""
+    and dropped `--system-site-packages`, and pipx ignores `--python` under `--force`. `pipx inject` installs
+    into the venv as it is; the line names no Python and no venv option, and needs none."""
     pipx = _receipt(tmp_path, "pipx-system-site.json")
     line = doctor.install_line(pipx, {"ais"})
-    assert line == f'{_runpip(tmp_path)}--no-index --find-links /home/ines/src/dist "openlogbook[ais]==0.7.0"'
+    options = "--no-index --find-links /home/ines/src/dist"
+    assert line == f'{_inject(tmp_path, pip_args=options)}"openlogbook[ais]==0.7.0"'
     assert "--python" not in line and "--force" not in line and "--system-site-packages" not in line
 
 
@@ -616,9 +613,60 @@ def test_a_pipx_line_in_powershell_sets_the_home_first(tmp_path: Path) -> None:
     quotes, since the right side of an assignment there is an expression (third review, 2)."""
     pipx = _receipt(tmp_path, "pipx-injected.json", _here(windows=True))
     assert doctor.install_line(pipx, {"ais", "mcp"}) == (
-        f'$env:PIPX_HOME = "{tmp_path / "pipx"}"; pipx runpip openlogbook install'
-        ' "openlogbook[ais,mcp]==0.7.0"'
+        f'$env:PIPX_HOME = "{tmp_path / "pipx"}"; pipx inject openlogbook "openlogbook[ais,mcp]==0.7.0"'
     )
+
+
+def test_a_pipx_venv_in_the_home_pipx_uses_is_plain_pipx_inject(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The stranger test (26 October): the line is what pipx's own docs say, `pipx inject openlogbook …`,
+    with no `PIPX_HOME=` when the venv is in the home a bare `pipx` uses: the one `PIPX_HOME` names, else
+    pipx's default. pipx writes the extras back to its receipt, so `pipx reinstall` keeps them."""
+    venv = tmp_path / "pipx" / "venvs" / "openlogbook"
+    venv.mkdir(parents=True)
+    shutil.copyfile(RECEIPTS / "pipx-injected.json", venv / "pipx_metadata.json")
+    named = doctor.install_of(venv, _here(env={"PIPX_HOME": str(tmp_path / "pipx")}))
+    assert (
+        doctor.install_line(named, {"ais", "mcp"}) == 'pipx inject openlogbook "openlogbook[ais,mcp]==0.7.0"'
+    )
+    elsewhere = doctor.install_of(venv, _here(env={"PIPX_HOME": str(tmp_path / "other")}))
+    line = doctor.install_line(elsewhere, {"ais", "mcp"})
+    assert line == f'{_inject(tmp_path)}"openlogbook[ais,mcp]==0.7.0"'
+    if sys.platform.startswith("linux"):
+        monkeypatch.setattr(Path, "home", lambda: tmp_path / "ines")
+        default = tmp_path / "ines" / ".local" / "share" / "pipx" / "venvs" / "openlogbook"
+        default.mkdir(parents=True)
+        shutil.copyfile(RECEIPTS / "pipx-injected.json", default / "pipx_metadata.json")
+        found = doctor.install_of(default, HERE)
+        assert doctor.install_line(found, {"ais"}) == 'pipx inject openlogbook "openlogbook[ais]==0.7.0"'
+        (
+            tmp_path / "ines" / ".local" / "pipx"
+        ).mkdir()  # every pipx still prefers the old home when it is there
+        assert doctor.install_line(doctor.install_of(default, HERE), {"ais"}).startswith("PIPX_HOME=")  # type: ignore[union-attr]
+
+
+def test_a_uv_tool_line_names_the_python_the_receipt_asked_for_or_none(tmp_path: Path) -> None:
+    """The stranger test: `--python <the tool's own bin/python>` was 60 characters of nothing a person chose,
+    and named the interpreter `--force` replaces. The line names the receipt's request (`3.12`), and none
+    when the receipt has none or names the tool environment's own interpreter (an older doctor's line)."""
+    receipt = (RECEIPTS / "uv-pinned.toml").read_text(encoding="utf-8")
+    own = tmp_path / "bin" / "python"
+    own.parent.mkdir()
+    own.write_bytes(b"")
+    for request, python in (
+        ('python = "3.12"', "--python 3.12 "),
+        ("", ""),
+        (f"python = {json.dumps(str(own))}", ""),
+    ):
+        (tmp_path / "uv-receipt.toml").write_text(
+            receipt.replace('python = "3.12"', request), encoding="utf-8"
+        )
+        found = doctor.install_of(tmp_path, _here(executable=str(own)))
+        assert doctor.install_line(found, {"ais", "mcp"}) == (
+            f"uv tool install --force {python}--no-index --find-links file:///home/ines/src/dist"
+            ' "openlogbook[ais,mcp]==0.7.0"'
+        ), request
 
 
 def test_under_homebrew_doctor_says_it_cannot_and_where_to_read_never_a_pip_line(tmp_path: Path) -> None:
@@ -690,11 +738,11 @@ def test_a_uv_receipt_on_another_python_than_the_one_running_is_no_line(tmp_path
 
 
 def test_a_checkout_keeps_its_groups_as_they_are(tmp_path: Path) -> None:
-    """The third review: `uv sync` installs the dev group unless told not to, follows the folder's
-    `.python-version` over the venv's Python (by hand, a 3.13 `.venv` became 3.12), and removes what it is
-    not given. The line names the interpreter running now, removes nothing (`--inexact`) and installs no
-    group (`--no-default-groups`), so a group installed stays and one not installed stays out; and none
-    when `UV_PROJECT_ENVIRONMENT` points `uv sync` at another environment."""
+    """The third review: `uv sync` removes what it is not given; the line removes nothing (`--inexact`), so
+    every extra and group installed stays. Since the stranger test (26 October) it is the short line a
+    contributor types in the clone, `uv sync --inexact --extra ais`, the clone named before it, never the
+    200 characters of `--project` and `--python`; and none when `UV_PROJECT_ENVIRONMENT` points `uv sync`
+    at another environment."""
     checkout = tmp_path / "src" / "logbook"
     (checkout / ".venv").mkdir(parents=True)
     (checkout / "pyproject.toml").write_text(
@@ -705,10 +753,9 @@ def test_a_checkout_keeps_its_groups_as_they_are(tmp_path: Path) -> None:
     here = _here(direct_url=json.dumps({"url": checkout.as_uri(), "dir_info": {"editable": True}}))
     found = doctor.install_of(checkout / ".venv", here)
     assert found == doctor.Install("checkout", folder=str(checkout), python=PYTHON)
-    assert doctor.install_line(found, {"ais"}) == (
-        f"uv sync --project {doctor._arg(str(checkout))} --python {PYTHON} --inexact --no-default-groups"
-        " --extra ais"
-    )
+    assert doctor.install_line(found, {"ais"}) == "uv sync --inexact --extra ais"
+    [hint] = [c for c in doctor.extras_checks(lambda m: m != "websockets", found) if c.name == "extra:ais"]
+    assert hint.detail == f"websockets not installed; in the clone, {checkout}: uv sync --inexact --extra ais"
     elsewhere = doctor.install_of(
         checkout / ".venv", dataclasses.replace(here, env={"UV_PROJECT_ENVIRONMENT": "/home/ines/env"})
     )
@@ -816,7 +863,7 @@ def test_a_uv_companion_whose_executables_were_installed_keeps_them(tmp_path: Pa
     and a plain `--with` in its place removes those executables."""
     uv = _receipt(tmp_path, "uv-with-executables.toml")
     assert doctor.install_line(uv, {"ais", "mcp"}) == (
-        f"uv tool install --force --python {PYTHON} --with-executables-from uvicorn==0.38.0"
+        "uv tool install --force --python 3.12 --with-executables-from uvicorn==0.38.0"
         ' "openlogbook[ais,mcp]==0.7.0"'
     )
     receipt = (RECEIPTS / "uv-with-executables.toml").read_text(encoding="utf-8")
@@ -831,7 +878,7 @@ def test_under_uv_each_line_says_it_installs_exactly_its_extras(tmp_path: Path) 
     checks = {c.name: c for c in doctor.extras_checks(lambda m: m == "websockets", uv)}
     assert checks["extra:speakers"].detail == (
         "pyannote.audio not installed; the line installs exactly the extras it names, so add any other one"
-        f" wanted to it: uv tool install --force --python {PYTHON} --with ijson==3.5.1"
+        " wanted to it: uv tool install --force --python 3.12 --with ijson==3.5.1"
         ' "openlogbook[ais,mcp,speakers]==0.7.0"'
     )
     alone = {c.name: c for c in doctor.extras_checks(lambda m: m != "pyannote.audio", uv)}
@@ -873,7 +920,7 @@ def test_a_pipx_file_url_becomes_a_requirement_too(tmp_path: Path) -> None:
         (
             "git+file:///home/ines/src/logbook",
             {"url": "file:///home/ines/src/logbook", "vcs_info": {"vcs": "git", "commit_id": COMMIT}},
-            f'{_runpip(tmp_path)}"openlogbook[ais] @ git+file:///home/ines/src/logbook@{COMMIT}"',
+            f'{_inject(tmp_path)}"openlogbook[ais] @ git+file:///home/ines/src/logbook@{COMMIT}"',
         ),
         ("file:///home/ines/src/logbook", {"url": "file:///home/ines/src/logbook", "dir_info": {}}, None),
     ):
@@ -914,7 +961,7 @@ def test_a_receipt_with_a_password_or_token_prints_no_line(tmp_path: Path) -> No
     )
     origin = json.dumps({"url": ssh, "vcs_info": {"vcs": "git", "commit_id": COMMIT}})
     assert doctor.install_line(doctor.install_of(tmp_path, _here(direct_url=origin)), {"ais"}) == (
-        f'uv tool install --force --python {PYTHON} "openlogbook[ais] @ git+{ssh}@{COMMIT}"'
+        f'uv tool install --force "openlogbook[ais] @ git+{ssh}@{COMMIT}"'
     )
 
 
@@ -927,7 +974,7 @@ def test_a_global_pipx_install_is_reinstalled_globally(
     venv = home / "venvs" / "openlogbook"
     venv.mkdir(parents=True)
     shutil.copyfile(RECEIPTS / "pipx-injected.json", venv / "pipx_metadata.json")
-    line = f'PIPX_HOME={doctor._arg(str(home))} pipx runpip openlogbook install "openlogbook[ais,mcp]==0.7.0"'
+    line = f'PIPX_HOME={doctor._arg(str(home))} pipx inject openlogbook "openlogbook[ais,mcp]==0.7.0"'
     monkeypatch.setenv("PIPX_GLOBAL_HOME", str(home))
     assert doctor.install_line(doctor.install_of(venv, HERE), {"ais", "mcp"}) == line
     monkeypatch.delenv("PIPX_GLOBAL_HOME")
@@ -1196,8 +1243,15 @@ def test_no_restore_test_yet_warns_and_says_what_to_run(lb: Logbook, clock: date
     (lb.root / "state" / "last-restore-test.json").unlink()
     check = _run(lb)["restore-test"]
     assert check.status == "warn" and check.detail.startswith(
+        "no restore test yet: run `logbook backup DEST` once, then `logbook backup --restore-test`, which"
+        " restores the latest snapshot"
+    ), "the stranger test: with no backup, `backup --restore-test` alone answers that there is no snapshot"
+    snapshot = lb.root.parent / "Backups" / "owner" / "2026-10-03T030000Z"
+    backup.record_backup(lb.root, snapshot.parent.parent, snapshot, 2, "a" * 64, clock)
+    check = _run(lb)["restore-test"]
+    assert check.status == "warn" and check.detail.startswith(
         "no restore test yet: `logbook backup --restore-test`"
-    )
+    ), "a backup is recorded: the restore test is the one step left"
 
 
 def test_a_failed_restore_test_fails_with_the_reason(lb: Logbook, clock: datetime) -> None:
@@ -1400,6 +1454,11 @@ def test_the_command_without_a_record_exits_1(
     status, out = _cli(capsys)
     assert status == 1
     assert out.startswith("fail  record")
+    assert (
+        "No record yet: run `logbook demo --out ~/Demo/Logbook` to try one,"
+        " or `logbook setup` to start yours." in out
+    )
+    assert "no logbook found" not in out
 
 
 def test_the_report_never_prints_an_environment_value(
@@ -1411,7 +1470,7 @@ def test_the_report_never_prints_an_environment_value(
     assert "LOGBOOK_DAWARICH_URL" in out
 
 
-# -- the home (ADR 0022) ----------------------------------------------------------------------------------
+# -- the machine that runs the schedule, the record's home (ADR 0022) ------------------------------------
 
 
 def _set_home(lb: Logbook, host: str) -> None:
@@ -1420,23 +1479,27 @@ def _set_home(lb: Logbook, host: str) -> None:
 
 def test_no_home_set_passes_and_says_how_to_set_one(lb: Logbook, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(home, "hostname", lambda: "laptop-of-ines")
-    check = _run(lb)["home"]
+    check = _run(lb)["schedule"]
     assert check.status == "pass"
-    assert "no home" in check.detail and "--install-schedule" in check.detail
+    assert check.detail == (
+        "no machine runs the scheduled syncs yet: `logbook sync --install-schedule` on the one that keeps"
+        " the record makes it that machine (ADR 0022)"
+    ), "the stranger test: `home` beside a Home place named in setup read as that place"
+    assert "home" not in check.detail.casefold()
 
 
 def test_the_home_machine_passes(lb: Logbook, monkeypatch: pytest.MonkeyPatch) -> None:
     _set_home(lb, "nordlys-home")
     monkeypatch.setattr(home, "hostname", lambda: "nordlys-home")
-    check = _run(lb)["home"]
+    check = _run(lb)["schedule"]
     assert check.status == "pass"
-    assert "nordlys-home" in check.detail and "2026-10-09" in check.detail
+    assert check.detail == "this machine (nordlys-home) runs the scheduled syncs, since 2026-10-09"
 
 
 def test_the_home_matches_by_short_name_and_case(lb: Logbook, monkeypatch: pytest.MonkeyPatch) -> None:
     _set_home(lb, "Nordlys-Home.local")
     monkeypatch.setattr(home, "hostname", lambda: "nordlys-home")
-    assert _run(lb)["home"].status == "pass"
+    assert _run(lb)["schedule"].status == "pass"
 
 
 def test_another_machine_warns_that_writers_belong_on_the_home(
@@ -1444,9 +1507,11 @@ def test_another_machine_warns_that_writers_belong_on_the_home(
 ) -> None:
     _set_home(lb, "nordlys-home")
     monkeypatch.setattr(home, "hostname", lambda: "laptop-of-ines")
-    check = _run(lb)["home"]
+    check = _run(lb)["schedule"]
     assert check.status == "warn"
-    assert check.detail == "this machine is not the record's home (nordlys-home); writers belong on the home"
+    assert check.detail == (
+        "the scheduled syncs run on nordlys-home, not on this machine; writers belong on that one"
+    )
 
 
 def test_a_home_file_that_is_not_the_shape_fails_naming_it(
@@ -1455,10 +1520,10 @@ def test_a_home_file_that_is_not_the_shape_fails_naming_it(
     monkeypatch.setattr(home, "hostname", lambda: "nordlys-home")
     path = lb.root / "state" / "home.json"
     _write(path, {"machine": "nordlys-home"})
-    check = _run(lb)["home"]
+    check = _run(lb)["schedule"]
     assert check.status == "fail" and "home.json" in check.detail
     path.write_text("{", encoding="utf-8")
-    assert _run(lb)["home"].status == "fail"
+    assert _run(lb)["schedule"].status == "fail"
 
 
 # -- the crossing ceilings (ADR 0016, ADR 0022) ----------------------------------------------------------

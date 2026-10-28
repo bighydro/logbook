@@ -603,7 +603,7 @@ pass  extra:transcribe  faster-whisper is installed
 pass  sync:immich       configured (LOGBOOK_IMMICH_URL, LOGBOOK_IMMICH_KEY)
 pass  sync:dawarich     configured (LOGBOOK_DAWARICH_URL, LOGBOOK_DAWARICH_KEY)
 pass  crossing          hermes 2, mcp 1, dream 2 until 2027-03-31 model qwen2.5-7b-instruct
-pass  home              this machine (server) is the record's home since 2026-10-13
+pass  schedule          this machine (server) runs the scheduled syncs, since 2026-10-13
 pass  last-run          2026-10-14 06:00 (2 h ago): immich 12, dawarich 214 lines; doctor 21 pass, 0 warn, 0 fail
 pass  restore-test      passed 2026-10-04 (2026-10-03T010000Z, 48,190 lines)
 pass  serve             systemd system service (/etc/systemd/system/logbook-serve.service) answering at http://127.0.0.1:8765/

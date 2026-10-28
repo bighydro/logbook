@@ -324,6 +324,8 @@ TIERS_SAID = (  # under the Day's header: what crosses where (SPEC §4), in the 
     " where it may go, and money and health (tier 3) never leave without one."
 )
 NO_DEVICE_WITH = "no device saw this day: say who was there"  # the `with` row of a day with no stay
+#: the Day page's footer in place of `read-only`: the forms on it that write a line, and only those
+DAY_WRITES = "Reflect and Sign, the with field and the stars write to your record; nothing else here does"
 NONE_CONFIRMED = "nobody confirmed; proposed below"  # the `with` row when only a row's proposals name anyone
 TIER_TITLE = (  # a shelf header's tier, on hover; never the words of a tier a gated page does not read
     "The highest tier among the lines this page read (SPEC §4): 1 places, photos and the calendar;"
@@ -2000,14 +2002,20 @@ class Site:
         return Response(status, self.document(str(status), body).encode("utf-8"))
 
     def document(
-        self, title: str, body: str, script: str | None = None, footnote: str | None = None, style: str = ""
+        self,
+        title: str,
+        body: str,
+        script: str | None = None,
+        footnote: str | None = None,
+        style: str = "",
+        writes: str | None = None,
     ) -> str:
         """One HTML document: the head, the header (`header`), `body`, the footer and `footnote` under
         it; `script` is the one inline script a page may carry (the Places page's keys, the Day's record
         button), named by hash in that page's policy; `style` what a page adds to the one inline
         stylesheet, after the header's (the Manifest's, the table pages', so every other page keeps its
-        look)."""
-        footer = self.footer_text(footnote)
+        look); `writes`, on a page with forms that write, which of them do, said in place of `read-only`."""
+        footer = self.footer_text(footnote, writes=writes)
         return (
             "<!doctype html>\n"
             '<html lang="en">\n<head>\n<meta charset="utf-8">\n'
@@ -2032,10 +2040,11 @@ class Site:
         but on a static page), or nothing beside a static site's own navigation."""
         return "" if self.nav is not None else doors.header_style(fonts=not self.static)
 
-    def footer_text(self, footnote: str | None = None, door: bool = False) -> str:
+    def footer_text(self, footnote: str | None = None, door: bool = False, writes: str | None = None) -> str:
         """What every page's footer says: read-only, the head, the timezone, and that nothing leaves this
         machine (or the site's own footer), then `footnote` under it. A door (`doors.page`) carries forms,
-        so it says nothing leaves this machine first and is not read-only. The head is the one the page
+        so it says nothing leaves this machine first and is not read-only; a page whose forms write says
+        which (`writes`, the Day's `DAY_WRITES`) in place of `read-only`. The head is the one the page
         read (`current`), as its tag names it."""
         meta = self.current()
         head = f"head <code>{escape(str(meta.get('head') or '')[:HEAD_CHARS])}…</code>"
@@ -2045,7 +2054,7 @@ class Site:
             if self.footer is not None
             else f"Nothing here leaves this machine{DOT}{zone}{DOT}{head}"
             if door
-            else f"read-only{DOT}{head}{DOT}{zone}{DOT}nothing here leaves this machine"
+            else f"{escape(writes or 'read-only')}{DOT}{head}{DOT}{zone}{DOT}nothing here leaves this machine"
         )
         if footnote is not None:
             footer += f'<br><span class="footnote">{escape(footnote)}</span>'
@@ -2351,7 +2360,12 @@ class Site:
         ]
         self._day_later_start()  # what the page asked to read beside it, once it is rendered
         return self.document(
-            f"{day} {data['weekday']}", "".join(parts), script, NO_MODEL, DAY_STYLE + day_rhythm.STYLE
+            f"{day} {data['weekday']}",
+            "".join(parts),
+            script,
+            NO_MODEL,
+            DAY_STYLE + day_rhythm.STYLE,
+            writes=None if self.static else DAY_WRITES,
         )
 
     def _day_header(
@@ -2406,8 +2420,8 @@ class Site:
                 if data.get("day_start", day_start.MIDNIGHT) != day_start.MIDNIGHT
                 else []
             ),
-            _dt("night before", day_reader.night_text(data["nights"]["before"])),
-            _dt("night after", day_reader.night_text(data["nights"]["after"])),
+            _dt("night before", day_reader.night_said(data, "before")),
+            _dt("night after", day_reader.night_said(data, "after")),
             _dt("country", day_reader.country_text(data["country"])),
             _signed_html(data.get("signed")),
         ]
@@ -2433,7 +2447,7 @@ class Site:
                 if company
                 else f'<span class="mute">{escape(nobody)}</span>'
             )
-            field = "" if self.static else self._with_form(day)
+            field = "" if self.static else f"{DOT}{self._with_form(day)}"  # the words, then the field
             parts.append(f'<dt id="with">with</dt><dd>{said}{field}</dd>\n')
         parts.append("</dl>\n")
         return "".join(parts)

@@ -664,6 +664,7 @@ def day_evidence(lb: Logbook, day: date) -> list[str]:
         if not located:
             continue
         said = []
+        page: dict[str, Any]
         try:
             page = day_reader.read(lb, when)
         except ValueError:

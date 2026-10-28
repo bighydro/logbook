@@ -365,9 +365,21 @@ def test_export_days_with_a_current_index_does_not_scan_the_files(lb: Logbook, t
         calls.append(self.root)
         return original(self)
 
+    scanned_before: list[int] = []  # the scans made by the time the run's one crossing line is appended
+    by_append: list[int] = []  # the files() calls the append makes itself, to find its month file
+    appending = Logbook.append
+
+    def append(self: Logbook, *args: object, **kwargs: object) -> object:
+        scanned_before.append(len(calls))
+        line = appending(self, *args, **kwargs)  # type: ignore[arg-type]
+        by_append.append(len(calls) - scanned_before[-1])
+        return line
+
     monkeypatch.setattr(Logbook, "files", counting)
+    monkeypatch.setattr(Logbook, "append", append)
     cli.main(["export", "--days", "2026-03-01", "2026-03-02", "--out", str(tmp_path / "o")])
-    assert calls == []
+    assert scanned_before == [0], "the export reads through the index, no month file scanned"
+    assert len(calls) == sum(by_append), "the only files() calls are the crossing line's own append"
     assert sorted(p.name for p in (tmp_path / "o").iterdir()) == ["2026-03-01", "2026-03-02"]
 
 

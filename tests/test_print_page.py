@@ -161,7 +161,7 @@ def test_the_trip_on_paper_is_the_fixture_a_spread_a_day(
     s = structure(page)
     assert f"<title>15{EN_DASH}21 June 2026 · Logbook</title>" in page
     assert f"<h1>15{EN_DASH}21 June 2026</h1>" in page, "the cover: the trip's dates, the return day included"
-    assert f"6 nights aboard {demo.BOAT_NAME}" in page and "until 2026-06-21" in page
+    assert f"6 nights aboard {demo.BOAT_NAME}" in page and "back on 21 June" in page
     assert page.count('<section class="spread day"') == 7, "the leaving day to the return day"
     assert "Day 1 of 7" in page and "Day 7 of 7" in page and "<h2>Monday 15 June</h2>" in page
     assert '<section class="route">' in page, "the route on a page of its own"
