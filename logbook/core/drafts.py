@@ -652,7 +652,9 @@ def for_day(
             resolve.identities_from(overlay) if tiers is None else resolve.at_tiers(overlay, tiers)[1]
         )
     confirmed = confirmations(lines, retracted, str(latest["id"]))
-    kept = kept_keys(lines, retracted, {str(line["id"]) for line in found})
+    # kept by a line through the gate alone: "kept as #N" for a line above it is a reference that leaks
+    seen = lines if tiers is None else [line for line in lines if int(line.get("tier") or 0) in set(tiers)]
+    kept = kept_keys(seen, retracted, {str(line["id"]) for line in found})
     block = day_json(latest, shown, on_day, names, confirmed, kept=kept, people=people_of(idx))
     signature = signing.signature_of(idx, day)
     block["since_signed"] = signature is not None and int(latest["seq"]) > int(signature["seq"])
@@ -661,6 +663,14 @@ def for_day(
     if any(segment["part"] == STORY for segment in block["segments"]):
         block["closing"] = closing(idx, day, tiers, retracted, ZoneInfo(str(latest.get("tz") or "UTC")))
     return block, withheld
+
+
+def kept_on_day(idx: Index, day: str) -> dict[tuple[Any, ...], dict[str, Any]]:
+    """What the owner kept from any draft of `day`, the whole record read (`kept_keys`): so a page
+    through a gate refuses to keep again what was kept above it, naming no line."""
+    retracted = retractions(idx.retractions())
+    found = of_day(idx.by_kind(KIND), retracted, day)
+    return kept_keys(idx.day(day), retracted, {str(line["id"]) for line in found})
 
 
 def kept_keys(

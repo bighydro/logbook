@@ -76,10 +76,11 @@ The `crossing` line lists each entry of `policy/crossing.json` as it counts toda
 until 2026-12-31`, `heard 2 fetch`). When `LOGBOOK_HEARD` names `feed` and no `heard` entry lets a
 transcript be fetched, it says which entry to write, `{"heard": {"max_tier": 2, "fetch": true}}`. The
 `world` line says what `export world` and the Library's `/world` show: tier 1 alone when the file names
-no `world` entry, and the entry that adds the chapters, `{"world": {"max_tier": 2}}`. A folder that
-`export --day` or `--days` writes reads its ceiling from the `folder` entry, tier 1 without one, as the
-vault and the site read theirs; `--tier` may lower it, never raise it; and the record keeps a crossing
-line for it, as for every export ([a day to a folder](export.md)).
+no `world` entry, and the entry that adds the chapters, `{"world": {"max_tier": 2}}`. The `export-day`
+line says what a folder that `export --day` or `--days` writes may hold: up to the `folder` entry's
+ceiling, or, when the file names none, that no entry exists and the default tier 1 applies, as the
+crossing line the export keeps records it (`"entry": null, "default_tier": 1`); `--tier` may lower it,
+never raise it ([a day to a folder](export.md)).
 
 ## Drafts the policy no longer allows
 

@@ -675,7 +675,10 @@ class Closing(NamedTuple):
     would keep from it, and `digest`, the proposals as shown, which the Sign form carries back. For
     Keep and sign: `pencil`, the standing draft as `--keep` reads it (`drafts.for_day` under the `dream`
     entry and through the page's tier gate, its sentences and links numbered and marked kept), and
-    `word`, the day in a word standing."""
+    `word`, the day in a word standing. `hidden`: the reflection Sign signs with is above the page's
+    gate, so the page shows, quotes, offers and numbers nothing of it (no proposals, no dictation),
+    and `named` is what the Sign form carries for it: its id, or, when hidden, a digest of it that
+    names no line."""
 
     lines: list[Line]
     retracted: set[str]
@@ -687,6 +690,8 @@ class Closing(NamedTuple):
     digest: str
     pencil: Mapping[str, Any] | None = None
     word: Line | None = None
+    hidden: bool = False
+    named: str = ""
 
 
 class Stale(Exception):
@@ -1246,6 +1251,8 @@ class Site:
                 "the form names an act: reflect, with your words, hear, with a recording, or dream, the"
                 " day so far",
             )
+        if not self._notes_seen():  # the words would be compared with, and replace, what it cannot show
+            return self._error(400, _reflect_elsewhere(day))
         try:
             day, today = self._closing_day(day)
         except ValueError as e:  # a day ahead, a day that is not one, a day_start that is not a clock
@@ -1330,7 +1337,8 @@ class Site:
         named = form.get("dictation", "").strip()
         if not named:
             return reflect.Reflection(text, reflect.TYPED)
-        found = [d for d in reflect.dictations(self.lb, lines, retracted) if d.id == named]
+        seen = {str(line["id"]) for line in reading.crossing(lines, self.tiers)}  # the page's gate
+        found = [d for d in reflect.dictations(self.lb, lines, retracted) if d.id == named and d.id in seen]
         if not found:
             raise Stale(
                 f"the Wispr Flow dictation this page offered is no longer on {day}; /day/{day} is the day"
@@ -1372,7 +1380,7 @@ class Site:
                             f" reflection among the lines it confirms (`logbook day sign {day}` signs it"
                             " without one); nothing was written"
                         )
-                    if form.get("reflection") != str(r.note["id"]) or form.get("proposals") != found.digest:
+                    if form.get("reflection") != found.named or form.get("proposals") != found.digest:
                         raise Stale(
                             f"the reflection or its proposals changed since this page was read; /day/{day}"
                             " is the day as it stands, and nothing was written"
@@ -1454,10 +1462,20 @@ class Site:
         """What Reflect and Sign read of `day`, as `day reflect DAY --sign` reads it with no input."""
         lines, retracted = reflect.day_lines(self.lb, day)
         standing = reflect.reflections(lines, retracted)
-        pending = reflect.drafts(reflect.dictations(self.lb, lines, retracted), standing)
+        # through the page's gate, as every line on it: a reflection (tier 2) or its dictation (tier 3)
+        # above it is signed with, never shown, quoted, offered or numbered
+        seen = {str(line["id"]) for line in reading.crossing(lines, self.tiers)}
+        dictated = [d for d in reflect.dictations(self.lb, lines, retracted) if d.id in seen]
+        pending = reflect.drafts(dictated, standing)
         r = reflect.on_the_day(standing[-1]) if standing else None
+        # a page that reads no notes holds none of the day's reflections, nor whether there is one
+        hidden = not self._notes_seen() or (
+            r is not None and r.note is not None and str(r.note["id"]) not in seen
+        )
+        note = "" if r is None or r.note is None else str(r.note["id"])
+        named = _reflection_named(note, hidden) if note or hidden else ""
         proposals: list[reflect.Proposal] = []
-        if r is not None and r.note is not None:
+        if r is not None and r.note is not None and not hidden:
             mine = str(r.note["id"])
             proposals = reflect.propose(r.text, day, reflect.commitments(self.lb, day, {mine}))
         with self.lb.index() as idx:
@@ -1465,7 +1483,7 @@ class Site:
             # through the page's gate, as the rest of the Day reads it: a draft above it is not there
             pencil, _withheld = drafts.for_day(idx, day, self.tiers, allowed=drafts.allowed(self.lb.root))
         kept = None
-        if earlier is not None and r is not None and r.note is not None:
+        if earlier is not None and r is not None and r.note is not None and not hidden:
             page = reflect.on_page(lines, retracted)
             kept = reflect.signature(earlier, page, [str(r.note["id"])], [], reflect.pencil(lines)).kept
         shown = json.dumps([p.to_json() for p in proposals], sort_keys=True, ensure_ascii=False)
@@ -1474,7 +1492,9 @@ class Site:
         # through the page's gate, as every line on it: a word above it is absent, never quoted
         words = reading.crossing(notes.standing(lines, keep.WORD, retracted), self.tiers)
         word = words[0] if words else None
-        return Closing(lines, retracted, r, proposals, draft, earlier, kept, digest, pencil, word)
+        return Closing(
+            lines, retracted, r, proposals, draft, earlier, kept, digest, pencil, word, hidden, named
+        )
 
     def _star(self, form: Mapping[str, str]) -> Response:
         """The Day page's star: `act` `star` or `unstar` on the `line` of a row of `day`, through
@@ -2701,74 +2721,82 @@ class Site:
             out.append('<ul class="plain signed">\n')
             out.extend(f"<li>{escape(text.strip())}</li>\n" for text in signing.summary(found.earlier))
             out.append("</ul>\n")
-        out.append(f'<form class="reflect" method="post" action="/day/{day}/reflect">\n')
-        if found.draft is not None:
-            d = found.draft
+        records = False
+        if self._notes_seen():
+            out.append(f'<form class="reflect" method="post" action="/day/{day}/reflect">\n')
+            if found.draft is not None:
+                d = found.draft
+                out.append(
+                    f'<p class="mute">The Wispr Flow dictation #{d.seq} of {escape(_clock(d.at, tz)[11:])}'
+                    f" begins with \u201c{reflect.CUE}\u201d: its words are below, without that word, a draft"
+                    " until Reflect takes them (change them first if they need it).</p>\n"
+                    f'<input type="hidden" name="dictation" value="{escape(d.id)}">\n'
+                )
+                text = reflect.without_cue(d.text)
+            elif r is not None and r.note is not None and not found.hidden:
+                when = escape(_clock(str(r.note["at"]), tz)[11:])
+                out.append(
+                    f'<p class="mute">Your reflection #{r.note["seq"]} of {when}'
+                    " is below; Reflect writes changed words as the day's reflection, the same words never"
+                    " twice.</p>\n"
+                )
+                text = r.text
+            else:
+                out.append(
+                    '<p class="mute">A few sentences about the day, in your words: what went out, what did'
+                    " not, what you will do, what someone else should. Rules, no model, read them for"
+                    " proposals.</p>\n"
+                )
+                text = ""
+            language = dream.language_of(_texts(reading.crossing(found.lines, self.tiers), found.retracted))
             out.append(
-                f'<p class="mute">The Wispr Flow dictation #{d.seq} of {escape(_clock(d.at, tz)[11:])} begins'
-                f" with \u201c{reflect.CUE}\u201d: its words are below, without that word, a draft until"
-                " Reflect takes them (change them first if they need it).</p>\n"
-                f'<input type="hidden" name="dictation" value="{escape(d.id)}">\n'
+                f'<textarea name="text" rows="6" lang="{escape(language)}" aria-label="your reflection"'
+                f' spellcheck="true">{escape(text, quote=False)}</textarea>\n'
+                '<button name="act" value="reflect">Reflect</button>\n</form>\n'
             )
-            text = reflect.without_cue(d.text)
-        elif r is not None and r.note is not None:
-            when = escape(_clock(str(r.note["at"]), tz)[11:])
-            out.append(
-                f'<p class="mute">Your reflection #{r.note["seq"]} of {when}'
-                " is below; Reflect writes changed words as the day's reflection, the same words never"
-                " twice.</p>\n"
-            )
-            text = r.text
-        else:
-            out.append(
-                '<p class="mute">A few sentences about the day, in your words: what went out, what did not,'
-                " what you will do, what someone else should. Rules, no model, read them for proposals.</p>\n"
-            )
-            text = ""
-        language = dream.language_of(_texts(found.lines, found.retracted))
-        out.append(
-            f'<textarea name="text" rows="6" lang="{escape(language)}" aria-label="your reflection"'
-            f' spellcheck="true">{escape(text, quote=False)}</textarea>\n'
-            '<button name="act" value="reflect">Reflect</button>\n</form>\n'
-        )
-        records = self._records()
-        if records:
-            out.append(
-                f'<form class="audio" method="post" action="/day/{day}/reflect"'
-                ' enctype="multipart/form-data">\n'
-                f'<input type="hidden" name="act" value="{HEAR}">\n'
-                "<label>or say it: a recording, heard on this machine "
-                '<input type="file" name="audio" accept="audio/*" capture></label>\n'
-                '<button>Hear it</button> <button type="button" class="record" hidden>Record</button>\n'
-                "</form>\n"
-            )
-        elif self.voice is not None and self.voice.missing:
-            out.append(f'<p class="mute">To reflect by voice here: {escape(self.voice.missing)}.</p>\n')
-        if r is None or r.note is None:
+            records = self._records()
+            if records:
+                out.append(
+                    f'<form class="audio" method="post" action="/day/{day}/reflect"'
+                    ' enctype="multipart/form-data">\n'
+                    f'<input type="hidden" name="act" value="{HEAR}">\n'
+                    "<label>or say it: a recording, heard on this machine "
+                    '<input type="file" name="audio" accept="audio/*" capture></label>\n'
+                    '<button>Hear it</button> <button type="button" class="record" hidden>Record</button>\n'
+                    "</form>\n"
+                )
+            elif self.voice is not None and self.voice.missing:
+                out.append(f'<p class="mute">To reflect by voice here: {escape(self.voice.missing)}.</p>\n')
+        else:  # a reflection is a note, tier 2: this page neither takes one nor shows whether there is one
+            out.append(f'<p class="mute">{escape(_reflect_elsewhere(day))}</p>\n')
+        if (r is None or r.note is None) and not found.hidden:
             out.append(
                 '<p class="mute">Reflect first: Sign signs the day with your reflection among the lines it'
                 f" confirms, as <code>logbook day reflect {day} --sign</code> does; <code>logbook day sign"
                 f" {day}</code> signs it without one.</p>\n</section>\n"
             )
             return "".join(out), records
-        out.append(self._sign_html(day, found, r.note, keeping))
+        out.append(self._sign_html(day, found, None if r is None else r.note, keeping))
         out.append("</section>\n")
         return "".join(out), records
 
-    def _sign_html(self, day: str, found: Closing, note: Line, keeping: bool = False) -> str:
+    def _sign_html(self, day: str, found: Closing, note: Line | None, keeping: bool = False) -> str:
         """The Sign form: with `keeping`, Keep and sign's controls first (`_keep_html`), then the
         proposals, a box each as `day reflect` numbers them (rules alone, none ticked: a guess until
         the owner accepts it), the reflection a sentence a line folded beside them, what signing
         confirms or keeps, and the button."""
-        r = found.reflection
-        assert r is not None
         out = [
             f'<form class="sign" method="post" action="/day/{day}/sign">\n'
-            f'<input type="hidden" name="reflection" value="{escape(str(note["id"]))}">\n'
+            f'<input type="hidden" name="reflection" value="{escape(found.named)}">\n'
             f'<input type="hidden" name="proposals" value="{escape(found.digest)}">\n'
         ]
         if keeping:  # the delegations follow the kept lines, under their own head (RFC 0043 §4.14)
             out.append(self._keep_html(day, found))
+        if found.hidden:  # a reflection above the page's gate: none of its words, proposals or number
+            return "".join(out) + self._sign_hidden_html(day, found, keeping)
+        r = found.reflection
+        assert r is not None and note is not None
+        if keeping:
             out.append('<fieldset class="keep">\n<legend>Asked of you</legend>\n')
         if found.proposals:
             out.append(
@@ -2810,13 +2838,24 @@ class Site:
             button = "Sign again"
         out.append(f'<p class="mute">{escape(said)}</p>\n')
         if keeping:
-            out.append(
-                '<details class="cli"><summary>the same at the command line</summary><p class="mute">'
-                "<code>logbook day reflect"
-                f" {day} --sign --keep N,N --revisit N=YYYY-MM-DD --word WORD --done T,T --tomorrow T,T"
-                " --let-go T,T --accept N,N</code>; or <code>logbook day sign"
-                f" {day}</code> with the same flags but <code>--accept</code>.</p></details>\n"
+            out.append(_keep_cli_html(day))
+        out.append(f'<button name="act" value="{SIGN}">{button}</button>\n</form>\n')
+        return "".join(out)
+
+    def _sign_hidden_html(self, day: str, found: Closing, keeping: bool) -> str:
+        """The rest of the Sign form when the reflection it signs with is above the page's gate: what
+        Sign does, in words that name, quote and count nothing of it, and the button."""
+        if found.earlier is None:
+            said = (
+                "Sign confirms the day's lines, those this page does not show among them, and writes what"
+                " you keep."
             )
+            button = "Sign"
+        else:
+            said, button = "Sign again, and the new signature supersedes the one standing.", "Sign again"
+        out = [f'<p class="mute">{escape(said)}</p>\n']
+        if keeping:
+            out.append(_keep_cli_html(day))
         out.append(f'<button name="act" value="{SIGN}">{button}</button>\n</form>\n')
         return "".join(out)
 
@@ -2873,6 +2912,10 @@ class Site:
         return self._day_later(
             ("plan", day, str(self.current().get("head"))), lambda: day_rhythm.plan_of(self.lb, day), stand_in
         )
+
+    def _notes_seen(self) -> bool:
+        """Whether the page's gate holds the tier of a note (2), and so of every reflection."""
+        return self.tiers is None or notes.TIER in self.tiers
 
     def _plan_seen(self) -> bool:
         """Whether the page's gate holds tier 1, the plan's tier."""
@@ -5622,6 +5665,32 @@ def _multipart(body: bytes, content_type: str) -> tuple[dict[str, str], Upload |
         elif data:
             upload = Upload(filename, headers.get_content_type(), data)
     return {k: ",".join(v) for k, v in fields.items()}, upload
+
+
+def _reflect_elsewhere(day: str) -> str:
+    """Why a page whose gate holds no notes takes no reflection, and where one is written."""
+    return (
+        "a reflection is a note, tier 2, which this page does not read, so it takes none and shows none;"
+        f" `logbook day reflect {day}` or the page of the whole record writes one"
+    )
+
+
+def _reflection_named(note: str, hidden: bool) -> str:
+    """What the Sign form carries for the reflection it signs with: its id, or, above the page's gate,
+    a digest of it, so the page holds no reference to a line it cannot show and a form older than the
+    record is still told apart."""
+    return hashlib.sha256(f"reflection {note}".encode()).hexdigest()[:16] if hidden else note
+
+
+def _keep_cli_html(day: str) -> str:
+    """Keep and sign at the command line, folded beside the form."""
+    return (
+        '<details class="cli"><summary>the same at the command line</summary><p class="mute">'
+        "<code>logbook day reflect"
+        f" {day} --sign --keep N,N --revisit N=YYYY-MM-DD --word WORD --done T,T --tomorrow T,T"
+        " --let-go T,T --accept N,N</code>; or <code>logbook day sign"
+        f" {day}</code> with the same flags but <code>--accept</code>.</p></details>\n"
+    )
 
 
 def _keep_item(day: str, n: int, part: str, block: Mapping[str, Any]) -> str:

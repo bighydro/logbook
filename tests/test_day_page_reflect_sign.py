@@ -395,9 +395,9 @@ def test_without_an_engine_the_voice_gives_the_command_for_this_install(
         "checkout", folder="/home/ines/src/logbook", python="/home/ines/src/logbook/.venv/bin/python"
     )
     monkeypatch.setattr(doctor, "detect_install", lambda: clone)
-    assert str(day_command.voice().missing).endswith(
-        "in the clone, /home/ines/src/logbook: uv sync --inexact --extra transcribe"
-    )
+    said = str(day_command.voice().missing)  # the short line, every extra the clone has named beside it
+    assert "in the clone, /home/ines/src/logbook: uv sync --extra " in said and "--inexact" not in said, said
+    assert said.endswith(" --extra transcribe"), said
 
 
 # -- Sign ----------------------------------------------------------------------------------------------------

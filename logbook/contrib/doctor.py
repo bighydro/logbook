@@ -43,8 +43,9 @@ The checks, in the order they print:
   installed (its Python, its venv's options, its source and version, a pipx suffix, uv's companions):
   this venv's pip at the installed version, `pipx inject` into pipx's venv (with `PIPX_HOME` only when
   the venv is not in the home a bare `pipx` uses), `uv tool install --force` with every extra (and the
-  `--python` the receipt asked for, if any), or, in a clone, `uv sync --inexact --extra <name>`, run in
-  the clone the warn names. Where doctor proves no such line (Homebrew, whose formula adds no extra, a
+  `--python` the receipt asked for, if any), or, in a clone, `uv sync --extra <name>`, run in the clone
+  the warn names, with an `--extra` for every extra it has too, since `uv sync` keeps only what it is
+  given. Where doctor proves no such line (Homebrew, whose formula adds no extra, a
   receipt it cannot read, a source that may have changed since, uv's cache) it prints none: the warn
   says why and points to docs/install.md, in one sentence. Nothing is imported to find out: a module's
   spec is looked for, and pyannote.audio (`speakers`) is asked by its installed distribution, as
@@ -65,9 +66,10 @@ The checks, in the order they print:
   which it never changes.
 - `crossing`: `policy/crossing.json` is the documented shape and every destination's ceiling is listed
   as it counts today (ADR 0016); an entry past its `until` day counts as tier 0 and is a warn naming
-  it (ADR 0022). No file is the defaults; a file that is not the shape is a fail naming it. A folder
-  `export --day` or `--days` writes reads its ceiling from the `folder` entry, tier 1 without one;
-  `--tier` may lower it, never raise it; and the record keeps a crossing line for it as for every export
+  it (ADR 0022). No file is the defaults; a file that is not the shape is a fail naming it.
+- `export-day`: a folder `export --day` or `--days` writes reads its ceiling from the `folder` entry; with
+  none, the line says no entry exists and the default tier 1 applies, as the crossing line the export
+  keeps records it (`"entry": null, "default_tier": 1`); `--tier` may lower it, never raise it
   (docs/export.md).
 - `phone`: whether the owner's own phone may write through the Library (`logbook setup phone`,
   docs/serve.md): this machine only, as by default, or the origin it may write from and the login,
@@ -164,8 +166,8 @@ GIB = 1024**3
 DISK_WARN_BYTES = 5 * GIB
 DISK_FAIL_BYTES = GIB // 2
 #: how this Logbook was installed, each with the one line that adds an extra to it as it is (`install_line`):
-#: pip, `pipx inject` and `uv sync --inexact` add to the environment this Logbook runs in, `uv tool install
-#: --force` makes it again with exactly what it is given, so its line names every extra and the version;
+#: pip and `pipx inject` add to the environment this Logbook runs in, `uv tool install --force` and a
+#: clone's `uv sync` make it again with exactly what they are given, so their line names every extra;
 #: Homebrew's formula installs no extra, and where doctor proves no line it prints none
 HowInstalled = Literal["pipx", "uv-tool", "checkout", "pip", "homebrew"]
 PIPX_RECEIPT = "pipx_metadata.json"  # in the venv pipx made, which is `sys.prefix`
@@ -1048,10 +1050,8 @@ def install_line(install: Install, extras: set[str] | frozenset[str]) -> str | N
         return None
     names = ",".join(sorted(extras))
     try:
-        if (
-            install.how == "checkout"
-        ):  # run in the clone (`extras_checks` names it); `--inexact` removes nothing
-            return "uv sync --inexact" + "".join(f" --extra {e}" for e in sorted(extras))
+        if install.how == "checkout":  # run in the clone (`extras_checks` names it), the short line
+            return "uv sync" + "".join(f" --extra {e}" for e in sorted(extras))
         if install.folder:
             requirement = f"--editable {_arg(f'{install.folder}[{names}]')}"
         else:
@@ -1110,13 +1110,15 @@ def _remedy(how: Install, extra: str, present: set[str], missing: Sequence[str])
     """What follows `<package> not installed` for `extra`: `: <line>`, with what the reader must know said
     before it (`; in the clone, <folder>: <line>`), so the line is the last thing and copies whole; or
     `: <why doctor proves none>`."""
-    # pip, `pipx inject` and `uv sync --inexact` add and remove nothing else, so they name the extra
-    # (and what pipx's receipt names, which pipx writes back); `uv tool install --force` names them all
-    line = install_line(how, (present if how.how == "uv-tool" else set(how.extras)) | {extra})
+    # pip and `pipx inject` add and remove nothing else, so they name the extra (and what pipx's receipt
+    # names, which pipx writes back); `uv tool install --force` and a clone's `uv sync` keep only what they
+    # are given, so they name every extra this Logbook has
+    exact = how.how in ("uv-tool", "checkout")
+    line = install_line(how, (present if exact else set(how.extras)) | {extra})
     if line is None:
         return f": {no_line(how, extra)}"
     notes = ""
-    if how.how == "uv-tool" and len(missing) > 1:
+    if exact and len(missing) > 1:
         notes += "; the line installs exactly the extras it names, so add any other one wanted to it"
     if how.how == "checkout":
         notes += f"; in the clone, {how.folder}"
@@ -1128,7 +1130,7 @@ def how_to_add(
 ) -> str:
     """How to add `extra` to this Logbook as it is installed, as a clause a message ends with: doctor's
     line for it (`pipx inject openlogbook "openlogbook[transcribe]==0.7.1"`, `in the clone, <folder>: uv
-    sync --inexact --extra transcribe`), or why doctor proves none and where to read. What the Day page
+    sync --extra transcribe`), or why doctor proves none and where to read. What the Day page
     and Today say in place of the recording form, the same line as `doctor`'s `extra:` row."""
     how = install or detect_install()
     present = _present(installed, how)
@@ -1270,6 +1272,38 @@ def crossing_check(root: Path) -> Check:
             f"{listed}; {named} and counts as tier 0: write a new until in {name} or remove the entry",
         )
     return Check("crossing", "pass", listed)
+
+
+def export_day_check(root: Path) -> Check:
+    """What `export --day` and `--days` may put in a folder (ADR 0026): the `folder` entry's ceiling, or,
+    when the file names none, that no entry exists and the default tier 1 applies, and the entry that
+    would raise it; a warn when the entry has expired, which counts as tier 0 (ADR 0022)."""
+    try:
+        named = policy.FOLDER_DESTINATION in policy.read(root)
+        tier = policy.folder_ceiling(root)
+    except policy.PolicyError as e:
+        return Check("export-day", "fail", str(e))
+    expired = policy.expired_on(root, policy.FOLDER_DESTINATION)
+    if expired is not None:
+        return Check(
+            "export-day",
+            "warn",
+            f"the folder entry expired on {expired.isoformat()} and counts as tier 0, so export --day writes"
+            f" no folder: write a new until in {policy.POLICY_FILE.as_posix()} or remove the entry",
+        )
+    if named:
+        return Check(
+            "export-day",
+            "pass",
+            f"export --day puts tiers up to {tier} in a folder, as the folder entry says",
+        )
+    return Check(
+        "export-day",
+        "pass",
+        f"export --day puts tier {tier} alone in a folder: {policy.POLICY_FILE.as_posix()} names no folder"
+        f' entry, so the default tier {tier} applies; {{"{policy.FOLDER_DESTINATION}": {{"max_tier": 2}}}}'
+        " would let tier 2 go",
+    )
 
 
 def world_check(root: Path) -> Check:
@@ -1746,6 +1780,7 @@ def run(
     checks.extend(env_checks(lb, env, sources))
     checks.append(crossing_check(lb.root))
     checks.append(world_check(lb.root))
+    checks.append(export_day_check(lb.root))
     checks.append(phone_check(lb, env))
     withheld = drafts_check(lb, state)
     if withheld is not None:

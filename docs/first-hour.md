@@ -299,6 +299,7 @@ warn  extra:speakers    pyannote.audio not installed: pipx inject openlogbook "o
 warn  extra:transcribe  mlx-whisper or faster-whisper not installed: pipx inject openlogbook "openlogbook[transcribe]==0.7.1"
 pass  crossing          mcp 1
 pass  world             export world shows tier 1 alone: policy/crossing.json names no world entry; {"world": {"max_tier": 2}} would add the chapters
+pass  export-day        export --day puts tier 1 alone in a folder: policy/crossing.json names no folder entry, so the default tier 1 applies; {"folder": {"max_tier": 2}} would let tier 2 go
 pass  phone             the Library is written from this machine only; `logbook setup phone` lets your phone write too
 pass  schedule          no machine runs the scheduled syncs yet: `logbook sync --install-schedule` on the one that keeps the record makes it that machine (ADR 0022)
 pass  last-run          no schedule on this machine; `logbook sync --install-schedule` runs `sync --all` and `doctor` four times a day and writes it
@@ -306,7 +307,7 @@ warn  restore-test      no restore test yet: run `logbook backup DEST` once, the
 pass  serve             no serve service on this machine; `logbook serve --install-service` keeps the pages at http://127.0.0.1:8765/ from load (docs/serve.md)
 pass  disk              29.8 GiB free on the record's volume
 pass  folder            a plain local folder, no sync client
-20 checks: 14 pass, 6 warn, 0 fail
+21 checks: 15 pass, 6 warn, 0 fail
 
 Setup is complete. Your record is at ~/Logbook.
 Next:

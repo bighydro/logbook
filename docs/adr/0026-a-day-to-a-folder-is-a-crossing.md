@@ -20,7 +20,9 @@ vault, the site, the world, the letter, Notion, a trip's bundle and a shared day
    the counts (the lines of those days, the ones that crossed, by tier and by kind) and the folder's
    digest, each file's sha256 and path in path order, as `export vault` hashes a folder. Under `extra` it
    names the folder's last part (never a path of this machine), the days written, the kinds and the line
-   count. `policy.max_tier` is the `folder` entry's ceiling, 1 without one. A run that writes no folder
+   count. `policy` names the `folder` entry and its `max_tier`; without the entry it records `"entry":
+   null` and the `default_tier` that applied, 1, never a `max_tier` no policy set (amended 2026-10-28,
+   the owner's desk's review of #429). A run that writes no folder
    appends nothing.
 3. The package itself is unchanged, `day-package/v1`: entries without payloads. The line says which tiers
    the folder holds.
