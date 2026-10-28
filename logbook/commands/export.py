@@ -317,10 +317,14 @@ def _export_days(lb: Logbook, a: argparse.Namespace) -> None:
         )
         if not tiers or max(tiers) > ceiling:
             asked = a.tier if a.tier is not None else "1"
+            allows = (
+                f"allows max_tier {ceiling}{policy.expiry_note(lb.root, FOLDER)}"
+                if _folder_entry(lb.root)
+                else f"names no {FOLDER!r} entry, so the default, max_tier {ceiling}, applies"
+            )
             raise crossing.CrossingError(
-                f"--tier {asked} is above the ceiling for {FOLDER!r}: {policy.policy_path(lb.root)} allows"
-                f" max_tier {ceiling}{policy.expiry_note(lb.root, FOLDER)}; write"
-                f' {{"{FOLDER}": {{"max_tier": {max(tiers or (1,))}}}}} in it to let that tier leave'
+                f"--tier {asked} is above the ceiling for {FOLDER!r}: {policy.policy_path(lb.root)} {allows};"
+                f' write {{"{FOLDER}": {{"max_tier": {max(tiers or (1,))}}}}} in it to let that tier leave'
             )
         if a.day:
             days = [parse_day(a.day).isoformat()]
@@ -364,6 +368,20 @@ def _export_days(lb: Logbook, a: argparse.Namespace) -> None:
     )
 
 
+def _folder_entry(root: Path) -> bool:
+    """Whether `policy/crossing.json` names the `folder` entry (`policy.folder_ceiling` read it already)."""
+    return FOLDER in policy.read(root)
+
+
+def _folder_policy(root: Path, ceiling: int) -> dict[str, Any]:
+    """The crossing line's `policy`: the `folder` entry by name and its ceiling, or no entry and the
+    default tier that applied in its place."""
+    file = policy.POLICY_FILE.as_posix()
+    if _folder_entry(root):
+        return {"file": file, "entry": FOLDER, "max_tier": ceiling}
+    return {"file": file, "entry": None, "default_tier": ceiling}
+
+
 def _record_folder(
     lb: Logbook,
     folder: Path,
@@ -380,7 +398,9 @@ def _record_folder(
     `folder`, the window of the days asked for, the tiers, the counts (per tier and kind, of the lines that
     crossed), the folder's last part, the days written and the kinds, never a path of this machine. The
     digest is the folder's, as `export vault` hashes one: each file's sha256 and path, in path order. The
-    ceiling is the policy's `folder` entry's, tier 1 without one (`policy.folder_ceiling`)."""
+    ceiling is the policy's `folder` entry's, recorded by name with its `max_tier`; without one the line
+    says so, `"entry": null`, and the `default_tier` that applied (`policy.folder_ceiling`), never a
+    `max_tier` no policy set."""
     bounds = day_start.of(lb.meta)
     since, until = bounds.span(days[0])[0], bounds.span(days[-1])[1]
     head = str(lb.meta["head"])  # the head the packages reflect: the one before this line
@@ -406,7 +426,7 @@ def _record_folder(
                 "resolutions_held_back": 0,
                 "attachments": {"included": 0, "bytes": 0, "missing": 0},
             },
-            "policy": {"file": policy.POLICY_FILE.as_posix(), "max_tier": ceiling},
+            "policy": _folder_policy(lb.root, ceiling),
             "logbook_head": head,
             "package_sha256": vault.digest(files),
             "extra": {

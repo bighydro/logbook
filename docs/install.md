@@ -359,13 +359,15 @@ is; when it prints none, it is one of these, with the version `logbook --version
 ```bash
 pipx inject openlogbook "openlogbook[crypto]==0.7.0"
 uv tool install --force "openlogbook[crypto,mcp]==0.7.0"
-uv sync --inexact --extra crypto                  # in a clone
+uv sync --extra crypto                            # in a clone
 ```
 
 `pipx inject` adds the extra to the environment pipx made, on its Python, and writes it into pipx's
 own record of the install, so `pipx reinstall` keeps it. `uv tool install --force` makes the tool again
-with exactly the extras it names, so name every one you already have. In a clone, `uv sync --inexact`
-adds the extra and removes nothing. Several
+with exactly the extras it names, so name every one you already have. In a clone, `uv sync` does the
+same, so doctor's line names every extra the clone has beside the new one and removes none of them,
+nor the `dev` group; a package you added by hand with `uv pip install` is not in the lock, and `uv sync`
+removes it. Several
 at once are a comma-separated list: `"openlogbook[transcribe,speakers]"`. The quotes matter; the
 brackets mean something else to the terminal without them. The Homebrew formula installs the
 base package only: a Mac that needs an extra uses `pipx` or `uv` for Logbook instead, which is a

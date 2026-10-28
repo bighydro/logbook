@@ -218,6 +218,7 @@ def moment(lb: Logbook, day: str, today: str, at: str | None) -> str:
 def _sentences(lb: Logbook, day: str, a: Asked, tiers: Sequence[int] | None = None) -> list[Item]:
     with lb.index() as idx:
         draft, withheld = drafts.for_day(idx, day, tiers, allowed=drafts.allowed(lb.root))
+        above = drafts.kept_on_day(idx, day) if tiers is not None else {}  # kept by a line above the gate
     if draft is None:
         why = f"; the standing draft is {drafts.withheld_text(withheld)}" if withheld is not None else ""
         if tiers is not None:
@@ -253,6 +254,8 @@ def _sentences(lb: Logbook, day: str, a: Asked, tiers: Sequence[int] | None = No
         head = f"{drafts.PART_LABELS.get(part, part)} {n}"
         if block.get("kept"):
             raise KeepError(f"{head} is kept already, as #{block['kept']['seq']}; a re-sign keeps it")
+        if _key(part, block) in above:  # said to be kept, never which line keeps it
+            raise KeepError(f"{head} is kept already, at a tier this page does not read; a re-sign keeps it")
         if not block.get("supported"):
             raise KeepError(f"{head} rests on no line of the day, so there is nothing to keep")
         mended = a.mend.get(n)
@@ -280,6 +283,13 @@ def _sentences(lb: Logbook, day: str, a: Asked, tiers: Sequence[int] | None = No
                 extra["revisit"] = _revisit(day, n, revisit)
             items.append(Item(head, text, LABELS[part], extra))
     return [*items, *links, *photo]
+
+
+def _key(part: str, block: Mapping[str, Any]) -> tuple[Any, ...] | None:
+    """The proposal a keepable sentence or link is, as `drafts.kept_keys` keys what was kept."""
+    if part == drafts.LINK:
+        return drafts.proposal_key(block)
+    return drafts.proposal_key({"kind": part, "text": block.get("text")})
 
 
 def _revisit(day: str, n: int, text: str) -> str:

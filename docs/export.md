@@ -40,7 +40,10 @@ Its payload names the destination `folder`, the window of the days asked for, th
 (the lines of those days, the ones that crossed, by tier and by kind, the rest held back), and under
 `extra` the folder's last part (`june-17`, never the whole path of this machine), the days written, the
 kinds and how many lines. `package_sha256` is the folder's digest as `export vault` hashes one: each
-file's sha256 and its path, in path order. `logbook doctor` names the rule ([the doctor](doctor.md)).
+file's sha256 and its path, in path order. `policy` says what set the ceiling: the entry by name and its
+ceiling, `{"file": "policy/crossing.json", "entry": "folder", "max_tier": 2}`, or, with no entry, that
+there is none and the default applied, `{"file": "policy/crossing.json", "entry": null, "default_tier":
+1}`. `logbook doctor`'s `export-day` line says the same ([the doctor](doctor.md)).
 
 The other exports, each with its own page: [the crossing](crossing.md) (a circle member's package),
 [the vault](vault.md), [the site](site.md), [the world](world.md), [the letter](letter.md), [Notion](export-notion.md)

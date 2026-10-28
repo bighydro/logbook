@@ -324,7 +324,7 @@ INSTALLS: dict[str, doctor.Install] = {
     [
         ("pipx", f'PIPX_HOME={PIPX_HOME} pipx inject openlogbook "openlogbook[ais,crypto]==0.7.0"'),
         ("uv-tool", 'uv tool install --force "openlogbook[ais,crypto]==0.7.0"'),
-        ("checkout", "uv sync --inexact --extra ais --extra crypto"),
+        ("checkout", "uv sync --extra ais --extra crypto"),
         ("pip", f'{VENV_PYTHON} -m pip install "openlogbook[ais,crypto]==0.7.0"'),
         ("homebrew", None),
     ],
@@ -431,8 +431,8 @@ def test_an_editable_or_pinned_install_keeps_where_it_came_from(tmp_path: Path) 
     )
 
     clone = doctor.Install("checkout", folder=str(checkout), python=VENV_PYTHON)
-    assert doctor.install_line(clone, {"ais"}) == "uv sync --inexact --extra ais"
-    assert _hint(clone).endswith(f"; in the clone, {checkout}: uv sync --inexact --extra ais")
+    assert doctor.install_line(clone, {"ais"}) == "uv sync --extra ais"
+    assert _hint(clone).endswith(f"; in the clone, {checkout}: uv sync --extra ais")
 
 
 def test_a_broken_receipt_is_still_the_installer_with_no_extras_named(tmp_path: Path) -> None:
@@ -738,11 +738,11 @@ def test_a_uv_receipt_on_another_python_than_the_one_running_is_no_line(tmp_path
 
 
 def test_a_checkout_keeps_its_groups_as_they_are(tmp_path: Path) -> None:
-    """The third review: `uv sync` removes what it is not given; the line removes nothing (`--inexact`), so
-    every extra and group installed stays. Since the stranger test (26 October) it is the short line a
-    contributor types in the clone, `uv sync --inexact --extra ais`, the clone named before it, never the
-    200 characters of `--project` and `--python`; and none when `UV_PROJECT_ENVIRONMENT` points `uv sync`
-    at another environment."""
+    """The third review: `uv sync` removes what it is not given; the line removes nothing, since it names
+    every extra installed beside the new one, so every extra and default group installed stays. Since the
+    owner's desk's review of #429 it is the short line a contributor types in the clone, `uv sync --extra
+    ais`, the clone named before it, never the 200 characters of `--project` and `--python`; and none when
+    `UV_PROJECT_ENVIRONMENT` points `uv sync` at another environment."""
     checkout = tmp_path / "src" / "logbook"
     (checkout / ".venv").mkdir(parents=True)
     (checkout / "pyproject.toml").write_text(
@@ -753,9 +753,10 @@ def test_a_checkout_keeps_its_groups_as_they_are(tmp_path: Path) -> None:
     here = _here(direct_url=json.dumps({"url": checkout.as_uri(), "dir_info": {"editable": True}}))
     found = doctor.install_of(checkout / ".venv", here)
     assert found == doctor.Install("checkout", folder=str(checkout), python=PYTHON)
-    assert doctor.install_line(found, {"ais"}) == "uv sync --inexact --extra ais"
+    assert doctor.install_line(found, {"ais"}) == "uv sync --extra ais"
     [hint] = [c for c in doctor.extras_checks(lambda m: m != "websockets", found) if c.name == "extra:ais"]
-    assert hint.detail == f"websockets not installed; in the clone, {checkout}: uv sync --inexact --extra ais"
+    every = "".join(f" --extra {e}" for e in sorted(doctor.KNOWN_EXTRAS))  # all here but ais, and ais
+    assert hint.detail == f"websockets not installed; in the clone, {checkout}: uv sync{every}"
     elsewhere = doctor.install_of(
         checkout / ".venv", dataclasses.replace(here, env={"UV_PROJECT_ENVIRONMENT": "/home/ines/env"})
     )
