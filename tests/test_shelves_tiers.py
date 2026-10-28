@@ -30,6 +30,7 @@ KARI = {"name": "Kari Nordmann", "email": "kari.nordmann@example.org"}
 PROMISE = "I'll send Ola the harbour map by Friday."
 SECRET_PROMISE = "I'll pay Kari for the sails by Friday."
 ASKED = "Can you send me the tide table for Saturday?"
+REPLY = "I'll send it tonight."
 GOAL = "Finish the passage planner"
 CANARY = "CANARY-tier-three-never-through-the-gate"
 
@@ -314,6 +315,7 @@ def test_a_promise_above_the_gate_keeps_its_judgement_and_its_person_off_the_pag
     promise is not on the page, and both ids are a 404 that says nothing of them."""
     _note(lb, "2026-03-02T17:00:00Z", PROMISE)
     _note(lb, "2026-03-05T08:00:00Z", SECRET_PROMISE, tier=3)
+    _resolution(lb, "2026-02-01T10:00:00Z", KARI["email"], KARI["name"], tier=2)  # a request is a person's
     _from_kari(lb, "2026-03-04T09:00:00Z", ASKED, tier=3)
     secret, asked = _proposal(lb, SECRET_PROMISE), _proposal(lb, ASKED)
     _cache(lb, secret.id, CANARY)
@@ -342,25 +344,29 @@ def test_a_promise_above_the_gate_keeps_its_judgement_and_its_person_off_the_pag
 
 
 def test_a_resolution_above_the_gate_names_nobody(lb: Logbook) -> None:
-    """Kari's address is on a tier-2 message; the resolution that names it is tier 3: through 1 and
-    2 the page shows the address, never the label."""
+    """Kari's address is on tier-2 messages; the resolution that names it is tier 3: through 1 and
+    2 the page shows the address, never the label, and her request is not on it (a request counts
+    only when a person wrote it, and through the gate nobody names her one)."""
     payload = {
         "schema": "message/v1",
         "service": "imessage",
-        "chat": {"id": "chat-kari", "type": "direct"},
+        "chat": {"id": KARI["email"], "type": "direct"},
         "from_me": False,
         "sender": {"kind": "email", "value": KARI["email"]},
         "text": ASKED,
     }
     lb.append(at="2026-03-04T09:00:00Z", source="imessage", kind="message", tier=2, payload=payload)
+    reply = {**{k: v for k, v in payload.items() if k != "sender"}, "from_me": True, "text": REPLY}
+    lb.append(at="2026-03-04T09:05:00Z", source="imessage", kind="message", tier=2, payload=reply)
     resolution = _resolution(lb, "2026-02-01T10:00:00Z", KARI["email"], KARI["name"], tier=3)
     whole = shelf_promises.read(lb)
     assert whole.people == [KARI["name"]]
+    assert {r.proposal.match.quote for r in whole.rows} == {ASKED, REPLY}
     gated = shelf_promises.read(lb, GATE)
     assert gated.people == [KARI["email"]] and gated.tier == 2
-    asked = next(r for r in gated.rows if r.proposal.match.quote == ASKED)
-    assert asked.who == KARI["email"]
-    for target in ("/promises", f"/promises/{asked.proposal.id}", f"/promises?person={KARI['email']}"):
+    (mine,) = gated.rows
+    assert mine.proposal.match.quote == REPLY and mine.who == KARI["email"]
+    for target in ("/promises", f"/promises/{mine.proposal.id}", f"/promises?person={KARI['email']}"):
         page = _page(lb, GATE, target)
         _absent(page, KARI["name"], "Kari", resolution, "tier 3")
     assert KARI["name"] in _main(_page(lb, None, "/promises"))

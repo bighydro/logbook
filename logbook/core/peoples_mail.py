@@ -1,5 +1,6 @@
 """People's mail (RFC 0045): the one rule for which mail is a person's, read by the Day page and the
-crossing alike — `logbook people mail`, and the mail filter of `export crossing`.
+crossing alike — `logbook people mail`, and the mail filter of `export crossing` — and by `promises`,
+which reads a request in a mail only when it is a person's mail.
 
 A mail line (`mail/v1`, RFC 0015) is **a person's mail** when someone the record names as a person is
 on it: the sender (`from`) of a mail received, any recipient (`to`, `cc`, `bcc`) of a mail sent; and its
