@@ -13,6 +13,8 @@ export LOGBOOK_HOME=~/Demo/Logbook
 ```
 demo record: 30 days, 2026-06-01 to 2026-06-30, seed 1; nothing in it is real
 wrote 12,772 lines to ~/Demo/Logbook, head 3ee025e7a9fb…
+  export LOGBOOK_HOME=~/Demo/Logbook
+  logbook show 2026-06-08
 ```
 
 ## Open it in a browser
@@ -137,7 +139,7 @@ logbook setup places propose --top 4
 ```
 
 ```
-2026-06-01 – 2026-06-30: 4 unnamed places, by hours
+2026-06-01 – 2026-06-30: 14 unnamed places, by hours; the first 4 shown (--top)
   1.   58.5 h · 47.3769,8.5417 · 3 stays · 1400 km from Marina   stay:owner:20260608T0830Z@47.3769,8.5417
   2.   40.7 h · 59.0500,10.0300 · 2 stays · aboard nordlys · 103 km from Marina   stay:owner:20260617T1200Z@59.0500,10.0300
       suggested: aboard nordlys
