@@ -315,7 +315,7 @@ def _hit_html(
     )
     return (
         f'<li class="hit" id="{_row_id(line_id)}">{at} {kind}{mark}'
-        f'<q class="excerpt">{marked(hit.snippet, terms)}</q>'
+        f'<q class="excerpt">{fields(hit.snippet, terms)}</q>'
         f"{site.link(escape(line_id), f'/line/{line_id}', 'id')}</li>\n"
     )
 
@@ -324,6 +324,13 @@ def _hit_html(
 
 
 Terms = tuple[frozenset[str], tuple[str, ...]]  # the query's words, folded; and its prefixes
+
+
+def fields(snippet: str, terms: Terms) -> str:
+    """The snippet's fields (a sender, a handle, a text: `search.FIELD_BREAK` between them) each on a line
+    of its own, marked (`marked`): a name and the number beside it in the record are never set side by
+    side on the page (`tests/test_the_look.py`, the strong guard)."""
+    return "<br>\n".join(marked(field, terms) for field in snippet.split(search.FIELD_BREAK))
 
 
 def marked(snippet: str, terms: Terms) -> str:

@@ -169,6 +169,7 @@ from ..core import (
     policy,
     presence,
     reading,
+    resolve,
     sealing,
     share,
     signing,
@@ -3145,9 +3146,16 @@ class Site:
 
     def _with_form(self, day: str) -> str:
         """The "with…" field: names completed from the canonical people (a `datalist`, no script),
-        a clock when the owner knows it, posting to `WITH_PATH`."""
-        names = sorted({p.name for p in people.directory(self.lb).known.values()}, key=str.casefold)
-        options = "".join(f'<option value="{escape(name)}">' for name in names)
+        a clock when the owner knows it, posting to `WITH_PATH`. Through the gate `tiers`, only the names
+        the resolution lines at those tiers give (`resolve.at_tiers`, as the exports read them, #422): a
+        page at tier 1 completes no name only a tier-2 line gives."""
+        known = {p.name for p in people.directory(self.lb).known.values()}
+        if self.tiers is not None:
+            with self.lb.index() as idx:
+                lines = [*idx.retractions(), *idx.resolutions()]
+            labels, _identities = resolve.at_tiers(lines, self.tiers)
+            known &= set(labels.values())
+        options = "".join(f'<option value="{escape(name)}">' for name in sorted(known, key=str.casefold))
         return (
             f'<form class="with" method="post" action="{WITH_PATH}">'
             f'<input type="hidden" name="day" value="{day}">'
@@ -3189,9 +3197,9 @@ class Site:
                     (escape(days_reader.km_text(r["moved_m"])), "num"),
                     escape(", ".join(days_reader.flight_text(f) for f in r["flights"])),
                     escape(days_reader.stays_text(r["stays"]) if r["sources"] else "nothing logged"),
-                    escape(people),
                     escape(day_reader.health_text(r["health"]) if r["health"] is not None else ""),
                     escape(", ".join(r["gaps"])),
+                    escape(people),  # last, as on Trips: a figure of the day never touches a name
                 ]
             )
         span = (date.fromisoformat(last) - date.fromisoformat(first)).days + 1
@@ -3215,7 +3223,7 @@ class Site:
                 f"the record runs {whole[0]} {EN_DASH} {whole[1]}</p>\n"
             )
         body += _table(
-            ["day", "", "night", ("moved", "num"), "flights", "stays", "with", "health", "gaps"],
+            ["day", "", "night", ("moved", "num"), "flights", "stays", "health", "gaps", "with"],
             rows,
             ids if self.static else None,
         )
