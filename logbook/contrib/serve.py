@@ -424,217 +424,36 @@ Cell = str | tuple[str, str]  # a table cell: text, or (text, css class)
 Toggle = Callable[[Sequence[str], bool], str]  # a row's line ids (and: only when starred) → its star
 Href = Callable[[str], str | None]  # a server path → the link to write, or None for plain text
 
-STYLE = """
-:root{color-scheme:light dark;--fg:#1c1c1c;--bg:#fff;--mute:#6a6a6a;--line:#ddd;--accent:#2f5d7c}
-@media (prefers-color-scheme:dark){
-:root{--fg:#e8e8e8;--bg:#141414;--mute:#9b9b9b;--line:#333;--accent:#8fb8d6}}
-:root{--stay:#2e7d4f;--move:#3a62b0;--aboard:#1f6f88;--flight:#a0521f;--gap:#c43b3b}
-@media (prefers-color-scheme:dark){
-:root{--stay:#6cc08a;--move:#88a8ea;--aboard:#6fc2da;--flight:#e39a55;--gap:#ec7a7a}}
-body{margin:0;font:15px/1.45 system-ui,sans-serif;color:var(--fg);background:var(--bg)}
-header{border-bottom:1px solid var(--line);padding:.6rem 1rem}
-nav{display:flex;flex-wrap:wrap;row-gap:.3rem}
-nav a{margin-right:1rem;color:var(--accent);text-decoration:none}
-nav a:first-child{font-weight:600}
-main{max-width:66rem;margin:0 auto;padding:1rem}
-footer{color:var(--mute);font-size:.875rem;padding:1rem;border-top:1px solid var(--line)}
-a{color:var(--accent)}
-h1{margin:.2rem 0 .6rem}
-h1 small{color:var(--mute);font-weight:400;font-size:.6em}
-h2{font-size:1.1rem;margin:1.4rem 0 .5rem}
-table{border-collapse:collapse;width:100%}
-th,td{text-align:left;padding:.3rem .5rem;border-bottom:1px solid var(--line);vertical-align:top}
-th{color:var(--mute);font-weight:500}
-td.num,th.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
-td.day{white-space:nowrap}
-dl.header{display:grid;grid-template-columns:max-content 1fr;gap:.2rem 1rem;margin:0 0 1rem}
-dl.header dt{color:var(--mute)}
-dl.header dd{margin:0}
-ol.timeline,ol.inside,ul.attached,ul.unplaced,ul.plain,ul.proposals{list-style:none;padding:0;margin:0}
-li.proposal{padding:.15rem 0}
-.row{padding:.4rem 0;border-bottom:1px solid var(--line)}
-.clock{display:inline-block;min-width:7.5rem;font-variant-numeric:tabular-nums;color:var(--mute)}
-.kind{display:inline-block;min-width:5.5rem;font-size:.875rem;text-transform:uppercase;letter-spacing:.05em;
-color:var(--mute)}
-.row.stay>.kind{color:var(--stay)}
-.row.move>.kind{color:var(--move)}
-.row.flight>.kind{color:var(--flight)}
-.row.aboard>.kind{color:var(--aboard)}
-.row.gap>.kind{color:var(--gap)}
-ol.inside{margin:.3rem 0 0 2rem}
-ol.inside .row{border:0;padding:.15rem 0}
-details{margin:.3rem 0 0 7.5rem}
-summary{cursor:pointer;color:var(--accent);min-height:44px;box-sizing:border-box;padding:.6rem 0}
-ul.attached{margin:.3rem 0 0 1rem}
-details.synthesis,p.synthesis{margin:.2rem 0 .3rem 1.5rem;font-size:.92rem}
-details.synthesis p.segment{margin:.15rem 0}
-ul.attached li,ul.unplaced li{padding:.15rem 0}
-p.with{margin:.3rem 0 0 1rem;color:var(--mute)}
-form.window{display:flex;gap:.6rem;align-items:center;flex-wrap:wrap;margin:0 0 1rem}
-form.window input,form.window button{min-height:44px}
-td.day a{display:inline-block;min-height:44px;line-height:44px}
-input,button{font:inherit;padding:.2rem .4rem;background:var(--bg);color:var(--fg);
-border:1px solid var(--line);border-radius:3px}
-p.pager,p.mute,.mute{color:var(--mute)}
-p.pager a{display:inline-block;min-height:44px;line-height:44px}
-a.name{font-size:.8rem;margin-left:.5rem}
-form.star{display:inline;margin:0 0 0 .3rem}
-form.star button{border:0;padding:0 .15rem;background:none;color:var(--mute);cursor:pointer;
-font-size:1rem;line-height:1}
-form.star button[aria-pressed=true],.star.on{color:#c9a227}
-form.with{display:inline-flex;gap:.4rem;align-items:center;flex-wrap:wrap;margin-left:.6rem}
-form.with input[type=text]{min-width:12rem}
-ul.starred{list-style:none;padding:0;margin:0}
-ul.starred li{padding:.2rem 0}
-ol.timeline li:target,ul.attached li:target,ul.attached span:target,ul.unplaced li:target,
-dt#with:target{background:color-mix(in srgb,var(--accent) 10%,var(--bg))}
-ol.queue{list-style:none;padding:0;margin:0}
-li.cluster{display:grid;grid-template-columns:10rem 1fr;gap:.2rem 1rem;padding:.8rem 0;
-border-bottom:1px solid var(--line)}
-li.cluster:target{background:color-mix(in srgb,var(--accent) 10%,var(--bg))}
-li.cluster svg{grid-row:1/4;width:10rem;height:6.5rem;border:1px solid var(--line);border-radius:3px}
-li.cluster svg text{font:11px system-ui,sans-serif;fill:var(--mute)}
-li.cluster svg circle.spot{fill:var(--accent)}
-li.cluster svg circle.ring,li.cluster svg circle.near{fill:none;stroke:var(--mute);stroke-dasharray:3 2}
-li.cluster svg line{stroke:var(--mute)}
-li.cluster p.facts{margin:0}
-li.cluster p.facts b{font-variant-numeric:tabular-nums}
-ul.evidence{list-style:none;padding:0;margin:0;color:var(--mute);font-size:.9rem}
-li.cluster details{margin:0;font-size:.9rem}
-form.name{display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;margin:.3rem 0 0}
-form.name input[type=text]{min-width:16rem;flex:1}
-form.name input[type=text],form.name button{min-height:44px}
-a.skip{display:inline-flex;align-items:center;min-height:44px;box-sizing:border-box;padding:.2rem .6rem;
-border:1px solid var(--line);border-radius:3px;text-decoration:none}
-@media (max-width:40rem){li.cluster{grid-template-columns:1fr}li.cluster svg{grid-row:auto}}
-section.close form{margin:.6rem 0 1rem}
-section.close textarea{display:block;width:100%;box-sizing:border-box;min-height:7rem;font:inherit;
-padding:.4rem;background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:3px}
-section.close button{padding:.35rem .9rem;margin:.4rem .4rem 0 0}
-section.close details{margin:.4rem 0}
-section.close label{overflow-wrap:anywhere}
-section.close input[type=file]{max-width:100%}
-ol.proposals,ol.sentences{padding:0;margin:.3rem 0}
-ol.proposals{list-style:none}
-ol.sentences{padding-left:2rem}
-ol.proposals li{padding:.35rem 0;border-bottom:1px solid var(--line)}
-ol.proposals label{display:flex;gap:.6rem;align-items:baseline;cursor:pointer}
-ol.proposals input{flex:none;width:1.1rem;height:1.1rem}
-ul.signed{color:var(--mute);margin:.4rem 0}
-section.close button,section.close input[type=text],section.close input[type=date]{min-height:44px;
-box-sizing:border-box}
-section.close details>summary{min-height:44px;display:flex;align-items:center}
-section.close code{overflow-wrap:anywhere}
-ol.proposals label{min-height:44px;align-items:flex-start;padding:.3rem 0;box-sizing:border-box}
-fieldset.keep{border:0;padding:0;margin:.9rem 0;min-width:0}
-fieldset.keep legend{padding:0;font-weight:600;font-size:11px;letter-spacing:.13em;text-transform:uppercase;
-color:var(--mute)}
-fieldset.keep input[type=text]{width:100%;max-width:20rem}
-ol.keep{list-style:none;padding:0;margin:.3rem 0}
-ol.keep>li{padding:.3rem 0;border-bottom:1px solid var(--line)}
-ol.keep label.pick{display:flex;gap:.6rem;align-items:flex-start;min-height:44px;cursor:pointer;
-padding:.3rem 0;box-sizing:border-box}
-ol.keep input[type=checkbox],ol.keep input[type=radio],ol.proposals input{flex:none;width:1.5rem;
-height:1.5rem;margin:0}
-ol.keep span.head{display:block;font-size:11px;letter-spacing:.08em;text-transform:uppercase;
-color:var(--mute)}
-ol.keep li.pencil span.words{font-family:var(--serif);color:var(--graphite);background:var(--paper);
-border-radius:3px;padding:0 .3rem}
-ol.keep li.kept span.words,ol.keep li.task span.words{font-family:var(--serif);color:var(--ink)}
-ol.keep label.revisit{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;min-height:44px;
-margin-left:1.85rem;color:var(--mute)}
-ol.keep span.answers{display:flex;flex-wrap:wrap;gap:.4rem;margin:.3rem 0 0}
-ol.keep span.answers label{display:inline-flex;align-items:center;gap:.4rem;min-height:44px;
-padding:0 .8rem;border:1px solid var(--line);border-radius:999px;cursor:pointer;box-sizing:border-box}
-ol.keep span.answers input{margin:0}
-form.dream{display:flex;flex-wrap:wrap;align-items:center;gap:.6rem .8rem;margin:.6rem 0 1rem}
-form.dream p{margin:0;flex:1 1 16rem}
-code.sha{overflow-wrap:anywhere}
-footer .footnote{display:inline-block;margin-top:.3rem}
-@media (max-width:40rem){details{margin-left:1rem}.clock{min-width:0;margin-right:.5rem}
-table{display:block;overflow-x:auto}}
-ol.shelf{list-style:none;padding:0;margin:0}
-ol.shelf>li{padding:.55rem 0;border-bottom:1px solid var(--line);overflow-wrap:anywhere}
-ol.shelf>li:target{background:color-mix(in srgb,var(--accent) 10%,var(--bg))}
-ol.shelf p{margin:.1rem 0}
-p.head{display:flex;flex-wrap:wrap;gap:.1rem .8rem;align-items:baseline}
-p.head .mute{font-size:.9rem;font-variant-numeric:tabular-nums}
-details.evidence,details.draft{margin:.25rem 0 0}
-details.evidence>summary{color:var(--mute);font-size:.875rem}
-details.evidence ul.evidence{font-size:.875rem;margin:.2rem 0 0 .8rem}
-details.evidence details{margin:0 0 0 .8rem}
-span.id{font:.875rem ui-monospace,monospace;color:var(--mute)}
-details.draft>summary{font-size:.9rem}
-div.draft p.segment{margin:.3rem 0}
-p.segment.unsupported{border-left:2px solid var(--line);padding-left:.5rem}
-.dates{white-space:nowrap}
-svg.stays{display:block;width:100%;max-width:30rem;height:auto;margin:.5rem 0;
-border:1px solid var(--line);border-radius:3px}
-svg.stays circle{fill:var(--accent);fill-opacity:.85;stroke:var(--bg)}
-svg.stays text{font:11px system-ui,sans-serif;fill:var(--fg)}
-svg.stays line{stroke:var(--mute)}
-li.proposal form{display:flex;flex-wrap:wrap;gap:.5rem;margin:.3rem 0 0}
-"""
-MANIFEST_STYLE = """
-.badge{display:inline-block;font-size:.75rem;text-transform:uppercase;letter-spacing:.05em;padding:0 .35rem;
-border:1px solid var(--line);border-radius:3px}
-.badge.passed{color:var(--flight)}.badge.hold,.badge.add,.badge.sell{color:var(--stay)}
-.badge.exited,.badge.let-go{color:var(--mute)}
-.stale-flag{color:var(--gap)}
-ol.shelf>li.stale{border-left:3px solid var(--gap);padding-left:.5rem}
-p.reason{margin:.2rem 0 0;font-style:italic}
-form.act{display:flex;flex-wrap:wrap;gap:.4rem;align-items:center;margin:.4rem 0}
-form.act input[type=text]{flex:1 1 10rem;min-width:0}
-form.act select,form.act input[type=date]{max-width:100%}
-section.acts{border:1px solid var(--line);border-radius:4px;padding:.2rem .6rem;margin:.6rem 0}
-s.retracted{color:var(--mute)}
-"""  # the Manifest's pages only (an exported site has none): every other page keeps STYLE as it was
-TABLES_STYLE = """
-@media (max-width:40rem){table{display:block;overflow-x:auto}}
-li.cluster svg{max-width:100%}
-"""  # the pages of tables, Days, Trips, Places, Assets and Gaps, served or exported (`export site`), on a
-# phone: a table scrolls inside its own box (STYLE's phone rule says so too, for every page, the Day's
-# Sources among them) and a cluster's canvas keeps to the column
-IDEAS_STYLE = MANIFEST_STYLE + "p.refs{overflow-wrap:anywhere}\n"  # the Ideas pages: a Notion id is long
 DAY_STYLE = """
-p.tiers{color:var(--mute);font-size:.9rem;margin:0 0 1rem}
-a.raw{display:inline-block;min-width:44px;min-height:44px;line-height:44px;text-align:center;font-size:.875rem;
-margin-left:.35rem;vertical-align:middle;color:var(--mute);text-decoration:none;
-font-variant-numeric:tabular-nums}
-ul.strip{list-style:none;display:flex;flex-wrap:wrap;gap:.4rem;padding:0;margin:.35rem 0 0 7.5rem}
-ul.strip li{display:flex;flex-direction:column;align-items:flex-start;max-width:8rem;font-size:.85rem}
-ul.strip img,ul.review img{display:block;max-width:100%;width:8rem;height:auto;border-radius:3px;
+p.tiers{color:var(--pencil);font-size:14px;margin:0 0 1rem}
+a.raw{display:inline-flex;align-items:center;justify-content:center;min-width:44px;min-height:44px;
+font-size:14px;font-family:var(--mono);margin-left:.35rem;vertical-align:middle;color:var(--pencil);
+text-decoration:none;font-variant-numeric:tabular-nums}
+ul.strip{list-style:none;display:flex;flex-wrap:wrap;gap:.5rem;padding:0;margin:.35rem 0 0 7.5rem}
+ul.strip li{display:flex;flex-direction:column;align-items:flex-start;max-width:8rem;font-size:14px}
+ul.strip img,ul.review img{display:block;max-width:100%;width:8rem;height:auto;border-radius:12px;
 border:1px solid var(--line)}
 ul.strip li.mute{align-self:center}
 ul.strip span.name,ul.review span.name{overflow-wrap:anywhere}
-section.review ul.review{list-style:none;display:flex;flex-wrap:wrap;gap:.8rem;padding:0;margin:.5rem 0 1rem}
-ul.review li{display:flex;flex-direction:column;gap:.3rem;width:8.5rem;min-width:0}
+section.review ul.review{list-style:none;display:flex;flex-wrap:wrap;gap:.9rem;padding:0;margin:.5rem 0 1rem}
+ul.review li{display:flex;flex-direction:column;gap:.4rem;width:8.5rem;min-width:0}
 form.keep{display:block;margin:0}
-form.keep button{padding:.2rem .4rem}
-svg.track{display:block;width:100%;max-width:30rem;height:auto;margin:.5rem 0;
-border:1px solid var(--line);border-radius:3px}
-svg.track circle{fill:var(--accent);fill-opacity:.85;stroke:var(--bg)}
-svg.track line{stroke:var(--mute);stroke-width:1.5}
-svg.track line.gap{stroke-dasharray:4 3}
-svg.track text{font:11px system-ui,sans-serif;fill:var(--fg)}
-ul.week{color:var(--mute);font-size:.9rem;margin:.3rem 0 1rem}
+form.keep button{padding:0 .9rem}
+ul.week{color:var(--pencil);font-size:14px;margin:.3rem 0 1rem}
 div.outside ul.strip{margin-left:0}
 ul.conversations,ol.messages{list-style:none;padding:0;margin:.2rem 0 0 .8rem}
-ol.messages li{padding:.1rem 0;overflow-wrap:anywhere}
+ol.messages li{padding:.2rem 0;overflow-wrap:anywhere}
 ol.messages .clock{min-width:3.2rem}
 section.held td{overflow-wrap:anywhere;vertical-align:baseline}
-section.held td.at{white-space:nowrap;font-variant-numeric:tabular-nums;color:var(--mute)}
+section.held td.at{white-space:nowrap;font-variant-numeric:tabular-nums;font-family:var(--mono);
+font-size:14px;
+color:var(--pencil)}
 details.conversation,details.all{margin:.2rem 0 0}
 section.held details.held{margin:1.5rem 0 0}
-section.held h3{font-size:1rem;margin:.8rem 0 .2rem}
-span.way{font-size:.78rem;color:var(--mute)}
+section.held h3{margin:.8rem 0 .2rem}
+span.way{font-weight:500;font-size:13px;font-family:var(--mono);text-transform:uppercase;letter-spacing:.12em;
+color:var(--pencil)}
 @media (max-width:40rem){ul.strip{margin-left:1rem}}
-"""
-LINE_STYLE = """
-pre.line{max-width:100%;box-sizing:border-box;overflow-x:auto;white-space:pre-wrap;overflow-wrap:anywhere;
-font:.8rem/1.4 ui-monospace,monospace;padding:.6rem;border:1px solid var(--line);border-radius:3px}
-dl.header dd{overflow-wrap:anywhere}
-@media (max-width:40rem){pre.line{font-size:.75rem}}
 """
 
 
@@ -2016,7 +1835,7 @@ class Site:
         )
         shown = json.dumps(line, indent=2, ensure_ascii=False)
         parts.append(f'<pre class="line">{escape(shown)}</pre>\n')
-        return self.document(f"line #{int(line['seq'])}", "".join(parts), style=LINE_STYLE)
+        return self.document(f"line #{int(line['seq'])}", "".join(parts))
 
     def _page(self, path: str, params: Mapping[str, str]) -> str:
         if path == "/":
@@ -2123,7 +1942,7 @@ class Site:
             '<html lang="en">\n<head>\n<meta charset="utf-8">\n'
             '<meta name="viewport" content="width=device-width, initial-scale=1">\n'
             f"<title>{escape(title)} · Logbook</title>\n"
-            f"<style>{STYLE}{self.header_style()}{style}</style>\n</head>\n<body>\n"
+            f"<style>{doors.library_style(fonts=not self.static)}{style}</style>\n</head>\n<body>\n"
             f"{self.header()}<main>\n{body}</main>\n"
             f"<footer>{footer}</footer>\n{'' if script is None else f'<script>{script}</script>' + chr(10)}"
             "</body>\n</html>\n"
@@ -2433,7 +2252,8 @@ class Site:
         if self.with_drafts and data.get("draft"):
             model = escape(day_rhythm.model_of(data["draft"]))
             pencil = (
-                f'<div class="paper"><p class="eyebrow">Pencil <span class="sc">{model}</span></p>\n'
+                f'<div class="paper" title="Pencil: drafted by {model}">'
+                f'<p class="eyebrow">Pencil <span class="sc">{model}</span></p>\n'
                 f"{_draft_html(data['draft'], star)}</div>\n"
             )
         if self.with_drafts and data.get("draft_withheld"):  # the policy no longer allows it: the row
@@ -3350,9 +3170,7 @@ class Site:
     def page_days(self, first: str | None, last: str | None) -> str:
         whole = self._whole()
         if whole is None:
-            return self.document(
-                "days", "<h1>Days</h1>\n<p>no days: the record has no lines</p>\n", style=TABLES_STYLE
-            )
+            return self.document("days", "<h1>Days</h1>\n<p>no days: the record has no lines</p>\n")
         if last is None:
             last = whole[1] if first is None else _clip(first, WINDOW_DAYS - 1, whole)
         else:
@@ -3402,7 +3220,7 @@ class Site:
             ids if self.static else None,
         )
         body += self._starred(first, last)
-        return self.document(f"days {first} {EN_DASH} {last}", body, style=TABLES_STYLE)
+        return self.document(f"days {first} {EN_DASH} {last}", body)
 
     def _starred(self, first: str, last: str) -> str:
         """The window's stars (RFC 0041), a photo's among them, in the order of the lines they mark:
@@ -3427,9 +3245,7 @@ class Site:
     def page_trips(self, year: str | None) -> str:
         whole = self._whole()
         if whole is None:
-            return self.document(
-                "trips", "<h1>Trips</h1>\n<p>no trips: the record has no days</p>\n", style=TABLES_STYLE
-            )
+            return self.document("trips", "<h1>Trips</h1>\n<p>no trips: the record has no days</p>\n")
         year = year or whole[1][:4]
         if not YEAR.fullmatch(year):
             raise ValueError(f"not a year (YYYY): {year!r}")
@@ -3441,7 +3257,7 @@ class Site:
         first, last = max(f"{year}-01-01", whole[0]), min(f"{year}-12-31", whole[1])
         if last < first:
             parts.append(f"<p>no days in {year}: the record runs {whole[0]} {EN_DASH} {whole[1]}</p>\n")
-            return self.document(f"trips {year}", "".join(parts), style=TABLES_STYLE)
+            return self.document(f"trips {year}", "".join(parts))
         rd = self.shared(  # the door and its year's page are one reading
             ("trips", first, last),
             lambda: reading.read(self.lb, first, last, self.airports, self.tiers, TRIP_KINDS),
@@ -3459,7 +3275,7 @@ class Site:
                     [self.trip_row(t, rd) for t in found],
                 )
             )
-        return self.document(f"trips {year}", "".join(parts), style=TABLES_STYLE)
+        return self.document(f"trips {year}", "".join(parts))
 
     def trip_row(self, trip: trips.Trip, rd: reading.Reading) -> list[Cell]:
         """One row of the trips table; the dates link the trip's days (`/days?from=&to=`, which a
@@ -3821,7 +3637,8 @@ class Site:
         day = str(p["day"])
         return (
             f'<li><p class="head">{self.link(day, f"/day/{day}")} <span class="mute">{escape(who + to)}'
-            f"{escape(due + status)}</span></p>\n<p>{escape(str(p['quote']))}</p>\n"
+            f"{escape(due + status)}</span></p>\n"
+            f'<p class="pencil" title="{shelf_promises.PENCIL}">{escape(str(p["quote"]))}</p>\n'
             f"{self._evidence([(f'{p["kind"]} ({p["source"]})', [p['line']], day)])}</li>\n"
         )
 
@@ -4028,7 +3845,7 @@ class Site:
         if report is not None:
             kept = f"&portfolio={quote(portfolio, safe='')}" if filtered and portfolio is not None else ""
             parts.append(self._org_queue_html(report, int(page), kept=kept))
-        return self.document("manifest", "".join(parts), style=MANIFEST_STYLE)
+        return self.document("manifest", "".join(parts))
 
     def _org_row(self, r: orgs.Row, among: Sequence[entities.Entity]) -> str:
         cls = ' class="stale"' if r.stale else ""
@@ -4257,7 +4074,7 @@ class Site:
         if report is not None:
             parts.append(self._org_queue_html(report, 1, into=org.id))
         parts.append(f"<p>{self.link('The Manifest', '/manifest')}</p>\n")
-        return self.document(org.label, "".join(parts), style=MANIFEST_STYLE)
+        return self.document(org.label, "".join(parts))
 
     def _org_item(self, item: orgs.Item) -> str:
         day = self.link(escape(item.day), f"/day/{item.day}")
@@ -4329,7 +4146,7 @@ class Site:
             parts.extend(self._org_row(r, [x.org for x in shelf.rows]) for r in passed)
             parts.append("</ol>\n")
         parts.append(f"<p>{self.link('The Manifest', '/manifest')}</p>\n")
-        return self.document("people across orgs", "".join(parts), style=MANIFEST_STYLE)
+        return self.document("people across orgs", "".join(parts))
 
     # -- /ideas, /idea/<id> (RFC 0037 §7, §11) -------------------------------------------------------------
 
@@ -4372,7 +4189,7 @@ class Site:
             parts.append("</ol>\n")
         if report is not None:
             parts.append(self._idea_queue_html(report, int(page)))
-        return self.document("ideas", "".join(parts), style=IDEAS_STYLE)
+        return self.document("ideas", "".join(parts))
 
     def _idea_row(self, r: ideas.Row, year: str) -> str:
         cls = ' class="stale"' if r.stale else ""
@@ -4586,7 +4403,7 @@ class Site:
         if report is not None:
             parts.append(self._idea_queue_html(report, 1, into=idea.id))
         parts.append(f"<p>{self.link('Ideas', '/ideas')}</p>\n")
-        return self.document(idea.label, "".join(parts), style=IDEAS_STYLE)
+        return self.document(idea.label, "".join(parts))
 
     def _idea_item(self, item: ideas.Item) -> str:
         day = self.link(escape(item.day), f"/day/{item.day}")
@@ -4774,7 +4591,7 @@ class Site:
         body = "<h1>Assets</h1>\n"
         if not registry:
             body += f"<p>no assets registered ({escape(assets.ASSETS_FILE)}); `logbook assets add`</p>\n"
-            return self.document("assets", body, style=TABLES_STYLE)
+            return self.document("assets", body)
         named = places.read(self.lb.root)
         statuses = asset_status.read(self.lb, registry, named, self.now())
         tz = self.tz
@@ -4813,7 +4630,7 @@ class Site:
             ],
             rows,
         )
-        return self.document("assets", body, style=TABLES_STYLE)
+        return self.document("assets", body)
 
     def page_world(self, first: str | None, last: str | None) -> str:
         """`logbook export world`'s page, read as the export reads it by default (the `world` ceiling of
@@ -4827,7 +4644,7 @@ class Site:
             self.airports,
             self._today_of(),
             self.header(),
-            self.header_style(),
+            doors.ROOT + self.header_style(),
         )
         if found is None:
             return self.document(
@@ -4852,7 +4669,7 @@ class Site:
         )
         if not data["sources"]:
             body += "<p>no lines</p>\n"
-            return self.document("gaps", body, style=TABLES_STYLE)
+            return self.document("gaps", body)
         rows: list[list[Cell]] = []
         for s in data["sources"]:
             if s["lines"] == 0:
@@ -4892,7 +4709,7 @@ class Site:
             f'<p class="mute">{escape(span)}, today {escape(data["today"])} ({escape(data["timezone"])});'
             " counted through the index, every line, retracted or not</p>\n"
         )
-        return self.document("gaps", body, style=TABLES_STYLE)
+        return self.document("gaps", body)
 
 
 # -- the Day's rows ---------------------------------------------------------------------------------------

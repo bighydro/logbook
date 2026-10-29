@@ -22,9 +22,9 @@ second time, and would say how many lines a gate holds back. An empty query is t
 else; a query, or a filter, that finds nothing says so in one sentence.
 
 A GET form only: nothing is written, no script, nothing fetched, no reference but the server's own
-paths; the page carries the Day's tokens and type (`TOKENS`, copied from `serve.STYLE`, which a test
-holds equal) and the server's one stylesheet, phone width first, every link and control a 44 px
-target. No person is a filter and no number stands beside a name: the page counts nothing but its pages.
+paths; the page carries the Library's one stylesheet (`doors.library_style`) and its own rules in the
+doors' tokens, phone width first, every link and control a 44 px target. No person is a filter and no
+number stands beside a name: the page counts nothing but its pages.
 A hit a later line of its kind supersedes is still a hit, marked as `logbook search` marks it,
 `superseded by #N`, a link to that line, when the gate lets that line through (`_superseded`). An
 exported site (`export site`) has no server to ask, and
@@ -57,36 +57,29 @@ DOT = " · "
 ROWED = frozenset({"note", "mail", "event"})  # the kinds whose line the Day lists as a row of its own, `l-ID`
 STROKES = str.maketrans({"ø": "o", "đ": "d", "ł": "l", "ħ": "h"})  # letters `unicode61` folds, NFKD not
 MARKED = re.compile(re.escape(search.MARK[0]) + r"([^\[\]]+?)" + re.escape(search.MARK[1]))
-# the Day page's tokens, copied from `serve.STYLE` (tests/test_search_page.py holds them equal)
-TOKENS = """
-:root{color-scheme:light dark;--fg:#1c1c1c;--bg:#fff;--mute:#6a6a6a;--line:#ddd;--accent:#2f5d7c}
-@media (prefers-color-scheme:dark){
-:root{--fg:#e8e8e8;--bg:#141414;--mute:#9b9b9b;--line:#333;--accent:#8fb8d6}}
-"""
-SEARCH_STYLE = (
-    TOKENS
-    + """form.search{display:flex;gap:.5rem;margin:0 0 1rem}
+SEARCH_STYLE = """form.search{display:flex;gap:.5rem;margin:0 0 1rem}
 form.search input{flex:1 1 auto;min-width:0;min-height:2.75rem;box-sizing:border-box;padding:0 .6rem}
 form.search button{flex:none;min-height:2.75rem;min-width:2.75rem;padding:0 1rem}
-p.facets{margin:0;color:var(--mute);font-size:.9rem}
+p.facets{margin:0;color:var(--pencil);font-size:14px}
 p.facets a,p.pager a{display:inline-block;min-height:2.75rem;line-height:2.75rem;padding:0 .4rem;
 min-width:2.75rem;box-sizing:border-box}
-p.facets b{display:inline-block;padding:0 .4rem;color:var(--fg)}
+p.facets b{display:inline-block;padding:0 .4rem;color:var(--ink)}
 p.facets span.n{font-variant-numeric:tabular-nums}
-section.day h2 a{display:inline-block;min-height:2.75rem;line-height:2.75rem}
+section.day h2 a{display:inline-block;min-height:2.75rem;line-height:1.2;text-decoration:none}
+section.day h2{font-size:26px;margin:2rem 0 .3rem}
 ol.hits{list-style:none;padding:0;margin:0}
-li.hit{padding:.4rem 0;border-bottom:1px solid var(--line);overflow-wrap:anywhere}
+li.hit{padding:.6rem 0;border-bottom:1px solid var(--line-soft);overflow-wrap:anywhere}
 li.hit a.at{display:inline-block;min-height:2.75rem;line-height:2.75rem;min-width:2.75rem;
 font-variant-numeric:tabular-nums}
-li.hit q.excerpt{display:block;quotes:none;margin:.1rem 0}
-li.hit mark{background:color-mix(in srgb,var(--accent) 25%,var(--bg));color:inherit;padding:0 .1rem}
+li.hit q.excerpt{display:block;quotes:none;margin:.1rem 0;font-family:var(--serif);font-size:19px;
+line-height:1.4}
+li.hit mark{background:var(--line);color:inherit;padding:0 .1rem;border-radius:3px}
 li.hit a.id{display:inline-block;min-height:2.75rem;line-height:2.75rem;
-font:.78rem/2.75rem ui-monospace,monospace;color:var(--mute);overflow-wrap:anywhere}
-li.hit .superseded{color:var(--mute);font-size:.85rem}
+font:14px/2.75rem var(--mono);color:var(--pencil);overflow-wrap:anywhere}
+li.hit .superseded{color:var(--pencil);font-size:14px}
 li.hit .superseded a{display:inline-block;min-height:2.75rem;line-height:2.75rem}
 @media (max-width:40rem){form.search button{padding:0 .6rem}li.hit .kind{min-width:0;margin-right:.4rem}}
 """
-)
 ASKED = "the words in the field"  # what a sentence says of words asked that set a number beside a name
 PAST = "Page {page} is past the last hit."  # a page asked for beyond them
 NO_SERVER = "Search answers in logbook serve, on this machine; an exported site has no server to ask."

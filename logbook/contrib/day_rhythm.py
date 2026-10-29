@@ -156,111 +156,98 @@ CLOSE_HEADING = {
     SIGNED: "Reflect and sign",
 }
 
-# the owner's design: these tokens, as custom properties on the Day page only. Text keeps 4.5:1 in
-# both themes: --gfaint (4.41:1 on --paper in light) carries no text, --plan and --star only graphics (3:1)
-LIGHT = (
-    "--bg:#fbfaf7;--fg:#22252a;--ink:#1c1a17;--mute:#666a71;--line:#e6e2d8;--accent:#2f5d7c;"
-    "--paper:#f4efe3;--rule:#e8dfcc;--graphite:#47433c;--gfaint:#746e62;--star:#9a760f;--stay:#2e7d4f;"
-    "--move:#3a62b0;--aboard:#1f6f88;--call:#a35a16;--plan:#868b93;--card:#ffffff"
-)
-DARK = (
-    "--bg:#121315;--fg:#e6e6e3;--ink:#f3f0e9;--mute:#a4a7ac;--line:#2c2e32;--accent:#8fb8d6;"
-    "--paper:#1d1c19;--rule:#2b2924;--graphite:#dcd6c8;--gfaint:#a8a295;--star:#e2bf52;--stay:#6cc08a;"
-    "--move:#88a8ea;--aboard:#6fc2da;--call:#e39a55;--plan:#8d9299;--card:#1b1c1f"
-)
-SERIF = '"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif'
-SANS = 'system-ui,-apple-system,"Segoe UI",sans-serif'
-MONO = "ui-monospace,SFMono-Regular,Menlo,monospace"
-STYLE = f"""
-:root{{{LIGHT};--serif:{SERIF};--sans:{SANS};--mono:{MONO}}}
-@media (prefers-color-scheme:dark){{:root{{{DARK}}}}}
-body{{font-size:15px;line-height:1.5;font-family:var(--sans);background:var(--bg);color:var(--fg)}}
-main a{{color:var(--accent)}}
-section.part{{margin:0}}
-section.part>h2,p.eyebrow,div.paper p.eyebrow{{font-weight:600;font-size:13px;line-height:1.4;
-font-family:var(--sans);letter-spacing:.13em;
-text-transform:uppercase;color:var(--mute);margin:26px 0 8px}}
-section.part>h2 small,p.eyebrow small{{text-transform:none;letter-spacing:0;font-weight:400;float:right}}
-section.header p.eyebrow{{margin:18px 0 4px}}
-section.header h1{{font-weight:500;font-size:31px;line-height:1.1;font-family:var(--serif);color:var(--ink);
-margin:0 0 6px}}
-section.header h1 small{{font-weight:400;font-size:15px;line-height:1.5;font-family:var(--sans);
-color:var(--mute)}}
-p.meta{{margin:0 0 10px;color:var(--fg)}}
-p.asked{{font-size:13.5px;color:var(--mute);margin:0 0 8px}}
-p.for{{margin:14px 0 10px}}p.for .ink{{font-family:var(--serif);color:var(--ink)}}
-.ink,.person,div.reflection p{{font-family:var(--serif);color:var(--ink)}}
-div.reflection p.mute{{font-family:var(--sans);color:var(--mute)}}
-.mono,div.t,svg.ribbon text,span.ev{{font-family:var(--mono)}}
-div.card{{background:var(--card);border:1px solid var(--line);border-radius:6px;padding:14px}}
-div.card p{{margin:0 0 6px}}div.card p:last-child{{margin:0}}
-ul.rows{{list-style:none;padding:0;margin:0}}
-ul.rows li{{display:flex;gap:.7rem;padding:7px 0;border-bottom:1px solid var(--line);font-size:13.5px}}
-ul.rows li:last-child{{border-bottom:0}}
-ul.rows div.t{{flex:0 0 3.2rem;color:var(--mute);font-size:12.5px;padding-top:1px}}
-ul.rows span.sub{{display:block;color:var(--mute);font-size:12.5px}}
-svg.ribbon{{display:block;width:100%;max-width:100%;height:auto;margin:4px 0 2px}}
-svg.ribbon text{{font-size:12px;fill:var(--mute)}}
-svg.ribbon text.lane{{letter-spacing:.13em}}
-svg.ribbon line.hour{{stroke:var(--line)}}
-svg.ribbon rect.plan.filled{{fill:var(--plan)}}
-svg.ribbon rect.plan.hollow{{fill:none;stroke:var(--plan);stroke-width:1.2;stroke-dasharray:3 2}}
-svg.ribbon rect.stay{{fill:var(--stay)}}svg.ribbon rect.move{{fill:var(--move)}}
-svg.ribbon rect.aboard{{fill:var(--aboard)}}
-svg.ribbon line.call{{stroke:var(--call);stroke-width:1.5}}
-svg.ribbon line.task{{stroke:var(--plan);stroke-width:2}}
-svg.ribbon line.now{{stroke:var(--accent);stroke-width:1.5}}
-p.legend{{font-size:12px;color:var(--mute);margin:0 0 4px}}
-p.legend span{{font-weight:600}}p.legend .stay{{color:var(--stay)}}p.legend .move{{color:var(--move)}}
-p.legend .aboard{{color:var(--aboard)}}p.legend .call{{color:var(--call)}}
-p.nothing,p.quiet{{color:var(--mute);font-size:13.5px;margin:14px 0}}
-section.record details.fold{{margin:0;padding:0;border-top:1px solid var(--line)}}
-section.record{{border-bottom:1px solid var(--line)}}
-details.fold>summary{{list-style:none;cursor:pointer;display:flex;flex-wrap:wrap;align-items:center;
-column-gap:.5rem;min-height:44px;padding:0}}
-details.fold>summary::marker{{content:""}}
-details.fold>summary::before{{content:"\\25B8";font-size:11px;color:var(--mute);display:inline-block;
-transition:transform .15s}}
-details.fold[open]>summary::before{{transform:rotate(90deg)}}
-details.fold>summary h2{{display:inline;font-weight:600;font-size:15px;line-height:1.3;
-font-family:var(--sans);
-margin:0;letter-spacing:0;
-text-transform:none;color:var(--fg)}}
-details.fold>summary span.sum{{color:var(--mute);font-size:13.5px}}
-div.fold{{padding:0 0 12px 20px;font-size:13.5px}}
-div.fold h3{{font-weight:600;font-size:11px;line-height:1.4;font-family:var(--sans);letter-spacing:.13em;
-text-transform:uppercase;color:var(--mute);
-margin:12px 0 4px}}
-div.fold ol.timeline>li,div.fold ul.unplaced>li{{border-bottom:1px solid var(--line);padding:4px 0}}
-section.record section.held details.held{{margin:0;min-height:44px}}
-div.paper{{background-color:var(--paper);background-image:repeating-linear-gradient(to bottom,
-transparent 0,transparent 27px,var(--rule) 27px,var(--rule) 28px);border-radius:3px;color:var(--graphite);
-font-size:16px;line-height:28px;font-family:var(--serif);padding:0 14px 1px}}
-div.paper p{{margin:0 0 28px}}div.paper p.eyebrow{{margin:0;padding-top:0;line-height:28px}}
-div.paper h2{{display:none}}
-div.paper .sc{{font-variant:small-caps;text-transform:none;letter-spacing:.04em}}
-div.paper p.mute,div.paper .mute{{color:var(--mute)}}
-div.paper p.segment.unsupported{{font-style:italic}}
-div.paper span.id{{font-size:10.5px;font-family:var(--mono);color:var(--accent)}}
-div.paper span.kind,span.tag{{font-size:10.5px;line-height:1.4;font-family:var(--sans);
-border:1px solid var(--rule);border-radius:999px;
-padding:0 6px;color:var(--graphite)}}
-li.decision{{color:var(--graphite);font-family:var(--serif);background:var(--paper)}}
-p.proposal{{color:var(--graphite);font-family:var(--serif);background:var(--paper);border-radius:3px;
-padding:4px 10px;margin:10px 0}}
-p.proposal .sc{{font-variant:small-caps;letter-spacing:.04em;font-family:var(--sans);font-size:12.5px}}
-li.decision small{{font-size:10.5px;font-family:var(--mono);color:var(--accent)}}
-blockquote.ink{{margin:4px 0 0;font-style:italic}}
-ul.gallery{{list-style:none;display:flex;flex-wrap:wrap;gap:.4rem;padding:0;margin:.4rem 0}}
-ul.gallery img{{display:block;width:8rem;max-width:100%;height:auto;border-radius:3px}}
-ul.gallery li.starred{{outline:2px solid var(--star);border-radius:3px}}
-section.close button,section.review button,section.add button,form.with button{{min-height:44px;
-border-radius:22px;background:var(--ink);color:var(--bg);border:1px solid var(--ink);padding:0 18px;
-font-weight:600;font-size:14px;font-family:var(--sans);cursor:pointer}}
-section.review button[value=pass]{{background:transparent;color:var(--ink)}}
-form.star button{{min-width:44px;min-height:44px;background:transparent;border:0;color:var(--ink)}}
-p.foot{{color:var(--mute);font-size:12.5px;margin:30px 0 10px}}
-@media (max-width:40rem){{div.fold{{padding-left:12px}}ul.rows div.t{{flex-basis:2.8rem}}}}
+# the Day in the doors' look (`doors.library_style` before it): no token of its own but the chart colours
+# `doors.PAGES` sets on `main`; ink the owner's words in the serif, pencil a model's in the pencil colour
+# with a dotted rule and the model named in a title (RFC 0043 §3, RFC 0047 §7); counts in the mono
+STYLE = """
+section.part{margin:0}
+section.part>h2,p.eyebrow,div.paper p.eyebrow{font-weight:500;font-size:13px;line-height:1.4;
+font-family:var(--mono);letter-spacing:.13em;text-transform:uppercase;color:var(--pencil);margin:36px 0 12px}
+section.part>h2 small,p.eyebrow small{text-transform:none;letter-spacing:0;font-weight:400;float:right}
+section.header p.eyebrow{margin:0 0 10px}
+section.header h1{margin:0 0 10px}
+p.meta{margin:0 0 14px;font-size:17px}
+p.asked{font-size:14px;color:var(--pencil);margin:0 0 8px}
+p.for{margin:14px 0 10px}p.for .ink{font-family:var(--serif);color:var(--ink)}
+.ink,.person,div.reflection p{font-family:var(--serif);color:var(--ink)}
+div.reflection p{font-size:22px;line-height:1.4}
+div.reflection p.mute{font-family:var(--sans);font-size:14px;color:var(--pencil)}
+.mono,div.t,svg.ribbon text,span.ev{font-family:var(--mono)}
+div.card{background:var(--surface);border:1px solid var(--line);border-radius:20px;padding:28px 32px}
+div.card p{margin:0 0 8px}div.card p:last-child{margin:0}
+ul.rows{list-style:none;padding:0;margin:0}
+ul.rows li{display:flex;gap:.9rem;padding:12px 0;border-bottom:1px solid var(--line-soft);font-size:15px}
+ul.rows li:last-child{border-bottom:0}
+ul.rows li.back{flex-wrap:wrap;column-gap:.4rem}
+ul.rows div.t{flex:0 0 3.4rem;color:var(--pencil);font-size:14px;padding-top:3px}
+ul.rows span.sub{display:block;color:var(--pencil);font-size:14px}
+svg.ribbon{display:block;width:100%;max-width:36rem;height:auto;margin:8px 0 4px}
+svg.ribbon text{font-size:12px;fill:var(--pencil)}
+svg.ribbon text.lane{letter-spacing:.13em}
+svg.ribbon line.hour{stroke:var(--line)}
+svg.ribbon rect.plan.filled{fill:var(--plan)}
+svg.ribbon rect.plan.hollow{fill:none;stroke:var(--plan);stroke-width:1.2;stroke-dasharray:3 2}
+svg.ribbon rect.stay{fill:var(--stay)}svg.ribbon rect.move{fill:var(--move)}
+svg.ribbon rect.aboard{fill:var(--aboard)}
+svg.ribbon line.call{stroke:var(--call);stroke-width:1.5}
+svg.ribbon line.task{stroke:var(--plan);stroke-width:2}
+svg.ribbon line.now{stroke:var(--signal);stroke-width:1.5}
+p.legend{font-size:14px;color:var(--pencil);margin:0 0 4px}
+p.legend span{font-weight:500;color:var(--ink)}
+p.legend span::before{content:"";display:inline-block;width:.7em;height:.7em;margin-right:.3em;
+border-radius:2px;
+background:var(--plan)}
+p.legend .stay::before{background:var(--stay)}p.legend .move::before{background:var(--move)}
+p.legend .aboard::before{background:var(--aboard)}p.legend .call::before{background:var(--call)}
+p.nothing,p.quiet{color:var(--pencil);font-size:14px;margin:14px 0}
+section.record{margin:0 0 8px;padding:4px 28px;background:var(--surface);border:1px solid var(--line);
+border-radius:20px}
+section.record>h2{margin-top:20px}
+section.record details.fold{margin:0;padding:0;border-top:1px solid var(--line-soft)}
+details.fold>summary{list-style:none;cursor:pointer;display:flex;flex-wrap:wrap;align-items:center;
+column-gap:.6rem;min-height:56px;padding:6px 0;color:var(--ink)}
+details.fold>summary::marker{content:""}
+details.fold>summary::before{content:"\\25B8";font-size:11px;color:var(--pencil);display:inline-block;
+transition:transform .15s}
+details.fold[open]>summary::before{transform:rotate(90deg)}
+details.fold>summary h2{display:inline;font-weight:400;font-size:22px;line-height:1.25;
+font-family:var(--serif);
+margin:0;letter-spacing:0;text-transform:none;color:var(--ink)}
+details.fold>summary span.sum{color:var(--pencil);font-size:14px}
+div.fold{padding:0 0 16px 20px;font-size:14px}
+div.fold h3{margin:14px 0 6px}
+div.fold ol.timeline>li,div.fold ul.unplaced>li{border-bottom:1px solid var(--line-soft);padding:6px 0}
+section.record section.held details.held{margin:0;min-height:44px}
+div.paper{margin:12px 0;padding:24px 32px;background:var(--tint);border:1px solid var(--line);
+border-radius:20px;color:var(--pencil);font-size:17px;line-height:1.6;font-family:var(--serif)}
+div.paper p{margin:0 0 14px}div.paper p.eyebrow{margin:0 0 12px}
+div.paper p.segment{text-decoration:underline dotted var(--pencil-rule);text-underline-offset:.25em;
+text-decoration-thickness:1px}
+div.paper h2{display:none}
+div.paper .sc{font-variant:normal;text-transform:none;letter-spacing:.04em;color:var(--ink)}
+div.paper p.mute,div.paper .mute{color:var(--pencil)}
+div.paper p.mute{font-size:14px;font-family:var(--sans)}
+div.paper p.segment small,div.paper p.segment span.kind{display:inline-block;margin-right:.4rem}
+div.paper p.segment.unsupported{font-style:italic}
+div.paper span.id{font-size:14px;font-family:var(--mono);color:var(--pencil)}
+div.paper span.kind,span.tag{min-width:0;font-size:13px;line-height:1.4;font-family:var(--mono);
+border:1px solid var(--line);border-radius:999px;padding:0 6px;color:var(--pencil)}
+li.decision{color:var(--pencil);font-family:var(--serif);background:var(--tint);
+text-decoration:underline dotted var(--pencil-rule);text-underline-offset:.25em}
+p.proposal{color:var(--pencil);font-family:var(--serif);font-size:17px;background:var(--tint);border-radius:14px;
+padding:10px 16px;margin:12px 0;text-decoration:underline dotted var(--pencil-rule);
+text-underline-offset:.25em}
+p.proposal .sc{font-variant:normal;letter-spacing:.12em;text-transform:uppercase;font-family:var(--mono);
+font-size:13px;text-decoration:none}
+li.decision small{font-size:13px;font-family:var(--mono);color:var(--pencil)}
+blockquote.ink{margin:6px 0 0;font-style:italic;font-size:19px}
+ul.gallery{list-style:none;display:flex;flex-wrap:wrap;gap:.5rem;padding:0;margin:.5rem 0}
+ul.gallery img{display:block;width:8rem;max-width:100%;height:auto;border-radius:12px}
+ul.gallery li.starred{outline:2px solid var(--star);border-radius:12px}
+section.review button[value=pass]{background:transparent;color:var(--ink);border-color:var(--line)}
+p.foot{color:var(--pencil);font-size:14px;margin:30px 0 10px}
+@media (max-width:40rem){div.fold{padding-left:12px}ul.rows div.t{flex-basis:2.8rem}
+section.record{padding:2px 20px}div.card{padding:20px}div.paper{padding:20px}}
 """
 
 
@@ -754,7 +741,9 @@ def loose_ends(
                 mark = f' <small title="line {escape(str(block["transcript"]))}">[{where or "call"}]</small>'
             unsupported = "" if segment.get("supported") else ' <span class="tag">unsupported</span>'
             body.append(
-                f'<li class="decision"><div class="t">pencil</div><span>{escape(str(segment["text"]))}'
+                f'<li class="decision" title="Pencil: drafted by {escape(model_of(block))}">'
+                '<div class="t">pencil</div>'
+                f"<span>{escape(str(segment['text']))}"
                 f'{mark}{unsupported}<span class="sub">from the call{RSQUO}s synthesis{DOT}'
                 f'<span class="sc">{escape(model_of(block))}</span></span>'
                 "</span></li>\n"
@@ -1233,7 +1222,8 @@ def proposal_html(found: Mapping[str, Any], link: Callable[[str, str], str]) -> 
     """The week's one proposal, one line in pencil under Today, headed by the model that wrote it."""
     unsupported = "" if found["supported"] else ' <span class="tag">unsupported</span>'
     return (
-        f'<p class="proposal"><span class="sc">{escape(str(found["model"]))}</span> '
+        f'<p class="proposal" title="Pencil: drafted by {escape(str(found["model"]))}">'
+        f'<span class="sc">{escape(str(found["model"]))}</span> '
         f"{escape(str(found['text']))}{unsupported} "
         f'<span class="mute">{link(f"the week{RSQUO}s draft", "/line/" + str(found["line"]))}</span></p>\n'
     )

@@ -50,14 +50,7 @@ SHOWN = 3  # the owner's turns shown before the rest fold
 CHARS = 280  # a turn shown longer than this is cut, and whole in a fold of its own; a folded turn is whole
 DOT = goals.DOT
 SHELF_STYLE = """
-.badge{display:inline-block;font-size:.75rem;text-transform:uppercase;letter-spacing:.05em;padding:0 .35rem;
-border:1px solid var(--line);border-radius:3px;color:var(--mute)}
-p.facts{margin:.1rem 0;color:var(--mute);overflow-wrap:anywhere}
-blockquote.said{margin:.3rem 0;padding-left:.6rem;border-left:3px solid var(--line);overflow-wrap:anywhere;
-white-space:pre-wrap}
-blockquote.machine{color:var(--mute);font-style:italic}
-p.summary{margin:.2rem 0;overflow-wrap:anywhere}
-p.pager{display:flex;flex-wrap:wrap;gap:.8rem}
+p.pager{display:flex;flex-wrap:wrap;gap:0 .8rem}
 """  # what the Agents page adds to the one stylesheet; every rule keeps to the column
 
 

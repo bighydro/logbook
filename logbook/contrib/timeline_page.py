@@ -53,62 +53,62 @@ EN_DASH = day_reader.EN_DASH
 NO_MOMENT = '<span class="mute">no moment</span>'
 ZOOM_WORDS = {"day": "day", "week": "week", "month": "month", "year": "year", "life": "all years"}
 WEEKDAYS = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
-TOKENS = """
-:root{color-scheme:light dark;--fg:#1c1c1c;--bg:#fff;--mute:#6a6a6a;--line:#ddd;--accent:#2f5d7c}
-@media (prefers-color-scheme:dark){
-:root{--fg:#e8e8e8;--bg:#141414;--mute:#9b9b9b;--line:#333;--accent:#8fb8d6}}
-"""  # the Day page's tokens (`serve.STYLE`), copied so the two read as one product
-STYLE = (
-    TOKENS
-    + """
-:root{--home:#2e8b57;--family:#b07d2b;--aboard:#1f7f9a;--away:#c0652a;--transit:#9b9b9b}
+PROPOSED_BY = (
+    "Pencil: proposed by the with module's rules, until you confirm who was there"  # the pencil's title
+)
+STYLE = """
+main{--home:#2e8b57;--family:#b07d2b;--aboard:#1f7f9a;--away:#c0652a;--transit:#9b9b9b}
 p.zooms{display:flex;flex-wrap:wrap;gap:.2rem .4rem;margin:.2rem 0 .6rem}
 p.zooms a,p.zooms b,p.pager a{display:inline-block;min-height:2.75rem;min-width:2.75rem;box-sizing:border-box;
 line-height:2.75rem;padding:0 .4rem;text-align:center}
-p.zooms b{color:var(--fg)}
+p.zooms b{color:var(--ink)}
 a.tap{display:inline-block;min-height:2.75rem;min-width:2.75rem;line-height:2.75rem;text-align:center}
 p.pager{display:flex;flex-wrap:wrap;gap:.2rem .8rem;margin:0 0 .4rem}
-p.pager span{display:inline-block;line-height:2.75rem;padding:0 .4rem;color:var(--mute)}
+p.pager span{display:inline-block;line-height:2.75rem;padding:0 .4rem;color:var(--pencil)}
 div.timeline{display:flex;flex-direction:column;gap:1rem}
-section.map{border:1px solid var(--line);border-radius:4px;padding:.5rem;min-width:0}
-section.map p{margin:0 0 .3rem;color:var(--mute);font-size:.9rem}
+section.map{border:1px solid var(--line);border-radius:20px;padding:20px;background:var(--surface);
+min-width:0}
+section.map p{margin:0 0 .3rem;color:var(--pencil);font-size:.9rem}
 section.list{min-width:0}
 @media (min-width:48rem){div.timeline{display:grid;grid-template-columns:minmax(0,1fr) 20rem;
 align-items:start}
 section.map{grid-column:2;grid-row:1;position:sticky;top:.5rem}section.list{grid-column:1;grid-row:1}}
 svg.track{display:block;width:100%;max-width:30rem;height:auto;margin:.5rem 0;
-border:1px solid var(--line);border-radius:3px}
-svg.track circle{fill:var(--accent);fill-opacity:.85;stroke:var(--bg)}
-svg.track line{stroke:var(--mute);stroke-width:1.5}
+border:1px solid var(--line);border-radius:16px;background:var(--surface)}
+svg.track circle{fill:var(--ink);fill-opacity:.85;stroke:var(--surface)}
+svg.track line{stroke:var(--pencil);stroke-width:1.5}
 svg.track line.gap{stroke-dasharray:4 3}
-svg.track text{font:11px system-ui,sans-serif;fill:var(--fg)}
+svg.track text{font:11px var(--sans);fill:var(--ink)}
 ol.items{list-style:none;padding:0;margin:0}
-ol.items>li{border-bottom:1px solid var(--line);overflow-wrap:anywhere}
-ol.items>li.move{color:var(--mute);font-size:.9rem;padding:.3rem 0 .3rem 1rem}
+ol.items>li{border-bottom:1px solid var(--line-soft);overflow-wrap:anywhere}
+ol.items>li.move{color:var(--pencil);font-size:.9rem;padding:.3rem 0 .3rem 1rem}
 ol.items details{margin:0}
-ol.items summary{min-height:2.75rem;padding:.55rem 0;line-height:1.6;color:var(--fg)}
+ol.items summary{min-height:2.75rem;padding:.55rem 0;line-height:1.6;color:var(--ink)}
 .class{display:inline-block;width:.7rem;height:.7rem;border-radius:50%;margin-right:.35rem;
 background:var(--transit);vertical-align:baseline}
 .home{--c:var(--home)}.family{--c:var(--family)}.aboard{--c:var(--aboard)}.away{--c:var(--away)}
 .class{background:var(--c,var(--transit))}
 dl.moment{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:.2rem .8rem;margin:.2rem 0 .8rem}
-dl.moment dt{color:var(--mute)}
+dl.moment dt{color:var(--pencil)}
 dl.moment dd{margin:0;min-width:0}
-.pencil{color:var(--mute);font-style:italic}
-blockquote.said{margin:.2rem 0;padding-left:.6rem;border-left:3px solid var(--line);white-space:pre-wrap}
-blockquote.machine{color:var(--mute);font-style:italic}
+blockquote.said{margin:.2rem 0;padding-left:.9rem;border-left:2px solid var(--line);white-space:pre-wrap;
+font-family:var(--serif);font-size:17px}
+blockquote.machine{color:var(--pencil);font-style:italic;font-family:var(--sans);font-size:15px}
 ul.plain li{padding:.15rem 0}
 ol.days{list-style:none;padding:0;margin:0}
-ol.days>li{padding:.4rem 0;border-bottom:1px solid var(--line);overflow-wrap:anywhere}
+ol.days>li{padding:.6rem 0;border-bottom:1px solid var(--line-soft);overflow-wrap:anywhere}
 a.chip{display:inline-block;min-height:2.75rem;line-height:2.75rem;margin:.1rem .3rem .1rem 0;padding:0 .5rem;
-border:1px solid var(--line);border-left:4px solid var(--c,var(--transit));border-radius:3px;
+border:1px solid var(--line);border-left:4px solid var(--c,var(--transit));border-radius:22px;
+background:var(--surface);
 text-decoration:none}
 div.calendar{display:grid;grid-template-columns:repeat(7,1fr);gap:.2rem}
-div.calendar span.head{color:var(--mute);font-size:.75rem;text-align:center}
+div.calendar span.head{color:var(--pencil);font-size:13px;font-family:var(--mono);letter-spacing:.12em;
+text-transform:uppercase;text-align:center}
 div.calendar a.cell,div.calendar span.cell{display:flex;flex-direction:column;min-height:3.4rem;min-width:0;
-padding:.2rem;border:1px solid var(--line);border-top:4px solid var(--c,var(--line));border-radius:3px;
-text-decoration:none;font-size:.7rem;color:var(--mute);overflow-wrap:anywhere}
-div.calendar a.cell b{font-size:.95rem;color:var(--fg)}
+padding:.2rem;border:1px solid var(--line);border-top:4px solid var(--c,var(--line));border-radius:12px;
+background:var(--surface);
+text-decoration:none;font-size:13px;color:var(--pencil);overflow-wrap:anywhere}
+div.calendar a.cell b{font-size:.95rem;color:var(--ink)}
 ol.months{list-style:none;padding:0;margin:0}
 ol.months>li{padding:.3rem 0;border-bottom:1px solid var(--line)}
 ol.months a.month,ol.months span.month{display:block;min-height:2.75rem;text-decoration:none}
@@ -118,9 +118,8 @@ div.year{position:relative;height:1.2rem;background:var(--line);border-radius:2p
 div.year span{position:absolute;top:0;bottom:0;min-width:3px;background:var(--c,var(--away));
 border-radius:2px}
 ol.shelf>li a{overflow-wrap:anywhere}
-p.legend{font-size:.85rem;color:var(--mute)}
+p.legend{font-size:14px;color:var(--pencil)}
 """
-)
 
 
 def page(site: Site, path: str) -> str:
@@ -290,7 +289,7 @@ def _detail(site: Site, item: Mapping[str, Any], day: str) -> str:
         proposed = ", ".join(
             f"{escape(p['name'])}? ({escape(', '.join(p['because']))})" for p in people["proposed"]
         )
-        rows.append(_dt("proposed", f'<span class="pencil">{proposed}</span>'))
+        rows.append(_dt("proposed", f'<span class="pencil" title="{PROPOSED_BY}">{proposed}</span>'))
     if item["photos"]:
         photos = ", ".join(
             site.link(f"photo {n}", f"/line/{i}", TAP) for n, i in enumerate(item["photos"], 1)
