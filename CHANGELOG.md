@@ -1,5 +1,131 @@
 # Changelog
 
+## 1.0.0 — 2026-10-29
+
+### Security
+- The MCP write tools `add_note` and `promise_done` are refused unless the `mcp` entry of `policy/crossing.json` names them under `write` and has not expired, as `sign_day` and `note_day` are, and the lines they write have source `mcp`, never `manual`: an agent never writes as the owner.
+- A signature never confirms pencil: the dream's draft, a note a model derived (a photo's description, a meeting's summary) and a line an agent wrote through the door are left out of `confirmed` by `day sign`, `day reflect --sign`, the Library's Sign and the door's `sign_day`, and a disposition a standing signature gave one is no longer carried forward.
+- `export share day` holds a draft to the entry it was written under, as every other crossing and the MCP door do: a draft whose `dream` entry is missing, lowered under its tier or expired stays home, counted in the manifest's `held_back` and the crossing line's `held_back_by_entry`.
+- `sync heard` fetches only from the public internet: an address that is not global (the tailnet's 100.64.0.0/10, Tailscale's 100.100.100.100 and a MagicDNS name that resolves into it among them) is refused, the connection goes to the address that was checked and never to a second answer of the resolver, on every redirect, never through a proxy the environment names, and an https page's redirect to http and a port other than 80 and 443 are refused.
+- `sync heard` fetches a feed's transcript only under a `heard` entry in `policy/crossing.json`, `{"heard": {"max_tier": 2, "fetch": true}}`: `LOGBOOK_HEARD=feed` alone fetches nothing, the entry is checked before any request, and `doctor` names it.
+- `export world` and the Library's `/world` fail closed: a record whose policy names no `world` entry shows tier 1 alone, and `{"world": {"max_tier": 2}}` adds the chapters; `doctor` names it on a `world` line.
+- `doctor --packet` sends its probe of the dream endpoint, with the bearer key, only while the policy's `dream` entry allows the dream; with no entry, or one expired, it says the probe was not sent and why. SECURITY.md lists every command that may open a socket.
+- `logbook serve` reads for this machine and for your phone through Tailscale Serve once `logbook setup phone` names it, and nobody else: a page asked under any other `Host` (a website pointing its name at 127.0.0.1, DNS rebinding) is a `421`, and a request through any other proxy, another login, two `Host` headers or Tailscale Funnel is a `403`, both before anything is read. Without `setup phone`, the phone no longer reads the pages through Tailscale Serve: run it once. Through an SSH tunnel, use the same port on both ends (`ssh -L 8765:127.0.0.1:8765`).
+- No Library page can be framed by another (`frame-ancestors 'none'`, `X-Frame-Options: DENY`), and a form posted from a frame or from another site (`Sec-Fetch-Dest`, `Sec-Fetch-Site`) writes nothing.
+- `logbook day` and the Day page, its ribbon's tooltips and its spoken label included, print a calendar entry's title and then its time after a word (`Dinner with Ola Nordmann, from 19:30 to 21:00`, `Ola Nordmann's birthday, from 19:30`), so a clock touches no name at either end of a title; the ribbon's label says `then` between its entries; an entry several calendars carry says `from 2 sources (…)` after its title, in `logbook day`, the Day page, `digest` and `tasks`, never `×2` beside a name.
+- A digit stuck to a name with no space between (`Ola Nordmann2`, `3Ola`) counts as a number beside that name, and so does one through a separator that is a letter (`3xOla`), with no boundary asked of the name: the dream holds the sentence, every reader holds a stored draft's, a name the `dream` entry withholds is still found there (and held out of a confirmed event's title), and `doctor --packet` scrubs the owner's name with a digit stuck to it. Guillemets, an ellipsis, `+`, `~`, `_` and the zero-width spaces count as separators too.
+- A week's threads print their kind and count in words after the title (`“Dinner with Ola Nordmann” calendar 1 time`), so a count stands beside no title that holds a name.
+- The Day page holds the reflection to its tier, as every other line of it: through a gate below the
+  reflection's tier (a note, tier 2) a page or a built Library page neither shows, quotes, offers nor
+  numbers it, nor its Wispr Flow dictation (tier 3); Sign still signs with it, its form naming no line.
+- A sentence kept from a draft as a note above the page's tiers no longer reads "kept as #N" on that
+  page; keeping it again there is refused in one sentence that names no line.
+
+### Added
+- Keep and sign on the Day page: in the evening, and when a signed day is signed again, the Sign form
+  keeps the pencil's sentences and links (numbered as `--keep` takes them), a kept decision's revisit
+  day, the day in a word and each task of the day answered (done, tomorrow, let go; a task shown by its
+  title alone, no number beside it), then signs, in one click and one hold of the writer lock; the page
+  writes what `logbook day sign DAY --keep …` writes, byte for byte, and any refusal writes nothing and
+  says why in one sentence. A page that reads fewer tiers than the record shows and keeps only the
+  draft its gate shows, as the rest of the Day does, and neither shows nor quotes a day's word above
+  its gate.
+- Today's evening offers *Dream the day so far* (`logbook dream day TODAY --evening`) while your `dream`
+  entry stands, its draft in pencil above the form; without the entry, or on a page whose tier gate is
+  below the entry's, the page says why in one sentence, and nothing is sent.
+
+### Fixed
+- The dream sends a name only at its entry's tiers: a person the record names only in a tier-3
+  resolution never reaches the model under a `dream` entry of `max_tier` 2, in the day, the week, the
+  month, the journey or the chapter, and a draft's tier rises to the tier of a name it was given.
+  `day sign --accept` refuses a person the `dream` entry's tiers do not name, and writes a name learned
+  at tier 3 at tier 3.
+- No number beside a name in a dream's draft: the journey and the person dreams hold such a sentence
+  as the day does, and `day`, the Day page, `show trip`, the journey's page, the week, month and
+  chapter readers and `export letter` hold one in a day, journey, week, month or chapter draft
+  already stored, whatever wrote it. A gated Day names a proposal's people only at its tiers.
+- The Library on a phone: every target the pages name is 44 px or more (a Day's line as written, every fold's summary, the Places review's name, skip and reject, the week's keep box and day links, the life's years and zooms, the Days' links, window and show button, the pagers, the world's map buttons); a Day's eyebrows, its ribbon, a row's kind, ids, evidence and the footer are at least 13, 12 or 14 px; and a row's kind and a promise's or an asset's badge keep 4.5:1 on the page in the light face and the dark.
+- `/world` on a phone: its play button and scrubber sit above the doors' bar instead of under it, and a navigation of its own wraps inside the screen.
+- Names, dates and sources in exports are held to the tier of the lines that give them. An output
+  names a person only from resolutions at its own tiers: a name only a tier-2 or tier-3 resolution
+  gives is no longer in a tier-1 `export vault`, `export site` or `export trip-bundle`, a name only a
+  tier-3 resolution gives is in none below tier 3, and neither is counted in a bundle's
+  `held_back.people`. `export site`'s Today, its span and its years and `export world`'s window come
+  from the lines that cross, so a tier-3 health line no longer moves them; a vault's day page counts
+  only the sources and flights that cross, and a day with none has no page; a trip bundle's
+  `trip.json` carries only the flights, stays and moves whose lines cross.
+- No date or clock time sits beside a person's name with only separators between: `people not-with`
+  writes "from DAY to DAY", a proposed event "from 19:30 to 22:10" after its title, a site's people
+  index names only, and a vault's year row puts its people last; the dream holds a sentence that
+  sets a date or a clock beside a name, as it holds a count, and a confirmed event's title holds a
+  surname and a genitive too.
+- The readers print people by name only, the most days together first, never with a count beside a
+  name: `rollup people` reads `Per Hansen  last 2026-06-30 · Office` (was `10 days · 0 nights · … ·
+  11 confirmed`), and `show year`'s people section and its page the same; `show asset` and `show
+  place` read `with  Anders Vik, Ola Nordmann, Sigrid Moen` (was `Anders Vik (2 days), …`); the
+  Library's People page names each person with their last real contact, the evidence uncounted (was
+  `10 days together`, `evidence · 11 lines`). `rollup places --with` lists each place's people, `with
+  Per Hansen, Liv Berg`, and `rollup people --drifting` each person's last real contact (`last
+  2026-06-12`), the quiet channels and the last shared place, without the counts, the fall or the days
+  ago. The year's page sets `with` before a place's people, a trip's paper edition names a day's people
+  last, and an org proposal on the Manifest the names it was seen under without their count. The counts
+  stay in `--json`, unchanged; a person's own page (`show person`, /people/ID) still counts the days
+  together.
+- No date, clock time or other number sits beside a person's name with only separators between: the
+  digest's promise reads `Kari Nordmann, due 2026-06-05 (by Friday)` (was `Kari Nordmann, 2026-06-05`)
+  and `rollup listen`'s top artists `Kari Nordmann  played 0.2 h · 4 listens`.
+- An event the owner accepts from the dream (`day sign --accept`, `day reflect --sign --accept`) is a
+  tier-1 line, and names a person only from the resolutions at tier 1: someone the record knows only
+  by tier-2 or tier-3 lines is no attendee, and their name in the title reads `someone`.
+- A fast test checks the site's people pages at tier 1 and at tier 1,2 on a small synthetic
+  record: a tier-1 site has a page for the person a tier-1 resolution names and none for one named
+  only at tier 2 or 3, and a tier-1,2 site has pages for both the tier-1 and the tier-2 people.
+  Before, only the slow forty-year export, which pull requests skip, checked these pages.
+- `export --day` and `--days` with no `folder` entry record what is true in their crossing line: no entry
+  exists and the default applied (`"entry": null, "default_tier": 1`), never a `max_tier` no policy set;
+  an entry is recorded by name with its ceiling. The refusal of a tier above the default says the file
+  names no `folder` entry, and doctor's new `export-day` line says the same.
+- In a clone run with uv, doctor's install hint is the short `uv sync --extra <name>` again, the clone
+  named before it; since `uv sync` keeps only the extras it is given, the line names every extra the
+  clone has beside the new one, so following it removes none. The pipx and uv-tool lines are unchanged.
+- A night the record does not place reads `not recorded` on Today (`Last night: not recorded`), the Day
+  page and `logbook day`; `in transit` only when the Day holds a move or a flight across that night.
+  The Day's JSON is unchanged.
+- `logbook doctor` before any record exists says `No record yet: run `logbook demo --out ~/Demo/Logbook` to try one, or
+  `logbook setup` to start yours.` (it still exits 1). Its install line for an extra is the short one
+  for how this Logbook was installed: `pipx inject openlogbook "openlogbook[ais]==…"` (with `PIPX_HOME`
+  only when the venv is not in pipx's own home), `uv tool install --force "openlogbook[ais]==…"` (with
+  the `--python` the receipt asked for, if any), and in a clone `uv sync --inexact --extra ais`, the
+  clone named before it.
+- doctor's `home` row is now `schedule` and says what it is: which machine runs the scheduled syncs.
+  Its `restore-test` warn says to run `logbook backup DEST` once first when no backup is recorded.
+- The Day page and Today, on a machine with no transcription engine, give the command that adds one
+  for how this Logbook was installed (doctor's line), never `install openlogbook[transcribe]`.
+- The Day page: the `with` row's words and its field are apart (`proposed below · add`); its footer
+  says what is true, `Reflect and Sign, the with field and the stars write to your record; nothing
+  else here does`, in place of `read-only`; a past day is headed by its weekday alone, the shape's
+  name (`morning`, `live`, `evening`) being today's.
+- `logbook show stats` names the record's format as such, `record format logbook/0.3`, beside a
+  program whose version is another number.
+- An asset is printed by its registered name, once: `rollup places`, `rollup nights`, `rollup people`,
+  `rollup places --with`, `show year`, `show person`, `show place`, `people` and `places propose` read
+  `aboard Nordlys` and `Nordlys (yacht)` (were `aboard nordlys` and `Nordlys (nordlys) (yacht)`). The
+  JSON SPEC §6.1 compares keeps the id.
+- `show trip`, the trip's page and its paper say the day you came home in words, `back on 21 June`,
+  for the morning after the last night (SPEC §3.2.6's `until`, unchanged in the JSON); they said
+  `until 2026-06-21`, which read as one night too many.
+- `show person` counts a person's days together as `rollup people` does, by the confirmed evidence
+  (a face on the morning after a confirmed evening is no day together; the demo's Ola reads 3 days
+  in both, was 4), and says so: `first confirmed … · last confirmed …`, `3 days together, by the
+  confirmed evidence`, `last 6 shared stays, confirmed or proposed`. `show asset` reads the runs
+  aboard as `rollup places` does, so its stays, hours and people agree with it.
+- `logbook export --day DAY --out DIR` (and `--days`) reads its ceiling from a `folder` entry of
+  `policy/crossing.json`, as the vault and the site do, tier 1 without one; `--tier` may lower it, never
+  raise it, and a tier above it is refused naming the entry. Each run that writes a folder appends a
+  `crossing/v1` line like every other export: destination `folder`, the folder's last part, the tiers,
+  the kinds, the line count and the folder's digest (ADR 0026). It wrote every tier and left no line,
+  though the README promises that your record keeps a line that says it left. docs/export.md.
+
 ## 0.7.1 — 2026-10-27
 
 ### Adapters
