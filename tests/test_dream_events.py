@@ -11,6 +11,7 @@ from __future__ import annotations
 import contextlib
 import io
 import json
+import re
 from collections.abc import Callable
 from datetime import date, datetime
 from pathlib import Path
@@ -549,7 +550,9 @@ def test_the_day_shows_a_proposed_event_greyed_and_a_confirmed_one_as_an_event(
     assert any(r.strip().startswith("event") and TITLE in r and "19:" in r for r in out.splitlines())
     html = serve.Site(lb).page_day(DAY)
     assert 'class="proposal proposed mute"' not in html and 'class="proposal confirmed"' in html
-    assert f'<span class="kind">event</span> {TITLE}' in html
+    assert re.search(rf'<span class="kind">event</span> {TITLE}, from 19:\d\d to \d\d:\d\d', html), (
+        "the title, then its time after a word"
+    )
     assert str(draft["id"]) == event["payload"]["extra"]["from"]
 
 
@@ -683,3 +686,7 @@ def test_a_confirmed_title_holds_every_name_learned_above_tier_1_and_nothing_els
     assert held("Bergs bursdag", words) == "someone's bursdag", "a genitive with no apostrophe"
     assert held("Lunch in May", words) == "Lunch in May", "a word of three letters is no name to hold"
     assert held("Olsen's boat", words) == "someone's boat"
+    # a digit touching a name is no letter: the name is still there, and held
+    assert held("Dinner with Kari Nordmann2", words) == "Dinner with someone2"
+    assert held("3Berg's boat", words) == "3someone's boat"
+    assert held("Bergen trip", words) == "Bergen trip", "a longer word is another word"

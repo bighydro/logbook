@@ -343,12 +343,12 @@ def test_the_ribbon_draws_the_planned_beside_the_lived(lb: Logbook) -> None:
         == "stay · move · aboard · call · dashed: planned, nothing beside it"
     )
     alone = _ribbon(_part(_page(site, BEFORE), "the-day"))
-    assert re.search(r'<rect class="plan hollow"[^>]*>\s*<title>[^<]* — ' + PLANNED_ALONE, alone), (
+    assert re.search(r'<rect class="plan hollow"[^>]*>\s*<title>' + PLANNED_ALONE + ", from ", alone), (
         "nothing lived beside it"
     )
     assert PLANNED_ALONE in _label(alone) and "no location lines for the day" in alone
     tuesday = _ribbon(_part(_page(site, TUESDAY), "the-day"))
-    assert re.search(r'<rect class="plan filled"[^>]*>\s*<title>[^<]* — Dinner', tuesday), (
+    assert re.search(r'<rect class="plan filled"[^>]*>\s*<title>Dinner[^<]*, from ', tuesday), (
         "a dinner at the hotel"
     )
     friday = _ribbon(_part(_page(site, FRIDAY), "the-day"))
@@ -468,6 +468,8 @@ def test_the_guard_finds_a_number_beside_a_name_and_nothing_else() -> None:
         "Per Hansen ×4",
         "Per Hansen, 12",
         "3 · Per Hansen",
+        "Per Hansen2",  # a digit touching the name, no space at all, on either side
+        "3Per Hansen",
     ):
         assert beside(said, names), said
     assert beside(f"Per Hansen{RSQUO}s birthday is on Tuesday.", names) == []
@@ -882,18 +884,21 @@ def test_a_site_without_drafts_carries_no_pencil_in_the_evening_or_signed(
     assert no_network == []
 
 
-def test_the_ribbon_says_the_time_before_the_entry_so_no_name_has_a_number_beside_it(lb: Logbook) -> None:
+def test_the_ribbon_says_the_entry_then_its_time_after_a_word_so_no_name_has_a_number_beside_it(
+    lb: Logbook,
+) -> None:
     """The twenty-seventh sitting's finding: `Dinner with Per Hansen 19:30` in a block's `<title>` and
-    the ribbon's `aria-label` put a clock time beside a name, where the guard did not read. (The
-    timeline's own row of an entry, `Dinner with Per Hansen 19:30 to 21:30`, is main's and the
-    timeline's: not this test's.)"""
+    the ribbon's `aria-label` put a clock time beside a name, where the guard did not read. The time
+    first moved the clock to a title's other end, beside a name it opens with; so the entry comes
+    first and its time after a word, `Dinner with Per Hansen, from 19:30 to 21:30` (the desk,
+    29 October)."""
     lb.append(**event(utc(SATURDAY, "19:30"), utc(SATURDAY, "21:30"), "Dinner with Per Hansen"))
     names = sorted({p.name for p in people.directory(lb).known.values()})
     for shape in day_rhythm.SHAPES:
         ribbon = _ribbon(_page(_site(lb, SATURDAY, "09:00"), SATURDAY, f"shape={shape}"))
         assert beside(_seen(ribbon), names) == [], shape
-        assert "<title>19:30" + DASH + "21:30 — Dinner with Per Hansen</title>" in ribbon, ribbon
-        assert "19:30 — Dinner with Per Hansen" in _label(ribbon)
+        assert "<title>Dinner with Per Hansen, from 19:30 to 21:30</title>" in ribbon, ribbon
+        assert "Dinner with Per Hansen, from 19:30" in _label(ribbon)
 
 
 # -- the morning's computed parts (RFC 0043 slice A, the rest) ----------------------------------------------
@@ -1014,7 +1019,7 @@ def test_the_morning_holds_all_six(lb: Logbook) -> None:
     assert "and 1 more in Sprint 24 — " in tasks and "open in Notion" in tasks
     assert '<a href="/line/' in tasks and 'href="https://www.notion.so/' in tasks, "its line, its page"
     assert f"{TRIP} — in five weeks" in html.unescape(_text(tasks))
-    assert '<line class="task"' in _ribbon(today) and "16:00 — Varnish the tiller" in _ribbon(today)
+    assert '<line class="task"' in _ribbon(today) and "Varnish the tiller, at 16:00" in _ribbon(today)
     seeing = _text(_fold(today, day_rhythm.SEEING))
     assert "Kari Nordmann, Ola Nordmann" in seeing and "noreply" not in seeing
     proposal = re.search(r'<p class="proposal">.*?</p>', today, re.S)

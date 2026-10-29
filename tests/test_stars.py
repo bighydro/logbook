@@ -388,7 +388,7 @@ def test_the_day_carries_its_stars_and_marks_the_starred_rows(
     ]
     text = _run(capsys, "day", "2026-06-10")
     [row] = [r for r in text.splitlines() if "Lunch" in r and r.strip().startswith("event")]
-    assert "★ Lunch" in row
+    assert "★ Lunch, from 12:00 to 13:00" in row, "the star first, then the title, then its time"
     assert [r for r in before.splitlines() if "★" in r] == []
     _run(capsys, "unstar", lunch["id"])
     assert "stars" not in json.loads(_run(capsys, "day", "2026-06-10", "--json"))

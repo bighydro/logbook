@@ -241,7 +241,7 @@ event when they come from different calendars, start less than a minute apart, l
 other or one of them is all-day, and carry the same title (case, accents and whitespace aside) or
 name the same flight (`XY561`, `XY 561`). The Day shows it once: the richest line of the set — a
 timed entry before an all-day one, then the one that fills the most fields (location, attendees,
-notes) — with the others named, `Check-in XY 561 07:40–08:00 · ×2 sources (ics, ios-calendar)`, and
+notes) — with the others named, `Check-in XY 561, from 07:40 to 08:00 · from 2 sources (ics, ios-calendar)`, and
 under `--json` its `sources` (its own first) and the ids of every line it stands for. The fold is
 at read time only: every line stays in the log as written, and the sources row counts each.
 

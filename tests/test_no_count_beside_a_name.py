@@ -17,8 +17,8 @@ from typing import Any
 
 import letter_record
 import pytest
-from dream_fortnight import DAYS, ENV, KARI, OLA, W25, fake, fortnight, run_cli, week_answer
-from persona import OLA_ID, resolution, utc
+from dream_fortnight import DAYS, ENV, KARI, MODEL, OLA, W25, fake, fortnight, run_cli, week_answer
+from persona import OLA_ID, attendee, event, resolution, utc
 
 from logbook.contrib import digest, dream, dream_week, letter, serve, week_paper
 from logbook.core import day as day_reader
@@ -32,12 +32,18 @@ CALL_DAY, RECORDING_DAY = "2026-06-17", "2026-06-19"
 _ALT = "|".join(re.escape(n) for n in NAMES)
 # the guard: a digit, then nothing but a separator, then a name; or a name, then a separator, then a digit.
 # A separator is a space, a bracket of either kind (a wikilink's too), a colon, a semicolon, a times sign,
-# a hash, the middle dot, a comma, a dash, a bar, a slash, an arrow, a quote: what `figures.SEPARATORS` holds
+# a hash, the middle dot, a comma, a dash, a bar, a slash, an arrow, a quote: what `figures.SEPARATORS` holds;
+# or nothing at all; and no boundary is asked of the name on either side, so a digit stuck to it
+# (`Ola Nordmann2`, `3Ola`) or through a separator that is a letter (`3xOla`) is beside it
 SEP = figures.SEPARATORS
-GUARD = re.compile(rf"(\d{SEP}(?:{_ALT})\b)|(\b(?:{_ALT})\??{SEP}\d)")
+GUARD = re.compile(rf"(\d{SEP}(?:{_ALT}))|((?:{_ALT})\??{SEP}\d)")
 
 
 RAW = re.compile(r'<a class="raw"[^>]*>#\d+</a>')  # a row's link to its line as written: an address
+TOOLTIP_END = re.compile(
+    r"</title>", re.I
+)  # an SVG tooltip is a text of its own, as the Day page's guard reads it
+SHORT = re.compile(rf"…[0-9a-f-]{{{drafts.ID_SHORT}}}(?![0-9a-f])")  # an evidence id, `[…6742a9f5]`: one too
 
 
 def beside(texts: str | Iterable[str]) -> list[str]:
@@ -45,10 +51,13 @@ def beside(texts: str | Iterable[str]) -> list[str]:
     out first; a date and a clock time are numbers too, each read as one figure (`figures.CALENDAR`, so
     `8 June` is as near a name as `8`; the owner, 27 October: words between are fine, separators
     alone are not). A page's link from a row to its line as written (`#SEQ`, `RAW`) is the line's
-    address, not a number of the person."""
+    address, not a number of the person, and so is a draft's evidence, its ids shortened (`SHORT`).
+    An SVG `<title>` is a tooltip, a text of its own (`TOOLTIP_END`): one ends where the next begins,
+    and every other tag is a space."""
     found: list[str] = []
     for text in [texts] if isinstance(texts, str) else texts:
-        for row in html.unescape(re.sub(r"<[^>]*>", " ", RAW.sub(" ", text))).splitlines():
+        unmarked = re.sub(r"<[^>]*>", " ", TOOLTIP_END.sub("\n", RAW.sub(" ", text)))
+        for row in SHORT.sub(" ", html.unescape(unmarked)).splitlines():
             if GUARD.search(figures.CALENDAR.sub("0", row)):
                 found.append(row.strip())
     return found
@@ -60,6 +69,10 @@ def test_the_guard_finds_a_count_a_date_or_a_clock_on_either_side_and_lets_words
     ]
     assert beside("12 × Kari Nordmann") and beside("you 3 min · Ola Nordmann 3 min") and beside("Ola: 4")
     assert beside(["<li>Kari Nordmann <span>3</span></li>"]), "markup is no separator"
+    assert beside("<rect><title>Dinner with Ola Nordmann 19:30</title></rect>"), "within a tooltip it is"
+    assert beside("<title>Lunch, from 12:00</title><title>Ola Nordmann, from 19:30</title>") == [], (
+        "two tooltips are two texts"
+    )
     assert beside("with  Kari Nordmann · Ola Nordmann") == []
     assert beside("due  “Comments by Friday.”  Kari Nordmann, 2026-06-05 (by Friday)"), "a date is a number"
     assert beside("due  “Comments by Friday.”  Kari Nordmann, due 2026-06-05 (by Friday)") == []
@@ -75,6 +88,20 @@ def test_the_guard_finds_a_count_a_date_or_a_clock_on_either_side_and_lets_words
         "[Ola Nordmann] 8 June",
     ):
         assert beside(said), said
+    # a digit touching a name with no space at all is beside it too, on either side or both
+    for said in ("Ola Nordmann2", "3Ola", "3Ola2", "Kari Nordmann2 came", "on 2026-06-10Ola Nordmann"):
+        assert beside(said), said
+    # and through a separator that is a letter (`x` for a times sign), with no boundary asked of the name
+    # on either side (the desk, 29 October): `3xOla`, `Ola Nordmannx3`, and so `2 Olav` too
+    for said in ("3xOla", "3x Ola Nordmann", "Ola Nordmannx3", "2 Olav", "3xKari came"):
+        assert beside(said), said
+    assert beside("Olav 2") == [], "a letter that is no separator stands between: another word"
+    # and the marks no letter is: guillemets (Norwegian quotes), an ellipsis, a plus, a tilde, an
+    # underscore, a space of no width
+    assert beside("Most of all with Kari Nordmann.  […6742a9f5]") == [], "an evidence id is an address"
+    assert beside("Kari Nordmann …42"), "an ellipsis before a figure is still a separator"
+    for said in ("Ola: «2»", "«2» Ola", "Ola…2", "Ola+2", "Ola~2", "Ola_2", "Ola\u200b2", "2\u2060Ola"):
+        assert beside(said), repr(said)
 
 
 # -- the readers, on rows a week before this rule wrote ------------------------------------------------------
@@ -104,6 +131,23 @@ def test_a_week_s_people_are_names_only_in_the_draft_s_order_wherever_a_draft_is
         {"name": "Ola Nordmann", "id": "e-ola", "lines": ["l3"]},
     ], "what a reader prints, in text or JSON: no count beside a person, in the draft's order"
     assert WEEK_BEFORE["people"][0]["contacts"] == 12, "the line is never rewritten"
+
+
+def test_a_week_s_threads_keep_a_word_between_their_count_and_any_title() -> None:
+    """A thread titled with a name, at the end of its title or the start, has a word on either side of
+    its count: the title before it and the next thread's after it are both a name's place."""
+    threads = [
+        {"thread": "Dinner with Ola Nordmann", "kind": "calendar", "count": 1},
+        {"thread": "Ola Nordmann", "kind": "mail", "count": 2},
+        {"thread": "Kari Nordmann", "kind": drafts.CHAT, "count": 9},
+        {"thread": "Per Hansen", "count": 3},  # a draft that kept no kind
+    ]
+    rows = list(drafts.number_rows({"threads": threads}, ""))
+    assert rows == [
+        "  threads   “Dinner with Ola Nordmann” calendar 1 time · “Ola Nordmann” mail 2 times"
+        " · Kari Nordmann · “Per Hansen” seen 3 times"
+    ], rows
+    assert beside(rows) == [], beside(rows)
 
 
 def test_a_call_s_length_and_a_recording_s_talk_time_stand_apart_from_the_name() -> None:
@@ -156,7 +200,8 @@ def counting(material: dict[str, Any]) -> dict[str, Any]:
 
 
 def _extra(lb: Logbook) -> list[dict[str, Any]]:
-    """A call with Kari (19 min) and a recording where Kari and the owner speak, in the second week."""
+    """A call with Kari (19 min) and a recording where Kari and the owner speak, in the second week;
+    a dinner on the calendar whose title ends with Ola's name, in the first."""
     call = {
         "at": utc(CALL_DAY, "18:00"), "source": "ios-calls", "kind": "call", "tier": 1,
         "payload": {
@@ -177,7 +222,8 @@ def _extra(lb: Logbook) -> list[dict[str, Any]]:
             ],
         },
     }  # fmt: skip
-    return [call, recording]
+    dinner = event(utc("2026-06-12", "19:30"), utc("2026-06-12", "21:00"), "Dinner with Ola Nordmann")
+    return [call, recording, dinner]  # the dinner: a title that ends with a name, at home in the evening
 
 
 @pytest.fixture
@@ -254,6 +300,7 @@ def test_no_reader_of_the_week_prints_a_number_beside_a_name(
         assert pinned == [], day
     assert "19 min ← Kari Nordmann" in days[CALL_DAY]
     assert "you · Kari Nordmann" in days[RECORDING_DAY]
+    assert "Dinner with Ola Nordmann, from 19:30 to 21:00" in days["2026-06-12"], days["2026-06-12"]
     sunday = days[SUNDAY]
     assert f"week {W25}" in sunday and "  with      " in sunday and "contacts" not in sunday, sunday
     data = json.loads(run_cli("day", SUNDAY, "--json")[1])
@@ -330,6 +377,13 @@ def test_a_dream_holds_a_date_or_a_clock_beside_a_name_and_lets_words_between_st
         "Ola Nordmann, 8 June.",
         "Lunch: Ola Nordmann · 12:30.",
         "On 2026-06-10, Ola Nordmann came.",
+        "Ola Nordmann2 came for dinner.",
+        "3Ola came for dinner.",
+        "Dinner with Ola2.",
+        "Seen 3xOla this week.",
+        "Dinner with Ola Nordmannx3.",
+        "Dinner with Ola Nordmann «2».",
+        "Ola Nordmann\u200b2 came.",
     ):
         assert dream.beside_a_name(said, made), said
     for said in (
@@ -338,3 +392,64 @@ def test_a_dream_holds_a_date_or_a_clock_beside_a_name_and_lets_words_between_st
         "With Ola at 14:00.",
     ):
         assert not dream.beside_a_name(said, made), said
+
+
+DINNER_DAY = "2026-06-10"  # a Wednesday: the office, then home from 18:30
+DINNER = "Dinner with Ola Nordmann"
+BIRTHDAY = "Birthday Ola Nordmann"  # an all-day entry whose title ends with a name
+PARTY = "Ola Nordmann's birthday"  # a timed entry with no end whose title starts with a name
+
+
+def test_the_day_s_events_say_their_time_after_a_word_and_a_digit_stuck_to_a_name_is_held(
+    lb: Logbook, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A calendar entry prints its title, then its time after a word, `Dinner with Ola Nordmann,
+    from 19:30 to 21:00`, `Ola Nordmann's birthday, from 19:30`, so no clock touches a name at
+    either end of the title (the desk, 29 October): in `logbook day`, on the Day page's row, and in
+    its ribbon's `<title>` and `aria-label`. A stored day draft (another writer's, before the rule)
+    that sticks a digit to a name, `Ola Nordmann2`, prints its words nowhere. An entry two
+    calendars carry says how many in words after its title, timed or all-day."""
+    dinner_at = (utc(DINNER_DAY, "19:30"), utc(DINNER_DAY, "21:00"))
+    birthday = event(utc(DINNER_DAY, "00:00"), utc("2026-06-11", "00:00"), BIRTHDAY, all_day=True)
+    lb.append_many(
+        [
+            event(*dinner_at, DINNER, [attendee(OLA["email"])]),
+            {**event(*dinner_at, DINNER), "source": "ics"},  # the same dinner from a second calendar
+            birthday,
+            {**birthday, "source": "ics"},
+            {k: v for k, v in event(utc(DINNER_DAY, "19:30"), "", PARTY).items() if k != "end"},
+        ]
+    )
+    dinner = next(
+        line for line in lb.lines() if line["kind"] == "event" and line["payload"]["title"] == DINNER
+    )
+    stuck = "Dinner at home with Ola Nordmann2 courses long."
+    lb.append(
+        utc(DINNER_DAY, "23:00"), MODEL, drafts.KIND, 2,
+        {
+            "schema": drafts.SCHEMA, "unit": drafts.UNIT_DAY, "subject": DINNER_DAY,
+            "read_head": lb.meta["head"], "read_count": 1, "language": "en",
+            "segments": [{"text": stuck, "evidence": [dinner["id"]]}], "proposals": [],
+        },
+    )  # fmt: skip
+    code, out, err = run_cli("day", DINNER_DAY)
+    assert code == 0, err
+    assert f"{DINNER}, from 19:30 to 21:00" in out and f"{PARTY}, from 19:30" in out, out
+    assert "Ola Nordmann2" not in out and beside(out) == [], beside(out)
+    assert out.count("from 2 sources (ios-calendar, ics)") == 2 and BIRTHDAY in out, (
+        "each entry from two calendars"
+    )
+    body = serve.Site(Logbook(lb.root)).respond(f"/day/{DINNER_DAY}", "").body.decode("utf-8")
+    seen = html.unescape(body)
+    assert f"{DINNER}, from 19:30 to 21:00" in seen and f"{PARTY}, from 19:30" in seen, "the Day page's rows"
+    assert f"<title>{DINNER}, from 19:30 to 21:00</title>" in seen, "the ribbon's tooltip"
+    (said,) = re.findall(r'<svg class="ribbon"[^>]*aria-label="([^"]*)"', body)
+    said = html.unescape(said)
+    assert f"{DINNER}, from 19:30" in said and f"{PARTY}, from 19:30" in said, said
+    assert "19:30" not in said.replace(", from 19:30", ""), "the ribbon's label says no clock before a title"
+    assert beside(said) == [], "the label is read aloud as one text: a word between its entries"
+    assert "Ola Nordmann2" not in body and beside(body) == [], beside(body)
+    code, out, err = run_cli("digest", DINNER_DAY)
+    assert code == 0 and beside(out) == [], beside(out) or err
+    code, out, err = run_cli("show", DINNER_DAY)
+    assert code == 0 and "Ola Nordmann2" not in out, out + err

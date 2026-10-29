@@ -1556,8 +1556,8 @@ def extra_rows(block: Mapping[str, Any], indent: str = "    ") -> Iterator[str]:
 def number_rows(numbers: Mapping[str, Any], indent: str = "    ") -> Iterator[str]:
     """A week's numbers, one row each: the hours by place, the people by name in the draft's order
     (the most time together first), the threads (a chat by its counterpart alone, a title quoted with
-    its count), and the energy (`no data` when the health lines under the ceiling hold none); never a
-    count beside a name (`names_only`)."""
+    its kind and its count, `_thread_text`), and the energy (`no data` when the health lines under the
+    ceiling hold none); never a count beside a name (`names_only`)."""
     numbers = names_only(numbers)
     places = numbers.get("places") or []
     if places:
@@ -1567,9 +1567,7 @@ def number_rows(numbers: Mapping[str, Any], indent: str = "    ") -> Iterator[st
         yield f"{indent}  {'with':<9} " + DOT.join(str(p["name"]) for p in people)
     threads = numbers.get("threads") or []
     if threads:
-        yield f"{indent}  {'threads':<9} " + DOT.join(
-            str(t["thread"]) if t.get("kind") == CHAT else f"“{t['thread']}” {t['count']}" for t in threads
-        )
+        yield f"{indent}  {'threads':<9} " + DOT.join(map(_thread_text, threads))
     energy = numbers.get("energy")
     if isinstance(energy, dict):
         said = []
@@ -1579,6 +1577,16 @@ def number_rows(numbers: Mapping[str, Any], indent: str = "    ") -> Iterator[st
         if training:
             said.append(f"training {training['sessions']} sessions, {training['minutes']} min")
         yield f"{indent}  {'energy':<9} " + (DOT.join(said) or "no data")
+
+
+def _thread_text(t: Mapping[str, Any]) -> str:
+    """A chat by its counterpart alone; a title quoted, then its kind and its count in words,
+    `“Dinner with Ola Nordmann” calendar 1 time`: a word on either side of the count, so it stands
+    beside no name, the title's own or the next thread's (`seen` for a draft that kept no kind)."""
+    if t.get("kind") == CHAT:
+        return str(t["thread"])
+    count = t["count"]
+    return f"“{t['thread']}” {t.get('kind') or 'seen'} {count} {'time' if count == 1 else 'times'}"
 
 
 def unit_rows(

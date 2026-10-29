@@ -110,10 +110,10 @@ from ..core import stars as starred
 from ..core.chain import Line
 from ..core.export import parse_day
 from ..core.figures import CALENDAR as CALENDAR
+from ..core.figures import LETTER_AFTER, LETTER_BEFORE, WORD, figures, years_of
 from ..core.figures import MONTHS as MONTHS
 from ..core.figures import NUMBER as NUMBER
 from ..core.figures import NUMBER_WORDS as NUMBER_WORDS
-from ..core.figures import WORD, figures, years_of
 from ..core.figures import YEAR as YEAR
 from ..core.figures import beside_a_name as named_beside
 from ..core.flights import Airports
@@ -274,9 +274,12 @@ class Material:
 
     def withholds(self, text: str) -> bool:
         """Whether `text` names someone by a name only a resolution above the entry's tiers gives
-        (`withheld`, whole words): a drafted sentence a unit reads (a day's in a week, a week's in a
-        chapter) written before the dream read names at its entry's tiers, never passed on (R2)."""
-        return any(re.search(rf"(?<!\w){re.escape(name)}(?!\w)", text) for name in self.withheld)
+        (`withheld`, no letter stuck to either end: `Per Hemmelig2` names him): a drafted sentence a
+        unit reads (a day's in a week, a week's in a chapter) written before the dream read names at
+        its entry's tiers, never passed on (R2)."""
+        return any(
+            re.search(rf"{LETTER_BEFORE}{re.escape(name)}{LETTER_AFTER}", text) for name in self.withheld
+        )
 
     def person_of(self, ref: Ref | None) -> str | None:
         """The canonical person a ref resolves to, noted as one the day names; else None."""
@@ -501,14 +504,14 @@ class Names:
         return canonical(lb, self.identities, self.every)
 
     def tier_in(self, data: Any) -> int:
-        """The highest tier of a resolution that supplied a name `data` carries (a label, whole words,
-        anywhere in it); 1 when it carries none. The draft's tier rises to it: a name is read as much
-        as a line is (RFC 0036)."""
+        """The highest tier of a resolution that supplied a name `data` carries (a label, no letter
+        stuck to either end, a digit may be, anywhere in it); 1 when it carries none. The draft's tier
+        rises to it: a name is read as much as a line is (RFC 0036)."""
         text = json.dumps(data, ensure_ascii=False)
         top = 1
         for ref, tier in self.tiers.items():
             label = self.labels.get(ref)
-            if tier > top and label and re.search(rf"(?<!\w){re.escape(label)}(?!\w)", text):
+            if tier > top and label and re.search(rf"{LETTER_BEFORE}{re.escape(label)}{LETTER_AFTER}", text):
                 top = tier
         return top
 
