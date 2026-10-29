@@ -7,9 +7,11 @@ Oslo persona's fortnight; nobody in it is real."""
 from __future__ import annotations
 
 import hashlib
+import html
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -20,9 +22,10 @@ import pytest
 from persona import KARI, KARI_ID, OLA, OLA_ID, persona_record, resolution
 
 from logbook import cli
-from logbook.contrib import site
-from logbook.core import drafts
+from logbook.contrib import demo, site
+from logbook.core import drafts, reading
 from logbook.core.store import Logbook
+from logbook.labs import demo_life
 
 SATURDAY_TRIP = "trip-2026-06-13-2026-06-13"  # the night aboard Solvind: Ola is there by a tier-2 note only
 ZURICH_TRIP = "trip-2026-06-15-2026-06-17"  # Ola at the dinner, a tier-1 calendar entry
@@ -42,8 +45,9 @@ def lb(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Logbook:
 
 
 def _named_at_tier_1(lb: Logbook) -> None:
-    """Kari and Ola named at tier 1 as well (a contact at tier 1): a tier-1 page names a person only from
-    a resolution at its tiers, and the persona names them at tier 2 (the owner, 27 October)."""
+    """Kari and Ola named by tier-1 resolution lines as well: a tier-1 page names a person only from a
+    resolution at its tiers, and the persona names them at tier 2 (the owner, 27 October). A contact
+    card is tier 2 (SPEC §4, RFC 0006); these lines are the test's, so a tier-1 page has someone to name."""
     lb.append_many(
         [
             {**resolution(ref, entity, name), "tier": 1}
@@ -385,6 +389,68 @@ def test_slugs_and_relative_paths() -> None:
 # -- forty years ---------------------------------------------------------------------------------------------
 
 
+LABEL_ABOVE_TIER_1 = "Tiertwo"  # a word no line of the demo has: the label a tier-2 resolution alone gives
+
+
+def _hidden_names(root: Path) -> set[str]:
+    """The names of the demo's directory, the owner's included, that no tier-1 line of the record
+    gives. A name a tier-1 line gives itself (a calendar attendee's) may cross at tier 1."""
+    directory = {p.name for p in (demo.OWNER, *demo_life.PEOPLE)}
+    at_tier_1: set[str] = set()
+    for line in Logbook(root).lines_unsorted():
+        if line["tier"] == 1:
+            payload = json.dumps(line["payload"], ensure_ascii=False)
+            at_tier_1 |= {name for name in directory if name in payload}
+    return directory - at_tier_1
+
+
+def _relabel_at_tier_2(root: Path) -> set[str]:
+    """Every person of the demo's directory but the owner renamed by a tier-2 resolution of each of
+    their refs, to a label no other line gives (`LABEL_ABOVE_TIER_1`): the last resolution of a ref
+    wins (RFC 0006), so a reader through a gate that passes tier 2 names them by it, and one through
+    tier 1 never may."""
+    lb = Logbook(root)
+    labels: set[str] = set()
+    drafts_: list[dict[str, Any]] = []
+    for person in demo_life.PEOPLE:
+        label = f"{person.first} {LABEL_ABOVE_TIER_1}"
+        labels.add(label)
+        refs = [("email", person.email), ("phone", person.phone)]
+        if person.face:
+            refs.append(("provider_id", f"immich:{person.face}"))
+        drafts_ += [
+            {
+                "at": "2026-06-30T12:00:00Z",
+                "source": "manual",
+                "kind": "resolution",
+                "tier": 2,
+                "payload": {
+                    "schema": "resolution/v1",
+                    "ref": {"kind": kind, "value": value},
+                    "entity": {"type": "person", "id": person.entity, "registry": "logbook"},
+                    "label": label,
+                    "method": "owner",
+                },
+            }
+            for kind, value in refs
+        ]
+    lb.append_many(drafts_)
+    return labels
+
+
+def _nowhere(folder: Path, names: set[str]) -> None:
+    """None of `names` in any file of `folder`, in its text or its attributes, plain, as HTML entities
+    or with a no-break space."""
+    for path in folder.rglob("*"):
+        if not path.is_file():
+            continue
+        rel = path.relative_to(folder).as_posix()
+        text = path.read_bytes().decode("utf-8", errors="replace")
+        plain = html.unescape(text).replace("\u00a0", " ")
+        for name in names:
+            assert name not in text and name not in plain, (rel, name)
+
+
 @pytest.mark.slow
 def test_forty_years_export_whole_every_link_resolves_and_the_folder_passes_the_synthetic_check(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
@@ -393,7 +459,10 @@ def test_forty_years_export_whole_every_link_resolves_and_the_folder_passes_the_
     writes into the record's policy, and `export site --tier 1,2` — a Year page and a Days index for
     each calendar year of the forty (41, July to June), the childhood ones included (lines, no
     track), a Day page per pick, every trip, the people; every link a file in the folder; and
-    `scripts/check_synthetic.py` passes. At tier 1 too, the default a real record exports at. The Day
+    `scripts/check_synthetic.py` passes. At tier 1 too, the default a real record exports at, where the
+    demo's contacts (tier 2) resolve nobody: no page of Kari, and no name only a line above tier 1
+    gives, in any file (`_nowhere`); a copy whose tier-2 labels are a word no other line has proves it
+    (`_relabel_at_tier_2`). The Day
     the README links is a page at the same path on every build, since the seed is fixed: the June
     pick of 2025, at the cabin with Ola, her note on it, held to a phone's column."""
     root = tmp_path / "Life"
@@ -414,7 +483,14 @@ def test_forty_years_export_whole_every_link_resolves_and_the_folder_passes_the_
         day_pages = [p for p in pages if re.fullmatch(r"days/\d{4}-\d{2}-\d{2}\.html", p)]
         assert 0 < len(day_pages) <= 12 * 41
         assert len([p for p in pages if p.startswith("trips/")]) > 100
-        assert "people/kari-nordmann.html" in pages and "people/ola-nordmann.html" in pages
+        if tiers == "1":
+            hidden = _hidden_names(root)
+            assert demo.OWNER.name in hidden and len(hidden) >= 2, hidden
+            _nowhere(folder, hidden)
+            assert "people/kari-nordmann.html" not in pages, "only a tier-2 resolution makes Kari a person"
+            assert "people/ola-nordmann.html" in pages
+        else:
+            assert "people/kari-nordmann.html" in pages and "people/ola-nordmann.html" in pages
         for rel, raw in _tree(folder).items():
             text = raw.decode("utf-8")
             assert "<script" not in text.lower(), rel
@@ -426,6 +502,21 @@ def test_forty_years_export_whole_every_link_resolves_and_the_folder_passes_the_
             [sys.executable, str(script), str(folder)], capture_output=True, encoding="utf-8", env=env
         )
         assert r.returncode == 0, r.stdout + r.stderr
+
+    # the control: the same record with every person's tier-2 label a word no other line has. Through
+    # 1,2 the readers name them by it; at tier 1 it is in no file, and neither is any hidden name
+    relabelled = tmp_path / "Relabelled"
+    shutil.copytree(root, relabelled)
+    labels = _relabel_at_tier_2(relabelled)
+    monkeypatch.setenv("LOGBOOK_HOME", str(relabelled))
+    names = set(reading.read(Logbook(relabelled), "2025-12-24", "2025-12-24", tiers=(1, 2)).names.values())
+    assert names & labels, "the relabelled record names its people by the new labels"
+    narrow = tmp_path / "relabelled-1"
+    _run(str(narrow), "--tier", "1")
+    capsys.readouterr()
+    _nowhere(narrow, {LABEL_ABOVE_TIER_1} | _hidden_names(relabelled))
+    assert not (narrow / "people" / "kari-nordmann.html").exists()
+    assert (narrow / "people" / "ola-nordmann.html").exists()
 
     readme_day = _read(folder, "days", f"{README_DAY}.html")
     assert f"<h1>{README_DAY} <small>Saturday</small></h1>" in readme_day
