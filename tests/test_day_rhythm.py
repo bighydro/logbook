@@ -41,7 +41,7 @@ from library_header import without_shell
 from persona import CAFE, HOME, KARI, KARI_ID, OLA, ZURICH, attendee, dwell, event, flight, note, photo, utc
 
 from logbook import cli
-from logbook.contrib import day_rhythm, demo, notify, people_drift, serve
+from logbook.contrib import day_rhythm, demo, doors, notify, people_drift, serve
 from logbook.core import day as day_reader
 from logbook.core import drafts, people
 from logbook.core.store import Logbook
@@ -552,7 +552,10 @@ def test_the_pencil_is_the_draft_restyled(
     site = _site(lb, SATURDAY, "09:00")
     evening = _page(site, WEDNESDAY)
     pencil = _part(evening, "pencil")
-    assert '<div class="paper"><p class="eyebrow">Pencil <span class="sc">' in pencil and MODEL in pencil
+    assert (
+        f'<div class="paper" title="Pencil: drafted by {MODEL}"><p class="eyebrow">Pencil <span class="sc">'
+        in pencil
+    )
     assert "<h2>Draft</h2>" in pencil and "A day." in pencil and '<span class="id"' in pencil
     assert _parts(evening).index("pencil") < _parts(evening).index("record")
     assert "quiet" not in _parts(_page(site, WEDNESDAY, "shape=live"))
@@ -630,15 +633,17 @@ def test_the_page_loads_nothing_and_opens_nothing(lb: Logbook, no_network: list[
 
 def test_the_look_is_the_owner_s(lb: Logbook) -> None:
     page = _page(_site(lb, SATURDAY, "09:00"), WEDNESDAY)
-    for token in (
-        "--paper:#f4efe3",
-        "--graphite:#47433c",
+    for token in (  # the doors' tokens (RFC 0047, the brief of 24 October 2026), light and dark
+        "--paper:#F4F1EA",
+        "--pencil:#62666D",
+        "--ink:#16181D",
+        "--surface:#1D2026",
+        "--ink:#F4F1EA",
         "--stay:#2e7d4f",
-        "--card:#1b1c1f",
-        "--ink:#f3f0e9",
     ):
         assert token in page
-    assert '"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif' in page
+    assert '"Instrument Serif","Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif' in page
+    assert doors.library_style() in page and day_rhythm.STYLE in page
 
 
 # -- the review's cases ----------------------------------------------------------------------------------
@@ -1028,7 +1033,7 @@ def test_the_morning_holds_all_six(lb: Logbook) -> None:
     assert '<line class="task"' in _ribbon(today) and "Varnish the tiller, at 16:00" in _ribbon(today)
     seeing = _text(_fold(today, day_rhythm.SEEING))
     assert "Kari Nordmann, Ola Nordmann" in seeing and "noreply" not in seeing
-    proposal = re.search(r'<p class="proposal">.*?</p>', today, re.S)
+    proposal = re.search(r'<p class="proposal" title="Pencil: drafted by [^"]+">.*?</p>', today, re.S)
     assert proposal is not None and PROPOSAL in proposal.group(0) and MODEL in proposal.group(0)
     card = _text(_part(page, "one-person")).strip().split("\n")[-1]
     assert card == (

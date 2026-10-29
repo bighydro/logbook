@@ -15,7 +15,7 @@ import phone_width
 import pytest
 from library_header import without_shell
 
-from logbook.contrib import search_page, serve
+from logbook.contrib import doors, search_page, serve
 from logbook.core.chain import Line
 from logbook.core.store import Logbook
 
@@ -241,8 +241,9 @@ def test_phone_width_first_and_touch_targets(lb: Logbook) -> None:
 
 
 def test_one_product_the_day_pages_tokens(lb: Logbook) -> None:
-    assert search_page.TOKENS in serve.STYLE  # the copy is the Day's own, byte for byte
-    assert search_page.SEARCH_STYLE.startswith(search_page.TOKENS)
+    page = _get(serve.Site(lb), "/search", "q=kari")  # the Library's one sheet, the search's rules after it
+    assert doors.library_style() + search_page.SEARCH_STYLE in page
+    assert ":root" not in search_page.SEARCH_STYLE
     asked = _get(serve.Site(lb), "/days")  # Ask, in the header of every page: Ask v1, through this search
     assert '<form class="ask" method="get" action="/ask" role="search">' in asked and 'name="q"' in asked
 

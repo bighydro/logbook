@@ -214,7 +214,9 @@ def _for(page: str) -> str:
 def test_next_week_s_mornings_show_the_intention_in_ink_with_its_sunday(lb: Logbook) -> None:
     site = _site(lb, MONDAY_MORNING)
     before = site.respond("/day/2026-06-22", "").body.decode("utf-8")
-    assert re.search(r'<p class="proposal">.*?' + re.escape(KEPT), before, re.S), "pencil, until kept"
+    assert re.search(
+        r'<p class="proposal" title="Pencil: drafted by [^"]+">.*?' + re.escape(KEPT), before, re.S
+    ), "pencil, until kept"
     assert 'class="for intention"' not in before
     assert _post(_site(lb), {"keep": "1", "intention": MINE}).status == 303
     after = site.respond("/day/2026-06-22", "").body.decode("utf-8")
