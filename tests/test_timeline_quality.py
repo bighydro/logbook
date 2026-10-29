@@ -108,7 +108,7 @@ def test_the_same_event_from_two_calendars_shows_once_naming_both(
     assert len(checkin["lines"]) == 2
     text = _day(capsys)
     assert text.lower().count("check-in") == 1
-    assert "×2 sources (ics, ios-calendar)" in text
+    assert "from 2 sources (ics, ios-calendar)" in text
     sources = {s["source"]: s["lines"] for s in data["sources"]}
     assert sources["ics"] == 1 and sources["ios-calendar"] == 1, "both lines are still there"
 

@@ -72,31 +72,39 @@ def years_of(text: str) -> set[str]:
 def beside_a_name(
     text: str, names: Collection[str], years: Collection[str] | None = None, language: str | None = None
 ) -> bool:
-    """Whether `text` names one of `names` (their full name, or their first name of three letters or
-    more, whole words, as written) and writes a figure (`figures`: dates, clock times and the unit's
-    `years` are not figures), or sets any digit at all, a date's and a clock's included, beside the
-    name with nothing but separators between them (`SEPARATORS`): a number beside a person."""
+    """Whether `text` sets any digit at all, a date's and a clock's included, beside one of `names`
+    (their full name, or their first name of three letters or more) with nothing but separators
+    between them, or none, whatever stands around the name (`adjacent`); or names one of them, no
+    letter stuck to either end, and writes a figure anywhere (`figures`: dates, clock times and the
+    unit's `years` are not figures): a number beside a person."""
     found = {n.strip() for n in names if n and n.strip()}
     found |= {n.split()[0] for n in list(found) if len(n.split()[0]) >= 3}
-    named = [name for name in found if re.search(rf"(?<!\w){re.escape(name)}(?!\w)", text)]
-    if not named:
-        return False
-    if any(adjacent(text, name) for name in named):
+    if any(adjacent(text, name) for name in found):  # a digit against the name, whatever is around it
         return True
-    return bool(figures(text, years=years, language=language))
+    named = [name for name in found if re.search(rf"{LETTER_BEFORE}{re.escape(name)}{LETTER_AFTER}", text)]
+    return bool(named) and bool(figures(text, years=years, language=language))
 
 
 # what may stand between a name and a digit and still leave them side by side: no letter, no word
-# (a bracket of either kind, a wikilink's too, and a quote as well: the owner, 27 October)
-SEPARATORS = "[\\s()\\[\\]:×x#·,\\-\u2013\u2014/|;=•.'\"\u2018\u2019\u201c\u201d\u2190\u2192]*"
+# (a bracket of either kind, a wikilink's too, and a quote as well: the owner, 27 October; guillemets,
+# an ellipsis, a plus, a tilde, an underscore and the spaces of no width too)
+SEPARATORS = (
+    "[\\s()\\[\\]:×x#·,\\-\u2013\u2014/|;=•.'\"\u2018\u2019\u201c\u201d\u2190\u2192"
+    "«»\u2039\u203a\u2026+~_\u200b\u200c\u200d\u2060\ufeff]*"
+)
+
+
+# where a name begins and ends when a sentence is read for it (`beside_a_name`'s figures): no letter
+# before it, none after it; a digit may touch it (`Ola Nordmann2`), never a letter (`Olav`)
+LETTER_BEFORE, LETTER_AFTER = r"(?<![^\W\d_])", r"(?![^\W\d_])"
 
 
 def adjacent(text: str, name: str) -> bool:
     """Whether a digit stands beside `name` in `text` with only `SEPARATORS` between them, on either
     side: `Ola Nordmann, 14:00`, `2026-06-17 · Ola`, `8 June · Ola` (a date in words is one figure,
-    `CALENDAR`); `with Ola at 14:00` has a word between."""
+    `CALENDAR`), a digit stuck to it with nothing between, `Ola Nordmann2`, `3Ola`, or through a
+    separator that is a letter, `3xOla`: no boundary is asked of the name on either side. `with Ola
+    at 14:00` has a word between; in `Olav 2` the `v` is no separator."""
     text = CALENDAR.sub(" 0 ", text)
-    alt = re.escape(name)
-    return (
-        re.search(rf"\d{SEPARATORS}(?<!\w){alt}(?!\w)|(?<!\w){alt}(?!\w)\??{SEPARATORS}\d", text) is not None
-    )
+    name = re.escape(name)
+    return re.search(rf"\d{SEPARATORS}{name}|{name}\??{SEPARATORS}\d", text) is not None

@@ -76,7 +76,6 @@ OPEN_DAYS = 60  # Yesterday looks this far back for the nearest day still open
 DOT = day_reader.DOT
 RSQUO = "\u2019"
 DASH = day_reader.EN_DASH
-APART = " \u2014 "  # a time, then an entry: an em dash, never a mark a number may stand beside a name across
 NO_FOR = "No goals or chapter set yet — the page can't say what a day was for."
 INTENTION_WITHHELD = "The week's intention is withheld here: it sets a number beside a person's name."
 NO_FOR_DAY = "No chapter holds this day and it touched no goal."
@@ -505,6 +504,11 @@ def ribbon(
     def hm(t: datetime) -> str:
         return t.astimezone(zone).strftime("%H:%M")
 
+    def between(a: datetime, b: datetime) -> str:
+        """`from 19:30 to 21:00`, `from 19:30` for a moment: after the title and a word, so a clock
+        touches no name at either end of it (the desk, 29 October)."""
+        return f"from {hm(a)}" if b <= a else f"from {hm(a)} to {hm(b)}"
+
     plan = [p for p in planned(data, lines) if p.end > start and p.start < end]
     out: list[str] = [f'<text class="lane" x="0" y="{PLAN_Y - 3}">PLANNED</text>']
     for p in plan:
@@ -512,13 +516,13 @@ def ribbon(
         cls = "plan filled" if p.beside else "plan hollow"
         out.append(
             f'<rect class="{cls}" x="{a}" y="{PLAN_Y}" width="{max(b - a, 2.0):.1f}" height="{LANE}" rx="2">'
-            f"<title>{hm(p.start)}{DASH}{hm(p.end)}{APART}{escape(p.title)}</title></rect>"
+            f"<title>{escape(p.title)}, {between(p.start, p.end)}</title></rect>"
         )
     tasks = sorted((t, title) for t, title in ticks if start <= t < end)
     for t, title in tasks:
         out.append(
             f'<line class="task" x1="{x(t)}" y1="{PLAN_Y - 2}" x2="{x(t)}" y2="{PLAN_Y + LANE + 2}">'
-            f"<title>{hm(t)}{APART}{escape(title)}</title></line>"
+            f"<title>{escape(title)}, at {hm(t)}</title></line>"
         )
     if not plan and not tasks:
         out.append(f'<text x="0" y="{PLAN_Y + 10}">{NO_PLAN}</text>')
@@ -537,10 +541,10 @@ def ribbon(
         a, b = x(_instant(within["start"])), x(_instant(within["end"]))
         lived[kind] = lived.get(kind, 0) + 1
         what = " ".join(x for x in (kind, named(entry)) if x)
+        when = between(_instant(within["start"]), _instant(within["end"]))
         out.append(
             f'<rect class="{kind}" x="{a}" y="{LIVED_Y}" width="{max(b - a, 1.5):.1f}" height="{LANE}">'
-            f"<title>{hm(_instant(within['start']))}{DASH}{hm(_instant(within['end']))}{APART}"
-            f"{escape(what)}</title></rect>"
+            f"<title>{escape(what)}, {when}</title></rect>"
         )
     rang = [t for t in calls(data, lines) if start <= t < end]
     for t in rang:
@@ -562,9 +566,9 @@ def ribbon(
         out.append(
             f'<line class="now" x1="{x(now)}" y1="{PLAN_Y - 2}" x2="{x(now)}" y2="{LIVED_Y + LANE + 2}"/>'
         )
-    # the time first, then the entry: a clock time never stands after a name the title holds
-    entries = [f"{hm(p.start)}{APART}{p.title}{'' if p.beside else ', nothing beside it'}" for p in plan]
-    entries += [f"{hm(t)}{APART}{title}, a task" for t, title in tasks]
+    # the entry first, then its time after a word: a clock never touches a name the title holds
+    entries = [f"{p.title}, from {hm(p.start)}{'' if p.beside else ', nothing beside it'}" for p in plan]
+    entries += [f"{title}, a task at {hm(t)}" for t, title in tasks]
     said = _ribbon_said(entries, lived, len(rang), hm(start), hm(end), why)
     said += " A line marks now." if now is not None and start <= now < end else ""
     legend = DOT.join(f'<span class="{cls}">{word}</span>' for cls, word in LEGEND)
@@ -580,8 +584,9 @@ def _ribbon_said(
     plan: Sequence[str], lived: Mapping[str, int], rang: int, first: str, last: str, why: str
 ) -> str:
     """The ribbon in a sentence: the day's span, the entries planned (one drawn hollow said so, as the
-    legend says it), and what was lived, counted, or why nothing was."""
-    planned_said = f"Planned: {'; '.join(plan) if plan else NO_PLAN}."
+    legend says it), and what was lived, counted, or why nothing was. The entries planned are one text
+    read aloud: `; then ` between them, so one's clock never touches the name the next one opens with."""
+    planned_said = f"Planned: {'; then '.join(plan) if plan else NO_PLAN}."
     counts = [_plural(n, k) for k, n in lived.items()] + ([_plural(rang, "call")] if rang else [])
     lived_said = f"Lived: {', '.join(counts)}." if counts else f"Lived: {why}."
     return f"The day from {first} to {last}. {planned_said} {lived_said}"

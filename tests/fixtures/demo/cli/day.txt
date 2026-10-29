@@ -8,7 +8,7 @@
   04:55–05:40  move   36.7 km · 45 min · car
   05:40–06:50  stay   OSL, Oslo · 1 h 10 min
   06:50–09:20  move   1426 km · 2 h 30 min · flight · OSL → ZRH · 1 event
-      event        Flight to Zürich (XY 561) 07:05–09:15
+      event        Flight to Zürich (XY 561), from 07:05 to 09:15
   07:12–09:10  flight XY 561  OSL → ZRH · tracked
   09:20–09:55  stay   ZRH, Zurich · 35 min · 2 messages
   09:55–10:30  move   9.0 km · 35 min · car

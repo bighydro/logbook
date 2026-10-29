@@ -61,6 +61,7 @@ from urllib.parse import urlsplit
 
 from .. import __version__
 from ..core import assets, day_start, places, policy
+from ..core.figures import LETTER_AFTER, LETTER_BEFORE
 from ..core.store import Logbook
 from . import adapters, doctor, last_run, model_client, schedule
 from . import service as serve_service
@@ -127,9 +128,12 @@ class Scrub:
         return self.pattern.sub(lambda m: self.replacements[m.lastgroup or ""], text)
 
 
-def _word(text: str, replacement: str, *, cased: bool = False) -> Rule:
-    """`text` with no letter, digit or underscore on either side, in any case unless `cased`."""
-    body = rf"(?<!\w){re.escape(text)}(?!\w)"
+def _word(text: str, replacement: str, *, cased: bool = False, letters: bool = False) -> Rule:
+    """`text` with no letter, digit or underscore on either side, in any case unless `cased`; with
+    `letters`, no letter on either side, so a name with a digit stuck to it (`Ines2`) is still the
+    name (`figures.LETTER_BEFORE`)."""
+    before, after = (LETTER_BEFORE, LETTER_AFTER) if letters else (r"(?<!\w)", r"(?!\w)")
+    body = rf"{before}{re.escape(text)}{after}"
     return Rule(body if cased else f"(?i:{body})", replacement, len(text))
 
 
@@ -264,7 +268,7 @@ def scrubber(lb: Logbook | None, env: Mapping[str, str]) -> Scrub:
     rules += [_word(form, HOME) for form in _path_forms(Path.home())]
     owner = owner_of(lb)
     rules += [rule for number in owner.phones if (rule := _phone(number, OWNER)) is not None]
-    rules += [_word(word, OWNER) for word in _owner_words(owner)]
+    rules += [_word(word, OWNER, letters=True) for word in _owner_words(owner)]
     rules += [_word(name, HOST) for name in _host_names(hostname())]
     if lb is not None:
         rules += _labels(lb)

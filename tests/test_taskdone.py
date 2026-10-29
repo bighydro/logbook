@@ -330,7 +330,7 @@ def test_propose_done_prints_proposals_with_the_evidence_line_id(
     assert "booking confirmation" in evidence
     assert _line_id(lb, subject=FLIGHTS_MAIL) in evidence
     call = next(line for line in lines if "Call with Ola Nordmann" in line)
-    assert "×2 sources" in call and "event" in call
+    assert "from 2 sources" in call and "event" in call
     assert "Zürich newsletter" not in out and "Book club" not in out and "standup" not in out
     assert "2 open tasks with no evidence found" in out
     out = json.loads(_run(capsys, "promises", "tasks", "--propose-done", "--json"))

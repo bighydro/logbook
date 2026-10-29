@@ -5201,8 +5201,7 @@ def _attached_html(
     raw = rows.raw if rows is not None else (lambda ids: "")
     items: list[tuple[str, str, Sequence[str]]] = []  # kind, text, the lines it points at
     for e in _drive_folded(attached["events"], rows.lines if rows is not None else {}, "start"):
-        span = day_reader.span_text(e["start"], e["end"], tz)
-        items.append(("event", f"{e['title']} {span}{day_reader.sources_text(e)}", e["lines"]))
+        items.append(("event", day_reader.event_text(e, tz) + day_reader.sources_text(e), e["lines"]))
     for t in attached["transcripts"]:
         items.append(("transcript", t["title"] + day_reader.voices_text(t), [t["line"]]))
     for n in attached["notes"]:

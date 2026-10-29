@@ -41,7 +41,7 @@ What a Day shows, in order:
    events, transcripts, notes, mail threads and calls named; messages and photos counted; keepers
    (RFC 0024) named. A calendar entry several calendars carry — starts less than a minute apart,
    the same duration or one side all-day, the same flight or the same title, case and accents
-   aside (`events.fold`) — is one event, the richest line of the set, `×N sources (ics,
+   aside (`events.fold`) — is one event, the richest line of the set, `from N sources (ics,
    ios-calendar)` naming the others; the fold is at read time, the lines stay as they are. A
    Notion row seen live and again by `sync notion --relations-backfill` is one event too, its
    page's line standing for the backfill's (`events.backfilled`), where `show` lists both.
@@ -1570,9 +1570,8 @@ def _entry_rows(
     attached = entry.get("attached")
     if attached:
         for e in attached["events"]:
-            span = span_text(e["start"], e["end"], tz)
             mark = _mark(marks, e["line"], also=e["lines"])
-            yield f"{inner}{'event':<12} {mark}{e['title']} {span}{sources_text(e)}"
+            yield f"{inner}{'event':<12} {mark}{event_text(e, tz)}{sources_text(e)}"
         for t in attached["transcripts"]:
             mark = _mark(marks, t["line"])
             yield f"{inner}{'transcript':<12} {mark}{t['title']}{voices_text(t)}"
@@ -1600,10 +1599,11 @@ def _entry_rows(
 
 
 def sources_text(item: Mapping[str, Any]) -> str:
-    """` · ×N sources (ios-calendar, ics)` for a calendar entry several sources carry, the sources
-    named in evidence order, the kept line's first; nothing for one source."""
+    """` · from N sources (ios-calendar, ics)` for a calendar entry several sources carry, the sources
+    named in evidence order, the kept line's first; nothing for one source. A word before the count:
+    it follows a title, which may end with a name."""
     sources = item.get("sources") or []
-    return f"{DOT}×{len(sources)} sources ({', '.join(map(str, sources))})" if len(sources) > 1 else ""
+    return f"{DOT}from {len(sources)} sources ({', '.join(map(str, sources))})" if len(sources) > 1 else ""
 
 
 def counts(attached: Mapping[str, Any] | None) -> list[tuple[int, str]]:
@@ -1678,6 +1678,19 @@ def _source_text(s: dict[str, Any], tz: ZoneInfo) -> str:
 
 def _clock(stamp: str, tz: ZoneInfo) -> str:
     return _instant(stamp).astimezone(tz).strftime("%H:%M")
+
+
+def when_text(start: str, end: str | None, tz: ZoneInfo) -> str:
+    """`from 19:30 to 21:00`, `from 19:30` for an entry with no end (`to 01:00+1` past midnight):
+    the time said in words, so it follows a title with a word between, never a name against a clock."""
+    span = span_text(start, end, tz)
+    return "from " + span.replace(EN_DASH, " to ", 1)
+
+
+def event_text(e: Mapping[str, Any], tz: ZoneInfo) -> str:
+    """`Dinner with Ola Nordmann, from 19:30 to 21:00`: a calendar entry's title, then its time after
+    a word (`when_text`), so a clock touches no name the title starts or ends with."""
+    return f"{e['title']}, {when_text(e['start'], e['end'], tz)}"
 
 
 def span_text(start: str, end: str | None, tz: ZoneInfo, clip: bool = False) -> str:

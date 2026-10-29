@@ -644,7 +644,7 @@ def rows(report: Report, tasks: Sequence[Task], clock: Any, open_only: bool = Fa
 def proposal_rows(report: Report, clock: Any) -> list[str]:
     """`logbook tasks --propose-done` as text: a header that says these are proposals, then for each
     open task with evidence its title, day and id, and under it one row per evidence line (day, time,
-    kind, the text, the words shared, `×N sources`, the line id); last, how many open tasks had none."""
+    kind, the text, the words shared, `from N sources`, the line id); last, how many open tasks had none."""
     if not report.tasks:
         return ["no tasks in the record (task/v1, RFC 0016)"]
     if not report.open:
@@ -670,7 +670,7 @@ def proposal_rows(report: Report, clock: Any) -> list[str]:
             continue
         out.append(f"  “{_cut(task.title)}”  ({task.day}, {task.id})")
         for p in found:
-            tail = f"  ×{len(p.sources)} sources" if len(p.sources) > 1 else ""
+            tail = f"  from {len(p.sources)} sources" if len(p.sources) > 1 else ""
             out.append(
                 f"    {p.day}  {clock(p.at)}  {p.kind:<11}  “{_cut(p.text)}”  {' '.join(p.evidence.shared)}"
                 f"{tail}  {p.line}"

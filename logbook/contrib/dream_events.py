@@ -42,6 +42,7 @@ from zoneinfo import ZoneInfo
 
 from ..core import drafts, places, reading, resolve, signing
 from ..core.chain import Line
+from ..core.figures import LETTER_AFTER, LETTER_BEFORE
 from ..core.store import Logbook, retractions
 
 if TYPE_CHECKING:
@@ -281,12 +282,13 @@ def _held_words(hidden: Iterable[str], shown: Iterable[str]) -> list[str]:
 
 
 def _unnamed(title: str, words: Sequence[str]) -> str:
-    """`title` with each of `words` (`_held_words`), whole words, a genitive's `s` with it, as
+    """`title` with each of `words` (`_held_words`), no letter stuck to either end (a digit may be,
+    `Kari2`), a genitive's `s` with it, as
     `SOMEONE` (`someone's` for a genitive): `Dinner with Kari Nordmann` is `Dinner with someone` and
     `Karis bursdag` is `someone's bursdag` when no tier-1 line names Kari."""
     for said in words:
         title = re.sub(
-            rf"(?<!\w){re.escape(said)}(['\u2019]s|s)?(?!\w)",
+            rf"{LETTER_BEFORE}{re.escape(said)}(['\u2019]s|s)?{LETTER_AFTER}",
             lambda m: SOMEONE + ("'s" if m.group(1) else ""),
             title,
         )

@@ -419,7 +419,7 @@ def _entry_text(e: Mapping[str, Any], tz: ZoneInfo) -> str:
         span += f"{EN_DASH}{_clock(str(e['end']), tz)}"
     text = f"{span}  {e['title']}"
     if len(e["sources"]) > 1:
-        text += f"{DOT}×{len(e['sources'])} sources"
+        text += f"{DOT}from {len(e['sources'])} sources"  # a word between: the title may end with a name
     if e["with"]:
         text += f"{DOT}with {', '.join(e['with'])}"
     return text

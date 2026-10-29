@@ -246,6 +246,9 @@ def test_a_name_part_an_email_and_a_number_in_another_format_are_the_owner(lb: L
     )
     assert scrub("lines 3, seq 12345678") == "lines 3, seq 12345678", "other numbers stay"
     assert scrub("Inesfjord and Nordmannsvei") == "Inesfjord and Nordmannsvei", "only whole words"
+    assert scrub("user Ines2 and 3Nordmann") == "user [owner]2 and 3[owner]", (
+        "a digit touching it is no letter"
+    )
 
 
 def test_a_one_letter_alias_or_owner_emails_written_as_one_string_replaces_no_letter(lb: Logbook) -> None:

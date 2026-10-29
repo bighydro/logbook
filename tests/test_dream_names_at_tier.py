@@ -296,6 +296,18 @@ def test_a_first_name_learned_only_at_tier_3_is_withheld_too(lb: Logbook) -> Non
     assert made.name_of("Per") is None and made.name_of("Kari Nordmann") == "Kari Nordmann"
 
 
+def test_a_withheld_name_with_a_digit_stuck_to_it_is_still_that_name(lb: Logbook) -> None:
+    """`Per Hemmelig2`, `3Per`: a digit touching a name is no letter, so the name is still written
+    there, withheld, and a label in the material raises the draft's tier however it is glued."""
+    made = dream.material(lb, DAY, dream.ceiling(lb))
+    assert made.withholds(f"{SECRET}2 came for coffee.") and made.withholds("3Per came for coffee.")
+    assert not made.withholds("Perhaps 3 came for coffee."), "a longer word is another word"
+    ref = ("phone", SECRET_PHONE)
+    names = dream.Names(labels={ref: SECRET}, identities={}, tiers={ref: 3}, every={}, withheld=frozenset())
+    assert names.tier_in({"said": f"Coffee with {SECRET}2"}) == 3
+    assert names.tier_in({"said": f"Coffee with {SECRET}s"}) == 1, "a letter after it: another word"
+
+
 def test_the_number_rule_holds_a_name_the_entry_withholds(lb: Logbook) -> None:
     """A name the material never gives can still be written (the owner's tier-2 text names Per): a figure
     beside it is held as beside any name, whatever its tier."""

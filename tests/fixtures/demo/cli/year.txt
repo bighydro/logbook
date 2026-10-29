@@ -53,15 +53,15 @@
       00:00–07:25  stay   Home · 7 h 25 min
       07:25–07:45  move   643 m · 20 min · walk
       07:45–11:45  stay   Office · 4 h · 1 event
-          event        One to one 09:00–09:45
+          event        One to one, from 09:00 to 09:45
           with         Liv Berg (calendar)
       11:45–12:00  move   1.6 km · 15 min · walk
       12:00–12:55  stay   59.9200,10.7400 near Home, 1.0 km · 55 min · 1 event, 1 photo, 1 keeper
-          event        Lunch 12:00–13:00
+          event        Lunch, from 12:00 to 13:00
           keeper       IMG_06031030.HEIC (memory)
           with         proposed Kari Nordmann (photo)
       12:55–13:10  move   1.5 km · 15 min · walk · 1 event, 1 note
-          event        Lunch 12:00–13:00
+          event        Lunch, from 12:00 to 13:00
           note         Lunch with Kari Nordmann at the cafe. She is thinking about Tromsø agai…
       13:10–17:25  stay   Office · 4 h 15 min · 1 mail thread, 2 messages
           mail         Agenda for next week (1 message)

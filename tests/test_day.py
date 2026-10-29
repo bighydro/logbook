@@ -142,7 +142,7 @@ def test_the_same_flight_in_four_calendars_in_two_languages_is_one_entry(
 ) -> None:
     """The persona's phone calendar holds the flight; a subscribed .ics, a Google calendar and a
     fourth hold it too, two of them in German, all with the same start and end: one event row,
-    `×4 sources`, and the sources line still counts every calendar's line."""
+    `from 4 sources`, and the sources line still counts every calendar's line."""
     lb = persona_record(tmp_path, monkeypatch)
     at, end = utc("2026-06-15", "07:05"), utc("2026-06-15", "09:15")
     twice = {**event(at, end, "Flug XY561 nach Zürich"), "source": "ics"}  # the same calendar twice
@@ -166,7 +166,7 @@ def test_the_same_flight_in_four_calendars_in_two_languages_is_one_entry(
     assert sources["ics"] == 2 and sources["gcal"] == 1, "the sources line counts what each calendar wrote"
     text = _run(capsys, "2026-06-15")
     assert text.count("Flight to Zürich (XY 561)") == 1 and "Flug" not in text
-    assert "1 event" in text and "×4 sources" in text
+    assert "1 event" in text and "from 4 sources" in text
 
 
 # -- a day aboard an asset --------------------------------------------------------------------------------
