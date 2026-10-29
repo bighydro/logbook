@@ -143,7 +143,7 @@ def test_the_front_door_is_today_in_the_doors_frame(lb: Logbook) -> None:
     head = page[page.index('<header class="doors">') : page.index("</header>")]
     assert '<a class="wordmark" href="/">Logbook</a>' in head
     doors_ = re.findall(r'<nav class="doors"[^>]*>(.*?)</nav>', head)[0]
-    assert re.findall(r'<a href="([^"]+)"', doors_) == ["/", "/days", "/people", "/places"]
+    assert re.findall(r'<a href="([^"]+)"', doors_) == ["/", "/life", "/people", "/places"]
     assert re.findall(r">([A-Za-z]+)</a>", doors_) == ["Today", "Life", "People", "Places"]
     assert '<a href="/" aria-current="page">Today</a>' in doors_
     ask = re.search(r'<form class="ask" method="get" action="/search" role="search">.*?</form>', head)
@@ -444,7 +444,10 @@ def test_the_shelves_listed_move_to_their_own_address_and_the_old_pages_keep_the
     text = shelves.body.decode("utf-8")
     assert "The last fortnight" in text and '<a class="gear" href="/shelves"' in text
     days = site.respond("/days").body.decode("utf-8")
-    assert '<header class="doors">' in days and '<a href="/days" aria-current="page">Life</a>' in days
+    # Life is its own door now (`door_life`): the Days page carries the header, Life a link to its door
+    assert '<header class="doors">' in days and '<a href="/life">Life</a>' in days
+    life = site.respond("/life").body.decode("utf-8")
+    assert '<a href="/life" aria-current="page">Life</a>' in life
     assert serve.STYLE in days, "every other page keeps its own stylesheet and look under the header"
     assert f'href="/day/{TODAY}"' in _today(site), "the Day /today names, one tap from Today"
     assert doors.GEAR == "/shelves"
@@ -512,7 +515,9 @@ def test_every_page_carries_the_doors_header_and_marks_its_door(lb: Logbook) -> 
         door = doors.door_of(target.partition("?")[0])
         marked = re.findall(r'<a href="([^"]+)" aria-current="page">', page)
         assert marked == [t for n, t in doors.DOORS if n == door], (target, marked)
-        if target != "/":  # a page that is not a door's: its own stylesheet, the header's beside it
+        if target.partition("?")[0] in ("/", "/life"):  # a door's own page (Today, Life): the doors' frame
+            assert doors.style() in page and serve.STYLE not in page, target
+        else:  # a page that is not a door's: its own stylesheet, the header's beside it
             assert (doors.header_style() in page and serve.STYLE in page) or target == "/world", target
             root = ":root{color-scheme:light dark;--paper"
             assert root not in page, (target, "the tokens on the header alone")

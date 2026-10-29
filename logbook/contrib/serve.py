@@ -188,6 +188,7 @@ from . import (
     asset_status,
     day_photos,
     day_rhythm,
+    door_life,
     door_today,
     doors,
     dream,
@@ -249,6 +250,7 @@ RECORD_PAGES = frozenset(
     | {"/promises", "/goals", "/agents"}  # the shelves' lists
     | {"/search"}  # the record's words (`search_page`)
     | {SHELVES}  # the shelves listed, the front page before Today
+    | {"/life"}  # the Life door (`door_life`)
 )
 JOURNEY_PATH = re.compile(r"^/journeys/(\d{4}-\d{2}-\d{2})/(\d{4}-\d{2}-\d{2})$")  # its first and last day
 PERSON_PATH = re.compile(r"^/people/([^/]+)$")  # a canonical person, by entity id
@@ -286,7 +288,7 @@ WEEK_ACT = re.compile(r"^/week/(\d{4}-W\d{2})/close$")  # its one act, Close the
 CLOSE = "close"  # the Day page's anchor of Reflect and sign, where a write sends the owner back
 # pages the record's today moves too (this year, anniversaries, drift, the stale orgs and ideas): in the tag
 # /goals: a goal goes past; /world: its window ends on today, whatever the calendar holds after it
-CLOCK_PAGES = ("/people", "/manifest", "/org/", "/ideas", "/idea/", "/goals", "/world")
+CLOCK_PAGES = ("/people", "/manifest", "/org/", "/ideas", "/idea/", "/goals", "/world", "/life")
 TRIP_KINDS: tuple[str, ...] | None = (
     trips.READ_KINDS
 )  # the lines a year's trips parse; the rest from the index
@@ -933,6 +935,8 @@ class Site:
             csp = DAY_CSP if self._records() else DAY_IMAGES
         if path == "/":  # Today: its fonts and its memory's thumbnail from here, the Day's forms
             csp = DOOR_CSP if self._records() else doors.CSP
+        if path == "/life":  # Life: a door, its fonts from here, no script
+            csp = doors.CSP
         said = _READS.set(None)
         asked = _PATH.set(path)  # the header marks the door the page is in
         try:
@@ -2015,7 +2019,14 @@ class Site:
             return self.page_world(params.get("from") or None, params.get("to") or None)
         if (m := WEEK_PATH.match(path)) is not None:
             return week_page.page_week(self, m.group(1), expanded=params.get("open") == "1")
+        if path == "/life":
+            return self.page_life(params)
         raise NotFound(f"no page at {path}")
+
+    def page_life(self, params: Mapping[str, str]) -> str:
+        """`/life`: the Life door (RFC 0047 §4.2, `door_life`): the chapter, the year's goals, the
+        timeline at the zoom and the moment the address names, and the Volumes."""
+        return door_life.page(self, params)
 
     def _error(self, status: int, message: str) -> Response:
         body = f"<h1>{status}</h1>\n<p>{escape(message)}</p>\n"

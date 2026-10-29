@@ -9,6 +9,7 @@ in files beside the log, each yours to edit. `logbook setup` asks about the ones
 | --- | --- | --- |
 | your timezone | `logbook.json`, `timezone` | `logbook setup --step timezone` |
 | where your day begins | `logbook.json`, `day_start` | `logbook setup day_start 06:00` |
+| the bounds of your life on the Library's Life door | `logbook.json`, `life` | by hand ([below](#your-life-life)) |
 | your own addresses | `logbook.json`, `owner_emails` | `logbook setup --step owner` |
 | whether your phone writes through the Library | `logbook.json`, `phone` (off by default) | `logbook setup phone --origin URL --login LOGIN` ([from your phone](serve.md#from-your-phone)) |
 | whether a sealed record keeps readings on this disk in plain text | `logbook.json`, `plaintext_cache` (off by default) | by hand ([sealing](sealing.md)) |
@@ -83,3 +84,19 @@ day, naming the key and the value (`logbook.json has day_start '6am', which is n
 nothing is guessed. `add`, `verify` and the adapters go on as before, since they never group by day, and
 `doctor` fails the `day-start` line until it is fixed. A reader that does not implement the rule (RFC 0036)
 must refuse in the same way; the conformance samples carry no `day_start`, so it passes as before.
+
+## Your life: `life`
+
+The Library's Life door (`/life`, [serve](serve.md#life)) draws one line of your life, from its first day
+to a bounded future. The bounds are yours: two local days in `logbook.json`,
+
+```json
+"life": {"from": "1986-07-01", "to": "2035-12-31"}
+```
+
+`from` is where the line begins (your birth, say), `to` where it ends; nothing is drawn past `to`, and
+`from` on or before `to`. Without it the line runs from the record's first day to the last day of next
+year, and never to the last line the record holds: a calendar entry in 2055 is not a reason to draw thirty
+years of nothing. There is no command that writes it yet: edit the file (a later `logbook setup life` may).
+A value that is not that shape is said on the page, in one sentence naming the key, and the line runs as
+without it. Changing it rewrites nothing and rebuilds no index.

@@ -87,6 +87,7 @@ DOORS = (
     "/agents",
     "/assets",
     "/gaps",
+    "/life",
 )
 EVERYWHERE = ("retraction", "resolution", "entity", "entity-review", "people-review")  # who is who
 DAY_PAGE = re.compile(r"^/day/(\d{4}-\d{2}-\d{2})$")
