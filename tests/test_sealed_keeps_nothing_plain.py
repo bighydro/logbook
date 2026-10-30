@@ -317,3 +317,43 @@ def test_a_running_rebuild_says_the_record_is_sealed_not_that_it_failed(
     finally:
         rebuilder.stop()
     assert said and "failed" not in said[0] and "sealed record" in said[0]
+
+
+def test_no_write_of_the_build_lab_keeps_a_page_of_a_sealed_record(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Every way the lab writes a page or names one: `put`, `drop`, `save`, a build at any gate. A
+    sealed record without `plaintext_cache` keeps none of them, not even of tier 1."""
+    lb = _record(tmp_path, monkeypatch, sealed=True)
+    site = serve.Site(lb, now=lambda: NOW)
+    library = library_build.Library(lb)
+    with pytest.raises(library_build.Sealed):
+        library.put("/people", site.respond("/people"), "x")
+    with pytest.raises(library_build.Sealed):
+        library.drop(["/people"])
+    with pytest.raises(library_build.Sealed):
+        library.save()
+    for tiers in (None, (1,), (1, 2)):
+        with pytest.raises(library_build.Sealed):
+            library_build.build(lb, serve.Site(lb, now=lambda: NOW, tiers=tiers))
+    assert not library_build.folder_of(lb).exists()
+
+
+def test_a_record_sealed_while_it_builds_keeps_nothing_it_built(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    lb = _record(tmp_path, monkeypatch, sealed=True, plain=True)
+    site = serve.Site(lb, now=lambda: NOW)
+    real = site.respond
+    answered: list[str] = []
+
+    def respond(path: str, query: str = "", if_none_match: str | None = None) -> serve.Response:
+        answered.append(path)
+        if len(answered) == len(library_build.DOORS) + 3:
+            lb.set_meta(**{kept.PLAIN: False})  # the owner turns it off mid-build
+        return real(path, query, if_none_match)
+
+    monkeypatch.setattr(site, "respond", respond)
+    with pytest.raises(library_build.Sealed):
+        library_build.build(lb, site)
+    assert not library_build.folder_of(lb).exists(), "the pages written before it are removed"

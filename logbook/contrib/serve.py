@@ -755,6 +755,12 @@ def refused(status: int, message: str) -> Response:
     return Response(status, body.encode("utf-8"))
 
 
+def _seq(meta: Mapping[str, Any]) -> int | None:
+    """The seq `logbook.json` (or the index, `Site.current`) names; None when it names none."""
+    seq = meta.get("seq")
+    return seq if isinstance(seq, int) and not isinstance(seq, bool) else None
+
+
 def _unframed(csp: str) -> str:
     """`csp` forbidding every frame, as every policy here does: a page built before it did keeps its
     policy in the build's `pages.json`, and is sent with the clause added."""
@@ -787,6 +793,7 @@ class Site:
         library: library_build.Library | None = None,
         on_act: Callable[[], None] | None = None,
         read_later: bool = False,
+        on_stale: Callable[[str], None] | None = None,
     ):
         self.lb = lb
         self.airports = airports or Airports.load()
@@ -802,6 +809,8 @@ class Site:
         # page rendered here is added to them; None renders every page (the tests, `export site`)
         self.library = library
         self.on_act = on_act  # told after an act changed the record: the server's rebuild, in the background
+        # told the record's head when a built page older than it is served: the server's rebuild, once a head
+        self.on_stale = on_stale
         self._lock = threading.Lock()
         # the review queues are read (their tables built once) and acted on under it
         self._review_lock = threading.Lock()
@@ -982,11 +991,15 @@ class Site:
         _READS.set(Reads(first, last, tuple(kinds)))
 
     def _built(self, path: str, query: str, if_none_match: str | None) -> Response | None:
-        """The page the build holds at this address, as it was written; None when it holds none, or
-        the page is one the server always renders (`library_build.live`: today's Day, `/today`)."""
+        """The page the build holds at this address, as it was written; None when it holds none, it
+        was built through another gate than this site's (`Page.serves`), or the page is one the server
+        always renders (`library_build.live`: today's Day, `/today`). A page of a build older than the
+        record's head is still the answer, its footer saying when it was built, and the rebuild is told
+        of the head (`on_stale`), which builds once for it."""
         assert self.library is not None
         try:
-            today = day_start.of(self.lb.meta).today(self.now()).isoformat()
+            meta = self.lb.meta
+            today = day_start.of(meta).today(self.now()).isoformat()
         except (day_start.DayStartError, KeyError, ValueError):
             return None  # the page that says why is rendered
         if library_build.live(path, today):
@@ -995,8 +1008,13 @@ class Site:
         if found is None:
             return None
         page, body = found
+        if not page.serves(self.tiers):
+            return None  # built through another gate: rendered through this one
         if path == "/" and not self._built_today(page.at, today):
             return None  # Today as of another day: rendered, as today's Day is
+        head = str(meta.get("head") or "")
+        if self.on_stale is not None and self.library.built().get("head") != head:
+            self.on_stale(head)
         if if_none_match is not None and _matches(if_none_match, page.etag):
             return Response(304, b"", etag=page.etag)
         csp = page.csp if page.csp is not None else CSP
@@ -1032,8 +1050,13 @@ class Site:
         if library_build.live(path, today) or not library_build.allowed(self.lb):
             return  # a sealed record turned off while the server runs: its next build removes the rest
         target, head = library_build.address(path, query), str(meta.get("head") or "")
-        with contextlib.suppress(OSError):  # a full disk or a cache folder gone: the page was answered
-            self.library.put(target, response, head, asked=True)
+        kept = self.library.pages().get(target)
+        if kept is not None and kept.gated and not kept.serves(self.tiers):
+            return  # a page another gate built: never kept over
+        # a full disk or a cache folder gone, another process building, the record sealed since: the
+        # page was answered, and is rendered again next time
+        with contextlib.suppress(OSError, library_build.Busy, library_build.Sealed):
+            self.library.put(target, response, head, asked=True, tiers=self.tiers, seq=_seq(meta))
 
     def _after_act(self, path: str, form: Mapping[str, str], response: Response) -> None:
         """An act changed the record: the built pages it changed are dropped at once (the server renders
@@ -1060,7 +1083,8 @@ class Site:
     ) -> Response:
         """`_write`, and the built pages it changed dropped when it wrote (`_after_act`)."""
         response = self._write(path, form, client, origin, upload, asked=asked)
-        with contextlib.suppress(OSError):  # the act is written; a cache that cannot be told is the build's
+        # the act is written; a cache that cannot be told is the build's, a sealed record keeps none
+        with contextlib.suppress(OSError, library_build.Sealed):
             self._after_act(path, form, response)
         return response
 
@@ -6230,6 +6254,7 @@ def make_server(
     server = Server(port, site, limit_s)
     server.rebuilder = library_build.Rebuilder(lb, site, library, say).start()
     site.on_act = server.rebuilder.kick
+    site.on_stale = server.rebuilder.stale
     if not library.built():
         server.rebuilder.kick()  # never built on this machine: the first build starts with the server
     return server
