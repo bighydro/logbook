@@ -37,8 +37,8 @@ aboard the yacht Nordlys. Nothing in it is real.*
 | `/trips?year=` | the trips of the year: first and last day (a link to those days), nights, route, flights in and out, places, people. Without a year, the record's last; every year the record covers is a link | `logbook show trips --year` |
 | `/journeys?year=` | the journeys that began in the year, the latest first: the name or the dates (a link to the journey), the nights away, the return day, the route, the photos, the places, the people the record names, the draft folded, the evidence folded ([Journeys](#journeys)). Without a year, the record's last | `logbook show trips --year`, grown |
 | `/journeys/FIRST/LAST` | one journey: its name and the form that names it, its draft folded, its stays as dots on a plain canvas and one row each, its days one row each (a link to the Day), the promises made on it, its people and photos | `logbook show trip ID` |
-| `/people?year=` | the people the record names, by days together in the year (default this year), then the last real contact; below, the review queue of `people review`, the only place someone the record has not placed appears ([People](#people)) | `logbook people --year`, `people review` |
-| `/people/ID` | one person: days together by year, the last real contact and what it was, drift and why, the promises open both ways, the anniversaries of the coming month, the places you have been with them | `logbook people NAME`, `people drift` |
+| `/people`, `?year=`, `?sel=ID` | the People door (RFC 0047 §4.3): everyone by closeness on four rings around you (Home, Family, Friends, Everyone else), the closest thread open beside them, the rest A to Z; below, the review queue of `people review`, the only place someone the record has not placed appears ([People](#people)) | `logbook people --year`, `people review` |
+| `/people/ID` | one person's whole thread: the days together as marks over the years, every moment newest first and the beginning, the promises open both ways, what was said (the words with `?said=1`), the places shared, what a model drafted about them in pencil | `logbook people NAME` |
 | `/manifest?portfolio=` | the orgs you named under what you decided about them (holding, exited, passed — the anti-portfolio, each reason in full —, let go, no status), the most recent touch first, the stale ones flagged, each with its portfolio, each row's evidence folded; a filter by portfolio; below, the review queue of `review org` with its acts ([the Manifest](#the-manifest)) | `logbook show orgs [--portfolio TEXT]`, `review org` |
 | `/org/ID` | one org: its refs, its status, reason and portfolio, the status form (with its portfolio), every touch newest first, its people, who introduced whom, its documents as references, every status line; the ledger only when asked (`?money=1`) | `logbook show org NAME`, `status org` |
 | `/manifest/people` | the people who appear with more than one org, each with the orgs and the tier of the lines that say so; then the anti-portfolio | `logbook show orgs` |
@@ -987,12 +987,29 @@ days kept beside the index (the reading `/gaps` keeps).
 
 ## People
 
-`/people` ranks the people the record names, never you, heard in the year (default this year, the
-record's last when it ended before): by **days together** that year, then the **last real contact**
-(later first: a day together, a meeting, an answered call, a message in a direct chat; never a mail),
-then the name. Each row says how many days and nights, the last real contact and how, and folds
-its evidence: the last real contact's line, each day together with where and its lines, each
-channel heard through that year with its count and last line. Every name is a link to the person.
+`/people` is the People door (RFC 0047 §4.3): who is in your life, and where you stand. The orbit
+draws you at the centre and the people the record names on four rings: **Home** (someone who spent at
+least 30 nights of the year with you at a place `places.json` calls home), **Family**
+(someone who carries your family name as the record spells you: `policy/owner.json`'s names, your own
+resolution lines' labels, an address of yours that reads `given.family@`), **Friends** (a call, a
+message or a night together this year) and **Everyone else**. The record holds no "family" or
+"friend" of its own, so the ring is a rule's reading, set in pencil with the rule on hover. The order
+is **closeness**: the people you live with first, always (they sit on the innermost ring), then days
+together in the last year (or in the year `?year=` names), then calls and messages, then how long the
+record has known them. It is never shown: no number stands beside a name
+anywhere on the door. The closest 30 are drawn; the rest are listed A to Z under "Everyone else".
+
+Beside the orbit (below it on a phone) is the **thread** of the person `?sel=ID` names, or of the
+closest: the ring, the name, the last real contact in words ("A call, three weeks ago."), the five
+newest moments (today's open item, what is coming up with them, the days together, a stay away as one
+span, calls, entries, recordings, messages back and forth, each a link to its day), the beginning (the
+first day the record holds with you both, or how to give one: `logbook with DAY "NAME"`), the promises
+open both ways and two links on: your years together (on Life, once that door is built) and the
+places you have shared. A thread is read from the index's rows of the person's lines, never the lines.
+
+Under them, **Heard in the last year** (or in the year `?year=` names) lists the people heard then, in
+the same order, as the People page always listed them: each name a link to their whole thread, the last
+real contact, and the evidence folded, uncounted. No count stands beside a name; the order says it.
 
 **Review.** Below the list is the review queue of `logbook people review`
 ([people](people.md)), in its order: each observed person (what one source saw: an address, a
@@ -1006,20 +1023,15 @@ nobody are folded below. This section is the only place an observed person appea
 Both acts post to `/people/review`, from this machine only; a proposal no longer in the queue is a
 `409`.
 
-`/people/ID` is one person (the id the resolution lines give them):
-
-- **days together** (and nights under one roof), counted by year, each year's days folded with
-  where and their lines;
-- the **last real contact** and what it was, in the record's words and never a message's: the place
-  of a day together, the entry's title and where it was held, the call's direction and length, the
-  chat a message was in;
-- **drift**, by `people drift`'s rule at its defaults (20 days together in the best year, no real
-  contact in over 365 days), and why not when not;
-- the **promises** open both ways, as `people drift` counts them: what you owe them, what they owe
-  you, each with the sentence, the day and the line;
-- the **anniversaries** of the coming month: a day together exactly 1, 2, 3, 5 or 10 years before
-  one of the next thirty days, the Day's rule;
-- the **places** you have been with them, by days there, with the days and the lines.
+`/people/ID` is one person's whole thread: the person's page's facts, each with its evidence folded
+(the days together and nights under one roof counted, the last real contact and what it was, the
+drift); the days together as a strip over the years, one mark per day and each a link to it, then
+counted by year; every moment newest first; the promises open both ways, the day each was said and is
+due; the anniversaries of the coming month; what was said, the words of the last few messages and recordings read only when asked
+(`?said=1`, as an org's money is); the places shared; what a model drafted about them (`draft/v1`, unit
+`person`) in pencil, with the lines it rests on, under the `relationship` entry it was written under,
+a sentence that sets a figure beside a name held; and how the record knows them (the addresses its
+resolution lines bind to them). `?at=DAY` marks that day's moment.
 
 ## The Manifest
 

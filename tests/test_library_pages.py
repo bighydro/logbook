@@ -29,7 +29,7 @@ from library_record import ASTRID_ELSEWHERE, BERGEN_WINTER, PROMISE, dream, libr
 from persona import transcript, utc
 
 from logbook import cli
-from logbook.contrib import people_review, serve
+from logbook.contrib import door_people, people_review, serve
 from logbook.core.store import Logbook
 
 LOOPBACK = "127.0.0.1"
@@ -239,6 +239,9 @@ def test_a_journey_draft_the_dream_entry_no_longer_allows_is_one_row_never_its_t
 
 
 def test_the_people_of_the_year_canonical_only_then_the_review_queue(lb: Logbook) -> None:
+    """The People door (RFC 0047 §4.3): the canonical people by closeness, the closest's thread open
+    beside them, each person a link to their thread; under them the shelf as it was, each name a link
+    to their page with its evidence folded; then the review queue, as it was."""
     text = _get(_site(lb), "/people")
     listed = _section(text, '<ol class="shelf">', '<h2 id="review">')
     names = re.findall(r'href="/people/[^"]+"><b>([^<]+)</b>', listed)
@@ -248,6 +251,15 @@ def test_the_people_of_the_year_canonical_only_then_the_review_queue(lb: Logbook
         and ASTRID_ELSEWHERE["email"] not in listed
     )
     assert listed.count('<details class="evidence">') == len(names)
+    door = _section(text, '<div class="door-people">', '<h2 id="review">')
+    drawn = re.findall(r'<a href="/people\?sel=[^"]+"[^>]*aria-label="([^",]+),', door)
+    closest = re.findall(r'<h2 class="name" id="thread-name">([^<]+)</h2>', door)
+    assert closest == [FRODE["name"]] and FRODE["name"] in drawn
+    assert OBSERVED["name"] not in door and ASTRID_ELSEWHERE["email"] not in door
+    assert door.count('href="/people?sel=') == len(drawn) == len(set(drawn)), (
+        "each once, a link to their thread"
+    )
+    assert f'href="/people/{FRODE["id"]}"' in door, "the closest's whole thread, a link away"
     review = _section(text, '<h2 id="review">')
     assert "1 proposal · 2 seen, not placed" in review
     assert ASTRID_ELSEWHERE["email"] in review and f'href="/people/{ASTRID["id"]}">Astrid Bakke</a>' in review
@@ -257,6 +269,9 @@ def test_the_people_of_the_year_canonical_only_then_the_review_queue(lb: Logbook
     assert '<button name="act" value="reject">Not the same person</button>' in review
     past = _get(_site(lb), "/people?year=2022")
     assert re.findall(r'href="/people/[^"]+"><b>([^<]+)</b>', past)[:2] == ["Elin Moe", ASTRID["name"]]
+    assert re.findall(r'<h2 class="name" id="thread-name">([^<]+)</h2>', past) == ["Elin Moe"]
+    found = door_people.circle(_site(lb), "2022")
+    assert found is not None and [n.person.name for n in found.near][:2] == ["Elin Moe", ASTRID["name"]]
 
 
 def test_a_machine_participant_is_on_no_shelf_no_page_and_in_no_queue(lb: Logbook) -> None:
@@ -287,6 +302,10 @@ def test_a_machine_participant_is_on_no_shelf_no_page_and_in_no_queue(lb: Logboo
     assert f'href="/people/{HANS["id"]}"' not in listed, (
         "a bot named after a person is not that person's year"
     )
+    year = _get(site, "/people?year=2025").split('<h2 id="review">')[0]
+    assert f"sel={HANS['id']}" not in year and HANS["name"] not in year, (
+        "a bot named after a person is not that person's year"
+    )
     assert "1 proposal · 2 seen, not placed" in review and named not in review
     assert site.respond(f"/people/{bot}", "").status == 404, "no page of its own"
     hans = _get(site, f"/people/{HANS['id']}")
@@ -297,6 +316,9 @@ def test_a_machine_participant_is_on_no_shelf_no_page_and_in_no_queue(lb: Logboo
 
 
 def test_a_person_s_page(lb: Logbook) -> None:
+    """One person's whole thread (RFC 0047 §4.3): the days together counted, by year and as marks over
+    the years, one per day; the last real contact and the drift; the promises both ways; an anniversary
+    coming; every derived row with its evidence, and every moment a link to its day."""
     site = _site(lb)
     bjorn = _get(site, f"/people/{BJORN['id']}")
     assert "22 days together" in bjorn and "drifting: 22 days together in 2023" in bjorn
@@ -307,13 +329,25 @@ def test_a_person_s_page(lb: Logbook) -> None:
     owed = _section(bjorn, "<h2>Promises</h2>", "<h2>Anniversaries")
     assert "You owe" in owed and "the photos by Friday" in owed and "due 2024-03-15" in owed
     assert "They owe" in owed and "the charts next time" in owed
+    assert "You owe them" in owed and "They owe you" in owed
     assert "<b>2023</b> · 22 days" in bjorn
+    strip = _section(bjorn, '<ul class="strip">', "</ul>")
+    year = _section(strip, '<span class="label">2023</span>', "</li>")
+    assert len(re.findall(r'class="mark" href="/day/2023-', year)) == 22, (
+        "22 days together in 2023, a mark each"
+    )
     kristin = _get(site, f"/people/{KRISTIN['id']}")
     assert '2025-10-14 · 1 year since <a href="/day/2024-10-14">2024-10-14</a>' in kristin
+    assert (
+        '<span class="date">14 OCT 2025</span><p class="moment"><a href="/day/2024-10-14">A year since'
+        in kristin
+    )
     ingrid = _get(site, f"/people/{INGRID['id']}")
     assert "Catch-up (Video call)" in ingrid and "not drifting" in ingrid
     for page in (bjorn, kristin, ingrid):
         assert page.count('<details class="evidence">') >= 4, "every derived row has its evidence"
+        moments = _section(page, '<ol class="moments">', "</ol>")
+        assert moments.count('href="/day/') >= 2, "every moment opens its day"
     assert site.respond(f"/people/{OBSERVED['email']}", "").status == 404, "never an observed person's page"
     assert site.respond("/people/nobody-at-all", "").status == 404
 

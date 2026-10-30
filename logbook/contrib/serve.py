@@ -12,9 +12,9 @@ redirects to the Day the owner is in now: the current date in the record's timez
 until the record's `day_start` (RFC 0036), whose Day then says where it begins. The Library's
 shelves: `/journeys?year=` the journeys that began in a year, the latest first (`journeys.shelf`),
 and `/journeys/FIRST/LAST` one journey (`journeys.read`): its days linking their Days, its stays as
-dots on a plain canvas drawn here, the promises made on it; `/people?year=` the canonical people of
-a year by days together (`person_page.ranked`) and the review queue of `people review`, and
-`/people/ID` one person (`person_page.read`); `/manifest?portfolio=` the orgs the owner named under
+dots on a plain canvas drawn here, the promises made on it; `/people` the People door (`door_people`,
+RFC 0047 §4.3): everyone by closeness, each a thread, then the review queue of `people review`, and
+`/people/ID` one person's whole thread; `/manifest?portfolio=` the orgs the owner named under
 what they decided about them (`orgs.shelf_of`, RFC 0037 §11), or only those one portfolio holds, and
 the review queue of `review org`, `/org/ID` one org (`orgs.page_of`) and `/manifest/people` the
 people with more than one org, the money only when asked and the gate reads tier 3, and a portfolio
@@ -189,6 +189,7 @@ from . import (
     day_photos,
     day_rhythm,
     door_life,
+    door_people,
     door_today,
     doors,
     dream,
@@ -201,7 +202,6 @@ from . import (
     keep,
     library_build,
     orgs,
-    person_page,
     phone,
     places_review,
     reflect,
@@ -945,6 +945,8 @@ class Site:
         if path == "/":  # Today: its fonts and its memory's thumbnail from here, the Day's forms
             csp = DOOR_CSP if self._records() else doors.CSP
         if path == "/life":  # Life: a door, its fonts from here, no script
+            csp = doors.CSP
+        if path == "/people" or PERSON_PATH.match(path) is not None:  # People (`door_people`): its fonts
             csp = doors.CSP
         said = _READS.set(None)
         asked = _PATH.set(path)  # the header marks the door the page is in
@@ -2009,9 +2011,9 @@ class Site:
         if (m := JOURNEY_PATH.match(path)) is not None:
             return self.page_journey(m.group(1), m.group(2))
         if path == "/people":
-            return self.page_people(params.get("year") or None)
+            return self.page_people(params)
         if (m := PERSON_PATH.match(path)) is not None:
-            return self.page_person(unquote(m.group(1)))
+            return self.page_person(unquote(m.group(1)), params)
         if path == "/manifest":
             asked = params.get("portfolio") or ""
             return self.page_manifest(params.get("page") or "1", asked if asked.strip() else None)
@@ -3754,38 +3756,14 @@ class Site:
 
     # -- /people -------------------------------------------------------------------------------------------
 
-    def page_people(self, year: str | None) -> str:
-        """The canonical people heard in the year (default this year, or the record's last), by days
-        together then last real contact, each a link to their page with its evidence folded; then
-        the review queue: who the sources saw that the record has not placed, proposed against the
-        people it names, with Merge and Not the same person; the observed are listed there only."""
-        data = self.shared(("ranked", year), lambda: person_page.ranked(self.lb, year, self.now()))
-        if data["year"] is None:
-            return self.document("people", "<h1>People</h1>\n<p>no people: the record has no lines</p>\n")
-        year = str(data["year"])
-        links = DOT.join(
-            f"<b>{y}</b>" if y == year else self.link(y, f"/people?year={y}") for y in data["years"]
-        )
-        parts = [f"<h1>People <small>{year}</small></h1>\n", f'<p class="pager">{links}</p>\n']
-        if not data["people"]:
-            parts.append(f"<p>nobody the record names was heard in {year}</p>\n")
-        else:
-            parts.append(
-                '<p class="mute">The people the record names, by days together this year, then the last'
-                " real contact. Someone the sources saw and the record has not placed is in the review"
-                " below, never here.</p>\n"
-            )
-            parts.append('<ol class="shelf">\n')
-            for r in data["people"]:
-                parts.append(self._person_row(r))
-            parts.append("</ol>\n")
-        if not self.static:
-            from . import people_review
+    def page_people(self, params: Mapping[str, str] | None = None) -> str:
+        """The People door (RFC 0047 §4.3, `door_people`): everyone by closeness, each person a thread,
+        then the review queue of `people review` (`_review_html`)."""
+        return door_people.page(self, params or {})
 
-            with self._review_lock:  # the observed table is built once, as the Places page's queue is
-                report = self.shared(("people review",), lambda: people_review.read(self.lb))
-            parts.append(self._review_html(report, year))
-        return self.document(f"people {year}", "".join(parts))
+    def page_person(self, name: str, params: Mapping[str, str] | None = None) -> str:
+        """One person's whole thread on the People door (`door_people.page_person`), by id or by name."""
+        return door_people.page_person(self, name, params or {})
 
     def _person_row(self, r: Mapping[str, Any]) -> str:
         """One person of the year, by name only (RFC 0043 §2.5): the days and nights together, a
@@ -3838,8 +3816,11 @@ class Site:
                     (f"seen {o.first} {EN_DASH} {o.last}, {_plural(o.lines, 'line')}", o.samples, None)
                 )
                 out.append(
+                    # words between the queue's number, the counts seen and either name: no figure
+                    # stands beside a person (the People door, RFC 0047 §4.3; #423, #430)
                     f'<li class="proposal" id="{escape(p.id)}"><p class="head"><b>{p.number}.</b>'
-                    f' {escape(who)} {ARROW} {into} <span class="mute">score {p.score}</span></p>\n'
+                    f" seen as {escape(who)} {ARROW} may be {into}"
+                    f' <span class="mute">score {p.score}</span></p>\n'
                     f"{self._evidence(items, open_=True)}"
                     f'<form method="post" action="{PEOPLE_REVIEW_PATH}">'
                     f'<input type="hidden" name="id" value="{escape(p.id)}">'
@@ -3861,107 +3842,6 @@ class Site:
                 )
             out.append("</ol>\n</details>\n")
         return "".join(out)
-
-    def page_person(self, name: str) -> str:
-        """One person's page: the numbers, the last real contact and what it was, the drift, the
-        days together by year, the promises both ways, the anniversaries of the coming month, the
-        places; every row with its evidence folded."""
-        everyone = self.shared(("everyone",), lambda: person_page.everyone(self.lb, self.airports))
-        data = person_page.read(self.lb, name, self.now(), self.airports, everyone)
-        refs = ", ".join(str(r["value"]) for r in data["refs"])
-        parts = [
-            f"<h1>{escape(data['name'])}</h1>\n",
-            f'<p class="mute">{escape(refs)}'
-            + (f"{DOT}birthday {escape(data['birthday'])}" if data["birthday"] else "")
-            + "</p>\n",
-            f'<p class="pager">{self.link("← people", "/people")}</p>\n',
-            '<ol class="shelf">\n',
-        ]
-        together = [d for y in data["years"] for d in y["together"]]
-        days = f"{_plural(data['days'], 'day')} together" if data["days"] else "no day together"
-        if data["nights"]:
-            days += f"{DOT}{_plural(data['nights'], 'night')} under one roof"
-        parts.append(
-            f"<li><p>{escape(days)}</p>\n"
-            f"{self._evidence([(f'at {d["where"]}', d['lines'], str(d['day'])) for d in together])}</li>\n"
-        )
-        contact = data["last_real_contact"]
-        if contact is None:
-            parts.append("<li><p>no real contact in the record</p></li>\n")
-        else:
-            parts.append(
-                f"<li><p>last real contact {self.link(str(contact['day']), f'/day/{contact["day"]}')}"
-                f"{DOT}{escape(str(contact['what']))}</p>\n"
-                f"{self._evidence([(str(contact['via']), [contact['line']], str(contact['day']))])}</li>\n"
-            )
-        drift = data["drift"]
-        best = next((y for y in data["years"] if y["year"] == drift["year"]), None)
-        drift_items: list[Evidence] = []
-        if best is not None:
-            drift_items.append((f"{_plural(best['days'], 'day')} together in {best['year']}", [], None))
-        if contact is not None:
-            drift_items.append(("the last real contact", [contact["line"]], str(contact["day"])))
-        parts.append(f"<li><p>{escape(drift['text'])}</p>\n{self._evidence(drift_items)}</li>\n</ol>\n")
-        parts.append("<h2>Days together</h2>\n")
-        if data["years"]:
-            parts.append('<ol class="shelf">\n')
-            for y in data["years"]:
-                items = [(f"at {d['where']}", d["lines"], str(d["day"])) for d in y["together"]]
-                parts.append(
-                    f"<li><p><b>{y['year']}</b>{DOT}{_plural(y['days'], 'day')}</p>\n"
-                    f"{self._evidence(items, 'the days')}</li>\n"
-                )
-            parts.append("</ol>\n")
-        else:
-            parts.append('<p class="mute">none: no stay of yours confirms them there</p>\n')
-        parts.append("<h2>Promises</h2>\n")
-        for key, label in (("you_owe", "You owe"), ("they_owe", "They owe")):
-            found = data["promises"][key]
-            parts.append(f"<h3>{label}</h3>\n")
-            if not found:
-                parts.append('<p class="mute">nothing open</p>\n')
-                continue
-            parts.append('<ol class="shelf">\n')
-            for p in found:
-                due = f"{DOT}due {p['due']}" if p["due"] else ""
-                day = str(p["day"])
-                parts.append(
-                    f'<li><p class="head">{self.link(day, f"/day/{day}")}'
-                    f'<span class="mute">{escape(due)}</span>'
-                    f"</p>\n<p>{escape(str(p['quote']))}</p>\n"
-                    f"{self._evidence([(f'{p["kind"]} ({p["source"]})', [p['line']], day)])}</li>\n"
-                )
-            parts.append("</ol>\n")
-        parts.append(f"<h2>Anniversaries <small>{escape(data['today'])} and the month after</small></h2>\n")
-        if data["anniversaries"]:
-            parts.append('<ol class="shelf">\n')
-            for a in data["anniversaries"]:
-                ago = _plural(int(a["years"]), "year")
-                parts.append(
-                    f"<li><p>{escape(str(a['on']))}{DOT}{ago} since "
-                    f"{self.link(str(a['day']), f'/day/{a["day"]}')}"
-                    f" at {escape(str(a['where']))}</p>\n"
-                    f"{self._evidence([('together', a['lines'], str(a['day']))])}</li>\n"
-                )
-            parts.append("</ol>\n")
-        else:
-            parts.append('<p class="mute">none in the coming month</p>\n')
-        parts.append("<h2>Places</h2>\n")
-        if data["places"]:
-            parts.append('<ol class="shelf">\n')
-            for pl in data["places"]:
-                there: list[Evidence] = [
-                    ("the days there", pl["lines"], None),
-                    *[(d, [], d) for d in pl["on"]],
-                ]
-                parts.append(
-                    f"<li><p>{escape(str(pl['where']))}{DOT}{_plural(int(pl['days']), 'day')}</p>\n"
-                    f"{self._evidence(there)}</li>\n"
-                )
-            parts.append("</ol>\n")
-        else:
-            parts.append('<p class="mute">none yet</p>\n')
-        return self.document(str(data["name"]), "".join(parts))
 
     # -- the evidence --------------------------------------------------------------------------------------
 

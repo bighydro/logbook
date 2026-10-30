@@ -148,6 +148,24 @@ def test_the_evidence_summary_on_the_people_page_is_14_px(demo: Logbook) -> None
     assert _small(_page(demo, "/people"), _within(_tag("summary"), _tag("details", "evidence"))) == []
 
 
+PEOPLE_DOOR = ("/people", "/people/4f8c85f9-0e6a-56f0-a9db-0d09bfdd3d56")  # the door, and Ola's whole thread
+
+
+@pytest.mark.parametrize("path", PEOPLE_DOOR)
+def test_the_people_door_s_links_are_44_px_tall(demo: Logbook, path: str) -> None:
+    """The People door (RFC 0047 §4.3): beside its folds, its targets are its pills (the whole thread,
+    Life, Places, what was said), each 44 px tall, as every fold's is."""
+    assert _tall(_page(demo, path), _tag("a", "pill")) == []
+
+
+def test_the_people_door_s_secondary_lines_are_14_px(demo: Logbook) -> None:
+    """Beside the evidence, the door's other smaller words: the lead, the legend, the kicker, a moment's
+    date, each 14 px on a phone."""
+    page = _page(demo, "/people")
+    for wanted in (_tag("p", "lead"), _tag("ul", "legend"), _tag("p", "kicker"), _tag("span", "date")):
+        assert _small(page, wanted) == []
+
+
 def test_the_places_review_s_name_skip_and_reject_are_44_px_tall(demo: Logbook) -> None:
     page = _page(demo, "/places")
     form = _tag("form", "name")
@@ -240,6 +258,14 @@ def test_the_people_page_s_ids_and_evidence_are_14_px(demo: Logbook) -> None:
     page = _page(demo, "/people")
     assert _small(page, _tag("span", "id")) == []
     assert _small(page, _tag("ul", "evidence")) == []
+
+
+def test_the_people_door_s_dates_addresses_and_facts_are_14_px(demo: Logbook) -> None:
+    """A person's whole thread: its dates, its line on the strip of days and its addresses are small
+    words too, each 14 px on a phone."""
+    page = _page(demo, PEOPLE_DOOR[1])
+    for wanted in (_tag("span", "date"), _tag("p", "fact"), _tag("dl", "refs")):
+        assert _small(page, wanted) == []
 
 
 # -- the colours ---------------------------------------------------------------------------------------
