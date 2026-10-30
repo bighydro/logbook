@@ -55,7 +55,7 @@ PLACES = {
     "Cabin": {"lat": CABIN[0], "lon": CABIN[1], "radius_m": 150},
 }
 POLICY = {  # every destination at its highest ceiling: the registry crosses to none of them
-    "hermes": {"max_tier": 3},  # given a recipient when the record is built: sealed lines resealed to it
+    "per-hansen": {"max_tier": 3},  # given a recipient when the record is built: sealed lines resealed to it
     "athena": {"max_tier": 3},  # no recipient: sealed lines cross opened, with --open
     "ola": {"max_tier": 3},
     "mcp": {"max_tier": 3, "write": ["sign_day", "note_day", "add_note", "promise_done"]},
@@ -206,7 +206,7 @@ def built(tmp_path_factory: pytest.TempPathFactory) -> Path:
         lb.append_many(_trip())
         (lb.root / "places.json").write_text(json.dumps(PLACES, indent=2), encoding="utf-8")
         _secret, recipient = sealing.generate_identity()  # hermes's own key: sealed lines are resealed to it
-        entries = {**POLICY, "hermes": {**POLICY["hermes"], "recipient": recipient}}
+        entries = {**POLICY, "per-hansen": {**POLICY["per-hansen"], "recipient": recipient}}
         (lb.root / "policy" / "crossing.json").write_text(
             json.dumps(entries, indent=2) + "\n", encoding="utf-8"
         )
@@ -296,7 +296,7 @@ def test_the_crossing_package(record: Record, tmp_path: Path) -> None:
     athena, who has none, shipped opened with `--open`; and a dry run."""
     window = ("--since", SINCE, "--tier", "1,2,3", "--unsigned")
     resealed, opened = tmp_path / "resealed", tmp_path / "opened"
-    said = [ran("export", "crossing", "--to", "hermes", *window, "--out", str(resealed))]
+    said = [ran("export", "crossing", "--to", "per-hansen", *window, "--out", str(resealed))]
     said.append(ran("export", "crossing", "--to", "athena", *window, "--open", "--out", str(opened)))
     said.append(ran("export", "crossing", "--to", "athena", *window, "--open", "--dry-run"))
     for out, mode in ((resealed, "resealed"), (opened, "opened")):
@@ -314,6 +314,7 @@ def test_the_shared_page(record: Record, tmp_path: Path) -> None:
     said, members = [], []
     for day, tier in ((DINNER_DAY, "1"), (TRIP_DAY, "3")):
         page = tmp_path / f"{day}.zip"
+        said.append(ran("day", "sign", day, "--at", f"{day}T20:30:00Z"))  # only a signed day is shared
         said.append(ran("export", "share", "day", day, "--to", "ola", "--tier", tier, "--out", str(page)))
         found = zip_members(page, f"page {day}")
         assert {name for _label, name, _data in found} >= {"manifest.json", "lines.jsonl", "package.json"}

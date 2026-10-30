@@ -546,7 +546,7 @@ def test_a_crossing_at_tier_1_carries_nothing_from_a_private_repo(
 ) -> None:
     assert _sync() == 0
     (lb.root / "policy" / "crossing.json").write_text(
-        json.dumps({"hermes": {"max_tier": 1}}), encoding="utf-8"
+        json.dumps({"per-hansen": {"max_tier": 1}}), encoding="utf-8"
     )
     out = tmp_path / "crossing"
     cli.main(
@@ -554,7 +554,7 @@ def test_a_crossing_at_tier_1_carries_nothing_from_a_private_repo(
             "export",
             "crossing",
             "--to",
-            "hermes",
+            "per-hansen",
             "--since",
             "2026-03-01T00:00:00Z",
             "--until",

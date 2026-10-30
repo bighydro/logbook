@@ -140,10 +140,10 @@ def lb(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Logbook:
     message with a present attachment and one with a missing attachment. Before the window: the
     resolutions (Ola's phone, the lid alias, and Kari, whom nothing in the window mentions) and a
     location. At exactly UNTIL: a location that must not cross. Both days are signed (RFC 0034), on
-    the 3rd, so the crossing's default gate lets them through. The policy names hermes at tier 2,
+    the 3rd, so the crossing's default gate lets them through. The policy names Per Hansen at tier 2,
     as the owner writes it: a new record names no one above tier 1."""
     lb = Logbook.init(tmp_path / "lb", TZ)
-    allow(lb.root, "hermes", 2)
+    allow(lb.root, "per-hansen", 2)
     monkeypatch.setenv("LOGBOOK_HOME", str(lb.root))
     store = lb.root / "attachments"
     store.mkdir()
@@ -189,7 +189,7 @@ def _jsonl(path: Path) -> list[dict[str, Any]]:
     return [json.loads(s) for s in path.read_text(encoding="utf-8").splitlines() if s.strip()]
 
 
-def _policy(lb: Logbook, max_tier: int, destination: str = "hermes") -> Path:
+def _policy(lb: Logbook, max_tier: int, destination: str = "per-hansen") -> Path:
     path = lb.root / "policy" / "crossing.json"
     path.parent.mkdir(exist_ok=True)
     path.write_text(json.dumps({destination: {"max_tier": max_tier}}), encoding="utf-8")
@@ -207,14 +207,20 @@ def test_init_writes_the_default_policy(tmp_path: Path):
 
 def test_first_export_writes_the_default_policy_when_missing(lb: Logbook, tmp_path: Path):
     (lb.root / "policy" / "crossing.json").unlink()  # a record made before ADR 0016
-    _run("--to", "mcp", "--since", SINCE, "--until", UNTIL, "--out", str(tmp_path / "out"))  # the one named
+    # the one entry the default names, `mcp`, is the door's own and never a crossing's destination
+    # (policy.RESERVED): refused, and nothing written, the default included
+    assert _fails("--to", "mcp", "--since", SINCE, "--until", UNTIL, "--out", str(tmp_path / "out")) == 2
+    assert not (lb.root / "policy" / "crossing.json").exists() and not (tmp_path / "out").exists()
+    cli.main(["export", "vault", str(tmp_path / "vault")])  # the first export that runs
     policy = json.loads((lb.root / "policy" / "crossing.json").read_text(encoding="utf-8"))
     assert policy == {"mcp": {"max_tier": 1}}
 
 
 def test_request_above_the_ceiling_is_refused_naming_the_file(lb: Logbook, tmp_path: Path, capsys):
     path = _policy(lb, 1)
-    assert _fails("--to", "hermes", "--since", SINCE, "--tier", "1,2", "--out", str(tmp_path / "out")) == 2
+    assert (
+        _fails("--to", "per-hansen", "--since", SINCE, "--tier", "1,2", "--out", str(tmp_path / "out")) == 2
+    )
     err = capsys.readouterr().err
     assert str(path) in err and "max_tier" in err
     assert not (tmp_path / "out").exists()
@@ -229,7 +235,18 @@ def test_unknown_destination_is_refused_naming_the_file(lb: Logbook, tmp_path: P
 
 def test_tier_3_is_refused_without_the_explicit_flag_even_when_policy_allows(lb: Logbook, tmp_path: Path):
     _policy(lb, 3)
-    _run("--to", "hermes", "--since", SINCE, "--until", UNTIL, "--tier", "1,2", "--out", str(tmp_path / "a"))
+    _run(
+        "--to",
+        "per-hansen",
+        "--since",
+        SINCE,
+        "--until",
+        UNTIL,
+        "--tier",
+        "1,2",
+        "--out",
+        str(tmp_path / "a"),
+    )
     tiers = {e["tier"] for e in _jsonl(tmp_path / "a" / "entries.jsonl")}
     assert tiers == {1, 2}
     assert _manifest(tmp_path / "a")["policy"]["tiers"]["3"] == "never"
@@ -237,7 +254,7 @@ def test_tier_3_is_refused_without_the_explicit_flag_even_when_policy_allows(lb:
 
 def test_tier_3_needs_both_the_policy_and_the_flag(lb: Logbook, tmp_path: Path, capsys):
     _policy(lb, 2)
-    code = _fails("--to", "hermes", "--since", SINCE, "--tier", "1,2,3", "--out", str(tmp_path / "out"))
+    code = _fails("--to", "per-hansen", "--since", SINCE, "--tier", "1,2,3", "--out", str(tmp_path / "out"))
     assert code == 2
     assert "policy" in capsys.readouterr().err
     assert not (tmp_path / "out").exists()
@@ -246,7 +263,16 @@ def test_tier_3_needs_both_the_policy_and_the_flag(lb: Logbook, tmp_path: Path, 
 def test_tier_3_crosses_only_with_policy_and_flag_and_says_so_loudly(lb: Logbook, tmp_path: Path, capsys):
     _policy(lb, 3)
     _run(
-        "--to", "hermes", "--since", SINCE, "--until", UNTIL, "--tier", "1,2,3", "--out", str(tmp_path / "a")
+        "--to",
+        "per-hansen",
+        "--since",
+        SINCE,
+        "--until",
+        UNTIL,
+        "--tier",
+        "1,2,3",
+        "--out",
+        str(tmp_path / "a"),
     )
     entries = _jsonl(tmp_path / "a" / "entries.jsonl")
     assert [e["seq"] for e in entries if e["tier"] == 3] == [7]
@@ -258,7 +284,7 @@ def test_tier_3_crosses_only_with_policy_and_flag_and_says_so_loudly(lb: Logbook
 
 @pytest.mark.parametrize("bad", ["2", "3", "1,3", "2,3", "0", "x", ""])
 def test_tier_must_be_1_or_1_2_or_1_2_3(lb: Logbook, tmp_path: Path, bad: str, capsys):
-    assert _fails("--to", "hermes", "--since", SINCE, "--tier", bad, "--out", str(tmp_path / "out")) == 2
+    assert _fails("--to", "per-hansen", "--since", SINCE, "--tier", bad, "--out", str(tmp_path / "out")) == 2
     assert "--tier must be 1, 1,2 or 1,2,3" in capsys.readouterr().err
 
 
@@ -267,14 +293,14 @@ def test_tier_must_be_1_or_1_2_or_1_2_3(lb: Logbook, tmp_path: Path, bad: str, c
 
 def test_tier_1_crosses_by_default_and_the_window_is_half_open(lb: Logbook, tmp_path: Path):
     out = tmp_path / "out"
-    _run("--to", "hermes", "--since", SINCE, "--until", UNTIL, "--out", str(out))
+    _run("--to", "per-hansen", "--since", SINCE, "--until", UNTIL, "--out", str(out))
     entries = _jsonl(out / "entries.jsonl")
     assert [e["seq"] for e in entries] == [5, 11]  # tier 1 only; seq 4 is before, seq 12 is at UNTIL
     lines = {line["seq"]: line for line in lb.lines()}
     assert entries[0] == lines[5]  # verbatim: the standard envelope, hash included
     m = _manifest(out)
     assert m["schema"] == "crossing-package/v1"
-    assert m["recipient"] == "hermes"
+    assert m["recipient"] == "per-hansen"
     assert m["owner"] == lb.meta["owner_id"]
     assert m["covers"] == {"from": SINCE, "to": UNTIL}
     assert m["tiers"] == [1]
@@ -292,13 +318,13 @@ def test_tier_1_crosses_by_default_and_the_window_is_half_open(lb: Logbook, tmp_
 
 def test_logbook_head_is_the_head_before_the_crossing_line(lb: Logbook, tmp_path: Path):
     before = lb.meta["head"]
-    _run("--to", "hermes", "--since", SINCE, "--until", UNTIL, "--out", str(tmp_path / "out"))
+    _run("--to", "per-hansen", "--since", SINCE, "--until", UNTIL, "--out", str(tmp_path / "out"))
     assert _manifest(tmp_path / "out")["logbook_head"] == before
 
 
 def test_tier_2_review_section_lists_the_tier_2_lines(lb: Logbook, tmp_path: Path):
     out = tmp_path / "out"
-    _run("--to", "hermes", "--since", SINCE, "--until", UNTIL, "--tier", "1,2", "--out", str(out))
+    _run("--to", "per-hansen", "--since", SINCE, "--until", UNTIL, "--tier", "1,2", "--out", str(out))
     m = _manifest(out)
     lines = {line["seq"]: line for line in lb.lines()}
     assert [e["seq"] for e in _jsonl(out / "entries.jsonl")] == [5, 6, 8, 9, 10, 11]
@@ -314,7 +340,7 @@ def test_kinds_filter(lb: Logbook, tmp_path: Path):
     out = tmp_path / "out"
     _run(
         "--to",
-        "hermes",
+        "per-hansen",
         "--since",
         SINCE,
         "--until",
@@ -333,7 +359,7 @@ def test_kinds_filter(lb: Logbook, tmp_path: Path):
 def test_a_retracted_line_is_held_back(lb: Logbook, tmp_path: Path):
     lb.retract(6, "not for anyone")
     out = tmp_path / "out"
-    _run("--to", "hermes", "--since", SINCE, "--until", UNTIL, "--tier", "1,2", "--out", str(out))
+    _run("--to", "per-hansen", "--since", SINCE, "--until", UNTIL, "--tier", "1,2", "--out", str(out))
     assert 6 not in [e["seq"] for e in _jsonl(out / "entries.jsonl")]
 
 
@@ -346,7 +372,7 @@ def test_resolutions_the_exported_refs_resolve_through_cross_including_alias_hop
     out = tmp_path / "out"
     _run(
         "--to",
-        "hermes",
+        "per-hansen",
         "--since",
         SINCE,
         "--until",
@@ -371,7 +397,7 @@ def test_resolution_overlay_never_crosses_above_the_requested_tier(lb: Logbook, 
     """A resolution is tier 2 (RFC 0006); at --tier 1 it stays home, and the manifest says so."""
     lb.append(**_message("2026-03-01T14:00:00Z", {"kind": "phone", "value": PHONE_A}) | {"tier": 1})
     out = tmp_path / "out"
-    _run("--to", "hermes", "--since", SINCE, "--until", UNTIL, "--out", str(out))
+    _run("--to", "per-hansen", "--since", SINCE, "--until", UNTIL, "--out", str(out))
     assert not (out / "resolution.jsonl").exists()
     m = _manifest(out)
     assert "resolution_file" not in m
@@ -386,7 +412,7 @@ def test_the_resolution_that_names_a_mails_address_crosses_with_the_mail(lb: Log
     out = tmp_path / "out"
     _run(
         "--to",
-        "hermes",
+        "per-hansen",
         "--since",
         SINCE,
         "--until",
@@ -411,7 +437,7 @@ def test_the_resolutions_that_name_a_transcripts_participants_cross_with_it(lb: 
     out = tmp_path / "out"
     _run(
         "--to",
-        "hermes",
+        "per-hansen",
         "--since",
         SINCE,
         "--until",
@@ -436,7 +462,7 @@ def test_an_address_meets_its_resolution_whichever_way_the_resolver_cased_it(lb:
     out = tmp_path / "out"
     _run(
         "--to",
-        "hermes",
+        "per-hansen",
         "--since",
         SINCE,
         "--until",
@@ -492,7 +518,7 @@ def test_a_mails_headers_and_a_transcripts_participants_are_refs_of_their_line()
 
 def test_present_attachments_are_copied_and_missing_ones_stay_references(lb: Logbook, tmp_path: Path):
     out = tmp_path / "out"
-    _run("--to", "hermes", "--since", SINCE, "--until", UNTIL, "--tier", "1,2", "--out", str(out))
+    _run("--to", "per-hansen", "--since", SINCE, "--until", UNTIL, "--tier", "1,2", "--out", str(out))
     assert (out / "attachments" / SHA_PRESENT).read_bytes() == b"three"
     assert not (out / "attachments" / SHA_MISSING).exists()
     m = _manifest(out)
@@ -509,26 +535,36 @@ def test_present_attachments_are_copied_and_missing_ones_stay_references(lb: Log
 
 def test_dry_run_prints_counts_and_writes_nothing(lb: Logbook, tmp_path: Path, capsys):
     policy_file = lb.root / "policy" / "crossing.json"
-    written = policy_file.read_bytes()  # the owner's file, which names hermes
+    written = policy_file.read_bytes()  # the owner's file, which names per-hansen
     head, seq = lb.meta["head"], lb.meta["seq"]
     out = tmp_path / "out"
     _run(
-        "--to", "hermes", "--since", SINCE, "--until", UNTIL, "--tier", "1,2", "--out", str(out), "--dry-run"
+        "--to",
+        "per-hansen",
+        "--since",
+        SINCE,
+        "--until",
+        UNTIL,
+        "--tier",
+        "1,2",
+        "--out",
+        str(out),
+        "--dry-run",
     )
     text = capsys.readouterr().out
     assert "dry run" in text and "nothing written" in text
     assert "location" in text and "note" in text and "message" in text
     assert "tier 1" in text and "tier 2" in text
     assert "5 bytes" in text  # attachments that would be copied
-    assert "max_tier" in text and "hermes" in text  # the policy that would apply
+    assert "max_tier" in text and "per-hansen" in text  # the policy that would apply
     assert not out.exists()
     assert (lb.meta["head"], lb.meta["seq"]) == (head, seq)
     assert not (lb.root / "exports").exists()
     assert policy_file.read_bytes() == written
     policy_file.unlink()  # a record made before ADR 0016: a dry run writes no default
-    _run("--to", "mcp", "--since", SINCE, "--until", UNTIL, "--out", str(out), "--dry-run")  # the one named
-    text = capsys.readouterr().out
-    assert "dry run" in text and "nothing written" in text
+    # the one entry the default names is the door's own (policy.RESERVED): refused before any count
+    assert _fails("--to", "mcp", "--since", SINCE, "--until", UNTIL, "--out", str(out), "--dry-run") == 2
+    assert "reserved" in capsys.readouterr().err
     assert not out.exists()
     assert (lb.meta["head"], lb.meta["seq"]) == (head, seq)
     assert not (lb.root / "exports").exists()
@@ -541,7 +577,7 @@ def test_dry_run_prints_counts_and_writes_nothing(lb: Logbook, tmp_path: Path, c
 def test_a_real_export_appends_one_crossing_line_and_the_chain_stays_valid(lb: Logbook, tmp_path: Path):
     head = lb.meta["head"]
     out = tmp_path / "out"
-    _run("--to", "hermes", "--since", SINCE, "--until", UNTIL, "--tier", "1,2", "--out", str(out))
+    _run("--to", "per-hansen", "--since", SINCE, "--until", UNTIL, "--tier", "1,2", "--out", str(out))
     _seq, _head, errors = lb.verify()
     assert errors == []
     line = list(lb.lines())[-1]
@@ -549,7 +585,7 @@ def test_a_real_export_appends_one_crossing_line_and_the_chain_stays_valid(lb: L
     m = _manifest(out)
     p = line["payload"]
     assert p["schema"] == "crossing/v1"
-    assert p["destination"] == "hermes"
+    assert p["destination"] == "per-hansen"
     assert p["bundle_id"] == m["bundle_id"]
     assert p["window"] == {"from": SINCE, "to": UNTIL}
     assert p["tiers"] == [1, 2]
@@ -574,7 +610,7 @@ def test_every_digest_is_of_the_bytes_on_disk_even_where_text_mode_writes_crlf(
 
     monkeypatch.setattr(Path, "open", crlf_open)
     out = tmp_path / "out"
-    _run("--to", "hermes", "--since", SINCE, "--until", UNTIL, "--tier", "1,2", "--out", str(out))
+    _run("--to", "per-hansen", "--since", SINCE, "--until", UNTIL, "--tier", "1,2", "--out", str(out))
     m = _manifest(out)
     p = list(lb.lines())[-1]["payload"]
     assert p["package_sha256"] == hashlib.sha256((out / "manifest.json").read_bytes()).hexdigest()
@@ -583,36 +619,47 @@ def test_every_digest_is_of_the_bytes_on_disk_even_where_text_mode_writes_crlf(
 
 
 def test_watermark_round_trip(lb: Logbook, tmp_path: Path):
-    _run("--to", "hermes", "--since", SINCE, "--until", UNTIL, "--out", str(tmp_path / "a"))
+    _run("--to", "per-hansen", "--since", SINCE, "--until", UNTIL, "--out", str(tmp_path / "a"))
     mark = json.loads((lb.root / "exports" / "crossing.json").read_text(encoding="utf-8"))
-    assert mark["hermes"]["until"] == UNTIL
-    _run("--to", "hermes", "--since", "last", "--until", "2026-03-03T00:00:00Z", "--out", str(tmp_path / "b"))
+    assert mark["per-hansen"]["until"] == UNTIL
+    _run(
+        "--to",
+        "per-hansen",
+        "--since",
+        "last",
+        "--until",
+        "2026-03-03T00:00:00Z",
+        "--out",
+        str(tmp_path / "b"),
+    )
     m = _manifest(tmp_path / "b")
     assert m["covers"] == {"from": UNTIL, "to": "2026-03-03T00:00:00Z"}
     assert [e["seq"] for e in _jsonl(tmp_path / "b" / "entries.jsonl")] == [
         12
     ]  # the signatures are on the 3rd; seq 15, the crossing line, is at now
     mark = json.loads((lb.root / "exports" / "crossing.json").read_text(encoding="utf-8"))
-    assert mark["hermes"]["until"] == "2026-03-03T00:00:00Z"
+    assert mark["per-hansen"]["until"] == "2026-03-03T00:00:00Z"
 
 
 def test_since_last_without_a_watermark_is_a_clear_error(lb: Logbook, tmp_path: Path, capsys):
-    assert _fails("--to", "hermes", "--since", "last", "--out", str(tmp_path / "out")) == 2
+    assert _fails("--to", "per-hansen", "--since", "last", "--out", str(tmp_path / "out")) == 2
     err = capsys.readouterr().err
     assert "exports" in err and "--since" in err
 
 
 def test_until_defaults_to_now_and_a_backwards_window_is_refused(lb: Logbook, tmp_path: Path):
-    assert _fails("--to", "hermes", "--since", UNTIL, "--until", SINCE, "--out", str(tmp_path / "out")) == 2
-    _run("--to", "hermes", "--since", SINCE, "--out", str(tmp_path / "out"))
+    assert (
+        _fails("--to", "per-hansen", "--since", UNTIL, "--until", SINCE, "--out", str(tmp_path / "out")) == 2
+    )
+    _run("--to", "per-hansen", "--since", SINCE, "--out", str(tmp_path / "out"))
     m = _manifest(tmp_path / "out")
     assert m["covers"]["to"] == m["generated_at"]
     assert [e["seq"] for e in _jsonl(tmp_path / "out" / "entries.jsonl")] == [5, 11, 12, 13, 14]
 
 
 def test_out_defaults_under_the_record(lb: Logbook):
-    _run("--to", "hermes", "--since", SINCE, "--until", UNTIL)
-    base = lb.root / "export" / "crossing" / "hermes"
+    _run("--to", "per-hansen", "--since", SINCE, "--until", UNTIL)
+    base = lb.root / "export" / "crossing" / "per-hansen"
     made = list(base.iterdir())
     assert len(made) == 1 and (made[0] / "manifest.json").exists()
 
@@ -620,7 +667,7 @@ def test_out_defaults_under_the_record(lb: Logbook):
 def test_an_empty_window_is_a_quiet_no_op(lb: Logbook, tmp_path: Path, capsys):
     """`--since last` twice in one second: nothing to cross, nothing written, exit 0 (for a nightly job)."""
     seq = lb.meta["seq"]
-    _run("--to", "hermes", "--since", SINCE, "--until", SINCE, "--out", str(tmp_path / "out"))
+    _run("--to", "per-hansen", "--since", SINCE, "--until", SINCE, "--out", str(tmp_path / "out"))
     assert "nothing to cross" in capsys.readouterr().out
     assert not (tmp_path / "out").exists()
     assert lb.meta["seq"] == seq
@@ -647,7 +694,7 @@ def test_only_the_lines_of_signed_days_cross_by_default(lb: Logbook, tmp_path: P
     out = tmp_path / "out"
     _run(
         "--to",
-        "hermes",
+        "per-hansen",
         "--since",
         SINCE,
         "--until",
@@ -677,7 +724,7 @@ def test_unsigned_lifts_the_gate(lb: Logbook, tmp_path: Path, capsys):
     out = tmp_path / "out"
     _run(
         "--to",
-        "hermes",
+        "per-hansen",
         "--since",
         SINCE,
         "--until",
@@ -699,7 +746,7 @@ def test_unsigned_lifts_the_gate(lb: Logbook, tmp_path: Path, capsys):
 def test_a_retracted_signature_closes_the_gate_again(lb: Logbook, tmp_path: Path):
     lb.retract(14, "not read after all")  # the 2nd is unsigned again
     out = tmp_path / "out"
-    _run("--to", "hermes", "--since", SINCE, "--until", "2026-03-04T00:00:00Z", "--out", str(out))
+    _run("--to", "per-hansen", "--since", SINCE, "--until", "2026-03-04T00:00:00Z", "--out", str(out))
     seqs = [e["seq"] for e in _jsonl(out / "entries.jsonl")]
     assert seqs == [5, 11, 13], "seq 12 is on the 2nd; seq 14 is retracted"
     assert _manifest(out)["counts"]["held_back_unsigned"] == 1, (
@@ -709,7 +756,7 @@ def test_a_retracted_signature_closes_the_gate_again(lb: Logbook, tmp_path: Path
 
 def test_dry_run_counts_the_unsigned_days(lb: Logbook, tmp_path: Path, capsys):
     _quiet_day(lb)
-    _run("--to", "hermes", "--since", SINCE, "--until", "2026-03-06T00:00:00Z", "--dry-run")
+    _run("--to", "per-hansen", "--since", SINCE, "--until", "2026-03-06T00:00:00Z", "--dry-run")
     text = capsys.readouterr().out
     assert "2 held back on unsigned days" in text and "--unsigned" in text
     assert not (lb.root / "export").exists()
@@ -728,7 +775,7 @@ def test_dispositions_cross_with_the_signature_unchanged(lb: Logbook, tmp_path: 
     assert again["payload"]["dispositions"] == expected
     out = tmp_path / "out"
     until = "2026-03-04T00:00:00Z"  # the signing day inside the window
-    _run("--to", "hermes", "--since", SINCE, "--until", until, "--tier", "1,2", "--out", str(out))
+    _run("--to", "per-hansen", "--since", SINCE, "--until", until, "--tier", "1,2", "--out", str(out))
     entries = {int(e["seq"]): e for e in _jsonl(out / "entries.jsonl")}
     assert 15 in entries and 13 in entries, "both signatures of the day cross with it"
     assert entries[15] == again, "the line crosses byte for byte: the dispositions untouched"
@@ -743,7 +790,7 @@ def test_a_signature_that_confirms_nothing_still_opens_the_gate_and_crosses(lb: 
     assert again["payload"]["confirmed"] == []
     out = tmp_path / "out"
     until = "2026-03-04T00:00:00Z"  # the signing day inside the window
-    _run("--to", "hermes", "--since", SINCE, "--until", until, "--tier", "1,2", "--out", str(out))
+    _run("--to", "per-hansen", "--since", SINCE, "--until", until, "--tier", "1,2", "--out", str(out))
     entries = {int(e["seq"]): e for e in _jsonl(out / "entries.jsonl")}
     assert [s for s in entries if s < 13] == [5, 6, 8, 9, 10, 11, 12], "the day's lines cross: it is signed"
     assert 15 in entries and entries[15] == again, "the signature crosses byte for byte"
@@ -776,7 +823,7 @@ def _matches_its_manifest(out: Path) -> dict[str, Any]:
 
 def test_the_manifest_lists_every_file_in_the_package(lb: Logbook, tmp_path: Path):
     out = tmp_path / "given" / "out"
-    _run("--to", "hermes", "--since", SINCE, "--until", UNTIL, "--tier", "1,2", "--out", str(out))
+    _run("--to", "per-hansen", "--since", SINCE, "--until", UNTIL, "--tier", "1,2", "--out", str(out))
     m = _matches_its_manifest(out)
     paths = [f["path"] for f in m["files"]]
     assert paths == [f"attachments/{SHA_PRESENT}", "entries.jsonl", "resolution.jsonl"]
@@ -794,9 +841,9 @@ def test_a_narrower_export_into_the_same_folder_leaves_nothing_of_the_broader_on
     said there were none. Handing the folder over would have disclosed what the second one excluded."""
     out = tmp_path / "given" / "out"
     broad = ("--tier", "1,2", "--unsigned")
-    _run("--to", "hermes", "--since", SINCE, "--until", UNTIL, *broad, "--out", str(out))
+    _run("--to", "per-hansen", "--since", SINCE, "--until", UNTIL, *broad, "--out", str(out))
     assert (out / "resolution.jsonl").exists() and (out / "attachments" / SHA_PRESENT).exists()
-    _run("--to", "hermes", "--since", SINCE, "--until", UNTIL, "--out", str(out))
+    _run("--to", "per-hansen", "--since", SINCE, "--until", UNTIL, "--out", str(out))
     m = _matches_its_manifest(out)
     assert sorted(_on_disk(out)) == ["entries.jsonl", "manifest.json"]
     assert not (out / "attachments").exists(), "not even the empty folder"
@@ -810,9 +857,9 @@ def test_a_narrower_export_into_the_same_folder_leaves_nothing_of_the_broader_on
 def test_an_earlier_bundle_with_files_of_its_own_added_is_still_replaced_whole(lb: Logbook, tmp_path: Path):
     """A folder with a crossing manifest is ours to replace, whatever else was put in it since."""
     out = tmp_path / "given" / "out"
-    _run("--to", "hermes", "--since", SINCE, "--until", UNTIL, "--tier", "1,2", "--out", str(out))
+    _run("--to", "per-hansen", "--since", SINCE, "--until", UNTIL, "--tier", "1,2", "--out", str(out))
     (out / "attachments" / "notes.txt").write_bytes(b"Ola's list for the boat\n")
-    _run("--to", "hermes", "--since", SINCE, "--until", UNTIL, "--out", str(out))
+    _run("--to", "per-hansen", "--since", SINCE, "--until", UNTIL, "--out", str(out))
     assert sorted(_on_disk(out)) == ["entries.jsonl", "manifest.json"]
     _matches_its_manifest(out)
 
@@ -841,7 +888,7 @@ FOREIGN = ["a file", "a folder of notes", "another manifest", "a manifest that i
 def test_a_target_that_is_not_a_bundle_of_ours_is_refused(lb: Logbook, tmp_path: Path, what: str, capsys):
     out = tmp_path / "given" / "out"
     before = _foreign(out, what)
-    code = _fails("--to", "hermes", "--since", SINCE, "--until", UNTIL, "--out", str(out))
+    code = _fails("--to", "per-hansen", "--since", SINCE, "--until", UNTIL, "--out", str(out))
     assert code == 2
     err = capsys.readouterr().err
     assert str(out) in err and "--force" in err
@@ -856,7 +903,7 @@ def test_a_target_that_is_not_a_bundle_of_ours_is_refused(lb: Logbook, tmp_path:
 def test_force_replaces_a_target_that_is_not_a_bundle_of_ours(lb: Logbook, tmp_path: Path, what: str):
     out = tmp_path / "given" / "out"
     _foreign(out, what)
-    _run("--to", "hermes", "--since", SINCE, "--until", UNTIL, "--out", str(out), "--force")
+    _run("--to", "per-hansen", "--since", SINCE, "--until", UNTIL, "--out", str(out), "--force")
     assert sorted(_on_disk(out)) == ["entries.jsonl", "manifest.json"]
     _matches_its_manifest(out)
     assert lb.meta["seq"] == 15
@@ -867,8 +914,8 @@ def test_an_empty_folder_and_a_missing_one_are_written_as_before(lb: Logbook, tm
     empty = tmp_path / "given" / "empty"
     empty.mkdir(parents=True)
     deep = tmp_path / "given" / "a" / "b" / "out"  # its parents are made, as they always were
-    _run("--to", "hermes", "--since", SINCE, "--until", UNTIL, "--out", str(empty))
-    _run("--to", "hermes", "--since", SINCE, "--until", UNTIL, "--out", str(deep))
+    _run("--to", "per-hansen", "--since", SINCE, "--until", UNTIL, "--out", str(empty))
+    _run("--to", "per-hansen", "--since", SINCE, "--until", UNTIL, "--out", str(deep))
     for out in (empty, deep):
         assert sorted(_on_disk(out)) == ["entries.jsonl", "manifest.json"]
         _matches_its_manifest(out)
@@ -880,10 +927,10 @@ def test_a_failed_export_leaves_the_earlier_bundle_as_it_was(lb: Logbook, tmp_pa
     """A store file that no longer hashes to its name stops the second export while it copies; the
     first bundle is still there byte for byte, nothing half-written beside it, no line appended."""
     out = tmp_path / "given" / "out"
-    _run("--to", "hermes", "--since", SINCE, "--until", UNTIL, "--tier", "1,2", "--out", str(out))
+    _run("--to", "per-hansen", "--since", SINCE, "--until", UNTIL, "--tier", "1,2", "--out", str(out))
     before, seq = _on_disk(out), lb.meta["seq"]
     (lb.root / "attachments" / SHA_PRESENT).write_bytes(b"thrEE")
-    again = ("--to", "hermes", "--since", SINCE, "--until", UNTIL, "--tier", "1,2", "--out", str(out))
+    again = ("--to", "per-hansen", "--since", SINCE, "--until", UNTIL, "--tier", "1,2", "--out", str(out))
     assert _fails(*again) == 1
     assert "does not hash to its name" in capsys.readouterr().err
     assert _on_disk(out) == before
@@ -897,11 +944,11 @@ def test_a_package_that_does_not_match_its_manifest_is_never_put_in_place(
     """The staged folder is checked against its manifest before the rename: a list that leaves a file
     out (here, by a fault put in on purpose) stops the export with the earlier bundle untouched."""
     out = tmp_path / "given" / "out"
-    _run("--to", "hermes", "--since", SINCE, "--until", UNTIL, "--out", str(out))
+    _run("--to", "per-hansen", "--since", SINCE, "--until", UNTIL, "--out", str(out))
     before, seq = _on_disk(out), lb.meta["seq"]
     listing = crossing._listing
     monkeypatch.setattr(crossing, "_listing", lambda folder, paths: listing(folder, list(paths)[1:]))
-    assert _fails("--to", "hermes", "--since", SINCE, "--until", UNTIL, "--out", str(out)) == 1
+    assert _fails("--to", "per-hansen", "--since", SINCE, "--until", UNTIL, "--out", str(out)) == 1
     assert "entries.jsonl is in the package and not in its manifest" in capsys.readouterr().err
     assert _on_disk(out) == before and lb.meta["seq"] == seq
     assert sorted(p.name for p in out.parent.iterdir()) == ["out"]
@@ -909,7 +956,7 @@ def test_a_package_that_does_not_match_its_manifest_is_never_put_in_place(
 
 def test_verify_package_names_a_file_missing_or_added(lb: Logbook, tmp_path: Path):
     out = tmp_path / "given" / "out"
-    _run("--to", "hermes", "--since", SINCE, "--until", UNTIL, "--tier", "1,2", "--out", str(out))
+    _run("--to", "per-hansen", "--since", SINCE, "--until", UNTIL, "--tier", "1,2", "--out", str(out))
     assert crossing.verify_package(out) == _manifest(out)
     (out / "attachments" / "extra.bin").write_bytes(b"\x00")
     with pytest.raises(crossing.CrossingError) as e:
@@ -926,10 +973,10 @@ def test_verify_package_names_a_file_missing_or_added(lb: Logbook, tmp_path: Pat
 def test_a_link_to_an_earlier_bundle_still_names_the_new_one(lb: Logbook, tmp_path: Path):
     """`--out` a symbolic link: the folder it names is replaced, beside that folder, and the link kept."""
     real = tmp_path / "given" / "real"
-    _run("--to", "hermes", "--since", SINCE, "--until", UNTIL, "--tier", "1,2", "--out", str(real))
+    _run("--to", "per-hansen", "--since", SINCE, "--until", UNTIL, "--tier", "1,2", "--out", str(real))
     link = tmp_path / "link"
     link.symlink_to(real, target_is_directory=True)
-    _run("--to", "hermes", "--since", SINCE, "--until", UNTIL, "--out", str(link))
+    _run("--to", "per-hansen", "--since", SINCE, "--until", UNTIL, "--out", str(link))
     assert link.is_symlink() and link.resolve() == real.resolve()
     assert sorted(_on_disk(real)) == ["entries.jsonl", "manifest.json"]
     _matches_its_manifest(real)
@@ -955,7 +1002,7 @@ def test_the_record_is_never_replaced_even_under_force(lb: Logbook, tmp_path: Pa
         json.dumps({"schema": "crossing-package/v1"}).encode("utf-8")
     )
     before = _on_disk(lb.root)
-    assert _fails("--to", "hermes", "--since", SINCE, "--until", UNTIL, "--out", str(out), "--force") == 2
+    assert _fails("--to", "per-hansen", "--since", SINCE, "--until", UNTIL, "--out", str(out), "--force") == 2
     err = capsys.readouterr().err
     assert str(out) in err and "record" in err
     assert _on_disk(lb.root) == before
@@ -965,7 +1012,7 @@ def test_the_record_is_never_replaced_even_under_force(lb: Logbook, tmp_path: Pa
 
 def test_a_bundle_under_the_records_export_folder_is_replaced_as_anywhere(lb: Logbook):
     out = lb.root / "export" / "for-hermes"
-    _run("--to", "hermes", "--since", SINCE, "--until", UNTIL, "--tier", "1,2", "--out", str(out))
-    _run("--to", "hermes", "--since", SINCE, "--until", UNTIL, "--out", str(out))
+    _run("--to", "per-hansen", "--since", SINCE, "--until", UNTIL, "--tier", "1,2", "--out", str(out))
+    _run("--to", "per-hansen", "--since", SINCE, "--until", UNTIL, "--out", str(out))
     assert sorted(_on_disk(out)) == ["entries.jsonl", "manifest.json"]
     _matches_its_manifest(out)

@@ -29,7 +29,9 @@ names the entry to change, and nothing is written.
 
 Like every other export, the run leaves one `crossing/v1` line in the record (RFC 0011), after the folder
 is written (a run that writes no folder leaves none), so a page leaves only on a command you type, to a place you name, and your record keeps a
-line that says it left:
+line that says it left. A folder, the vault, the site and the world are your own copies, so they take no
+signed-day gate and hold a day you have not signed as one you have, while `export crossing` and `export
+share day`, which send a day to someone else, hold back every day you have not signed (RFC 0034):
 
 ```
 2026-06-17: 437 entries → /Users/ines/Handover/june-17

@@ -75,6 +75,26 @@ NOTION_DESTINATION = "notion"  # `logbook export notion`: the record's facts for
 INCLUDE_UNSIGNED = "include_unsigned"  # an entry's optional key: `--include-unsigned` may lift the gate
 MODEL = "model"  # an entry's optional key: the one model the destination is
 DEFAULT_POLICY: dict[str, Any] = {MCP_DESTINATION: {"max_tier": MCP_DEFAULT_TIER}}
+# The names the policy keeps for its own readers and doors: never a person's or a package's destination,
+# so `export crossing --to mcp` and `export share day --to vault` never write under an entry, a watermark
+# or an `export/` folder that is a reader's own. `hermes`, `chat` and `phone` are the 1.1 doors' entries;
+# `relationship` the person drafts' (`drafts.PERSON_ENTRY`), `letter` the letter's. Held in any case:
+# `MCP` and `mcp` are one folder on a Mac or Windows disk.
+RESERVED = (
+    MCP_DESTINATION,
+    "hermes",
+    DREAM_DESTINATION,
+    SITE_DESTINATION,
+    VAULT_DESTINATION,
+    WORLD_DESTINATION,
+    FOLDER_DESTINATION,
+    HEARD_DESTINATION,
+    "chat",
+    "phone",
+    NOTION_DESTINATION,
+    "letter",
+    "relationship",
+)
 TIERS = (1, 2, 3)
 UNTIL = "until"  # the last day an entry holds, `YYYY-MM-DD`; absent: for good
 EXPIRED_TIER = 0  # what an entry past its `until` day counts as: nothing crosses
@@ -105,6 +125,17 @@ AGENTS_FILE = PurePosixPath("policy/agents.json")  # the owner's own agents, by 
 
 class PolicyError(ValueError):
     """The policy file refuses the request, or is not a policy; the message names the file."""
+
+
+def check_destination(name: str) -> str:
+    """`name` as a person's or a package's destination: one of `RESERVED`, in any case and with any
+    trailing dots or spaces, is refused in one sentence (`PolicyError`)."""
+    if name.casefold().rstrip(". ") in RESERVED:  # Windows drops a folder name's trailing dots and spaces
+        raise PolicyError(
+            f"{name!r} is a name {POLICY_FILE.as_posix()} keeps for its own reader, reserved, never a"
+            " person's or a package's destination; give the person's own name to --to"
+        )
+    return name
 
 
 def policy_path(root: Path) -> Path:

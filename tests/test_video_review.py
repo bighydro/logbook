@@ -325,13 +325,16 @@ def test_every_line_of_a_family_video_is_tier_2_and_none_crosses_a_tier_1_entry(
         "task",
     }
     window = ("2026-01-01T00:00:00Z", "2100-01-01T00:00:00Z")
-    request = crossing.request(lb, "mcp", *window, (1,), signed_only=False)
-    assert crossing.select(lb, request).lines == []
     (lb.root / "policy").mkdir(exist_ok=True)
     (lb.root / "policy" / "crossing.json").write_text(
-        json.dumps({"hermes": {"max_tier": 2}}), encoding="utf-8"
+        json.dumps({"kari": {"max_tier": 1}}), encoding="utf-8"
+    )  # a tier-1 entry for a person: `mcp`, the one a new record names, is no person's (policy.RESERVED)
+    request = crossing.request(lb, "kari", *window, (1,), signed_only=False)
+    assert crossing.select(lb, request).lines == []
+    (lb.root / "policy" / "crossing.json").write_text(
+        json.dumps({"per-hansen": {"max_tier": 2}}), encoding="utf-8"
     )
-    request = crossing.request(lb, "hermes", *window, (1, 2), signed_only=False)
+    request = crossing.request(lb, "per-hansen", *window, (1, 2), signed_only=False)
     assert len(crossing.select(lb, request).lines) == len(mine)  # crossing is the tier's say, never hidden
 
 

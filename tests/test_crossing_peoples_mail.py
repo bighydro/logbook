@@ -111,7 +111,7 @@ def lb(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Logbook:
     signing.sign(lb, "2026-03-01", at="2026-03-03T08:00:00Z")
     policy = lb.root / "policy" / "crossing.json"
     policy.parent.mkdir(exist_ok=True)
-    policy.write_text(json.dumps({"hermes": {"max_tier": 2}}), encoding="utf-8")
+    policy.write_text(json.dumps({"per-hansen": {"max_tier": 2}}), encoding="utf-8")
     return lb
 
 
@@ -121,7 +121,7 @@ def _run(out: Path, *args: str) -> dict[str, Any]:
             "export",
             "crossing",
             "--to",
-            "hermes",
+            "per-hansen",
             "--since",
             SINCE,
             "--until",
@@ -183,7 +183,7 @@ def test_the_dry_run_says_how_many_mails_stay_home(lb: Logbook, capsys: pytest.C
             "export",
             "crossing",
             "--to",
-            "hermes",
+            "per-hansen",
             "--since",
             SINCE,
             "--until",
@@ -199,13 +199,13 @@ def test_the_dry_run_says_how_many_mails_stay_home(lb: Logbook, capsys: pytest.C
 
 
 def test_a_window_whose_mail_is_all_peoples_says_none_was_held_back(lb: Logbook) -> None:
-    req = crossing.request(lb, "hermes", "2026-03-01T08:59:00Z", "2026-03-01T09:30:00Z", (1, 2))
+    req = crossing.request(lb, "per-hansen", "2026-03-01T08:59:00Z", "2026-03-01T09:30:00Z", (1, 2))
     assert crossing.select(lb, req).counts()["mail_held_back"] == 0
 
 
 def _bundle(lb: Logbook, out: Path, kinds: frozenset[str] | None, all_mail: bool) -> dict[str, bytes]:
     """The bundle of one request, with the bundle's id, time and head fixed, as files → bytes."""
-    req = crossing.request(lb, "hermes", SINCE, UNTIL, (1, 2), kinds, all_mail=all_mail)
+    req = crossing.request(lb, "per-hansen", SINCE, UNTIL, (1, 2), kinds, all_mail=all_mail)
     sel = crossing.select(lb, req)
     head = str(lb.meta["head"])
     manifest = crossing.build_manifest(
@@ -238,7 +238,7 @@ def test_a_record_with_no_mail_carries_no_mail_key(tmp_path: Path, monkeypatch: 
     signing.sign(lb, "2026-03-01", at="2026-03-03T08:00:00Z")
     (lb.root / "policy").mkdir(exist_ok=True)
     (lb.root / "policy" / "crossing.json").write_text(
-        json.dumps({"hermes": {"max_tier": 2}}), encoding="utf-8"
+        json.dumps({"per-hansen": {"max_tier": 2}}), encoding="utf-8"
     )
     bundle = _bundle(lb, tmp_path / "out", None, all_mail=False)
     assert b"mail" not in bundle["manifest.json"]  # no `mail_held_back`, no `policy.mail`

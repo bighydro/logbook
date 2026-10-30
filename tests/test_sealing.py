@@ -701,7 +701,7 @@ def _crossing_policy(lb: Logbook, recipient: str | None) -> None:
     entry: dict = {"max_tier": 2}
     if recipient:
         entry["recipient"] = recipient
-    (lb.root / "policy" / "crossing.json").write_text(json.dumps({"hermes": entry}), encoding="utf-8")
+    (lb.root / "policy" / "crossing.json").write_text(json.dumps({"per-hansen": entry}), encoding="utf-8")
 
 
 def _sealed_day(sealed_lb: Logbook) -> None:
@@ -738,7 +738,18 @@ def test_a_crossing_reseals_sealed_lines_and_files_to_the_destination(
     out = tmp_path / "out"
     window = ["--since", "2026-03-01T00:00:00Z", "--until", "2026-03-02T00:00:00Z"]
     cli.main(
-        ["export", "crossing", "--to", "hermes", *window, "--tier", "1,2", "--unsigned", "--out", str(out)]
+        [
+            "export",
+            "crossing",
+            "--to",
+            "per-hansen",
+            *window,
+            "--tier",
+            "1,2",
+            "--unsigned",
+            "--out",
+            str(out),
+        ]
     )
     entries = [json.loads(s) for s in (out / "entries.jsonl").read_text().splitlines()]
     stored = {line["seq"]: line for line in _stored(sealed_lb)}
@@ -771,7 +782,7 @@ def test_a_crossing_to_a_destination_without_a_recipient_needs_open_and_then_shi
         "export",
         "crossing",
         "--to",
-        "hermes",
+        "per-hansen",
         *window,
         "--tier",
         "1,2",
@@ -787,7 +798,7 @@ def test_a_crossing_to_a_destination_without_a_recipient_needs_open_and_then_shi
             "export",
             "crossing",
             "--to",
-            "hermes",
+            "per-hansen",
             *window,
             "--tier",
             "1,2",
@@ -808,13 +819,24 @@ def test_a_crossing_to_a_destination_without_a_recipient_needs_open_and_then_shi
 
 def test_a_crossing_of_a_plain_record_is_unchanged(tmp_path: Path, monkeypatch):
     lb = Logbook.init(tmp_path / "lb", "Europe/Oslo")
-    allow(lb.root, "hermes", 2)  # the owner's entry: a new record names no one above tier 1
+    allow(lb.root, "per-hansen", 2)  # the owner's entry: a new record names no one above tier 1
     monkeypatch.setenv("LOGBOOK_HOME", str(lb.root))
     lb.append(at="2026-03-01T09:00:00Z", source="manual", kind="note", tier=2, payload=NOTE)
     out = tmp_path / "out"
     window = ["--since", "2026-03-01T00:00:00Z", "--until", "2026-03-02T00:00:00Z"]
     cli.main(
-        ["export", "crossing", "--to", "hermes", *window, "--tier", "1,2", "--unsigned", "--out", str(out)]
+        [
+            "export",
+            "crossing",
+            "--to",
+            "per-hansen",
+            *window,
+            "--tier",
+            "1,2",
+            "--unsigned",
+            "--out",
+            str(out),
+        ]
     )
     entry = json.loads((out / "entries.jsonl").read_text())
     assert entry["payload"] == NOTE and "sealing" not in json.loads((out / "manifest.json").read_text())

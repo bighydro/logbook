@@ -55,6 +55,8 @@ else, so nothing a page says can land outside the folder it is kept in.
 | `max_tier` | 1, 2 or 3 | MUST | the highest tier the page may carry; every line is at or under it |
 | `lines` | integer | MUST | how many lines `lines.jsonl` holds |
 | `held_back` | integer | MUST | the day's lines that stayed home: above `max_tier` (a retracted line and a retraction are not counted either way) |
+| `held_back_unsigned` | integer | MAY | of `held_back`, the lines whose day is not signed (RFC 0034, as the crossing counts them); every page since the rule writes it, `0` when none |
+| `mail_held_back` | integer | MAY | of `held_back`, the mails no person is on (RFC 0045, as the crossing counts them); written only when the day held a mail |
 | `lines_sha256` | hex sha256 | MUST | the digest of `lines.jsonl`'s bytes |
 | `package_sha256` | hex sha256 | MUST | the digest of `package.json`'s bytes |
 | `attachments` | array | MUST | one `{sha256, bytes, media_type}` per file under `attachments/`, sorted by digest; empty when none |
@@ -117,6 +119,11 @@ whose bytes are not its name.
    requested tier may not exceed its ceiling; otherwise the request is refused naming the file and
    nothing is written. Tier 1 is the default; tier 3 crosses only when the file allows it *and* the
    owner typed `--tier 3`, and the console then says so in words nobody can miss.
+   The destination is a person: a name the policy keeps for its own reader or door (`mcp`, `hermes`,
+   `vault` and the rest of `policy.RESERVED`) is refused in any case. The day must be signed (RFC
+   0034): an unsigned day is refused in one sentence naming `logbook day sign`, before anything is
+   written. The lines are then held to the crossing's own rules (review R4): the signed-day gate line
+   by line, and RFC 0045's people's mail, each counted in the manifest.
 2. Makes or reads the sharing key; selects the lines; writes the page to a temporary file and
    renames it into place, so a crash leaves no half-written page.
 3. Appends one `crossing/v1` line (RFC 0011) to its own chain: destination, the local day's window

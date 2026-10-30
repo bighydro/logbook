@@ -222,9 +222,18 @@ READERS: tuple[tuple[str, ...], ...] = (
     ("repair", "tail", "--dry-run"),
     ("repair", "fork"),  # without --apply: which chain is the record, said
     ("repair", "health-units", "--dry-run"),
-    ("export", "crossing", "--to", "hermes", "--since", "2026-06-01T00:00:00Z", "--dry-run"),
-    ("export", "crossing", "--to", "hermes", "--since", "2026-06-01T00:00:00Z", "--dry-run", "--unsigned"),
-    ("export", "trip-bundle", "2026-06-09", "--to", "hermes", "--dry-run"),
+    ("export", "crossing", "--to", "per-hansen", "--since", "2026-06-01T00:00:00Z", "--dry-run"),
+    (
+        "export",
+        "crossing",
+        "--to",
+        "per-hansen",
+        "--since",
+        "2026-06-01T00:00:00Z",
+        "--dry-run",
+        "--unsigned",
+    ),
+    ("export", "trip-bundle", "2026-06-09", "--to", "per-hansen", "--dry-run"),
     ("backup", "list", BACKUPS),
     ("verify",),
     ("verify", "--keyless"),
@@ -244,11 +253,11 @@ READERS: tuple[tuple[str, ...], ...] = (
 
 @pytest.fixture(scope="module")
 def record(tmp_path_factory: pytest.TempPathFactory) -> Logbook:
-    """The demo record, generated once per worker; the readers only read it. Its policy names hermes
+    """The demo record, generated once per worker; the readers only read it. Its policy names per-hansen
     at tier 2, as the owner writes it, for the dry runs that cross to it."""
     root = tmp_path_factory.mktemp("demo") / "Demo"
     cli.main(["demo", "--days", "30", "--seed", "7", "--out", str(root)])
-    allow(root, "hermes", 2)
+    allow(root, "per-hansen", 2)
     return Logbook(root)
 
 

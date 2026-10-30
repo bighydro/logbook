@@ -9,9 +9,14 @@ signed days only unless `--unsigned` ([the signed day](signed-day.md)), and one 
 chain that says what left. `--dry-run` counts and writes nothing.
 
 ```bash
-logbook export crossing --to hermes --since 2026-03-01T00:00:00Z --until 2026-03-02T00:00:00Z --dry-run
-logbook export crossing --to hermes --since last --out ~/Handover/hermes
+logbook export crossing --to kari --since 2026-03-01T00:00:00Z --until 2026-03-02T00:00:00Z --dry-run
+logbook export crossing --to kari --since last --out ~/Handover/kari
 ```
+
+A member is a person, never a name the policy keeps for its own reader or door: `mcp`, `hermes`, `dream`,
+`site`, `vault`, `world`, `folder`, `heard`, `chat`, `phone`, `notion`, `letter` and `relationship`, in any
+case, are refused in one sentence before anything is written, by `export crossing` and `export share day`
+alike, so a package never lands under a reader's entry, watermark or folder.
 
 ## Drafts follow the entry they were written under
 
@@ -24,6 +29,15 @@ entry's `until` has passed, it is removed, or its `max_tier` is below the draft'
 them. A shared page (`export share day`) holds its drafts the same way: one its entry no longer allows
 stays home, counted in the manifest's `held_back` and in the crossing line's `held_back_by_entry`. A video scene's draft (`video review`) is written on this machine under no entry and crosses by its
 tier like any line. With the entry in force the package is what it was.
+
+## A shared page holds what a package holds
+
+`export share day` sends one day to one person, as a package sends a window, and holds it to the same
+rules through the crossing's own functions: only a day you have signed leaves (an unsigned one is refused
+in one sentence that names `logbook day sign`), and a mail crosses only when a person is on it. The page's
+manifest counts each: `held_back_unsigned` always, `mail_held_back` whenever the day held a mail; both are
+part of `held_back`, and the crossing line's `counts` say the same. A shared page has no `--unsigned` and
+no `--all-mail`.
 
 ## People's mail
 
