@@ -318,3 +318,107 @@ def test_a_signed_day_closes_a_request_or_a_promise_by_its_line_and_the_row_says
     seq = lb.meta["seq"]
     out_text = _run(capsys, "promises", "done", asked.id)
     assert "already kept" in out_text and lb.meta["seq"] == seq
+
+
+# -- a request is a person's: people's mail (RFC 0045) and a message whose sender is a person ----------
+
+ASK = "Can you confirm the date by Friday?"
+BESIDE = "We will publish the results on Monday."  # a commitment beside the request, read as before
+HARBOUR_ID = "019cadd3-6bc0-7dcd-9133-000000000031"  # a company, never a person
+DESK_ID = "019cadd3-6bc0-7dcd-9133-000000000032"
+
+
+def _company(ref: tuple[str, str], entity_id: str, label: str) -> dict[str, Any]:
+    found = resolution(ref, entity_id, label)
+    found["payload"]["entity"]["type"] = "company"
+    return found
+
+
+def _asking_mail(sender: str, **extra: Any) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "schema": "mail/v1",
+        "raw_id": f"ines@example.org:ask-{sender}",
+        "message_id": f"ask-{sender}",
+        "thread": f"ask-{sender}",
+        "from": {"email": sender, "name": "The sender"},
+        "to": [{"email": "ines@example.org", "name": "Ines Nordmann"}],
+        "subject": "The date",
+        "direction": "received",
+        "body": f"{ASK} {BESIDE}",
+        "size": 1000,
+    }
+    if extra:
+        payload["extra"] = extra
+    return {"at": "2026-06-19T09:00:00Z", "source": "mail", "kind": "mail", "tier": 2, "payload": payload}
+
+
+def _asking_message(phone: str, **extra: Any) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "schema": "message/v1",
+        "raw_id": f"whatsapp-ask-{phone}",
+        "chat": {"id": f"{phone.lstrip('+')}@s.whatsapp.net", "type": "direct", "name": "The sender"},
+        "from_me": False,
+        "sender": {"kind": "phone", "value": phone, "name": "The sender"},
+        "text": f"{ASK} {BESIDE}",
+    }
+    if extra:
+        payload["extra"] = extra
+    at = "2026-06-19T10:00:00Z"
+    return {"at": at, "source": "whatsapp", "kind": "message", "tier": 2, "payload": payload}
+
+
+NO_REPLY_PERSON = resolution(("email", "noreply@example.org"), DESK_ID, "Per Hansen")
+BOT = {"kind": "agent", "name": "Nordlys", "ref": {"kind": "provider_id", "value": "telegram:900000001"}}
+HARBOUR_MAIL = _company(("email", "harbour@example.org"), HARBOUR_ID, "Oslo Harbour")
+HARBOUR_PHONE = _company(("phone", "+447700900456"), HARBOUR_ID, "Oslo Harbour")
+
+
+@pytest.mark.parametrize(
+    ("resolved", "line", "asked"),
+    [
+        pytest.param([], _asking_mail("ola@example.org"), True, id="mail-from-a-person"),
+        pytest.param([], _asking_mail("news@example.org"), False, id="a-newsletter"),
+        pytest.param(
+            [NO_REPLY_PERSON], _asking_mail("noreply@example.org"), False, id="a-no-reply-named-a-person"
+        ),
+        pytest.param([], _asking_mail("ola@example.org", machine=True), False, id="mail-an-agent-wrote"),
+        pytest.param([HARBOUR_MAIL], _asking_mail("harbour@example.org"), False, id="a-company-s-mail"),
+        pytest.param([], _asking_message("+4790000001"), True, id="message-from-a-person"),
+        pytest.param([], _asking_message("+4790000001", counterpart=BOT), False, id="a-chat-with-an-agent"),
+        pytest.param([], _asking_message("+447700900123"), False, id="a-number-nobody-is-named-by"),
+        pytest.param([HARBOUR_PHONE], _asking_message("+447700900456"), False, id="a-company-s-number"),
+    ],
+)
+def test_a_request_counts_only_when_a_person_wrote_it(
+    record: tuple[Logbook, dict[str, Any], list[Any]],
+    resolved: list[dict[str, Any]],
+    line: dict[str, Any],
+    asked: bool,
+) -> None:
+    """A request of the owner's is read in a mail only when it is a person's mail (RFC 0045: the sender
+    resolves to a person, is no no-reply address, no agent's), and in a message only when its sender
+    resolves to a person and the chat is no conversation with an agent; a newsletter, a notification, a
+    company, a stranger and a bot's chat ask nothing of the owner. The commitment beside it is read as
+    before: the rule is the requests'."""
+    lb, _doc, _lines = record
+    lb.append_many([*resolved, line])
+    origin = str(list(lb.lines())[-1]["id"])
+    found = {p.match.quote: p for p in promises.extract(lb).proposals if p.line == origin}
+    assert (ASK in found) is asked
+    if asked:
+        assert found[ASK].role == "request" and found[ASK].direction == "owed_by_owner"
+    assert found[BESIDE].role == "theirs"
+
+
+def test_a_company_s_request_counts_once_the_owner_names_its_sender_a_person(
+    record: tuple[Logbook, dict[str, Any], list[Any]],
+) -> None:
+    """The marina's booking request is a mail from an address the record names nobody behind: not asked
+    of the owner. A resolution naming that address a person (RFC 0045, open question 1) brings it back,
+    on the next reading."""
+    lb, doc, _lines = record
+    booking = "Please confirm your crane booking by 18 June."
+    assert booking not in {p.match.quote for p in promises.extract(lb).proposals}
+    lb.append_many([resolution(("email", doc["people"]["marina"]["email"]), DESK_ID, "Per Hansen")])
+    (asked,) = [p for p in promises.extract(lb).proposals if p.match.quote == booking]
+    assert asked.role == "request" and asked.counterpart == "Per Hansen"

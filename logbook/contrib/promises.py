@@ -6,7 +6,10 @@ A promise here is a sentence that reads like one in a line the owner wrote: a `m
 will", "ich schicke", "ich melde mich", "mach ich"), first-person obligation ("I need to", "ich
 muss"), an offer ("let me get back"), a terse deadline ("by Friday", "bis Freitag"), in English
 and German, found by rules alone. A request is a sentence that asks the owner for something in a
-line they received ("can you send", "could you", "let me know", "kannst du", "schick mir"). Who
+line a person wrote them ("can you send", "could you", "let me know", "kannst du", "schick mir"): a
+mail that is a person's mail (RFC 0045, `logbook.core.peoples_mail`), a message whose sender the
+record names as a person, another's turn. A request in a newsletter, a notification, a company's
+mail or a message from a number nobody is named by asks the owner nothing and is not proposed. Who
 wrote the line decides which it is: the owner's addresses and names come from `logbook.json`,
 `policy/owner.json` and the resolution lines (`present.owner_of`), a message's `from_me`, a
 transcript's speakers (RFC 0006). A request cue in text the owner wrote is the owner asking and is
@@ -42,7 +45,7 @@ from dataclasses import asdict, dataclass, replace
 from datetime import date, timedelta
 from typing import Any, Protocol
 
-from ..core import attribution, day_start, kept, machine, policy, present, signing
+from ..core import attribution, day_start, kept, machine, peoples_mail, policy, present, signing
 from ..core.chain import Line
 from ..core.resolve import Identity, Ref, identities_from
 from ..core.store import Logbook, retractions
@@ -734,6 +737,7 @@ def _extract(
     )
     owner_label = _owner_label(owner, identities)
     voices = attribution.Voices(identities, owner.entities, owner.id)
+    rule = peoples_mail.Rule(identities, owner)  # who is a person, for whom a request counts (RFC 0045)
     lines = _words(lb, kinds, since, until, frozenset(retracted) | superseded, admit, after_seq, through_seq)
     skipped_by: dict[str, dict[str, int]] = {kind: {} for kind in kinds}
     proposals: list[Proposal] = []
@@ -758,6 +762,7 @@ def _extract(
         known = _known(participants, identities, owner)
         counterpart: str | None = None
         with_names: tuple[str, ...] = ()
+        by_a_person = False
         if kind == MESSAGE and machine.is_machine(payload):
             skipped[AGENT_MESSAGES] = skipped.get(AGENT_MESSAGES, 0) + 1  # an agent's words, never a promise
             continue
@@ -804,6 +809,7 @@ def _extract(
                 if kind == MAIL
                 else _message_parties(payload, identities, owner, owner_label)
             )
+            by_a_person = _by_a_person(kind, line, rule)
             turns = [Turn(None, text)]
             spoken_by = {None: author}
         else:
@@ -832,7 +838,7 @@ def _extract(
             speaker = spoken_by[turn.speaker]
             own = sentences(turn.text)
             for match in extractor(turn.text):
-                proposed, role = _role(match, speaker, kind)
+                proposed, role = _role(match, speaker, kind, by_a_person)
                 if not proposed:
                     continue
                 pid = proposal_id(str(line["id"]), match.quote)
@@ -926,16 +932,19 @@ def _voice(
     return Speaker(None, label, None, False)
 
 
-def _role(match: Match, speaker: Speaker, kind: str) -> tuple[bool, str | None]:
-    """(whether it is proposed, what it is) given who wrote it: a request cue is `request` when
-    someone other than the owner wrote the line (a mail or message received, another's turn) and is
-    not proposed when the owner did, since that is the owner asking; a commitment cue is `promise`
-    in the owner's own words, `theirs` when a person the record resolves said it, None when nobody
-    is behind the label (a diarizer's `Speaker A`)."""
+def _role(match: Match, speaker: Speaker, kind: str, by_a_person: bool) -> tuple[bool, str | None]:
+    """(whether it is proposed, what it is) given who wrote it: a request cue is `request` when a
+    person other than the owner wrote the line (a mail or message received `by_a_person`, another's
+    turn) and is not proposed when the owner did, since that is the owner asking, nor in a mail or
+    message no person wrote; a commitment cue is `promise` in the owner's own words, `theirs` when a
+    person the record resolves said it, None when nobody is behind the label (a diarizer's `Speaker
+    A`)."""
     if match.phrase_class == REQUEST:
         if speaker.owner:
             return False, None
-        if kind in (MAIL, MESSAGE) or speaker.spoken is not None:
+        if kind in (MAIL, MESSAGE):
+            return (True, ASKED) if by_a_person else (False, None)
+        if speaker.spoken is not None:
             return True, ASKED
         return False, None
     if speaker.owner:
@@ -943,6 +952,20 @@ def _role(match: Match, speaker: Speaker, kind: str) -> tuple[bool, str | None]:
     if speaker.person is not None or (kind in (MAIL, MESSAGE) and speaker.spoken):
         return True, THEIRS
     return True, None
+
+
+def _by_a_person(kind: str, line: Line, rule: peoples_mail.Rule) -> bool:
+    """Whether a person wrote a mail or a message: a mail when it is a person's mail (RFC 0045: its
+    sender resolves to a person, is no no-reply address, no agent's and not let go); a message when
+    its sender resolves to a person and it is no conversation with an agent, as `people` reads a
+    message. A newsletter, a notification, a company and a number nobody is named by are nobody."""
+    if kind == MAIL:
+        return rule.classify(line).person
+    payload = line.get("payload") or {}
+    sender = payload.get("sender")
+    ref_kind, value = (sender.get("kind"), sender.get("value")) if isinstance(sender, dict) else ("", "")
+    ref = (ref_kind, value) if isinstance(ref_kind, str) and isinstance(value, str) and value else None
+    return not machine.with_agent(payload) and rule.person(ref) is not None
 
 
 def _direction(speaker: Speaker, role: str | None = None) -> str | None:

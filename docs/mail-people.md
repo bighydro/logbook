@@ -55,6 +55,13 @@ not), and never an address.
 counts the rest in the manifest as `mail_held_back`. `--all-mail` sends every mail the tier and the signed
 days let through, as before, and the manifest says so ([the crossing](crossing.md#peoples-mail)).
 
+## Requests
+
+`logbook promises` reads a request ("can you send me…", "please confirm…") in a mail you received only
+when the mail is a person's mail, so a newsletter, a shop or a notification asks you nothing; the Day
+page's *asked of you*, the person page and the Notion export read the same proposals
+([who wrote it](promises.md#who-wrote-it)).
+
 ## Replies owed
 
 The Day page's loose ends (RFC 0043) will read *replies owed* from the same rule: for each person the
