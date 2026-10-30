@@ -515,14 +515,15 @@ def test_every_page_carries_the_doors_header_and_marks_its_door(lb: Logbook) -> 
         door = doors.door_of(target.partition("?")[0])
         marked = re.findall(r'<a href="([^"]+)" aria-current="page">', page)
         assert marked == [t for n, t in doors.DOORS if n == door], (target, marked)
-        if target.partition("?")[0] in ("/", "/life"):  # a door's own page (Today, Life): the doors' frame
+        root = ":root{color-scheme:light dark;--paper"
+        own = target.partition("?")[0] in ("/", "/life")  # a door's own page (Today, Life): the doors' frame
+        if own or '<main class="door">' in page:  # and any page in it (Places): the doors' one stylesheet
             assert doors.style() in page and serve.STYLE not in page, target
+            assert page.count(root) == 1, (target, "the tokens defined once, on :root")
         elif door == doors.PEOPLE:  # the People door and each thread: the doors' frame, its tokens on :root
-            root = ":root{color-scheme:light dark;--paper"
             assert doors.style() in page and root in page and serve.STYLE not in page, target
         else:  # a page that is not a door's: its own stylesheet, the header's beside it
             assert (doors.header_style() in page and serve.STYLE in page) or target == "/world", target
-            root = ":root{color-scheme:light dark;--paper"
             assert root not in page, (target, "the tokens on the header alone")
     assert doors.door_of("/people/019cadd3") == doors.PEOPLE and doors.door_of("/day/2026-06-19") is None
     shelves = site.respond("/shelves").body.decode("utf-8")

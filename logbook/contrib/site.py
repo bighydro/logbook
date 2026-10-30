@@ -53,7 +53,7 @@ from ..core import year as year_reader
 from ..core.chain import Line
 from ..core.flights import Airports
 from ..core.store import Logbook, uuid7
-from . import door_today, serve, trip_page
+from . import door_places, door_today, serve, trip_page
 from .vault import digest, write
 
 __all__ = ["digest", "write"]  # the folder is written and digested as a vault is
@@ -62,6 +62,7 @@ DESTINATION = policy.SITE_DESTINATION
 TIER_SETS = {"1": (1,), "1,2": (1, 2)}  # tier 3 never goes to a site
 YEARS, DAYS, TRIPS, PLACES, PEOPLE = "years", "days", "trips", "places", "people"
 DAY_PAGES = "day_pages"  # a kind of page, in the console and the crossing line; the files are under days/
+PLACE_PAGES = "place_pages"  # one named place each (`door_places.page_place`); the files are under places/
 INDEX = "index.html"
 TRIPS_PAGE, PLACES_PAGE, PEOPLE_PAGE = "trips.html", "places.html", "people.html"
 TODAY_PAGE = "today.html"  # Today, the Library's front door, as of the record's last day (`door_today`)
@@ -70,6 +71,7 @@ PAGE_NOUNS = {  # a kind of page, singular and plural, for the console
     YEARS: ("year", "years"),
     DAYS: ("days index", "days indexes"),
     DAY_PAGES: ("day page", "day pages"),
+    PLACE_PAGES: ("place", "places"),
     TRIPS: ("trip", "trips"),
     PLACES: ("places page", "places page"),
     PEOPLE: ("person", "people"),
@@ -268,6 +270,7 @@ class _Builder:
         self.trips: dict[str, dict[str, Any]] = {}  # trip id → `trip_page.read`
         self.trip_of: dict[str, str] = {}  # the id a Year listed (clipped at New Year) → the page's id
         self.people: dict[str, PersonPage] = {}
+        self.place_ids: list[str] = []  # the named places, a page each (`door_places`)
         self.slugs = Slugs()
         self.warnings: list[str] = []
         self.logged = 0
@@ -367,6 +370,9 @@ class _Builder:
     def day_path(self, day: str) -> str:
         return f"{DAYS}/{day}.html"
 
+    def place_path(self, place_id: str) -> str:
+        return f"{PLACES}/{place_id}.html"
+
     def _href(self, path: str) -> str | None:
         """A link `serve` makes, as the page being rendered writes it: a day to its Day page when it
         has one, else to its row in its year's Days index (plain text on that index itself, or for a
@@ -384,6 +390,11 @@ class _Builder:
                 return None
             return f"{relative(self.here, self.days_path(day[:4]))}#{day}"
         parts = urlsplit(path)
+        if parts.path == "/places" and not parts.query:
+            return relative(self.here, PLACES_PAGE)
+        place = serve.PLACE_PATH.match(parts.path)
+        if place is not None and place.group(1) in self.place_ids:
+            return relative(self.here, self.place_path(place.group(1)))
         if parts.path == "/days":
             first = max(parse_qs(parts.query).get("from", [""])[0], self.req.since)
             if first[:4] in self.years and first <= self.req.until:
@@ -437,7 +448,10 @@ class _Builder:
             pager = [self._a(here, self.year_path(year), year)]
             out[here] = trip_page.html(data, self.nav(here, *pager), self.links(here))
         out[TRIPS_PAGE] = self._trips_index()
+        self.place_ids = [p.id for p in door_places.read(self.view).places]
         out[PLACES_PAGE] = self._places()
+        for place_id in self.place_ids:
+            out[self.place_path(place_id)] = self._place(place_id)
         out[PEOPLE_PAGE] = self._people_index()
         for page in self.people.values():
             out[self.person_path(page)] = self._person_page(page)
@@ -477,6 +491,12 @@ class _Builder:
     def _places(self) -> str:
         self.here, self.view.nav = PLACES_PAGE, self.nav(PLACES_PAGE)
         return self.view.page_places()
+
+    def _place(self, place_id: str) -> str:
+        """One named place, as the Library's `/places/ID` renders it (the Places door)."""
+        here = self.place_path(place_id)
+        self.here, self.view.nav = here, self.nav(here)
+        return door_places.page_place(self.view, place_id)
 
     def _trips_index(self) -> str:
         here = TRIPS_PAGE
@@ -655,6 +675,7 @@ def build(lb: Logbook, req: Request, airports: Airports | None = None) -> Build:
         DAY_PAGES: len(builder.day_pages),
         TRIPS: len(builder.trips),
         PLACES: 1,
+        PLACE_PAGES: len(builder.place_ids),
         PEOPLE: len(builder.people),
     }
     return Build(
