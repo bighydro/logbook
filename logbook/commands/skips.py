@@ -112,6 +112,8 @@ SKIP_PHRASES = {
     "skipped_unknown_sender": "messages from neither the owner nor the assistant, never kept as anyone's",
     "skipped_fork": "repos that are forks (--all leaves them out; LOGBOOK_GITHUB_REPOS may name one)",
     "skipped_pending_review": "reviews still pending, never submitted",
+    "skipped_unreadable_file": "files that do not parse",
+    "skipped_no_counterpart": "naming no account, no link and no text",
 }
 
 
@@ -189,6 +191,7 @@ NOTE_PHRASES = {  # counts that are not skips: the line was written, with someth
     "github_part_unreadable": "lists the token may not read",
     "github_private": "read from a private repository (tier 2)",
     "github_visibility_unknown": "read from a repository not known to be public (tier 2)",
+    "owner_in_every_chat": "owner taken as the one person in every chat (no profile in the export)",
 }
 
 

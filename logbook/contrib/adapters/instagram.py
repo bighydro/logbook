@@ -48,7 +48,7 @@ reason it states.
 **The owner** is the `Name` and `Username` of the export's own profile
 (`personal_information.json`), and the names and handles of `policy/owner.json` (`owner_aliases`).
 When none of those takes part in any thread, the one person in every thread is the owner, and said
-(`owner_guessed`); when that is nobody or more than one, `run` raises `Unreadable` naming
+(`owner_in_every_chat`); when that is nobody or more than one, `run` raises `Unreadable` naming
 `policy/owner.json`, and nothing is read: a message of the owner's is never written as somebody
 else's. Nothing else of the profile is read.
 
@@ -504,7 +504,7 @@ def _owner(
     every = [{_fold(p) for p in t.participants} for t in threads if t.participants]
     common = set.intersection(*every) if every else set()
     if len(common) == 1:
-        _count(state.counts, "owner_guessed")
+        _count(state.counts, "owner_in_every_chat")
         return frozenset(common)
     raise Unreadable(
         "the export does not say which person in the messages is you (no profile, and no one name in every"
@@ -734,7 +734,7 @@ def _one(
         _count(state.counts, "skipped_bad_date")
         return
     if ref is None and url is None and text is None:
-        _count(state.counts, "skipped_no_ref")
+        _count(state.counts, "skipped_no_counterpart")
         return
     payload: dict[str, Any] = {
         "schema": SOCIAL_SCHEMA,

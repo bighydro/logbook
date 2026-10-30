@@ -308,7 +308,7 @@ def test_without_the_profile_the_owner_is_the_one_in_every_thread(tmp_path):
     shutil.rmtree(folder / "personal_information")
     counts: dict[str, int] = {}
     ola = _messages(_lines(folder, counts=counts), OLA_THREAD)
-    assert ola[1]["payload"]["from_me"] is True and counts["owner_guessed"] == 1
+    assert ola[1]["payload"]["from_me"] is True and counts["owner_in_every_chat"] == 1
 
 
 def test_owner_aliases_name_the_owner_when_the_export_cannot(tmp_path):
