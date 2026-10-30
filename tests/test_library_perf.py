@@ -161,6 +161,45 @@ def test_today_reads_its_days_and_the_readings_kept_beside_the_index(
 
 
 @pytest.mark.parametrize("lines", SIZES)
+def test_the_people_door_reads_the_people_once_and_each_thread_from_the_index(
+    lines: int, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The People door (RFC 0047 §4.3) within the other pages' budget: the people of the whole record
+    are read once for the door and every thread on it; a thread is the index's rows of a person's
+    lines, never the lines (a card none, a person's whole thread the one line its last real contact
+    was); the words of what was said are read only when asked, `door_people.SAID` lines; a reload at
+    the same head reads nothing."""
+    from logbook.contrib import door_people
+
+    lb, built = _record(tmp_path, monkeypatch, lines)
+    site = serve.Site(lb, now=lambda: bench.NOW)
+    reads = Reads(monkeypatch)
+    busiest, other = built["busiest_person"], "019cadd3-6bc0-7dcd-9133-000000000003"
+    for target in ("/people", f"/people?year={bench.NOW.year - 1}"):
+        path, _, query = target.partition("?")
+        reads.clear()
+        response = site.respond(path, query)
+        assert response.status == 200, target
+        assert reads.folds <= 24, (target, reads.folds)
+        assert "message" not in reads.whole, (target, dict(reads.whole))
+        reads.clear()
+        assert site.respond(path, query).body == response.body and reads.read == 0, (
+            target,
+            dict(reads.lines),
+        )
+    for target, most in (
+        (f"/people?sel={other}", 0),  # the card: index rows alone
+        (f"/people/{busiest}", 1),  # the whole thread: and the line the last real contact was
+        (f"/people/{other}?said=1", 1 + door_people.SAID),  # and the words, when asked
+    ):
+        path, _, query = target.partition("?")
+        reads.clear()
+        assert site.respond(path, query).status == 200, target
+        assert reads.read <= most and reads.folds == 0, (target, dict(reads.lines), reads.folds)
+        assert "message" not in reads.whole, (target, dict(reads.whole))
+
+
+@pytest.mark.parametrize("lines", SIZES)
 def test_the_people_review_compares_only_who_could_be_the_same(
     lines: int, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

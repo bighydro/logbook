@@ -517,6 +517,9 @@ def test_every_page_carries_the_doors_header_and_marks_its_door(lb: Logbook) -> 
         assert marked == [t for n, t in doors.DOORS if n == door], (target, marked)
         if target.partition("?")[0] in ("/", "/life"):  # a door's own page (Today, Life): the doors' frame
             assert doors.style() in page and serve.STYLE not in page, target
+        elif door == doors.PEOPLE:  # the People door and each thread: the doors' frame, its tokens on :root
+            root = ":root{color-scheme:light dark;--paper"
+            assert doors.style() in page and root in page and serve.STYLE not in page, target
         else:  # a page that is not a door's: its own stylesheet, the header's beside it
             assert (doors.header_style() in page and serve.STYLE in page) or target == "/world", target
             root = ":root{color-scheme:light dark;--paper"

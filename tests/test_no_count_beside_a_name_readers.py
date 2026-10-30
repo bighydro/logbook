@@ -12,6 +12,7 @@ from __future__ import annotations
 import contextlib
 import io
 import json
+import re
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -151,6 +152,9 @@ def test_the_people_page_names_its_people_only_the_most_days_first(lb: Logbook) 
     assert found == [], found
     rows = [r for r in beside_a_name.page_rows(body) if r.startswith(("Per Hansen ·", "Liv Berg ·"))]
     assert rows[0].startswith("Per Hansen · last real contact 2026-06-30"), rows
+    # the People door (RFC 0047 §4.3): the closest's thread open, its last real contact in words
+    assert '<h2 class="name" id="thread-name">Per Hansen</h2>' in body
+    assert "A day together at Office, yesterday." in body, "the last real contact, 2026-06-30, in words"
     assert body.index("Per Hansen") < body.index("Liv Berg") < body.index("Ola Nordmann"), "the order"
     shelf = body.split('id="review"')[0]  # the people the record names; the review queue below
     assert " together</p>" not in shelf and "under one roof" not in shelf
@@ -158,6 +162,12 @@ def test_the_people_page_names_its_people_only_the_most_days_first(lb: Logbook) 
     assert "<summary>… and more</summary>" in shelf and " more</summary>" not in shelf.replace(
         "<summary>… and more</summary>", ""
     ), "the evidence past the first rows is folded, uncounted: its count followed the days together"
+    # no count of days together or nights under one roof anywhere on it (the ring's rule names them in words)
+    assert not re.search(r"\b\d[\d,]*\s+(?:days?|nights?)\b", shelf)
+    assert 'class="moment"><a href="/day/' in shelf, "each moment its day"
+    assert "Earlier moments, on the whole thread</a>" not in shelf or " more<" not in shelf, (
+        "the moments past the first are a link, uncounted: no count follows the days together"
+    )
 
 
 # -- the strong guard, over every reader ---------------------------------------------------------------------
