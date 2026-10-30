@@ -5,11 +5,11 @@ page of the Library carries the same header (`header`, with `header_style`: the 
 alone) above its own body, which keeps `serve.STYLE` and its look until its own pull request.
 
 The header, from the left: the wordmark (a link to Today), the four doors, the Ask field and the gear.
-A door not yet built links to the page that holds its moments today (`DOORS`: Life to `/days`, People
-to `/people`, Places to `/places`). Ask is a GET form to the Library's search (`/search?q=`, Ask v1,
-RFC 0047 §4.5); an exported site has no server to ask, and leaves it out. The gear is one icon, a link
-to the index of the machinery pages (`GEAR`, the shelves listed) until `/gear` exists. On a phone the
-doors are a bar at the foot of the screen and Ask is at the top.
+A door not yet built links to the page that holds its moments today (`DOORS`: People to `/people`,
+Places to `/places`); Life is its own page, `/life` (`door_life`). Ask is a GET form to the Library's
+search (`/search?q=`, Ask v1, RFC 0047 §4.5); an exported site has no server to ask, and leaves it out.
+The gear is one icon, a link to the index of the machinery pages (`GEAR`, the shelves listed) until
+`/gear` exists. On a phone the doors are a bar at the foot of the screen and Ask is at the top.
 
 The stylesheet (`STYLE`) holds the tokens as custom properties on `:root` (`TOKENS`, and `DARK` for a
 browser that asks for a dark page) and the three families (`FAMILIES`) with their fallbacks. A door's
@@ -38,7 +38,7 @@ if TYPE_CHECKING:  # the Site passes itself; serve imports this module, never th
 TODAY, LIFE, PEOPLE, PLACES = "Today", "Life", "People", "Places"
 # the four doors and where each opens until its own page is on main (RFC 0047 §4, §5); the fifth,
 # Holdings, goes between Places and Ask when it is built, and its place stays empty until then (§11)
-DOORS = ((TODAY, "/"), (LIFE, "/days"), (PEOPLE, "/people"), (PLACES, "/places"))
+DOORS = ((TODAY, "/"), (LIFE, "/life"), (PEOPLE, "/people"), (PLACES, "/places"))
 ASK = "/search"  # Ask v1 is the Library's search (#363)
 GEAR = "/shelves"  # the index of the machinery pages, until `/gear` exists
 GEAR_TITLE = "The gear: the sources, the agents, the Manifest, the assets and the gaps"

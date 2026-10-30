@@ -40,7 +40,7 @@ WRITE = os.environ.get("LOGBOOK_GOLDEN_WRITE") == "1"
 # `/today` is a seed: no page links it since the doors' header took the old navigation's place
 SEEDS = (
     "/", "/today", "/days", "/trips", "/journeys", "/people", "/manifest", "/manifest/people", "/ideas",
-    "/places", "/assets", "/gaps", "/world", "/promises", "/goals", "/agents",
+    "/places", "/assets", "/gaps", "/world", "/promises", "/goals", "/agents", "/life",
 )  # fmt: skip
 LINK = re.compile(r"""href\s*=\s*["']([^"'#]*)""")
 MOST = 500  # pages a record's crawl renders at most; the order is fixed, so the same pages every run
