@@ -29,15 +29,22 @@ MOVES = {
     "days, to alone": ("/days?to=2026-06-21", "/life?to=2026-06-21&zoom=day"),
     "days, the last fortnight": ("/days", "/life?zoom=day"),
     "days, empty values": ("/days?from=&to=", "/life?zoom=day"),
+    "days, a whole year, as Life's Volumes link it": (
+        "/days?from=2025-01-01&to=2025-12-31",
+        "/life?year=2025&zoom=year",
+    ),
     "trips of a year": ("/trips?year=2026", "/life?year=2026&zoom=year"),
     "trips": ("/trips", "/life?zoom=year"),
     "journeys of a year": ("/journeys?year=2026", "/life?year=2026&zoom=year"),
     "journeys": ("/journeys", "/life?zoom=year"),
-    "one journey": ("/journeys/2026-06-12/2026-06-14", "/life?trip=2026-06-12/2026-06-14"),
     "goals": ("/goals", "/life"),
     "world, a window in one year": ("/world?from=2026-06-08&to=2026-06-21", "/places?at=2026"),
     "world, from alone": ("/world?from=2025-03-01", "/places?at=2025"),
-    "world, a window over two years": ("/world?from=2025-12-20&to=2026-01-05", "/places"),
+    "world, a window over two years, the year it opens": (
+        "/world?from=2025-12-20&to=2026-01-05",
+        "/places?at=2025",
+    ),
+    "world, to alone": ("/world?to=2026-01-05", "/places?at=2026"),
     "world": ("/world", "/places"),
     "a parameter the home does not take": (
         "/days?from=2026-06-08&shape=x&open=1",
@@ -53,6 +60,8 @@ STAYS = (
     "/people",
     "/places",
     "/goals/nobody",
+    "/journeys/2026-06-12/2026-06-14",  # waits: Life has no journey's name form yet
+    "/journeys/2026-02-30/2026-03-01",
     "/ideas",
     "/promises",
     "/gaps",
@@ -65,18 +74,19 @@ STAYS = (
 INVALID = (
     "/days?from=2026-13-01",
     "/days?from=2026-06-08&to=2026-06-01",  # backwards
-    "/days?from=2026-01-01&to=2026-12-31",  # longer than Life's window of days
+    "/days?from=2026-01-01&to=2026-06-30",  # longer than Life's window of days
     "/days?from=8%20June",
     "/days?to=2026-06-08%0d%0aSet-Cookie:%20a=b",
     "/trips?year=20x6",
     "/journeys?year=26",
-    "/journeys/2026-02-30/2026-03-01",
-    "/journeys/2026-06-20/2026-06-12",  # backwards
-    "/journeys/2025-01-01/2026-06-12",  # longer than Life's trip
+    "/days?from=2026-01-01&to=2026-12-30",  # longer than Life's window, and not a whole year
+    "/days?from=2026-01-02&to=2027-01-01",
+    "/trips?year=%D9%A2%D9%A0%D9%A2%D9%A6",  # a year in digits that are not 0 to 9
+    "/days?from=%D9%A2%D9%A0%D9%A2%D9%A6-06-08",
     "/world?from=junk",
     "/world?from=2026-06-21&to=2026-06-08",
 )
-POSTS = ("/days", "/trips", "/journeys", "/journeys/2026-06-12/2026-06-14", "/goals", "/world")
+POSTS = ("/days", "/trips", "/journeys", "/goals", "/world", "/journeys/2026-06-12/2026-06-14")
 POSTS += ("/journeys/name",)  # a row that stays: Life's form
 
 
@@ -146,7 +156,7 @@ def test_every_row_that_moves_answers_with_the_one_status() -> None:
     assert doors.REDIRECT_STATUS == 302, "RFC 0047 §15: 302 for one release, 1.1; 301 from 1.2"
     site = serve.Site.__new__(serve.Site)  # `moved` reads nothing of the record
     for row in doors.MOVED:
-        if row.home is None or row.post:
+        if row.home is None or row.post or row.waits:
             continue
         example = _example(row.old)
         response = site.moved(example, "")
@@ -244,6 +254,27 @@ def test_a_value_the_new_home_would_refuse_is_a_404_and_no_redirect(served: Serv
         assert value not in text, (old, value)
 
 
+DOOR_PAGES = ("/", "/life", "/life?zoom=life", "/life?trip=2026-06-12/2026-06-14", "/people", "/places")
+
+
+@pytest.mark.parametrize("page", (*DOOR_PAGES, f"/day/{WEDNESDAY}"))
+def test_no_link_on_a_door_leads_through_the_table_to_a_404_or_back_to_itself(
+    served: Served, page: str
+) -> None:
+    """The doors link old addresses (Life's Volumes link a year of `/days`): each still opens a page."""
+    path, _, query = page.partition("?")
+    text = served.site.respond(path, query).body.decode("utf-8")
+    for href in sorted(set(re.findall(r'href="(/[^"#]*)', text))):
+        target = href.replace("&amp;", "&")
+        old, _, asked = target.partition("?")
+        found = served.site.moved(old, asked)
+        if found is None:
+            continue
+        assert found.status == doors.REDIRECT_STATUS, (page, target, found.status)
+        assert found.location != page, (page, target, "a link back to the page it is on")
+        assert served.get(str(found.location), _here(served)).status == 200, (page, target, found.location)
+
+
 def test_a_path_no_row_names_is_answered_as_on_main(served: Served) -> None:
     for path in ("/journeys/name/again", "/journeys/2026-06-12", "/days/2026-06-12", "/life/days"):
         assert served.site.moved(path, "") is None, path
@@ -298,7 +329,7 @@ def test_every_row_has_a_route_and_every_home_is_one() -> None:
     answered = lambda path: any(r.fullmatch(path) for r in routes)  # noqa: E731
     for row in doors.MOVED:
         assert answered(_example(row.old)), f"{row.old}: a row without a route"
-        if row.home is not None:
+        if row.home is not None and not row.waits:
             assert answered(row.home), f"{row.old} leads to {row.home}, which the server does not answer"
 
 
@@ -337,4 +368,4 @@ def test_the_docs_name_every_old_address_and_point_at_the_rfc() -> None:
     for row in doors.MOVED:
         assert f"`{row.old.replace('{', '').replace('}', '')}`" in text, row.old
         if row.home is not None:
-            assert f"`{row.home}" in text, row.home
+            assert f"`{row.home.replace('{', '').replace('}', '')}" in text, row.home

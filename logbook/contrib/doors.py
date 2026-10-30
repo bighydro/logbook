@@ -56,21 +56,26 @@ class Moved:
     `{DAY}`, `{FIRST}`, `{LAST}` and `{ID}`) and its new home (`home`; None: it stays, or its home is not
     built yet). `query` is what the old address's query carries to the new one, `(old name, new name,
     kind)`; `fixed` is what the new home's query adds, its parts named as `old`'s; `most` is the most
-    days the row's two days may span (Life's own window), and `post` marks a form's address."""
+    days the row's two days may span (Life's own window), and `year` the home of a window that is one
+    calendar year, `{YEAR}` its year, whatever `most` says. `waits` names what a row with a home waits
+    for (its home not on main yet, or not yet holding what the old page held): until then it is
+    answered as it always was. `post` marks a form's address."""
 
     old: str
     home: str | None = None
     query: tuple[tuple[str, str, str], ...] = ()
     fixed: tuple[tuple[str, str], ...] = ()
     most: int | None = None
+    year: str | None = None
+    waits: str = ""
     post: bool = False
 
 
 DAY_VALUE, YEAR_VALUE, SHARED_YEAR = "day", "year", "shared year"  # what a carried value must be
 # Every Library address before the doors and where it lives now: RFC 0047 §9's rows, in order. The
-# server answers a row with a home with `REDIRECT_STATUS` to it (`moved`); a row without one, and every
-# POST, as it always did. A parameter an old address took that its new home does not is named in the
-# row's comment and dropped, never passed on.
+# server answers a row with a home with `REDIRECT_STATUS` to it (`moved`); a row without one, a row that
+# `waits`, and every POST, as it always did. A parameter an old address took that its new home does not
+# is named in the row's comment and dropped, never passed on.
 MOVED = (
     Moved("/"),  # Today
     Moved("/today"),  # already a 302 to today's Day, which Today is: left as it is (tests pin it)
@@ -79,15 +84,28 @@ MOVED = (
     Moved("/day/{DAY}/sign", post=True),
     Moved("/star", post=True),
     Moved("/with", post=True),
-    # Life, the day zoom; Life's window of days is at most `door_life.DAY_MOST`
+    # Life, the day zoom; Life's window of days is at most `door_life.DAY_MOST`, and a whole calendar
+    # year (Life's own Volumes link one) is Life at that year
     Moved(
-        "/days", "/life", (("from", "from", DAY_VALUE), ("to", "to", DAY_VALUE)), (("zoom", "day"),), most=92
+        "/days",
+        "/life",
+        (("from", "from", DAY_VALUE), ("to", "to", DAY_VALUE)),
+        (("zoom", "day"),),
+        most=92,
+        year="/life?year={YEAR}&zoom=year",
     ),
     # Life at the year, the zoom that draws a year's trips: Life has no `zoom=trip` (§9's), so not that
     Moved("/trips", "/life", (("year", "year", YEAR_VALUE),), (("zoom", "year"),)),
     Moved("/journeys", "/life", (("year", "year", YEAR_VALUE),), (("zoom", "year"),)),
-    # Life at that trip, at most `door_life.TRIP_MOST` days
-    Moved("/journeys/{FIRST}/{LAST}", "/life", fixed=(("trip", "{FIRST}/{LAST}"),), most=366),
+    # Life at that trip, at most `door_life.TRIP_MOST` days, once Life holds what the journey's page does:
+    # its name form (`/journeys/name`), its promises and photos; Life's trip links here until then
+    Moved(
+        "/journeys/{FIRST}/{LAST}",
+        "/life",
+        fixed=(("trip", "{FIRST}/{LAST}"),),
+        most=366,
+        waits="Life's trip view: the journey's name form, promises and photos",
+    ),
     Moved("/journeys/name", post=True),  # Life's form posts here
     Moved("/goals", "/life"),  # the year's goals at the top of Life (§15, 6)
     Moved("/goals/{ID}"),  # waits: Life takes no `goal=` yet, and a goal's thread is not dropped
@@ -95,7 +113,7 @@ MOVED = (
     Moved("/idea/{ID}"),  # likewise: Life takes no `idea=` yet
     Moved("/ideas/review", post=True),
     Moved("/ideas/status", post=True),
-    Moved("/gaps"),  # waits for the gear (#418): `/gear/sources`, its `since` dropped
+    Moved("/gaps", "/gear/sources", waits="the gear, #418"),  # its `since` dropped: the sources take none
     Moved("/promises"),  # the full list of every promise stays in the gear (§15, 4), at its own address
     Moved("/promises/{ID}"),  # waits: People takes no `promise=` yet, and the person is the record's
     Moved("/people"),  # its `year` and `page` as they were
@@ -104,21 +122,21 @@ MOVED = (
     Moved("/places"),
     Moved("/places/review", post=True),
     # Places at the year the window lies in: Places takes `at=YYYY`, no window, so `from` and `to` are
-    # dropped and their year carried; a window over two years is the whole globe
+    # dropped and the year it opens in carried (`from`'s, else `to`'s); without either, Places' own year
     Moved("/world", "/places", (("from to", "at", SHARED_YEAR),)),
-    Moved("/assets"),  # waits for the gear (#418): `/gear/assets`
-    Moved("/manifest"),  # waits for the gear (#418): `/gear/manifest`, its `page` and `portfolio`
-    Moved("/manifest/people"),  # likewise, `/gear/manifest/people`
-    Moved("/org/{ID}"),  # likewise, `/gear/org/ID`, its `money`
+    Moved("/assets", "/gear/assets", waits="the gear, #418"),
+    Moved("/manifest", "/gear/manifest", waits="the gear, #418"),  # its `page` and `portfolio`
+    Moved("/manifest/people", "/gear/manifest/people", waits="the gear, #418"),
+    Moved("/org/{ID}", "/gear/org/{ID}", waits="the gear, #418"),  # its `money`
     Moved("/manifest/review", post=True),
     Moved("/manifest/status", post=True),
-    Moved("/agents"),  # waits for the gear (#418): `/gear/agents`, its `page` and `day`
+    Moved("/agents", "/gear/agents", waits="the gear, #418"),  # its `page` and `day`
     Moved("/line/{ID}"),
     Moved("/photo/{ID}"),
 )
-_DAY = r"\d{4}-\d{2}-\d{2}"
+_DAY = r"[0-9]{4}-[0-9]{2}-[0-9]{2}"  # ASCII digits only: `\d` is any script's
 _PARTS = {"DAY": _DAY, "FIRST": _DAY, "LAST": _DAY, "ID": r"[^/]+"}  # what each part of a row's address is
-_YEAR = re.compile(r"\d{4}")
+_YEAR = re.compile(r"[0-9]{4}")
 
 
 @functools.cache
@@ -157,7 +175,7 @@ def moved(path: str, query: str) -> str | None:
         found = pattern(row.old).fullmatch(path)
         if found is None:
             continue
-        if row.home is None or row.post:
+        if row.home is None or row.post or row.waits:
             return None
         parts = {
             name: (_day(value, name).isoformat() if name != "ID" else quote(unquote(value), safe=""))
@@ -166,6 +184,8 @@ def moved(path: str, query: str) -> str | None:
         if "FIRST" in parts:
             _span(date.fromisoformat(parts["FIRST"]), date.fromisoformat(parts["LAST"]), row.most, "the trip")
         asked = {k: v[-1] for k, v in parse_qs(query, keep_blank_values=True).items()}
+        if row.year is not None and (year := _calendar_year(asked)) is not None:
+            return row.year.format(YEAR=year)
         pairs: list[tuple[str, str]] = []
         for old, new, kind in row.query:
             value = _carried(old.split(), kind, asked, row.most)
@@ -174,6 +194,15 @@ def moved(path: str, query: str) -> str | None:
         pairs.extend((new, template.format(**parts)) for new, template in row.fixed)
         return row.home + (f"?{urlencode(pairs, safe='/')}" if pairs else "")
     return None
+
+
+def _calendar_year(asked: dict[str, str]) -> str | None:
+    """The year `from` and `to` are, when they are its first and its last day; else None."""
+    first, last = asked.get("from") or "", asked.get("to") or ""
+    year = first[:4]
+    if _YEAR.fullmatch(year) is None or (first, last) != (f"{year}-01-01", f"{year}-12-31"):
+        return None
+    return year
 
 
 def _carried(names: list[str], kind: str, asked: dict[str, str], most: int | None) -> str | None:
@@ -195,8 +224,8 @@ def _carried(names: list[str], kind: str, asked: dict[str, str], most: int | Non
         return None if name not in days else days[name].isoformat()
     first, last = days.get(names[0]), days.get(names[1])  # SHARED_YEAR: a window, the year it lies in
     _span(first, last, most, " and ".join(names))
-    years = {d.year for d in days.values()}
-    return f"{years.pop():04d}" if len(years) == 1 else None
+    opens = first or last
+    return None if opens is None else f"{opens.year:04d}"
 
 
 ASK = "/ask"  # Ask v1 (`door_ask`): the record's words as moments, through the search of #363
