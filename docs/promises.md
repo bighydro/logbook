@@ -43,8 +43,8 @@ I was asked
 
 **I promised** is every commitment cue in a line you wrote: a mail whose sender is one of your
 addresses, a message with `from_me`, your turn of a transcript, a note. **I was asked** is every
-request cue in a line you received: a mail from someone else, a message not from you, another's
-turn. A request cue in your own words ("can you send me the invoice?" in a mail you sent) is you
+request cue in a line a person wrote you: a person's mail, a message from a person, another's turn
+([who wrote it](#who-wrote-it)). A request cue in your own words ("can you send me the invoice?" in a mail you sent) is you
 asking, and is not proposed; a commitment cue in someone else's words ("I'll send you the photos"
 from Ola) is theirs, and `--all` lists it in a third section with the candidates nobody resolves
 and the ones the judge set aside. The order inside a section is the day's.
@@ -100,6 +100,16 @@ A note is yours, except for text that carries its own labels (`Speaker 2:`, or a
 knows), which belongs to that speaker. A request from a diarizer's `Speaker A`, who is not you, is
 counted as asked of you; a commitment from one is nobody's and shows under `--all`.
 
+A request counts only when a person wrote it. A mail asks something of you when it is a person's mail
+([people's mail](mail-people.md), RFC 0045): its sender resolves to a person, is no no-reply address,
+no agent's, and not let go. A message asks something of you when its sender resolves to a person and
+it is no conversation with an agent. A newsletter's "please let us know", a shop's "please confirm",
+a notification, a company's mail and a message from a number nobody is named by ask you nothing and
+are not proposed. To have a sender's requests counted, resolve the address or the number to a person
+([people](people.md)); the next reading counts them. Read through tiers (a page's, a crossing's), only
+the resolutions at those tiers name a person, so a request whose sender only a higher resolution names
+is not proposed there. A commitment cue in the same lines is read as before.
+
 An agent's words are nobody's ([your own agents](adapters/agents.md)). A message one of your bots
 wrote (`extra.machine`), a turn of a transcript's participant marked `machine` (the assistant of a
 Claude Code session or of a conversation in the Claude apps) and a message you forwarded (`extra.forwarded`, someone else's words) are never
@@ -147,8 +157,10 @@ persona (`tests/fixtures/promises/wider-net.json`): 24 planted commitments and 1
 across mail, iMessage, WhatsApp and one transcript, among 60 distractor lines (others' promises,
 your own questions, negations, quoted replies, newsletters, chit-chat). The test asserts recall of
 at least 20 of 24 and 10 of 12 and precision of at least 0.8, and prints the numbers; the rules
-read 22 of 24, 11 of 12, at precision 0.97. The three misses are the three sentences planted with
-no cue on purpose; the one false proposal is the farewell.
+read 22 of 24, 10 of 12, at precision 0.97. Three misses are the three sentences planted with no cue
+on purpose; the fourth is the marina's "please confirm your crane booking", from an address the fixture
+names nobody behind, so no person's request ([who wrote it](#who-wrote-it)); the one false proposal is
+the farewell.
 
 ## The JSON
 
