@@ -333,12 +333,6 @@ def test_no_number_date_or_clock_touches_a_name_on_any_page_or_state(persona: Pa
         assert checked >= 60, checked
 
 
-# the People pages read no tiers at all (`person_page.ranked`, `page_person`): no command renders them
-# through a gate (`export site` writes its own people pages, held to its tier, #422), and the People door
-# (#410) replaces them; a gated Site's `/people` is the one known gap, said in the pull request
-UNGATED = ("/people",)
-
-
 @pytest.mark.parametrize(
     ("tiers", "hidden"),
     [((1,), ("Ola Nordmann", tiers_test.PER)), ((1, 2), (tiers_test.PER,))],
@@ -350,7 +344,7 @@ def test_a_page_reads_nothing_above_its_tier_in_the_look(
     completion list (the Day's `with` field, `resolve.at_tiers`): Ola Nordmann is named by tier-2 lines
     alone, Per Hemmelig by a tier-3 line alone."""
     site = serve.Site(Logbook(persona), tiers=list(tiers))
-    pages = [(t, p) for t, p in _every_state(site) if not t.startswith(UNGATED)]
+    pages = list(_every_state(site))  # the People door (#410) among them, through its gate
     assert len(pages) >= 30
     full = serve.Site(Logbook(persona))
     day = full.respond(f"/day/{tiers_test.DINNER_DAY}").body.decode("utf-8")
