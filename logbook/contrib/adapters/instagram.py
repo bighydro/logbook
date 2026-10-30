@@ -36,7 +36,9 @@ export gives a message no id, and nothing in the key changes between layouts or 
 renames themselves, so a newer export adds only what is new. Reactions are not in the key: a
 reaction added later is not a new line. A message with nothing in it is skipped and counted
 (`skipped_no_body`), as is one timed before Instagram existed (`skipped_bad_date`), and a thread file
-that does not parse (`skipped_unreadable_file`).
+that does not parse (`skipped_unreadable_file`). An entry of a list or of the owner's content in a
+shape this version does not read (Meta moves files to new shapes, `label_values` among them) is
+skipped and counted (`skipped_unknown_shape`), never guessed at.
 
 **Calls.** A message with `call_duration` is a call: one `call/v1` line (RFC 0012), `direction` by
 who placed it, `answered` when the duration is more than 0, `end` `at` plus the duration then,
@@ -239,12 +241,13 @@ def _root(name: PurePosixPath) -> tuple[str, ...]:
 
 def sniff(path: Path) -> bool:
     """A zip or a folder with one of Instagram's own folders (`your_instagram_activity`,
-    `followers_and_following`): in a folder at its top or one below it, in a zip anywhere. Reads the zip's
-    directory and nothing else; never raises."""
+    `followers_and_following`): at a folder's top, never further down (a folder that holds an export,
+    `~/Downloads`, is not one), and anywhere in a zip. Reads the zip's directory and nothing else; never
+    raises."""
     try:
         path = Path(path)
         if path.is_dir():
-            return any(_has_marker(child) for child in [path, *(c for c in path.iterdir() if c.is_dir())])
+            return _has_marker(path)
         if not path.is_file() or not zipfile.is_zipfile(path):
             return False
         with zipfile.ZipFile(path) as z:
@@ -691,9 +694,15 @@ def _social(state: _Run, name: PurePosixPath, action: str) -> Iterator[dict[str,
             continue
         title = entry.get("title")
         values = entry.get("string_map_data")
+        listed = entry.get("string_list_data")
+        if not isinstance(values, Mapping) and not isinstance(listed, list):
+            _count(
+                state.counts, "skipped_unknown_shape"
+            )  # a newer shape (`label_values`): said, never guessed
+            continue
         if isinstance(values, Mapping):
             yield from _one(state, name, action, *_from_map(values, title))
-        for item in entry.get("string_list_data") or []:
+        for item in listed if isinstance(listed, list) else []:
             if isinstance(item, Mapping):
                 ref = _handle(title) or _handle(item.get("value"))
                 yield from _one(
@@ -767,6 +776,7 @@ def _content(state: _Run, name: PurePosixPath, kind: str) -> Iterator[dict[str, 
             if isinstance(i, Mapping) and _text(i.get("uri"))
         ]
         if not items:
+            _count(state.counts, "skipped_unknown_shape")
             continue
         caption = _text(entry.get("title")) or next((t for i in items if (t := _text(i.get("title")))), None)
         post: dict[str, Any] = {"kind": kind, "id": f"{kind}:{PurePosixPath(str(items[0]['uri'])).name}"}

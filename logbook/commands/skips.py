@@ -114,6 +114,7 @@ SKIP_PHRASES = {
     "skipped_pending_review": "reviews still pending, never submitted",
     "skipped_unreadable_file": "files that do not parse",
     "skipped_no_counterpart": "naming no account, no link and no text",
+    "skipped_unknown_shape": "entries in a shape this version cannot read",
 }
 
 

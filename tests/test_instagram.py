@@ -585,3 +585,24 @@ def test_people_review_proposes_an_instagram_sender_against_a_whatsapp_person_by
     resolutions = [line for line in lb.lines() if line["kind"] == "resolution"]
     assert len(resolutions) == 1  # nothing merged on its own
     assert sum(1 for _ in lb.lines()) == before + 27
+
+
+def test_a_folder_holding_an_export_is_not_claimed_as_one(tmp_path):
+    downloads = tmp_path / "Downloads"
+    _newer(downloads)
+    (downloads / "receipt.pdf").write_bytes(b"%PDF-1.4 synthetic")
+    assert instagram.sniff(downloads) is False
+    assert instagram.sniff(downloads / "instagram-kari.n.example-2026-10-30-SYNTH") is True
+
+
+def test_an_entry_in_a_shape_this_version_cannot_read_is_counted(tmp_path):
+    folder = _newer(tmp_path)
+    likes = folder / ACTIVITY / "likes" / "liked_posts.json"
+    likes.write_text(
+        json.dumps({"likes_media_likes": [{"timestamp": 1_778_935_000, "label_values": [{"label": "URL"}]}]}),
+        encoding="utf-8",
+    )
+    counts: dict[str, int] = {}
+    lines = _lines(folder, counts=counts)
+    assert counts["skipped_unknown_shape"] == 1
+    assert not [s for s in _of(lines, "social") if s["payload"]["action"] == "like"]
