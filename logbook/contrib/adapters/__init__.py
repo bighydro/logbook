@@ -183,6 +183,7 @@ BUILT_IN = (  # generated from pyproject.toml by scripts/adapter_registry.py; ne
     "github_live",
     "line",
     "twitter",
+    "instagram",
     "apple_books",
     "voice_memos",
     "apple_photos",
@@ -329,6 +330,7 @@ ALIASES = {  # `add flights <csv>` (RFC 0013); `add health`, `add calls`, … as
     "claude-sessions": "claude-code",  # `add claude-sessions <folder>`: Claude Code's session transcripts
     "claude-export": "claude",  # `add claude-export <zip|folder>`: the Claude apps' data export
     "github-export": "github",  # `add github-export DIR`: a clone or an account export (the export's word)
+    "instagram-export": "instagram",  # `add instagram-export <zip|folder>`: Meta's "Export your information"
 }
 
 
