@@ -78,9 +78,16 @@ def test_every_page_wears_the_doors_look_and_nothing_of_the_old(record: Path) ->
     pages = list(_pages(serve.Site(Logbook(record))))
     assert len(pages) >= 40
     sheet = doors.library_style()
+    doors_seen = 0
     for target, page in pages:
         styles = STYLE.findall(page)
         assert len(styles) == 1, target
+        if '<main class="door">' in page:  # a door's own page (`doors.page`): its frame and its own look
+            assert styles[0].startswith(doors.style()) and doors.PAGES not in styles[0], target
+            assert ":root" not in styles[0].replace(doors.style(), "", 1), (target, "a door defines no token")
+            assert LEGACY.search(styles[0]) is None, (target, LEGACY.search(styles[0]))
+            doors_seen += 1
+            continue
         assert styles[0].count(sheet) == 1 and styles[0].startswith(sheet), (target, "the one sheet, first")
         own = styles[0].replace(sheet, "", 1)
         assert ":root" not in own and "prefers-color-scheme" not in own.replace(
@@ -92,6 +99,7 @@ def test_every_page_wears_the_doors_look_and_nothing_of_the_old(record: Path) ->
             "the frame the sheet styles",
         )
     assert doors.PAGES in sheet and doors.style() in sheet and sheet.count(ROOT_TOKENS) == 1
+    assert doors_seen < len(pages) // 2, "the old pages are the most of what a crawl reaches"
 
 
 def test_the_world_keeps_its_map_under_the_doors_tokens(record: Path) -> None:
