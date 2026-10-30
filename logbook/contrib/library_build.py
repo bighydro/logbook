@@ -21,13 +21,19 @@ from tier 2 resolutions: the server renders every page as it is asked for, and a
 before is removed (`Sealed`, `clear`). A file is named
 by the SHA-256 of its address, not by the address, so `/People` and `/people` are never one file on a
 filesystem that does not tell case apart, and no address becomes a path. `pages.json` names each:
-`{"version", "built": {when, head, seconds, pages, written}, "pages": {address: {file, status, csp,
-location, etag, at, head, asked}}}`, written whole and moved into place, so a reader never sees half
-of it.
+`{"version", "built": {when, head, seconds, pages, written, tiers}, "pages": {address: {file, status,
+csp, location, etag, at, head, asked, tiers}}}`, written whole and moved into place, so a reader never
+sees half of it, and only under `building.lock`. `tiers` is the gate a page was built through (null:
+every tier, the server's); a page is served only to a site of that gate, and one that names none
+(written before the gate was kept) to none.
 
 A build is one process's at a time: `building.lock` is created exclusively and holds the pid; a
-second build finds it and returns, a lock whose pid is gone is taken over. The build writes only the
-files whose bytes changed (`vault.write`'s rule) and removes the pages it no longer names.
+second build finds it and returns, a lock whose pid is gone is taken over. The server takes it too, for
+the moment it writes `pages.json` (a page added on demand, the pages an act dropped), or writes under
+the hold of its own process's build: while another process builds, the server writes nothing there,
+and a page it dropped stays dropped in its memory until a build writes that page anew. The build
+writes only the files whose bytes changed (`vault.write`'s rule) and removes the pages it no longer
+names.
 
 What is built (`targets`): the doors and shelves (`DOORS`), the Days of the last fortnight but today,
 and the detail pages the doors link to, up to `EACH` of each kind (the people, journeys, orgs, ideas,
@@ -47,6 +53,7 @@ import json
 import multiprocessing
 import os
 import re
+import secrets
 import shutil
 import sys
 import threading
@@ -105,6 +112,8 @@ WORKERS_ENV, WORKERS_MOST = "LOGBOOK_BUILD_WORKERS", 4  # a build's processes fr
 WORKERS_FROM = 100_000  # lines: a smaller record builds in one process
 SLOWEST = 5  # the pages a build names as its slowest
 SAVE_EVERY = 50  # a build names its pages in `pages.json` this many at a time, and at its end
+LOCK_WAIT_S = 2.0  # a build waits this long for a lock another process holds (the server's, for a write)
+LOCK_YOUNG_S = 5.0  # a lock that names no process yet is another's, being written, for this long
 
 
 class Busy(Exception):
@@ -136,8 +145,8 @@ def clear(lb: Logbook) -> None:
         pid = int(json.loads((folder / LOCK).read_bytes()).get("pid", 0))
     except (OSError, ValueError, AttributeError):
         pid = 0
-    if pid and pid != os.getpid() and _alive(pid):
-        return
+    if pid and (pid == os.getpid() or _alive(pid)):
+        return  # this process's own build removes them when it ends (`build`)
     shutil.rmtree(folder, ignore_errors=True)
 
 
@@ -149,6 +158,12 @@ def folder_of(lb: Logbook) -> Path:
 def address(path: str, query: str = "") -> str:
     """The address a page is kept under: its path, and its query as asked (`?` and all)."""
     return path + (f"?{query}" if query else "")
+
+
+def gate(tiers: Iterable[int] | None) -> list[int] | None:
+    """The gate a page is built and served through, as `pages.json` records it: its tiers in order, or
+    None for every tier (a site with no gate, the server's)."""
+    return None if tiers is None else sorted({int(t) for t in tiers})
 
 
 def file_name(target: str) -> str:
@@ -212,9 +227,16 @@ class Page:
     head: str
     asked: bool = False
     reads: list[Any] | None = None  # [first, last, kinds]: what the page said it was made of (`Site.reads`)
+    tiers: list[int] | None = None  # the gate it was built through (`gate`); None: every tier
+    seq: int | None = None  # the record's seq the page read up to; None: not said
+    gated: bool = True  # whether `pages.json` names its gate: a page that does not is served to no gate
 
     def to_json(self) -> dict[str, Any]:
-        return {k: v for k, v in self.__dict__.items()}
+        return {k: v for k, v in self.__dict__.items() if k != "gated"}
+
+    def serves(self, tiers: Iterable[int] | None) -> bool:
+        """Whether the page may answer a site reading through `tiers`: built through that very gate."""
+        return self.gated and self.tiers == gate(tiers)
 
 
 def _page(v: object) -> Page | None:
@@ -232,7 +254,17 @@ def _page(v: object) -> Page | None:
         head=str(v.get("head") or ""),
         asked=bool(v.get("asked")),
         reads=_reads(v.get("reads")),
+        tiers=_tiers(v.get("tiers")),
+        seq=v["seq"] if isinstance(v.get("seq"), int) and not isinstance(v.get("seq"), bool) else None,
+        gated="tiers" in v and (v["tiers"] is None or _tiers(v["tiers"]) is not None),
     )
+
+
+def _tiers(v: object) -> list[int] | None:
+    """A page's gate as `pages.json` holds it: a list of tiers, else None."""
+    if not isinstance(v, list) or not all(isinstance(t, int) and not isinstance(t, bool) for t in v):
+        return None
+    return gate(v)
 
 
 def _reads(v: object) -> list[Any] | None:
@@ -256,6 +288,16 @@ class Library:
         self._pages: dict[str, Page] = {}
         self._built: dict[str, Any] = {}
         self._dirty = False  # pages added (`put(save=False)`) and not yet in `pages.json`
+        # `building.lock`, as this process holds it: how many hold it (a build, and the server's writes
+        # meanwhile), and whether a build is one of them; changed under `_hold`
+        self._hold = threading.Lock()
+        self._holders = 0
+        self._building = False
+        self._token = secrets.token_hex(8)  # in the lock this Library writes: whose it is
+        # pages an act dropped: the record's seq after the act, by address; such a page is not served
+        # until one that read that far is written (another build, begun before the act, may write the
+        # page as it read it, whether or not the drop could be written to `pages.json`)
+        self._hidden: dict[str, int] = {}
 
     # -- reading ---------------------------------------------------------------------------------------
     def _load(self) -> None:
@@ -305,7 +347,8 @@ class Library:
         with self._lock:
             self._load()
             found = self._pages.get(target)
-        if found is None:
+            dropped = self._hidden.get(target)
+        if found is None or (dropped is not None and (found.seq is None or found.seq < dropped)):
             return None
         try:
             return found, (self.folder / found.file).read_bytes()
@@ -314,7 +357,12 @@ class Library:
 
     # -- writing ---------------------------------------------------------------------------------------
     def _save(self, pages: Mapping[str, Page], built: Mapping[str, Any]) -> None:
-        """`pages.json`, whole, moved into place. Under `_lock`."""
+        """`pages.json`, whole, moved into place. Under `_lock`, and with `building.lock` held by this
+        process (`_holding`). `Sealed` on a record that may not keep its pages here (`allowed`)."""
+        if not allowed(self.lb):
+            raise Sealed(SEALED)
+        if self._holders <= 0:
+            raise Busy("pages.json is written only under the build lock")
         data = {
             "version": VERSION,
             "built": dict(built),
@@ -325,10 +373,28 @@ class Library:
         self._seen = None  # read it back as written, mtime and all
         self._dirty = False
 
-    def put(self, target: str, response: Response, head: str, asked: bool = False, save: bool = True) -> Page:
-        """`response` kept at `target`: its bytes with the build's footer note, its file written when
-        the bytes changed, the manifest naming it (written now, or with `save` False at the build's
-        next `save`, so a build of hundreds of pages writes `pages.json` a few times, not once each)."""
+    def put(
+        self,
+        target: str,
+        response: Response,
+        head: str,
+        asked: bool = False,
+        save: bool = True,
+        tiers: Iterable[int] | None = None,
+        seq: int | None = None,
+    ) -> Page:
+        """`response` kept at `target`, as read through `tiers` (`gate`) up to `seq`: its bytes with the
+        build's footer note, its file written when the bytes changed, the manifest naming it (written now, or
+        with `save` False at the build's next `save`, so a build of hundreds of pages writes `pages.json`
+        a few times, not once each). `Sealed` on a record that may not keep its pages here (`allowed`),
+        before anything is written; with `save`, `Busy` while another process holds the build lock,
+        and nothing written."""
+        if not allowed(self.lb):
+            raise Sealed(SEALED)
+        if save:
+            with self._holding():
+                self.put(target, response, head, asked, save=False, tiers=tiers, seq=seq)
+                return self._put_saved(target)
         when = self.now()
         local = self._local(when)
         body = stamped(response.body, local)
@@ -344,7 +410,17 @@ class Library:
             else [response.reads.first, response.reads.last, list(response.reads.kinds)]
         )
         page = Page(
-            name, response.status, response.csp, response.location, etag, _stamp(when), head, asked, reads
+            name,
+            response.status,
+            response.csp,
+            response.location,
+            etag,
+            _stamp(when),
+            head,
+            asked,
+            reads,
+            gate(tiers),
+            seq,
         )
         with self._lock:
             self._load()
@@ -354,27 +430,49 @@ class Library:
             pages[target] = page
             self._pages = pages
             self._dirty = True
-            if save:
-                self._save(pages, self._built)
         return page
 
-    def save(self) -> None:
-        """`pages.json` as this process holds it now: what `put(save=False)` added."""
+    def _put_saved(self, target: str) -> Page:
+        """`pages.json` written with what `put` just added at `target`, and that page."""
         with self._lock:
+            self._save(self._pages, self._built)
+            return self._pages[target]
+
+    def save(self) -> None:
+        """`pages.json` as this process holds it now: what `put(save=False)` added. Under the build lock
+        (`Busy` while another process holds it); `Sealed` on a record that may not keep it."""
+        if not allowed(self.lb):
+            raise Sealed(SEALED)
+        with self._holding(), self._lock:
             self._save(self._pages, self._built)
 
     def drop(self, targets: Iterable[str]) -> list[str]:
         """Forget `targets` (an act changed them): the server renders each until the next build
-        writes it again. Their files stay until then; nothing names them. The addresses dropped."""
+        writes it again. Their files stay until then; nothing names them. The addresses dropped.
+        While another process holds the build lock `pages.json` is left to it; either way the drop is
+        kept here, and a page read before it is not served (`page`), whoever writes it back.
+        `Sealed` on a record that may not keep it."""
+        if not allowed(self.lb):
+            raise Sealed(SEALED)
+        seq = int(self.lb.meta.get("seq") or 0)
         gone = []
-        with self._lock:
-            self._load()
-            pages = dict(self._pages)
-            for target in targets:
-                if pages.pop(target, None) is not None:
-                    gone.append(target)
-            if gone:
-                self._save(pages, self._built)
+        with contextlib.ExitStack() as stack:
+            try:
+                stack.enter_context(self._holding())
+                holding = True
+            except Busy:
+                holding = False
+            with self._lock:
+                self._load()
+                pages = dict(self._pages)
+                for target in targets:
+                    if pages.pop(target, None) is not None:
+                        gone.append(target)
+                self._hidden.update({target: seq for target in gone})
+                if not holding:
+                    self._pages = pages
+                elif gone:
+                    self._save(pages, self._built)
         return gone
 
     def _local(self, when: datetime) -> str:
@@ -389,32 +487,127 @@ class Library:
 
     @contextlib.contextmanager
     def building(self) -> Any:
-        """Hold `building.lock` for a build: `Busy` when another live process holds it."""
-        _private_folder(self.folder)
-        lock = self.folder / LOCK
-        for _ in range(2):
-            try:
-                fd = os.open(lock, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-            except FileExistsError:
-                try:
-                    pid = int(json.loads(lock.read_bytes()).get("pid", 0))
-                except (OSError, ValueError, AttributeError):
-                    pid = 0
-                if pid and pid != os.getpid() and _alive(pid):
-                    raise Busy(f"the Library is being built by process {pid}") from None
-                if pid == os.getpid():
-                    raise Busy("the Library is being built by this process") from None
-                lock.unlink(missing_ok=True)
-                continue
-            with os.fdopen(fd, "w", encoding="utf-8") as fh:
-                json.dump({"pid": os.getpid(), "since": _stamp(self.now())}, fh)
-            break
-        else:
-            raise Busy("the Library's build lock could not be taken")
+        """Hold `building.lock` for a build: `Busy` when another live process holds it, or this
+        process builds already."""
+        with self._hold:
+            if self._building:
+                raise Busy("the Library is being built by this process")
+            self._take(LOCK_WAIT_S)
+            self._building = True
         try:
             yield
         finally:
-            lock.unlink(missing_ok=True)
+            with self._hold:
+                self._building = False
+                self._let_go()
+
+    @contextlib.contextmanager
+    def _holding(self) -> Any:
+        """Hold `building.lock` for a write of `pages.json`: alongside this process's own build when
+        one runs, else taken for the moment of the write. `Busy` when another live process holds it."""
+        with self._hold:
+            self._take()
+        try:
+            yield
+        finally:
+            with self._hold:
+                self._let_go()
+
+    def _take(self, wait_s: float = 0.0) -> None:
+        """One more holder of `building.lock`, the file created when this is the first. Under `_hold`."""
+        if self._holders == 0:
+            self._create_lock(wait_s)
+        self._holders += 1
+
+    def _let_go(self) -> None:
+        """One holder fewer, the file removed with the last, and only while it is this Library's: a
+        lock another process took over is its own. Windows refuses to remove a file another process
+        reads at that moment: tried again for a moment, else left, and taken back by the next `_take`."""
+        self._holders -= 1
+        if self._holders > 0:
+            return
+        lock = self.folder / LOCK
+        if (_lock_of(lock) or {}).get("by") != self._token:
+            return
+        for attempt in range(REPLACE_TRIES):
+            try:
+                lock.unlink(missing_ok=True)
+                return
+            except PermissionError:
+                if sys.platform != "win32" or attempt == REPLACE_TRIES - 1:
+                    return
+                time.sleep(0.05)
+
+    def _create_lock(self, wait_s: float = 0.0) -> None:
+        """`building.lock`, created whole with this pid and this Library's token (`_link_lock`): `Busy`
+        when a live process holds it (after `wait_s`), another Library of this process does, or another
+        process is writing it now (a lock that names no one, younger than `LOCK_YOUNG_S`). A lock whose
+        process is gone, or that this Library left behind, is taken over."""
+        _private_folder(self.folder)
+        lock = self.folder / LOCK
+        data = json.dumps({"pid": os.getpid(), "since": _stamp(self.now()), "by": self._token}).encode()
+        until = time.monotonic() + wait_s
+        for _ in range(int(wait_s / 0.1) + 3):
+            try:
+                _link_lock(lock, data)
+                return
+            except FileExistsError:
+                pass
+            found = _lock_of(lock)
+            pid = found.get("pid") if found is not None else None
+            if found is not None and found.get("by") == self._token:
+                lock.unlink(missing_ok=True)  # this Library's own, left behind (`_let_go`)
+                continue
+            if not isinstance(pid, int) or pid <= 0:
+                try:
+                    young = time.time() - lock.stat().st_mtime < LOCK_YOUNG_S
+                except OSError:
+                    continue  # gone meanwhile: try again
+                if young:
+                    raise Busy("the Library's build lock is being taken by another process")
+                lock.unlink(missing_ok=True)
+                continue
+            if pid == os.getpid():
+                raise Busy("the Library is being built by this process")
+            if _alive(pid):
+                if time.monotonic() < until:
+                    time.sleep(0.1)
+                    continue
+                raise Busy(f"the Library is being built by process {pid}")
+            lock.unlink(missing_ok=True)  # its process gone
+        raise Busy("the Library's build lock could not be taken")
+
+
+def _lock_of(lock: Path) -> dict[str, Any] | None:
+    """`building.lock`'s object; None when it is not there, empty or not JSON."""
+    try:
+        data = json.loads(lock.read_bytes())
+    except (OSError, ValueError):
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def _link_lock(lock: Path, data: bytes) -> None:
+    """`data` at `lock`, never there half written: written to a sibling, then linked into place, which
+    fails when the lock is there (FileExistsError). A filesystem without hard links creates the lock
+    exclusively and writes it after, the moment between covered by `LOCK_YOUNG_S`."""
+    tmp = lock.with_name(f".{lock.name}.{os.getpid()}.{threading.get_ident()}.tmp")
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | getattr(os, "O_BINARY", 0), 0o600)
+    try:
+        with os.fdopen(fd, "wb") as fh:
+            fh.write(data)
+        try:
+            os.link(tmp, lock)
+            return
+        except FileExistsError:
+            raise
+        except OSError:  # no hard links here
+            pass
+        fd = os.open(lock, os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_BINARY", 0), 0o600)
+        with os.fdopen(fd, "wb") as fh:
+            fh.write(data)
+    finally:
+        tmp.unlink(missing_ok=True)
 
 
 def live(path: str, today: str) -> bool:
@@ -516,13 +709,15 @@ class Result:
     seconds: float
     failed: dict[str, str]
     slowest: list[tuple[str, float]] = field(default_factory=list)  # the pages that took longest, first
+    head: str = ""  # the head the pages read: the index's when the build began
 
 
 def settled(lb: Logbook, site: Site) -> str:
     """What the pages read besides the lines and the clock: `logbook.json` without its head and seq,
     the settings beside the chain and the code (`kept.stamp`), and the review's bookkeeping and the
-    circle's pages (`Site._beside`). A build under another is a full one."""
-    return kept.stamp(lb, kept.code_digest(), *site._beside())
+    circle's pages (`Site._beside`), and the gate the site reads through (`gate`). A build under
+    another is a full one."""
+    return kept.stamp(lb, kept.code_digest(), *site._beside(), json.dumps(gate(site.tiers)))
 
 
 def days_touched(lb: Logbook, since: int) -> tuple[set[str], set[str]] | None:
@@ -587,7 +782,10 @@ def build(
     200 or a redirect; a page that fails is named in `failed` and the build goes on. A full build
     removes the pages it no longer names. `Busy` when another process is building. With `workers`
     more than one, the pages are rendered in that many processes (`_rendered`), each with a site of
-    its own on the clock as the build began, and written here, the doors first."""
+    its own on the clock as the build began, and written here, the doors first. `site` renders every
+    page (a site with a build of its own answers from it: `Rebuilder` builds on one without). `Sealed`
+    on a record that may not keep its pages here (`allowed`), checked before each page is kept: a
+    record sealed while it builds keeps none of what was built."""
     from . import serve
 
     site = site or serve.Site(lb)
@@ -595,7 +793,25 @@ def build(
         clear(lb)
         raise Sealed(SEALED)
     library = library or Library(lb)
+    try:
+        return _build(lb, site, library, only, say, full, workers)
+    except Sealed:
+        clear(lb)
+        raise
+
+
+def _build(
+    lb: Logbook,
+    site: Site,
+    library: Library,
+    only: Sequence[str] | None,
+    say: Callable[[str], None] | None,
+    full: bool,
+    workers: int,
+) -> Result:
+    """`build`, its record allowed to keep pages here."""
     started = time.monotonic()
+    tiers = gate(site.tiers)
     with library.building():
         with lb.index() as idx:
             seq, head = idx.indexed()  # what the pages read: a writer may be between logbook.json and it
@@ -629,7 +845,9 @@ def build(
                     failed[target] = f"{response.status}"
                     continue
                 old = before.get(target)
-                page = library.put(target, response, head, asked=target in asked, save=False)
+                page = library.put(
+                    target, response, head, asked=target in asked, save=False, tiers=tiers, seq=seq
+                )
                 took[target] = seconds
                 if old is None or old.etag != page.etag:
                     written += 1
@@ -654,7 +872,7 @@ def build(
             library._load()
             library._built = {
                 "when": _stamp(library.now()),
-                "head": head,
+                "head": head if only is None else last.get("head"),  # a few pages say nothing of the rest
                 "seq": seq if only is None else last.get("seq"),
                 "settled": stamp if only is None else last.get("settled"),
                 "seconds": seconds,
@@ -665,9 +883,10 @@ def build(
                 "slowest": [[t, s] for t, s in slowest],
                 "workers": workers if apart else 1,
                 "years": years if only is None else last.get("years"),
+                "tiers": tiers if only is None else last.get("tiers"),
             }
             library._save(library._pages, library._built)
-    return Result(len(wanted), written, removed, seconds, failed, slowest)
+    return Result(len(wanted), written, removed, seconds, failed, slowest, head)
 
 
 Rendered = tuple[str, "Response | str", float]  # an address, its page or why it failed, the seconds it took
@@ -788,21 +1007,45 @@ def _render(targets: list[str]) -> list[Rendered]:
 class Rebuilder:
     """The server's own build, on one thread of its own: asked for after every act (`kick`), it builds
     the Library once for however many acts came in while it built, and waits again; asked for one page
-    (`ask`: a reading the server stopped at its limit), it builds the pages asked for, without a limit.
+    (`ask`: a reading the server stopped at its limit), it builds the pages asked for, without a limit;
+    told of a built page older than the record's head (`stale`: a CLI act or a sync moved it), it
+    builds once for that head, however many pages say so, the old pages served meanwhile.
     Another process building (`Busy`, the 06:00 close) is waited out and asked again `RETRY_S` later.
-    Never a page's caller: a request never waits for it."""
+    Never a page's caller: a request never waits for it.
+
+    `site` is the server's, which answers from the build; the pages are rendered on a site of the
+    rebuild's own (`builder`) that reads the record through the same gate and renders every page, as
+    `export site` and `serve --build` do: never the build's bytes kept again."""
 
     RETRY_S = 30.0
 
     def __init__(self, lb: Logbook, site: Site, library: Library, say: Callable[[str], None] | None = None):
         self.lb, self.site, self.library, self.say = lb, site, library, say
+        self._builder: Site | None = None
         self._asked = threading.Event()
         self._stop = threading.Event()
         self._thread = threading.Thread(target=self._run, name="library-build", daemon=True)
         self._full = False
         self._wanted: list[str] = []
         self._wanted_lock = threading.Lock()
+        self._at: str | None = str(library.built().get("head") or "") or None  # the head built, or building
+        self._queued: str | None = None  # a newer head a built page was found older than, not yet built
         self.builds = 0
+
+    def builder(self) -> Site:
+        """The site the rebuild renders on: the server's record, clock, gate and voice, and no build."""
+        if self._builder is None:
+            from . import serve
+
+            self._builder = serve.Site(
+                self.lb,
+                self.site.airports,
+                now=self.site.now,
+                tiers=self.site.tiers,
+                voice=self.site.voice,
+                with_drafts=self.site.with_drafts,
+            )
+        return self._builder
 
     def start(self) -> Rebuilder:
         self._thread.start()
@@ -813,6 +1056,21 @@ class Rebuilder:
         with self._wanted_lock:
             self._full = True
         self._asked.set()
+
+    def stale(self, head: str) -> None:
+        """A built page was served at `head`, newer than the build's: one build for that head, unless
+        it is the head built or being built, or one already asked for."""
+        with self._wanted_lock:
+            if head in (self._at, self._queued):
+                return
+            self._queued = head
+            self._full = True
+        self._asked.set()
+
+    def wanted(self) -> int:
+        """The builds asked for and not begun: one, or none (however many asks came in)."""
+        with self._wanted_lock:
+            return 1 if self._full or self._wanted else 0
 
     def ask(self, target: str) -> None:
         """One page: a reading the server stopped at its limit, built here without one."""
@@ -831,28 +1089,48 @@ class Rebuilder:
             if self._stop.is_set():
                 return
             self._asked.clear()
+            try:
+                head: str | None = str(self.lb.meta.get("head"))
+            except (OSError, ValueError):
+                head = None
             with self._wanted_lock:
                 full, wanted = self._full, self._wanted
                 self._full, self._wanted = False, []
+                before = self._at
+                if full:
+                    self._at, self._queued = head, None
             try:
-                result = build(self.lb, self.site, self.library, only=None if full else wanted)
+                result = build(self.lb, self.builder(), self.library, only=None if full else wanted)
             except Busy:
                 with self._wanted_lock:
+                    self._at = before if self._at == head else self._at
                     self._full = self._full or full
                     self._wanted += [t for t in wanted if t not in self._wanted]
                 self._stop.wait(self.RETRY_S)
                 self._asked.set()
                 continue
             except Sealed as e:  # the owner turned plaintext_cache off: every page is rendered live
+                self._unbuilt(head, before)
                 if self.say is not None:
                     self.say(f"library: {e}")
                 continue
             except Exception as e:  # the server goes on answering from the build it has
+                self._unbuilt(head, before)  # and the next page older than the head asks again
                 if self.say is not None:
                     self.say(f"library: the build failed: {type(e).__name__}: {e}")
                 continue
+            if full:
+                with self._wanted_lock:
+                    if self._at == head:  # the pages read the index's head, which a writer may lead
+                        self._at = result.head
             self.builds += 1
             if self.say is not None:
                 self.say(
                     f"library: {result.pages:,} pages, {result.written:,} written, in {result.seconds} s"
                 )
+
+    def _unbuilt(self, head: str | None, before: str | None) -> None:
+        """A build for `head` that did not finish: that head is not built, and `stale` asks for it again."""
+        with self._wanted_lock:
+            if self._at == head:
+                self._at = before

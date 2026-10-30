@@ -263,17 +263,30 @@ anyway, set `"plaintext_cache": true` in `logbook.json` (off by default): the bu
 readings kept beside the index (above), are then on this disk in plain text, `0600`, as on a record
 that seals nothing ([sealing](sealing.md); RFC 0047 §15, question 11).
 
-Not yet, and why it is a lab (after v1; nothing here is built now):
+How the lab keeps itself honest:
 
-- [ ] **A rebuild through its own Site.** The rebuild after an act renders through the server's own
-  `Site`, and can save a page's stale bytes again; each such save adds another `built hh:mm` to its
-  footer, and marks the page `asked`. It should render through a `Site` with no library.
-- [ ] **A page older than the record's head.** A built page is never checked against the record's
-  head. After `day sign` on the command line, the built Day says *unsigned* until the next 06:00 close.
-  A built page whose head is not the record's should still be served, and start one rebuild per head,
-  so acts and syncs from the command line are on the pages within one build.
-- [ ] **Two writers of `pages.json`.** The server's rebuild and the close's build can each lose the
-  other's writes to the manifest. The server should write it only under the build lock.
+- **The rebuild renders on a site of its own.** The rebuild after an act, or after the head moved,
+  renders every page on a `Site` with no build, through the server's gate, as `logbook serve --build`
+  does: never the built bytes kept again, never a second `built hh:mm` in a footer, never a page
+  marked as asked for when nobody asked for it.
+- **A page older than the record's head is served meanwhile.** After `day sign` on the command line,
+  or a sync, the built pages stay the answer, each footer saying when it was built, and the server
+  starts one rebuild for that head, however many pages are asked for while it runs; the new page is
+  served once it is written.
+- **`pages.json` is written only under the build lock.** The server takes `building.lock` for the
+  moment it writes the manifest (a page kept on demand, the pages an act dropped), or writes beside
+  its own rebuild. While another process builds (the 06:00 close), the server writes nothing there:
+  a page kept on demand is rendered again next time. A page an act dropped stays dropped in the
+  server's memory until a page that read past the act is written, whoever writes the old one back.
+  Every write is a temporary file moved into place, the lock among them (linked into place whole,
+  removed only by the one that took it).
+- **A page records the tiers it was built at.** `pages.json` names the gate each page was built
+  through (`tiers`; null for every tier, the server's) and the gate of the last build; a page is
+  served only to a request read through that same gate, a build through another gate renders every
+  page again, and a page that names no gate (built before 1.1) is served to none until rebuilt.
+- **A sealed record keeps nothing.** Every write of the lab (a page kept, the manifest, a page
+  dropped, a build at any gate, tier 1 included) refuses a sealed record without `plaintext_cache`,
+  and a record sealed while a build runs keeps nothing the build wrote.
 
 ## Never hangs
 

@@ -12,7 +12,7 @@ import shutil
 import sys
 import threading
 import time
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -453,3 +453,233 @@ def test_serve_built_answers_from_the_build_under_the_limit(
 def test_serve_live_takes_a_limit_when_given(lb: Logbook, monkeypatch: pytest.MonkeyPatch) -> None:
     given = _serve_given(monkeypatch, "--live", "--limit", "15")
     assert given["built"] is False and given["limit_s"] == 15.0
+
+
+# -- the lab's review (#382's list, after v1.0) -----------------------------------------------------------
+
+
+def _wait_for(rebuilder: library_build.Rebuilder, builds: int) -> None:
+    deadline = time.monotonic() + 120
+    while rebuilder.builds < builds and time.monotonic() < deadline:
+        time.sleep(0.05)
+    assert rebuilder.builds >= builds, "the rebuild did not finish"
+
+
+def test_the_rebuilder_renders_each_page_anew_on_a_site_of_its_own(lb: Logbook) -> None:
+    """The server's own site answers from the build: a rebuild through it would keep the built bytes
+    again, with a second "built" note, and mark them asked. Its own site, with no build, renders."""
+    library, _site, _result = _built(lb)
+    asked_before = {t for t, p in library.pages().items() if p.asked}
+    served = _served(lb, library)
+    _note(lb, "2026-06-20T09:00:00Z", "Kari Nordmann rowed out to the skerry.")
+    rebuilder = library_build.Rebuilder(lb, served, library).start()
+    try:
+        rebuilder.kick()
+        _wait_for(rebuilder, 1)
+    finally:
+        rebuilder.stop()
+    page = library.page("/day/2026-06-20") or pytest.fail("the Day is built")
+    assert b"Kari Nordmann rowed out to the skerry." in page[1], "rendered anew, not the build kept again"
+    for target, (found, body) in ((t, library.page(t) or pytest.fail(t)) for t in library.pages()):
+        assert body.count(b'class="built"') <= 1, f"{target}: one built note, never two"
+        assert found.asked == (target in asked_before), f"{target}: a rebuild marks no page asked"
+    assert rebuilder.site is served and rebuilder.site.library is library, "the server's site is its own"
+
+
+def test_a_built_page_at_an_older_head_is_served_and_asks_for_one_rebuild_of_that_head(lb: Logbook) -> None:
+    """A CLI act or a sync moves the head under a running server: the built page is still answered (its
+    footer says when it was built) and one rebuild of the new head is asked for, however many pages are
+    asked for meanwhile."""
+    library, _site, _result = _built(lb)
+    stale: list[str] = []
+    served = serve.Site(lb, now=lambda: JUNE, library=library, on_stale=stale.append)
+    assert b"built 12:00" in served.respond("/people").body
+    assert stale == [], "the build is at the record's head: nothing to ask"
+    _note(lb, "2026-06-19T09:00:00Z", "Ola Nordmann mended the jetty.")
+    head = str(Logbook(lb.root).meta["head"])
+    for door in ("/people", "/days", "/people"):
+        answered = served.respond(door)
+        assert answered.status == 200 and b"built 12:00" in answered.body, "the last built page, meanwhile"
+    assert stale and set(stale) == {head}, "the page told the server which head it is older than"
+
+    rebuilder = library_build.Rebuilder(lb, served, library)
+    rebuilder.stale(str(library.built()["head"]))
+    assert not rebuilder.wanted(), "the head the build is at: no rebuild"
+    rebuilder.stale(head)
+    rebuilder.stale(head)
+    assert rebuilder.wanted() == 1, "one rebuild per head"
+    rebuilder.start()
+    try:
+        _wait_for(rebuilder, 1)
+        rebuilder.stale(head)  # asked again once it is built at that head: nothing more
+        assert rebuilder.wanted() == 0 and rebuilder.builds == 1
+    finally:
+        rebuilder.stop()
+    assert library.built()["head"] == head
+    page = library.page("/day/2026-06-19") or pytest.fail("the Day is built")
+    assert b"Ola Nordmann mended the jetty." in page[1]
+
+
+def test_the_server_tells_its_rebuilder_of_a_page_older_than_the_head(lb: Logbook) -> None:
+    library_build.build(lb, serve.Site(lb, now=lambda: JUNE))
+    server = serve.make_server(lb, port=0, built=True)
+    try:
+        assert server.rebuilder is not None
+        assert server.site.on_stale == server.rebuilder.stale
+        assert server.rebuilder.site is server.site
+    finally:
+        server.server_close()
+
+
+def _held_by_another_process(library: library_build.Library) -> Path:
+    """`building.lock` naming a live process that is not this one (this one's parent)."""
+    lock = library.folder / library_build.LOCK
+    lock.write_text(json.dumps({"pid": os.getppid(), "since": "2026-06-21T03:00:00Z"}), encoding="utf-8")
+    return lock
+
+
+def test_the_server_writes_pages_json_only_under_the_build_lock(lb: Logbook) -> None:
+    """Another process building (the 06:00 close) holds the lock and writes `pages.json` whole at its
+    end: the server's own additions and drops never write it meanwhile, so neither loses the other's.
+    A drop is still kept in this process: the dropped page is rendered, never the build's."""
+    library, _site, _result = _built(lb)
+    lock = _held_by_another_process(library)
+    manifest = library.folder / library_build.MANIFEST
+    before = manifest.read_bytes()
+    served = serve.Site(lb, now=lambda: JUNE, library=library, on_act=lambda: None)
+    assert served.respond("/days", "from=2026-06-09&to=2026-06-11").status == 200
+    day = "2026-06-20"
+    form = {"act": "reflect", "text": "Per Hansen brought the charts back."}
+    assert served.write(f"/day/{day}/reflect", form, LOOPBACK, None).status == 303
+    assert manifest.read_bytes() == before, "pages.json written outside the build lock"
+    page = served.respond(f"/day/{day}").body.decode("utf-8")
+    assert "Per Hansen brought the charts back." in page and "built 12:00" not in page
+    assert lock.exists(), "the other process's lock is left to it"
+    lock.unlink()
+    library.drop(["/gaps"])  # the lock free: taken for the write, and let go
+    assert "/gaps" not in json.loads(manifest.read_bytes())["pages"] and not lock.exists()
+    assert not list(library.folder.glob(".*.tmp")), "moved into place whole"
+
+
+def test_a_drop_another_build_did_not_see_stays_dropped_after_it_writes_pages_json(lb: Logbook) -> None:
+    library, site, _result = _built(lb)
+    seq = int(lb.meta["seq"])  # what the other process's build read, begun before the act
+    _note(lb, "2026-06-20T09:00:00Z", "The act the drops are for.")
+    lock = _held_by_another_process(library)
+    library.drop(["/people"])  # the lock another's: kept here only
+    assert library.page("/people") is None
+    lock.unlink()
+    library.drop(["/days"])  # the lock free: written to pages.json, and kept here too
+    # the other build, ending a while after the act on a clock of its own, writes the pages as it read them
+    other = library_build.Library(lb, now=lambda: JUNE + timedelta(minutes=5))
+    other.put("/people", site.respond("/people"), "x", seq=seq)
+    other.put("/days", site.respond("/days"), "x", seq=seq)
+    assert "/people" in other.pages() and "/days" in other.pages()
+    assert library.page("/people") is None, "built before the act: still dropped here"
+    assert library.page("/days") is None, "the same, whichever branch the drop took"
+    later = int(Logbook(lb.root).meta["seq"])
+    other.put("/people", site.respond("/people"), "y", seq=later)
+    assert library.page("/people") is not None, "built after the act: served"
+
+
+def test_a_built_page_records_the_tiers_it_was_built_at_and_serves_only_that_gate(lb: Logbook) -> None:
+    library = library_build.Library(lb, now=lambda: JUNE)
+    library_build.build(lb, serve.Site(lb, now=lambda: JUNE, tiers=(1,)), library)
+    assert library.built()["tiers"] == [1]
+    assert all(p.tiers == [1] for p in library.pages().values())
+    every = serve.Site(lb, now=lambda: JUNE, library=library)
+    assert b"built 12:00" not in every.respond("/people").body, "a tier-1 page never answers every tier"
+    assert library.pages()["/people"].tiers == [1], "and never kept over the gate it was built at"
+    one = serve.Site(lb, now=lambda: JUNE, library=library, tiers=(1,))
+    assert b"built 12:00" in one.respond("/people").body, "the gate it was built at"
+    library_build.build(lb, serve.Site(lb, now=lambda: JUNE), library)
+    assert library.built()["full"] is True, "another gate: every page again"
+    assert all(p.tiers is None for p in library.pages().values())
+    assert b"built 12:00" in every.respond("/people").body
+    assert b"built 12:00" not in one.respond("/people").body, "an every-tier page never answers tier 1"
+
+
+def test_a_built_page_that_names_no_tiers_is_never_served(lb: Logbook) -> None:
+    library, _site, _result = _built(lb)
+    manifest = library.folder / library_build.MANIFEST
+    data = json.loads(manifest.read_bytes())
+    for page in data["pages"].values():
+        del page["tiers"]
+    manifest.write_text(json.dumps(data), encoding="utf-8")
+    assert b"built 12:00" not in _served(lb, library).respond("/people").body, "built before tiers were kept"
+
+
+def test_a_build_of_a_few_pages_does_not_hide_that_the_rest_are_older_than_the_head(lb: Logbook) -> None:
+    library, _site, _result = _built(lb)
+    old = library.built()["head"]
+    _note(lb, "2026-06-19T09:00:00Z", "Ines Nordmann painted the shed.")
+    library_build.build(lb, serve.Site(lb, now=lambda: JUNE), library, only=["/gaps"])  # a page asked for
+    assert library.built()["head"] == old, "the build's head is that of its last whole build"
+    stale: list[str] = []
+    served = serve.Site(lb, now=lambda: JUNE, library=library, on_stale=stale.append)
+    assert b"built 12:00" in served.respond("/people").body
+    assert stale == [str(Logbook(lb.root).meta["head"])]
+
+
+def test_a_rebuild_that_failed_is_tried_again_for_the_same_head(
+    lb: Logbook, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    library, _site, _result = _built(lb)
+    _note(lb, "2026-06-19T09:00:00Z", "Per Hansen came by with coffee.")
+    head = str(Logbook(lb.root).meta["head"])
+    said: list[str] = []
+    heard = threading.Event()
+
+    def say(text: str) -> None:
+        said.append(text)
+        heard.set()
+
+    def full_disk(*_args: Any, **_kwargs: Any) -> library_build.Result:
+        raise OSError(28, "No space left on device")
+
+    monkeypatch.setattr(library_build, "build", full_disk)
+    rebuilder = library_build.Rebuilder(lb, _served(lb, library), library, say).start()
+    try:
+        rebuilder.stale(head)
+        assert heard.wait(60) and "failed" in said[0]
+        heard.clear()
+        rebuilder.stale(head)
+        assert heard.wait(60) and len(said) == 2, "the same head, tried again"
+    finally:
+        rebuilder.stop()
+
+
+def test_the_build_lock_is_let_go_only_while_it_is_this_library_s(lb: Logbook) -> None:
+    library, _site, _result = _built(lb)
+    lock = library.folder / library_build.LOCK
+    with library.building():
+        lock.write_text(json.dumps({"pid": os.getppid()}), encoding="utf-8")  # taken over by another
+    assert lock.exists(), "another process's lock is never removed"
+    lock.unlink()
+    lock.write_text("", encoding="utf-8")  # another process between creating it and naming itself
+    with pytest.raises(library_build.Busy):
+        library.save()
+    assert lock.exists()
+
+
+def test_a_lock_this_library_left_behind_is_taken_back(lb: Logbook) -> None:
+    """Windows may refuse to remove the lock while another process reads it: the file stays, naming
+    this process; the next write takes it back rather than calling itself busy for ever."""
+    library, _site, _result = _built(lb)
+    with library.building():
+        held = (library.folder / library_build.LOCK).read_bytes()
+    (library.folder / library_build.LOCK).write_bytes(held)
+    library.save()
+    with library.building():
+        pass
+    other = library_build.Library(lb, now=lambda: JUNE)
+    (library.folder / library_build.LOCK).write_bytes(held)
+    with pytest.raises(library_build.Busy):
+        other.save()  # another Library of this process never takes it
+
+
+def test_clearing_leaves_a_build_this_process_runs(lb: Logbook) -> None:
+    library, _site, _result = _built(lb)
+    with library.building():
+        library_build.clear(lb)
+        assert (library.folder / library_build.MANIFEST).exists()
