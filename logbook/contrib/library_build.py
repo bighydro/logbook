@@ -103,7 +103,7 @@ JOURNEY_PAGE = re.compile(r"^/journeys/(\d{4}-\d{2}-\d{2})/(\d{4}-\d{2}-\d{2})$"
 RECENT_DAYS = 14  # the Days of the last fortnight are built; today's is always rendered live
 EACH = 60  # detail pages of one kind the build follows from the doors
 ASKED = 500  # addresses the server added on demand, the latest kept and rebuilt
-DETAIL = re.compile(r"^/(people|journeys|org|idea|goals|promises|day)/")
+DETAIL = re.compile(r"^/(people|places|journeys|org|idea|goals|promises|day)/")
 HREF = re.compile(r"""href\s*=\s*["']([^"']*)["']""", re.I)
 LIVE_PREFIXES = ("/photo/",)  # pixels from the attachment store: cheap, and not a page
 FOOTER = "</footer>"

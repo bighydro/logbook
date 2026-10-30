@@ -190,6 +190,7 @@ from . import (
     day_rhythm,
     door_life,
     door_people,
+    door_places,
     door_today,
     doors,
     dream,
@@ -254,6 +255,7 @@ RECORD_PAGES = frozenset(
 )
 JOURNEY_PATH = re.compile(r"^/journeys/(\d{4}-\d{2}-\d{2})/(\d{4}-\d{2}-\d{2})$")  # its first and last day
 PERSON_PATH = re.compile(r"^/people/([^/]+)$")  # a canonical person, by entity id
+PLACE_PATH = re.compile(r"^/places/([^/]+)$")  # a named place, by its id (`door_places`, RFC 0047 §4.4)
 ORG_PATH = re.compile(r"^/org/([^/]+)$")  # a named org, by entity id (RFC 0037 §11)
 IDEA_PATH = re.compile(r"^/idea/([^/]+)$")  # a named idea, by entity id (RFC 0037 §11)
 PROMISE_PATH = re.compile(r"^/promises/([0-9a-f]+)$")  # one promise, by its proposal id (`shelf_promises`)
@@ -287,8 +289,9 @@ WEEK_PATH = re.compile(r"^/week/(\d{4}-W\d{2})$")  # the week page (RFC 0043 §8
 WEEK_ACT = re.compile(r"^/week/(\d{4}-W\d{2})/close$")  # its one act, Close the week: POST only, likewise
 CLOSE = "close"  # the Day page's anchor of Reflect and sign, where a write sends the owner back
 # pages the record's today moves too (this year, anniversaries, drift, the stale orgs and ideas): in the tag
-# /goals: a goal goes past; /world: its window ends on today, whatever the calendar holds after it
-CLOCK_PAGES = ("/people", "/manifest", "/org/", "/ideas", "/idea/", "/goals", "/world", "/life")
+# /goals: a goal goes past; /world: its window ends on today, whatever the calendar holds after it;
+# /places: what comes next, and the last year its places are ordered by
+CLOCK_PAGES = ("/people", "/manifest", "/org/", "/ideas", "/idea/", "/goals", "/world", "/life", "/places")
 TRIP_KINDS: tuple[str, ...] | None = (
     trips.READ_KINDS
 )  # the lines a year's trips parse; the rest from the index
@@ -395,6 +398,8 @@ DAY_IMAGES = CSP.replace("default-src 'none';", "default-src 'none'; img-src 'se
 DAY_CSP = DAY_IMAGES.replace("style-src", f"script-src '{DAY_SCRIPT_HASH}'; style-src")
 WORLD_CSP = CSP.replace("style-src", f"script-src '{world.SCRIPT_HASH}'; style-src")
 DOOR_CSP = doors.CSP.replace("style-src", f"script-src '{DAY_SCRIPT_HASH}'; style-src")  # Today, recording
+# the Places door: the doors' policy and its queue's keys
+PLACES_DOOR_CSP = doors.CSP.replace("style-src", f"script-src '{PLACES_SCRIPT_HASH}'; style-src")
 YEAR = re.compile(r"^\d{4}$")
 DAY = re.compile(r"\d{4}-\d{2}-\d{2}")
 EN_DASH, ARROW, DOT = day_reader.EN_DASH, day_reader.ARROW, day_reader.DOT
@@ -940,6 +945,8 @@ class Site:
             return kept  # the tag names the page: what the browser may keep, the server may keep too
         params = {k: v[-1] for k, v in parse_qs(query, keep_blank_values=True).items()}
         csp = PLACES_CSP if path == "/places" else WORLD_CSP if path == "/world" else CSP
+        if path == "/places" or PLACE_PATH.match(path) is not None:  # the Places door: the doors' policy
+            csp = PLACES_DOOR_CSP if path == "/places" else doors.CSP
         if DAY_PATH.match(path) is not None:
             csp = DAY_CSP if self._records() else DAY_IMAGES
         if path == "/":  # Today: its fonts and its memory's thumbnail from here, the Day's forms
@@ -1857,6 +1864,7 @@ class Site:
             and DAY_PATH.match(path) is None
             and JOURNEY_PATH.match(path) is None
             and PERSON_PATH.match(path) is None
+            and PLACE_PATH.match(path) is None
             and ORG_PATH.match(path) is None
             and IDEA_PATH.match(path) is None
             and LINE_PATH.match(path) is None
@@ -2005,7 +2013,11 @@ class Site:
         if path == "/trips":
             return self.page_trips(params.get("year") or None)
         if path == "/places":
-            return self.page_places(params.get("page") or "1", params.get("at") or None)
+            return self.page_places(
+                params.get("page") or "1", params.get("at") or None, params.get("person") or None
+            )
+        if (m := PLACE_PATH.match(path)) is not None:
+            return door_places.page_place(self, unquote(m.group(1)))
         if path == "/journeys":
             return self.page_journeys(params.get("year") or None)
         if (m := JOURNEY_PATH.match(path)) is not None:
@@ -3406,14 +3418,20 @@ class Site:
 
     # -- /places, /assets, /gaps ----------------------------------------------------------------------------
 
-    def page_places(self, page: str = "1", at: str | None = None) -> str:
-        """The named places first (name, nights, last visit: from the observed places), then
-        "Name this place": the review queue in the CLI's order, `PAGE_SIZE` a page, each cluster
-        with a dot on a plain canvas, its counts, its evidence folded, and a form. A static site
-        gets the named places alone. `at=lat,lon` (the Day's link) is a redirect to the page the
-        nearest cluster is on, at that cluster, or this page with a note when there is none."""
+    def page_places(self, page: str = "1", at: str | None = None, person: str | None = None) -> str:
+        """The Places door (`door_places.door`, RFC 0047 §4.4): the globe, what comes next, your
+        places; `at=YYYY` turns the globe to that year, `person=ID` (People's link) to the places
+        shared. Under it the register, the named places (name, nights, last visit: from the observed
+        places), folded, then "Name this place": the
+        review queue in the CLI's order, `PAGE_SIZE` a page, each cluster with a dot on a plain
+        canvas, its counts, its evidence folded, and a form; all of it in the doors' frame
+        (`door_places.page`). A static site gets the door and the register alone. `at=lat,lon` (the
+        Day's link) is a redirect to the page the nearest cluster is on, at that cluster, or this page
+        with a note when there is none."""
         if not page.isdigit() or int(page) < 1:
             raise ValueError(f"page must be a number from 1, not {page!r}")
+        year = at if at is not None and YEAR.fullmatch(at) else None
+        at = None if year is not None else at
         with self._review_lock:  # requests that arrive together wait for one build of the table
             report = places_review.read(self.lb)
         tz = report.tz
@@ -3430,12 +3448,14 @@ class Site:
                 on = (report.proposals.index(p) // PAGE_SIZE) + 1
                 raise Redirect(f"/places?page={on}#{p.id}")
             note = f"no place to name at {lat:.4f},{lon:.4f}: it is named or rejected, or it was never a stay"
-        body = "<h1>Places</h1>\n"
+        body = door_places.door(self, year, person)
         if note:
             body += f'<p class="mute">{escape(note)}</p>\n'
-        body += self._named_places(report)
+        body += '<section class="places-queue">\n'
+        body += f'<details class="register"><summary>The register: {escape(places.PLACES_FILE)}</summary>\n'
+        body += self._named_places(report) + "</details>\n"
         if self.static:
-            return self.document("places", body, style=TABLES_STYLE)
+            return door_places.page(self, body)
         total = len(report.proposals)
         pages = max(1, math.ceil(total / PAGE_SIZE))
         n = min(int(page), pages)
@@ -3444,10 +3464,10 @@ class Site:
         body += f"<h2>Name this place <small>{escape(places_review.head(report))}</small></h2>\n"
         if not report.observed:
             body += "<p>no places observed: the record has no stays yet</p>\n"
-            return self.document("places", body, style=TABLES_STYLE)
+            return door_places.page(self, body)
         if not shown:
             body += "<p>nothing to review: every place you return to is named</p>\n"
-            return self.document("places", body, style=TABLES_STYLE)
+            return door_places.page(self, body)
         body += (
             '<p class="mute">The places you return to that have no name yet, by nights then hours, each'
             " with what the record already says about it. Name writes the field into places.json and the"
@@ -3471,7 +3491,7 @@ class Site:
         if n < pages:
             pager.append(f'<a href="/places?page={n + 1}">more →</a>')
         body += f'<p class="pager">{DOT.join(pager)}</p>\n'
-        return self.document("places", body, PLACES_SCRIPT, style=TABLES_STYLE)
+        return door_places.page(self, body, PLACES_SCRIPT)
 
     def _named_places(self, report: places_review.Report) -> str:
         found = report.places
