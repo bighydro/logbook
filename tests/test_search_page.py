@@ -237,8 +237,8 @@ def test_phone_width_first_and_touch_targets(lb: Logbook) -> None:
 def test_one_product_the_day_pages_tokens(lb: Logbook) -> None:
     assert search_page.TOKENS in serve.STYLE  # the copy is the Day's own, byte for byte
     assert search_page.SEARCH_STYLE.startswith(search_page.TOKENS)
-    asked = _get(serve.Site(lb), "/days")  # Ask, in the header of every page: the search's own field
-    assert '<form class="ask" method="get" action="/search" role="search">' in asked and 'name="q"' in asked
+    asked = _get(serve.Site(lb), "/days")  # Ask, in the header of every page: Ask v1, through this search
+    assert '<form class="ask" method="get" action="/ask" role="search">' in asked and 'name="q"' in asked
 
 
 def test_an_exported_site_has_no_search(lb: Logbook) -> None:

@@ -6,8 +6,9 @@ alone) above its own body, which keeps `serve.STYLE` and its look until its own 
 
 The header, from the left: the wordmark (a link to Today), the four doors, the Ask field and the gear.
 A door not yet built links to the page that holds its moments today (`DOORS`: People to `/people`,
-Places to `/places`); Life is its own page, `/life` (`door_life`). Ask is a GET form to the Library's
-search (`/search?q=`, Ask v1, RFC 0047 §4.5); an exported site has no server to ask, and leaves it out.
+Places to `/places`); Life is its own page, `/life` (`door_life`). Ask is a GET form to `/ask?q=`
+(`door_ask`, Ask v1, RFC 0047 §4.5), which answers with moments; the page of an answer keeps the words
+asked in the field (`asked`). An exported site has no server to ask, and leaves it out.
 The gear is one icon, a link to the index of the machinery pages (`GEAR`, the shelves listed) until
 `/gear` exists. On a phone the doors are a bar at the foot of the screen and Ask is at the top.
 
@@ -39,7 +40,7 @@ TODAY, LIFE, PEOPLE, PLACES = "Today", "Life", "People", "Places"
 # the four doors and where each opens until its own page is on main (RFC 0047 §4, §5); the fifth,
 # Holdings, goes between Places and Ask when it is built, and its place stays empty until then (§11)
 DOORS = ((TODAY, "/"), (LIFE, "/life"), (PEOPLE, "/people"), (PLACES, "/places"))
-ASK = "/search"  # Ask v1 is the Library's search (#363)
+ASK = "/ask"  # Ask v1 (`door_ask`): the record's words as moments, through the search of #363
 GEAR = "/shelves"  # the index of the machinery pages, until `/gear` exists
 GEAR_TITLE = "The gear: the sources, the agents, the Manifest, the assets and the gaps"
 FONT_DIR = Path(__file__).resolve().parent / "fonts"
@@ -226,11 +227,11 @@ def door_of(path: str) -> str | None:
     return None
 
 
-def header(site: Site, door: str) -> str:
-    """The header of a door's page: the wordmark, the four doors (`door` the current one), Ask and the
-    gear. On an exported site (`site.static`) every link goes through `site.href`, a door it has no
-    page for is its name alone, and Ask and the gear are left out: there is no server to ask, and the
-    machinery is the owner's."""
+def header(site: Site, door: str, asked: str = "") -> str:
+    """The header of a door's page: the wordmark, the four doors (`door` the current one), Ask (the
+    words `asked` in its field, on the page of an answer) and the gear. On an exported site
+    (`site.static`) every link goes through `site.href`, a door it has no page for is its name alone,
+    and Ask and the gear are left out: there is no server to ask, and the machinery is the owner's."""
     doors = []
     for name, path in DOORS:
         current = ' aria-current="page"' if name == door else ""
@@ -248,11 +249,12 @@ def header(site: Site, door: str) -> str:
     )
     parts = [wordmark, f'<nav class="doors" aria-label="Doors">{"".join(doors)}</nav>']
     if not site.static:
+        value = f' value="{escape(asked)}"' if asked else ""
         parts.append(
             f'<form class="ask" method="get" action="{ASK}" role="search">'
             '<label for="ask">Ask</label>'
             '<input id="ask" type="search" name="q" placeholder="Ask: a name, a place, a word"'
-            ' autocomplete="off">'
+            f'{value} autocomplete="off">'
             "</form>"
         )
         title = escape(GEAR_TITLE)
@@ -272,10 +274,12 @@ def page(
     style_: str = "",
     script: str | None = None,
     footnote: str | None = None,
+    asked: str = "",
 ) -> str:
-    """One door's page: the head, the header (`header`), `body` in `<main class="door">`, then the
-    footer the Library's every page carries (`footnote` under it). `style_` is the door's own rules,
-    after the frame; `script` its one inline script, named by hash in its policy."""
+    """One door's page: the head, the header (`header`, the words `asked` in its Ask field), `body` in
+    `<main class="door">`, then the footer the Library's every page carries (`footnote` under it).
+    `style_` is the door's own rules, after the frame; `script` its one inline script, named by hash in
+    its policy."""
     footer = site.footer_text(footnote, door=True)
     return (
         "<!doctype html>\n"
@@ -283,7 +287,7 @@ def page(
         '<meta name="viewport" content="width=device-width, initial-scale=1">\n'
         f"<title>{escape(title)} · Logbook</title>\n"
         f"<style>{style(fonts=not site.static)}{style_}</style>\n</head>\n<body>\n"
-        f"{header(site, door)}"
+        f"{header(site, door, asked)}"
         f'<main class="door">\n{body}</main>\n'
         f'<footer class="door">{footer}</footer>\n'
         f"{'' if script is None else f'<script>{script}</script>' + chr(10)}"

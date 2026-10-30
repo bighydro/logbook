@@ -70,7 +70,7 @@ silence's is `logbook/contrib/gaps.py`'s. A number here points at the lines it c
 
 `/` is what you read at 07:00, on a phone first (RFC 0047 §4.1), in the frame every door shares: the
 wordmark, the four doors (Today, Life, People, Places; until their own pages are built, Life opens
-`/days`, People `/people` and Places `/places`), the *Ask* field (a search of the record, `/search`)
+`/days`, People `/people` and Places `/places`), the *Ask* field (`/ask`, [below](#ask))
 and the gear. On a phone the doors are a bar at the foot of the screen and *Ask* is at the top. Every
 other page of the Library carries the same header above its own body, the door it belongs to marked
 (the Days are Life's, a person People's, a place Places'); the body keeps its look until its own door
@@ -100,6 +100,28 @@ so, and the next visit has them; the page's tag names what has arrived). On the 
 answers in about 50 ms the first time and 15 ms after. A built Today (`--built`) is served only on
 the day it was built. `export site` writes it as `today.html`, as of the record's last day, with no
 form, no *Ask* and no font.
+
+## Ask
+
+The field at the top of every door asks `/ask?q=…` (RFC 0047 §4.5, v1). The words are found as `logbook
+search` finds them (the same index table, words, phrases and `prefix*`, a retracted line never a hit),
+held to the page's tier: a page at tier 1 searches tier 1. The answer is moments, not lines: one row a
+day, each with the day in words (a link to its Day), where you spent that night (a link to that day on
+the World; a place with no name is said by the place or the city it is near, never by its coordinates),
+who was with you (the Day's own company, names only, each a link to their page; a name the page's tier
+does not read is left out) and the words that matched, your own words first, the match marked and
+the source (message, mail, call, note, calendar …) in pencil, each a link to its row on the Day. The
+answer is the closest 240 matches (more words narrow it), each day once with all its matches, newest
+first across twelve days a page; the pages are links. No number, date or clock touches a person's name on the
+page: an excerpt's fields are joined by ` · ` only where letters meet (a field that begins or ends
+with a figure starts a line of its own), a phone number or an address alone is left out, and an
+excerpt whose own words set a figure beside a name shows none of them, only its source and the link to
+its Day, where the words are. A hit a later line corrected says so and links
+the line that did; `?standing=1` leaves such hits out. Nothing asked is a field beside one sentence;
+nothing found is "Nothing in the record says that. Try fewer words, or a name." `/search` stays as it
+is. No
+model answers here: questions in your own words, with cited answers, are Ask v2. An exported site has
+no server to ask.
 
 The frame (`logbook/contrib/doors.py`) is one stylesheet: the owner's tokens as custom properties on
 `:root` (`--paper`, `--surface`, `--line`, `--line-soft`, `--tint`, `--ink`, `--pencil`,

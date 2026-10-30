@@ -94,6 +94,7 @@ ROUTES = frozenset(
         "/goals",
         "/goals/ID",
         "/search",
+        "/ask",
         "/agents",
         "/line/ID",
         "/week/W",
@@ -591,6 +592,8 @@ def walked(
                     "/search?q=ola",  # a search with hits
                     "/search?q=ola&page=0",  # and one refused
                     "/life",  # the Life door, not in the navigation yet
+                    "/ask?q=ola",  # Ask: an answer of moments
+                    "/ask?q=ola&page=0",  # and one refused
                 ],
             ),
             (_manifest_site(_copy(manifest, folder / "orgs", mp)), ["/", "/manifest/people?money=1"]),

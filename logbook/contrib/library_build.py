@@ -80,6 +80,7 @@ LOCK = "building.lock"
 DOORS = (
     "/",
     "/shelves",
+    "/ask",  # Ask (`door_ask`): the field and its sentence; an answer is built once it is asked
     "/days",
     "/trips",
     "/journeys",

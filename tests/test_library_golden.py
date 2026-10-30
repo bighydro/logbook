@@ -40,14 +40,16 @@ WRITE = os.environ.get("LOGBOOK_GOLDEN_WRITE") == "1"
 # `/today` is a seed: no page links it since the doors' header took the old navigation's place
 SEEDS = (
     "/", "/today", "/days", "/trips", "/journeys", "/people", "/manifest", "/manifest/people", "/ideas",
-    "/places", "/assets", "/gaps", "/world", "/promises", "/goals", "/agents", "/life",
+    "/places", "/assets", "/gaps", "/world", "/promises", "/goals", "/agents", "/life", "/ask",
+    "/ask?q=kari",
 )  # fmt: skip
 LINK = re.compile(r"""href\s*=\s*["']([^"'#]*)""")
 MOST = 500  # pages a record's crawl renders at most; the order is fixed, so the same pages every run
 EACH = {
-    "day": 60,
+    "day": 64,  # 60, and the days an answer of Ask (`/ask?q=kari`) links before the crawl reaches them
     "line": 12,
     "week": 8,  # a week's pager links only the record's weeks, but four years of them would crowd the rest
+    "days": 31,  # 30, and the window the days of Ask's answer link to before the crawl reaches it
 }  # pages of one section a crawl renders at most (the first, in its order)
 EACH_OTHER = 30  # the same for every other section: `/days?from=…`, `/people/…`, `/places?page=…`
 NOT_PAGES = ("/photo/", "/favicon.ico")

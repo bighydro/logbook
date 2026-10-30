@@ -332,6 +332,8 @@ PAGES = (
     "/search",
     "/search?q=kari",
     "/search?q=kari&kind=note&year=2026",
+    "/ask",  # Ask v1: the field, and an answer of moments
+    "/ask?q=kari",
     "/timeline",  # the timeline at each zoom (RFC 0043 §11)
     "/timeline/day/2026-06-17",
     "/timeline/week/2026-W25",

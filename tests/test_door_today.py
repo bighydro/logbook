@@ -146,7 +146,7 @@ def test_the_front_door_is_today_in_the_doors_frame(lb: Logbook) -> None:
     assert re.findall(r'<a href="([^"]+)"', doors_) == ["/", "/life", "/people", "/places"]
     assert re.findall(r">([A-Za-z]+)</a>", doors_) == ["Today", "Life", "People", "Places"]
     assert '<a href="/" aria-current="page">Today</a>' in doors_
-    ask = re.search(r'<form class="ask" method="get" action="/search" role="search">.*?</form>', head)
+    ask = re.search(r'<form class="ask" method="get" action="/ask" role="search">.*?</form>', head)
     assert ask is not None and 'name="q"' in ask.group(0) and "<label" in ask.group(0)
     gear = re.search(r'<a class="gear" href="/shelves"[^>]*aria-label="The gear"', head)
     assert gear is not None and "<svg" in head, "one icon, drawn inline"
