@@ -53,10 +53,15 @@ says why no standing profile fits.
 **Not read**, and never opened: ads and the advertisers that used your activity, logins, devices and
 security, your profile beyond your name, preferences and topics, and everything else the export holds.
 
+Meta changes the shape of some files from one export to the next. An entry in a shape this version
+does not read is never guessed at: it is skipped and counted (`skipped N entries in a shape this
+version cannot read`), so a run on a newer export says what it left out.
+
 ## Meta's text encoding
 
 Every string in Meta's JSON is stored as its UTF-8 bytes read as latin-1, so `Båten ⛵` arrives as
-`B\u00c3\u00a5ten \u00e2\u009b\u00b5`. The adapter reads each one back before it writes anything; the record holds `Båten ⛵`.
+`B\u00c3\u00a5ten \u00e2\u009b\u00b5`. The adapter reads each one back before it writes anything;
+the record holds `Båten ⛵`.
 
 ## Two layouts
 
