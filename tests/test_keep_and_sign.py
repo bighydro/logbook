@@ -40,7 +40,7 @@ DECIDED = "Kari Nordmann sails on Saturday."
 IDEA = "The boat-share log moved on."
 PHOTO_TEXT = "The afternoon light on the water."
 MENDED = "A crew list makes Saturday easy."
-HERMES = "hermes"
+HERMES = "per-hansen"
 
 
 def _cli(*args: str) -> tuple[int, str, str]:
@@ -68,7 +68,7 @@ def lb(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Logbook:
     monkeypatch.setattr(policy, "today", lambda: date(2026, 10, 22))
     policy.policy_path(lb.root).write_text(
         json.dumps(
-            {policy.DREAM_DESTINATION: {"max_tier": 2, "until": "2026-12-31"}, "hermes": {"max_tier": 2}}
+            {policy.DREAM_DESTINATION: {"max_tier": 2, "until": "2026-12-31"}, "per-hansen": {"max_tier": 2}}
         ),
         encoding="utf-8",
     )

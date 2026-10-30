@@ -62,7 +62,7 @@ def export_arguments(sub: Subparsers) -> None:
     s.add_argument(
         "--to",
         metavar="DESTINATION",
-        help="crossing: the circle member, e.g. hermes; share: the member as policy/crossing.json names them;"
+        help="crossing: the circle member, e.g. kari; share: the member as policy/crossing.json names them;"
         " world: the last day, YYYY-MM-DD (default: the record's); letter: the person it is for",
     )
     s.add_argument(

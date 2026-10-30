@@ -18,7 +18,7 @@ from typing import Any
 import pytest
 from persona import TZ, note, photo, transcript, utc
 
-from logbook.core import share
+from logbook.core import share, signing, store
 from logbook.core.store import Logbook
 
 DAY = "2026-06-13"
@@ -29,6 +29,9 @@ INES_SEED = hashlib.sha256(b"logbook share fixture: ines, synthetic, signs nothi
 OLA_SEED = hashlib.sha256(b"logbook share fixture: ola, synthetic, signs nothing real").digest()
 RECORDED = "2026-06-14T06:00:00Z"  # every line's `recorded_at`: the Sunday morning sync
 CREATED = "2026-06-14T18:00:00Z"  # when each page was shared
+SIGNED = (
+    "2026-06-14T06:30:00Z"  # when each owner signed the Saturday: Sunday morning, off its page (RFC 0034)
+)
 INES_BUNDLE = "019cadd3-6bc0-7dcd-9133-00000000a001"  # the bundle ids, fixed for the fixture
 OLA_BUNDLE = "019cadd3-6bc0-7dcd-9133-00000000a002"
 ANCHORAGE = (59.8500, 10.6000)
@@ -132,26 +135,33 @@ def ola_drafts() -> list[dict[str, Any]]:
     return drafts
 
 
-def _record(root: Path, owner_id: str, drafts: list[dict[str, Any]], files: list[bytes]) -> Logbook:
+def _record(
+    root: Path, owner_id: str, drafts: list[dict[str, Any]], files: list[bytes], signature: str
+) -> Logbook:
+    """The record, its day signed by its owner (only a signed day is shared, RFC 0034), the signature's
+    id and stamps fixed like every other line's, so the head and the pages regenerate byte for byte."""
     lb = Logbook.init(root, TZ)
     lb.set_meta(owner_id=owner_id)
     for data in files:
         lb.attach(data)
     lb.append_many(drafts)
+    with pytest.MonkeyPatch.context() as m:
+        m.setattr(store, "uuid7", lambda: signature)
+        signing.sign(lb, DAY, at=SIGNED, recorded_at=SIGNED)
     return lb
 
 
 def ines_record(tmp_path: Path) -> Logbook:
     """Ines's record under `tmp_path/ines`, Ola allowed to tier 2; the stray message is retracted
     by a line of the drafts, so the head is fixed too."""
-    lb = _record(tmp_path / "ines", INES_ID, ines_drafts(), [PHOTO_BYTES])
+    lb = _record(tmp_path / "ines", INES_ID, ines_drafts(), [PHOTO_BYTES], _id(0x0A))
     _allow(lb, "ola", 2)
     return lb
 
 
 def ola_record(tmp_path: Path) -> Logbook:
     """Ola's record under `tmp_path/ola`, Ines allowed to tier 1 only."""
-    lb = _record(tmp_path / "ola", OLA_ID, ola_drafts(), [TRANSCRIPT_TEXT])
+    lb = _record(tmp_path / "ola", OLA_ID, ola_drafts(), [TRANSCRIPT_TEXT], _id(0x1A))
     _allow(lb, "ines", 1)
     return lb
 

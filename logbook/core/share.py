@@ -56,9 +56,14 @@ HEX_KEY = re.compile(r"[0-9a-f]{64}")
 HEX_SIGNATURE = re.compile(r"[0-9a-f]{128}")
 ATTACHMENT = re.compile(r"attachments/([0-9a-f]{64})")
 SEED_LEN = 32
+HELD_BACK_COUNTS = ("held_back_unsigned", "mail_held_back")  # optional manifest counts, each of `held_back`
 Stamp = tuple[int, int, int, int, int, int]  # a zip member's date_time
 CHUNK = 1 << 20
 TIER3_WARNING = crossing.TIER3_WARNING
+UNSIGNED_DAY = (
+    "export share day {day}: {day} is not signed, and only a day you have signed leaves (RFC 0034);"
+    " read it and sign it first: logbook day sign {day}"
+)
 SEALED_DAY = (
     "export share day {day}: this day holds sealed lines, and a shared page cannot carry them yet; "
     "a sealed day shares after v1 (RFC 0029)"
@@ -195,9 +200,15 @@ def owner_key(lb: Logbook) -> tuple[bytes, str]:
 
 
 def check_name(name: str, what: str = "destination") -> str:
-    """A destination or circle name is one folder name: letters, digits, `.`, `_` and `-`."""
+    """A destination or circle name is one folder name: letters, digits, `.`, `_` and `-`; a
+    destination is never one the policy keeps for its own reader (`policy.check_destination`)."""
     if not NAME.fullmatch(name):
         raise ShareError(f"a {what} is letters, digits, '.', '_' and '-' only, not {name!r}")
+    if what == "destination":
+        try:
+            policy.check_destination(name)
+        except policy.PolicyError as e:
+            raise ShareError(str(e)) from e
     return name
 
 
@@ -240,6 +251,10 @@ class Selection:
     held_back_by_entry: int = (
         0  # drafts their entry no longer allows (`drafts.held_by_entry`), in `held_back`
     )
+    held_back_unsigned: int = (
+        0  # lines whose day is not signed (`crossing.SignedGate`, RFC 0034), in `held_back`
+    )
+    mail_held_back: int | None = None  # mail no person is on (RFC 0045), in `held_back`; None: no mail read
 
     @property
     def held_back(self) -> int:
@@ -259,7 +274,9 @@ class Selection:
             "logged": self.logged,
             "crossed": len(self.lines),
             "held_back": self.held_back,
+            "held_back_unsigned": self.held_back_unsigned,
             **({"held_back_by_entry": self.held_back_by_entry} if self.held_back_by_entry else {}),
+            **({"mail_held_back": self.mail_held_back} if self.mail_held_back is not None else {}),
             "by_tier": self.by_tier,
             "by_kind": self.by_kind,
             "resolutions": 0,
@@ -280,7 +297,10 @@ def select(lb: Logbook, day: str, max_tier: int, to: str | None = None) -> Selec
     (`heard`, RFC 0046) is on the page only when the entry of `to` says `"heard": true`. A draft
     follows the entry it was written under, as every crossing holds it (`drafts.held_by_entry`, R4):
     one its entry no longer allows (missing, lowered, expired) stays home and is counted in
-    `held_back`, whatever `max_tier`."""
+    `held_back`, whatever `max_tier`. The crossing's two other rules hold the page as they hold a
+    package (review R4), through its own functions: a line whose day is not signed stays home
+    (`crossing.SignedGate`, RFC 0034; `share_day` refuses an unsigned day before this), and a mail no
+    person is on (`crossing.peoples_mail_only`, RFC 0045), each counted apart and in `held_back`."""
     with lb.index() as idx:
         # `Index.day`'s own query, the lines as the file holds them, so a sealed one is seen sealed;
         # each is then opened as `Index.day` opens it
@@ -290,7 +310,10 @@ def select(lb: Logbook, day: str, max_tier: int, to: str | None = None) -> Selec
             for line in idx.read([(str(f), int(o)) for f, o in places], opened=False)
             if line.get("kind") != RETRACTION
         ]
-        retracted = retractions(idx.retractions())
+        marks = idx.retractions()
+        retracted = retractions(marks)
+        gate = crossing.signed_gate(lb, idx)
+        resolutions = idx.resolutions()
     sealed_seqs = {int(line["seq"]) for line in stored if is_sealed(line)}  # by seq: an id may repeat
     rows = [lb.opened(line) for line in stored]
     rows = [line for line in rows if str(line["id"]) not in retracted]
@@ -304,17 +327,23 @@ def select(lb: Logbook, day: str, max_tier: int, to: str | None = None) -> Selec
     crossing_ids = {str(line["id"]) for line in lines}
     lines = [line for line in lines if stars.beside(line, crossing_ids)]
     sealed = sum(1 for line in lines if int(line["seq"]) in sealed_seqs)
-    # what was heard leaves only when `to`'s entry says so (RFC 0046), held after the sealed lines are
-    # counted, so the sealed-day refusal judges the day as it would without this rule; a star on a
-    # heard line held back stays home with it
+    # the crossing's rules, then what was heard (RFC 0046), are applied after the sealed lines are
+    # counted, so the sealed-day refusal judges the day as it would without them; a star on a line one
+    # of them holds back stays home with it
+    gated = len(lines)
+    lines = [line for line in lines if gate.passes(str(line["id"]), str(line["kind"]), str(line["at"]))]
+    unsigned = gated - len(lines)
+    lines, mail_held = crossing.peoples_mail_only(lb, marks, resolutions, lines)
     texts = heard.crosses(lb.root, to)
     kept = [line for line in lines if not heard.held(line, texts)]
-    if len(kept) != len(lines):
+    if len(kept) != gated:
         kept_ids = {str(line["id"]) for line in kept}
         kept = [line for line in kept if stars.beside(line, kept_ids)]
     lines = kept
     blobs, missing = crossing.blobs(lb, lines)
-    return Selection(lines, len(rows), [_attachment(b) for b in blobs], missing, sealed, by_entry)
+    return Selection(
+        lines, len(rows), [_attachment(b) for b in blobs], missing, sealed, by_entry, unsigned, mail_held
+    )
 
 
 def _attachment(blob: dict[str, Any]) -> dict[str, Any]:
@@ -351,16 +380,21 @@ def share_day(
 ) -> Shared:
     """Write the page for `to` at `out`, then append the crossing line: in that order, so a crash
     leaves at worst a page no line names. The key is made on first use; the policy is checked first,
-    so nothing is written when the request is refused. A day whose page would carry a sealed line is
-    refused too, before the key or anything else is written: the page would carry it opened, under a
-    hash that covers its `sealed/v1` reference, which no receiver can recompute; a sealed day shares
-    after v1, when a page can carry sealed lines resealed to the receiver (RFC 0029). A sealed
-    attachment on a day of plain lines shares, opened and checked (`_copy_checked`)."""
+    so nothing is written when the request is refused. A destination the policy keeps for its own
+    reader (`policy.RESERVED`) is refused, and so is a day the owner has not signed (RFC 0034, as
+    `export crossing` holds one; `UNSIGNED_DAY` names `day sign`). A day whose page would carry a
+    sealed line is refused too, before the key or anything else is written: the page would carry it
+    opened, under a hash that covers its `sealed/v1` reference, which no receiver can recompute; a
+    sealed day shares after v1, when a page can carry sealed lines resealed to the receiver (RFC 0029).
+    A sealed attachment on a day of plain lines shares, opened and checked (`_copy_checked`)."""
     day = parse_day(day).isoformat()
     check_name(to)
     allowed = ceiling(lb, to, max_tier)
     meta = lb.meta
     lb._check_format(meta)  # a 0.1 record is refused here, before a page exists that no line could record
+    with lb.index() as idx:
+        if day not in crossing.signed_gate(lb, idx).signed:
+            raise ShareError(UNSIGNED_DAY.format(day=day))
     sel = select(lb, day, max_tier, to)
     if sel.sealed:
         raise ShareError(SEALED_DAY.format(day=day))
@@ -397,6 +431,8 @@ def share_day(
         "max_tier": max_tier,
         "lines": len(sel.lines),
         "held_back": sel.held_back,
+        "held_back_unsigned": sel.held_back_unsigned,  # of `held_back`: by the signed-day gate (RFC 0034)
+        **({"mail_held_back": sel.mail_held_back} if sel.mail_held_back is not None else {}),  # RFC 0045
         "lines_sha256": hashlib.sha256(lines_raw).hexdigest(),
         "package_sha256": hashlib.sha256(package_raw).hexdigest(),
         "attachments": sel.blobs,
@@ -436,7 +472,7 @@ def share_day(
             "window": {"from": since, "to": until},
             "tiers": [t for t in policy.TIERS if t <= max_tier],
             "counts": sel.counts(),
-            "policy": {"file": policy.POLICY_FILE.as_posix(), "max_tier": allowed},
+            "policy": {"file": policy.POLICY_FILE.as_posix(), "max_tier": allowed, "signed_only": True},
             "logbook_head": head,
             "package_sha256": package_sha256,
             "extra": {"schema": SCHEMA, "date": day},
@@ -609,9 +645,10 @@ def _manifest(zf: zipfile.ZipFile) -> dict[str, Any]:
         raise ReceiveError(f"{MANIFEST_FILE}: {e}") from e
     if manifest.get("max_tier") not in policy.TIERS:
         raise ReceiveError(f"{MANIFEST_FILE}: max_tier must be 1, 2 or 3")
-    for key in ("lines", "held_back"):
+    for key in ("lines", "held_back", *(k for k in HELD_BACK_COUNTS if k in manifest)):
         if not isinstance(manifest.get(key), int) or isinstance(manifest[key], bool) or manifest[key] < 0:
             raise ReceiveError(f"{MANIFEST_FILE}: {key} is not a count")
+    _check_counts(manifest)
     for key in ("lines_sha256", "package_sha256", "logbook_head"):
         if not isinstance(manifest.get(key), str) or not DIGEST.fullmatch(manifest[key]):
             raise ReceiveError(f"{MANIFEST_FILE}: {key} is not a lowercase hex sha256")
@@ -632,6 +669,13 @@ def _manifest(zf: zipfile.ZipFile) -> dict[str, Any]:
         ):
             raise ReceiveError(f"{MANIFEST_FILE}: an attachment is not {{sha256, bytes, media_type}}")
     return manifest
+
+
+def _check_counts(manifest: dict[str, Any]) -> None:
+    """Each count of a rule (`HELD_BACK_COUNTS`) is part of `held_back`, never more than it."""
+    for key in HELD_BACK_COUNTS:
+        if key in manifest and manifest[key] > manifest["held_back"]:
+            raise ReceiveError(f"{MANIFEST_FILE}: {key} is more than held_back, of which it is a part")
 
 
 def _sender(manifest: dict[str, Any], circle: dict[str, str], sender: str | None, lb: Logbook) -> str:

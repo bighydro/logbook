@@ -1189,14 +1189,14 @@ word, so the day closes itself (ADR 0005). It writes nothing and sends nothing; 
 
 A crossing package (RFC 0005) is the bundle you hand a named member of your circle: the lines of a window,
 verbatim, the attachments they point at, and the resolution lines that let the reader name the people in
-them, so they need nothing else from your record. The first reader is Hermes, an agent that pulls one
-nightly and proposes actions.
+them, so they need nothing else from your record. Kari, say, gets one every night. A member is a person:
+a name the policy keeps for a reader or a door of its own (`mcp`, `hermes`, `vault` and the rest) is refused.
 
 ```bash
-logbook export crossing --to hermes --since 2026-03-01T00:00:00Z --dry-run     # counts per kind and tier, writes nothing
-logbook export crossing --to hermes --since 2026-03-01T00:00:00Z               # the first window, tier 1 only
-logbook export crossing --to hermes --since last --tier 1,2                    # every night: since the last one, tiers 1 and 2
-logbook export crossing --to hermes --since last --tier 1,2 --kinds message,event --out /srv/hermes/inbox/tonight
+logbook export crossing --to kari --since 2026-03-01T00:00:00Z --dry-run     # counts per kind and tier, writes nothing
+logbook export crossing --to kari --since 2026-03-01T00:00:00Z               # the first window, tier 1 only
+logbook export crossing --to kari --since last --tier 1,2                    # every night: since the last one, tiers 1 and 2
+logbook export crossing --to kari --since last --tier 1,2 --kinds message,event --out ~/Handover/kari/tonight
 ```
 
 The window is `[--since, --until)`, `--until` defaulting to now; `--since last` starts where the last crossing
@@ -1207,7 +1207,7 @@ reference), and `resolution.jsonl` when any exported line names someone your con
 alias hops included. A JSON parser is all a reader needs.
 
 How much may cross is a setting in your record, not in the code (ADR 0016): `policy/crossing.json` maps each
-destination to its ceiling, `{"hermes": {"max_tier": 2}}`, and you write each entry yourself: a new record
+destination to its ceiling, `{"kari": {"max_tier": 2}}`, and you write each entry yourself: a new record
 names only `mcp`, at 1. Tier 1 crosses by default; tier 2 only
 with `--tier 1,2`, and the manifest then lists every tier-2 line under `review`; tier 3 only when the file
 allows it *and* you type `--tier 1,2,3`, and the manifest and the console say loudly that it did. A request

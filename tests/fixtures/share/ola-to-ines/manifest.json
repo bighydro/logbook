@@ -5,14 +5,15 @@
   "date": "2026-06-13",
   "from": "8dcbff29-a6c0-5eaf-b320-19e23443ba8a",
   "held_back": 2,
+  "held_back_unsigned": 0,
   "key": "5df798a38513062672180f48ca6532401cbc9e7041c7c353244b9ff9be0c47b8",
   "lines": 2,
   "lines_sha256": "07782bb6fbf8290293c4b98e84f124433bef1fbc083c00267421c78747a51ed5",
-  "logbook_head": "6381a2e9a71bcfb82c129288bafb85406dde4d66ed534b5b4b1bf55539ac30a8",
+  "logbook_head": "c1928a46d6ef72d61643d5d3366a9dbca53fc8dc5dbeed36bcd755b8f1f62b9b",
   "max_tier": 1,
-  "package_sha256": "edcde4333e35dddaf2dc6c9ebfb10546e7d12c7b565b5e5c5fde8429cd4d71c0",
+  "package_sha256": "7ff9d45ea40f99124c6f6d2ff806b7c25d4e0f3fe1dfd1b264a4a11cc48f9604",
   "schema": "shared-page/v1",
-  "signature": "b7b6b4420c476a4bc23940637b50e24583114cdd1d738474ced5c3ca8dbed0af493545ded915c2fdf4fd277c2597bf15a532d6f90003a7551be3f134c033c201",
+  "signature": "04aba7b080ed6d7b92e2682e17b412c61cab0252241d00a37da4303c2450238f187dd26797c0848987eaa775bb9faab779bb23a9081f7cd02be70b2b1b6dce05",
   "to": "ines",
   "tz": "Europe/Oslo"
 }

@@ -16,11 +16,12 @@ from test_heard_sync import FEED, JSON, SRT, TEXT, VTT, _heard, _listen, _ttml, 
 from logbook import cli
 from logbook.commands import heard as heard_command
 from logbook.contrib.adapters import heard as step
-from logbook.core import crossing, heard, share
+from logbook.core import crossing, heard, share, signing
 from logbook.core.store import Logbook
 
 TZ = "Europe/Oslo"
 DAY = "2026-10-14"
+SIGNED_AT = "2026-10-15T06:30:00Z"  # the morning after, off the day's page
 
 
 @pytest.fixture
@@ -261,6 +262,7 @@ def test_a_crossing_leaves_every_text_home_unless_the_entry_names_it(lb: Logbook
 
 
 def test_a_shared_page_carries_no_text_unless_the_entry_names_it(lb: Logbook) -> None:
+    signing.sign(lb, DAY, at=SIGNED_AT)  # a page is of a signed day (RFC 0034)
     _policy(lb, {"max_tier": 2})
     sel = share.select(lb, DAY, 2, "ola")
     assert not [line for line in sel.lines if line["kind"] == "heard"]
@@ -376,6 +378,8 @@ def test_a_share_refuses_a_sealed_day_first_and_carries_heard_only_under_the_ent
     cli.main(["sync", "heard"])
     capsys.readouterr()
     assert [line["kind"] for line in sealed.lines() if line["kind"] == "heard"] == ["heard"]
+    signing.sign(sealed, DAY, at=SIGNED_AT)  # signed, so the sealed lines are what refuses it (RFC 0034)
+    signing.sign(lb, DAY, at=SIGNED_AT)
     refusal = (
         f"export share day {DAY}: this day holds sealed lines, and a shared page cannot carry them yet; "
         "a sealed day shares after v1 (RFC 0029)"

@@ -34,6 +34,7 @@ from typing import Any
 from .. import __version__
 from . import attachments, day_start, drafts, heard, peoples_mail, policy, sealing, signing, stars
 from .chain import Line, is_sealed
+from .index import Index
 from .resolve import Ref, standing, walk
 from .store import Logbook, retractions, utc, uuid7
 
@@ -138,7 +139,12 @@ def request(
     when `--tier 1,2,3` was typed, so a policy edit alone never lets it cross (ADR 0016). The
     destination's recipient, when the policy names one, is what sealed lines are resealed to.
     `signed_only` is the gate of RFC 0034: the lines of signed days, unless the owner lifts it;
-    `all_mail` lifts RFC 0045's, people's mail only."""
+    `all_mail` lifts RFC 0045's, people's mail only. A destination the policy keeps for its own reader
+    (`policy.RESERVED`: `mcp`, `vault`, ...) is refused first, whatever the file says of it."""
+    try:
+        policy.check_destination(destination)
+    except policy.PolicyError as e:
+        raise CrossingError(str(e)) from e
     if since == LAST:
         since = last_until(lb, destination)
     since, until = utc(_checked(since)), utc(_checked(until))
@@ -269,14 +275,8 @@ def select(lb: Logbook, req: Request) -> Selection:
             if p.tier in req.tiers and (req.kinds is None or p.kind in req.kinds) and p.id not in retracted
         ]
         if req.signed_only:
-            meta = lb.meta
-            signed, signs = signing.gate(idx, str(meta["owner_id"]))
-            days = day_start.of(meta)  # a line's day is its local day under the record's day_start
-            kept = [
-                p
-                for p in wanted
-                if (signs.get(p.id) if p.kind == signing.KIND else days.day_of(p.at)) in signed
-            ]
+            gate = signed_gate(lb, idx)
+            kept = [p for p in wanted if gate.passes(p.id, p.kind, p.at)]
             unsigned_held = len(wanted) - len(kept)
             wanted = kept
         raw = idx.read(((p.file, p.offset) for p in wanted), opened=False)
@@ -298,16 +298,8 @@ def select(lb: Logbook, req: Request) -> Selection:
     # a mail crosses only when it is a person's (RFC 0045), unless the request says `--all-mail`; the
     # count is written whenever the rule read a mail, so a package with none is what it was
     mail_held: int | None = None
-    if not req.all_mail and any(line.get("kind") == peoples_mail.KIND for line in lines):
-        try:
-            rule = peoples_mail.Rule.of(lb, retraction_lines, resolution_lines)
-        except policy.PolicyError as e:
-            raise CrossingError(str(e)) from e
-        persons = [
-            line for line in lines if line.get("kind") != peoples_mail.KIND or rule.classify(line).person
-        ]
-        mail_held = len(lines) - len(persons)
-        lines = persons
+    if not req.all_mail:
+        lines, mail_held = peoples_mail_only(lb, retraction_lines, resolution_lines, lines)
     # a draft follows the entry it was written under, not the head (RFC 0036 amendment 1): once its
     # entry (the `relationship` entry's for a person, the `dream` entry's for every other unit) no
     # longer allows its tier it stays home, whatever this ceiling
@@ -330,6 +322,48 @@ def select(lb: Logbook, req: Request) -> Selection:
     return Selection(
         lines, len(inside), overlay, held, found, missing, carried, unsigned_held, held_by_entry, mail_held
     )
+
+
+@dataclass(frozen=True)
+class SignedGate:
+    """RFC 0034's gate as one record holds it: the days with a standing signature, and the day each
+    `signed-day` line signs, by its id. A line passes when its day is signed; a line's day is the local
+    day of its `at` under the record's `day_start` (RFC 0036), a signature's the day it signs, so a
+    signature crosses with its day. The one gate `select` and `share day` both hold a line to."""
+
+    signed: frozenset[str]
+    signs: Mapping[str, str]
+    days: day_start.DayStart
+
+    def day(self, id_: str, kind: str, at: str) -> str | None:
+        return self.signs.get(id_) if kind == signing.KIND else self.days.day_of(at)
+
+    def passes(self, id_: str, kind: str, at: str) -> bool:
+        return self.day(id_, kind, at) in self.signed
+
+
+def signed_gate(lb: Logbook, idx: Index) -> SignedGate:
+    """The record's signed-day gate (`SignedGate`), read through the open index."""
+    meta = lb.meta
+    signed, signs = signing.gate(idx, str(meta["owner_id"]))
+    return SignedGate(frozenset(signed), signs, day_start.of(meta))
+
+
+def peoples_mail_only(
+    lb: Logbook, marks: Iterable[Line], resolutions: Iterable[Line], lines: list[Line]
+) -> tuple[list[Line], int | None]:
+    """RFC 0045's rule, the one `select` and `share day` both apply: `lines` (opened) with every mail
+    no person is on left out (`peoples_mail.Rule`), and how many were; None when there was no mail to
+    read, so a package with none is what it was. `CrossingError` names `policy/owner.json` when that
+    file is not what it should be."""
+    if not any(line.get("kind") == peoples_mail.KIND for line in lines):
+        return lines, None
+    try:
+        rule = peoples_mail.Rule.of(lb, marks, resolutions)
+    except policy.PolicyError as e:
+        raise CrossingError(str(e)) from e
+    persons = [line for line in lines if line.get("kind") != peoples_mail.KIND or rule.classify(line).person]
+    return persons, len(lines) - len(persons)
 
 
 def _overlay(lines: list[Line], last: dict[Ref, Line], tiers: tuple[int, ...]) -> tuple[list[Line], int]:

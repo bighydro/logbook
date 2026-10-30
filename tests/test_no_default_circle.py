@@ -23,9 +23,9 @@ NEW_RECORD = {"mcp": {"max_tier": 1}}
 
 
 def _owners_file(*named: str) -> bytes:
-    """A policy file as an owner writes it by hand: hermes at 2 and each of `named` at 2, on one line
+    """A policy file as an owner writes it by hand: per-hansen at 2 and each of `named` at 2, on one line
     with no newline at the end, so a rewrite in the program's own layout would show."""
-    entries = {"hermes": {"max_tier": 2}} | {name: {"max_tier": 2} for name in named}
+    entries = {"per-hansen": {"max_tier": 2}} | {name: {"max_tier": 2} for name in named}
     return json.dumps(entries, separators=(",", ":")).encode("utf-8")
 
 
@@ -87,7 +87,7 @@ def test_a_crossing_to_hermes_on_a_new_record_is_refused_naming_the_file(
                 "export",
                 "crossing",
                 "--to",
-                "hermes",
+                "per-hansen",
                 "--tier",
                 "1",
                 "--since",
@@ -100,7 +100,7 @@ def test_a_crossing_to_hermes_on_a_new_record_is_refused_naming_the_file(
         )
     assert e.value.code == 2
     err = capsys.readouterr().err
-    assert str(policy.policy_path(lb.root)) in err and "'hermes'" in err
+    assert str(policy.policy_path(lb.root)) in err and "'per-hansen'" in err
     assert Logbook(lb.root).meta["seq"] == 0, "no line appended"
     assert not out.exists()
     assert policy.policy_path(lb.root).read_bytes() == before
@@ -133,7 +133,7 @@ def test_demo_keeps_a_file_that_names_hermes_byte_for_byte(
         (
             "crossing",
             "--to",
-            "hermes",
+            "per-hansen",
             "--tier",
             "1,2",
             "--since",

@@ -32,7 +32,7 @@ from shared_day import (
 )
 
 from logbook import cli
-from logbook.core import sealing, share
+from logbook.core import sealing, share, signing
 from logbook.core.chain import canonical_json
 from logbook.core.store import Logbook
 
@@ -168,7 +168,7 @@ def test_a_share_is_recorded_as_a_crossing_line(
     assert payload["tiers"] == [1, 2]
     assert payload["counts"]["crossed"] == 4 and payload["counts"]["held_back"] == 1
     assert payload["counts"]["by_tier"] == {"1": 3, "2": 1, "3": 0}
-    assert payload["policy"] == {"file": "policy/crossing.json", "max_tier": 2}
+    assert payload["policy"] == {"file": "policy/crossing.json", "max_tier": 2, "signed_only": True}
     assert payload["logbook_head"] == manifest["logbook_head"] == last["prev"]
     assert payload["package_sha256"] == hashlib.sha256(_members(ines_page)["manifest.json"]).hexdigest()
     assert payload["extra"] == {"schema": share.SCHEMA, "date": DAY}
@@ -193,6 +193,7 @@ def test_the_sharing_key_is_made_on_first_use_and_kept(
         ]
     )
     _allow(lb, "ola", 1)
+    signing.sign(lb, DAY, at="2026-06-14T06:30:00Z")  # only a signed day is shared (RFC 0034)
     assert "share_key" not in lb.meta
     key_file = share.key_path(str(lb.meta["owner_id"]))
     assert not key_file.exists()
@@ -665,6 +666,8 @@ def sealed_ines(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Logbook:
     lb = Logbook(lb.root)
     lb.attach(PHOTO_BYTES)
     lb.append_many(ines_drafts())
+    for day in (DAY, "2026-06-14"):  # only a signed day is shared (RFC 0034); signed on the Monday
+        signing.sign(lb, day, at="2026-06-15T06:30:00Z")
     _allow(lb, "ola", 2)
     use(monkeypatch, lb)
     return lb
@@ -744,6 +747,38 @@ def test_a_day_that_holds_sealed_lines_is_refused_before_anything_is_written(
     assert (sealed_ines.root / "logbook.json").read_bytes() == meta_raw
     after = Logbook(sealed_ines.root).meta
     assert (after["seq"], after["head"]) == (before["seq"], before["head"])
+
+
+def test_a_day_whose_one_sealed_line_is_other_mail_is_refused_as_a_sealed_day(
+    sealed_ines: Logbook, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+):
+    """The sealed-day refusal judges the day before the crossing's rules thin it (the review of the
+    share's rules): a sealed mail no person is on would stay home under RFC 0045, but the day is
+    still one that holds sealed lines, refused as it was before the rule."""
+    sealed_ines.append_many(
+        [
+            {
+                "at": "2026-06-14T09:00:00Z",
+                "source": "mail",
+                "kind": "mail",
+                "tier": 2,
+                "payload": {
+                    "schema": "mail/v1",
+                    "raw_id": "m-berth@mail.example.org",
+                    "direction": "received",
+                    "from": {"email": "harbour@example.org"},
+                    "to": [{"email": "ines@example.org"}],
+                    "subject": "Berth 14",
+                },
+            }
+        ]
+    )
+    code, err = _failure(
+        capsys, "export", "share", "day", "2026-06-14", "--to", "ola", "--tier", "2",
+        "--out", str(tmp_path / "sunday.zip"),
+    )  # fmt: skip
+    assert code == 2 and "this day holds sealed lines" in err
+    assert not (tmp_path / "sunday.zip").exists()
 
 
 def test_a_plain_day_of_a_sealed_record_shares_and_is_received(

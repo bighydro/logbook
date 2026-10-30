@@ -370,13 +370,13 @@ def test_a_signed_day_covers_the_day_so_defined(lb: Logbook, capsys: pytest.Capt
 
     from logbook.core import crossing, signing
 
-    allow(lb.root, "hermes", 2)  # the owner's entry: a new record names no one above tier 1
+    allow(lb.root, "per-hansen", 2)  # the owner's entry: a new record names no one above tier 1
     lb.set_meta(day_start="06:00")
     early = str(lb.day_lines("2026-10-12")[0]["id"])
     line = signing.sign(lb, "2026-10-12")
     assert line["payload"]["confirmed"] == [early]
     assert line["payload"]["page"]["lines"] == 1
-    req = crossing.request(lb, "hermes", "2026-10-12T00:00:00Z", "2026-10-14T00:00:00Z", (1, 2))
+    req = crossing.request(lb, "per-hansen", "2026-10-12T00:00:00Z", "2026-10-14T00:00:00Z", (1, 2))
     crossed = [str(x["id"]) for x in crossing.select(lb, req).lines if x["kind"] == "note"]
     assert crossed == [early], "the 01:30 line is the signed 12th's; the 07:00 line is the unsigned 13th's"
     cli.main(["day", "2026-10-12", "--json"])

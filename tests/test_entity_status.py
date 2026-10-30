@@ -207,7 +207,7 @@ def test_an_export_under_a_ceiling_of_two_carries_no_org_status_and_not_its_reas
     lb: Logbook, capsys: pytest.CaptureFixture[str], tmp_path: Path
 ) -> None:
     policy = lb.root / "policy" / "crossing.json"
-    policy.write_text(json.dumps({"hermes": {"max_tier": 2}}), encoding="utf-8")
+    policy.write_text(json.dumps({"per-hansen": {"max_tier": 2}}), encoding="utf-8")
     seq = int(lb.meta["seq"])
     org_reason, idea_reason = "orders through 2027 at the yard", "pricing page written"
     _status(capsys, "org", YARD["label"], "hold", "--reason", org_reason, "--at", "2026-10-01")
@@ -216,7 +216,7 @@ def test_an_export_under_a_ceiling_of_two_carries_no_org_status_and_not_its_reas
     assert [line["kind"] for line in (org_status, idea_note, idea_status)] == ["status", "note", "status"]
     assert [line["tier"] for line in (org_status, idea_note, idea_status)] == [3, 2, 2]
     out = tmp_path / "out"
-    cli.main(["export", "crossing", "--to", "hermes", "--since", "2026-09-01T00:00:00Z", "--until",
+    cli.main(["export", "crossing", "--to", "per-hansen", "--since", "2026-09-01T00:00:00Z", "--until",
               "2026-10-05T00:00:00Z", "--tier", "1,2", "--unsigned", "--out", str(out)])  # fmt: skip
     crossed = [json.loads(s) for s in (out / "entries.jsonl").read_text(encoding="utf-8").splitlines() if s]
     ids = {line["id"] for line in crossed}

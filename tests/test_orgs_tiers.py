@@ -44,7 +44,7 @@ from persona import utc
 from logbook import cli
 from logbook.commands import export as export_command
 from logbook.contrib import entities, entity_review, entity_status, notion_export, orgs, serve
-from logbook.core import assets, notes, places, policy, store
+from logbook.core import assets, notes, places, policy, signing, store
 from logbook.core.store import Logbook
 
 SINCE, UNTIL = "2023-01-01T00:00:00Z", "2026-10-13T00:00:00Z"  # every line of the record is inside
@@ -137,7 +137,7 @@ def _no_org_status_note(line: dict[str, Any]) -> bool:
 def test_a_crossing_under_a_ceiling_of_two_carries_no_org_status_no_reason_and_no_ledger_line(
     lb: Logbook, tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """The settled record, every Havbris wire accepted as the org's merchant: a crossing to `hermes`
+    """The settled record, every Havbris wire accepted as the org's merchant: a crossing to `per-hansen`
     under `max_tier: 2`, over a window that covers every line, carries every tier-2 line and nothing
     of tier 3, and the bytes of the bundle hold no reason and no figure. Then the same destination
     asked for tier 3 is refused, naming the policy file, and nothing is written anywhere."""
@@ -166,10 +166,10 @@ def test_a_crossing_under_a_ceiling_of_two_carries_no_org_status_no_reason_and_n
     )
 
     policy = lb.root / "policy" / "crossing.json"
-    policy.write_text(json.dumps({"hermes": {"max_tier": 2}}), encoding="utf-8")
+    policy.write_text(json.dumps({TO: {"max_tier": 2}}), encoding="utf-8")
     out = tmp_path / "out"
     # `--all-mail`: this is the tier ceiling's test, and the orgs' mail is no person's (RFC 0045)
-    code, _out, err = _run(capsys, "export", "crossing", "--to", "hermes", "--since", SINCE, "--until", UNTIL,
+    code, _out, err = _run(capsys, "export", "crossing", "--to", TO, "--since", SINCE, "--until", UNTIL,
                            "--tier", "1,2", "--unsigned", "--all-mail", "--out", str(out))  # fmt: skip
     assert code == 0, err
     crossed = _jsonl(out / "entries.jsonl")
@@ -203,10 +203,10 @@ def test_a_crossing_under_a_ceiling_of_two_carries_no_org_status_no_reason_and_n
     # the same destination asked for tier 3: refused before anything is written
     head, before = Logbook(lb.root).meta["head"], _record_files(lb.root)
     refused = tmp_path / "refused"
-    code, out_text, err = _run(capsys, "export", "crossing", "--to", "hermes", "--since", SINCE, "--until",
+    code, out_text, err = _run(capsys, "export", "crossing", "--to", TO, "--since", SINCE, "--until",
                                UNTIL, "--tier", "1,2,3", "--unsigned", "--out", str(refused))  # fmt: skip
     assert code == 2 and out_text == ""
-    assert err.startswith("export crossing: ") and "above the ceiling for 'hermes'" in err
+    assert err.startswith("export crossing: ") and "above the ceiling for 'per-hansen'" in err
     assert str(policy) in err and "max_tier 2" in err
     assert not refused.exists(), "no bundle"
     assert Logbook(lb.root).meta["head"] == head, "no crossing/v1 line"
@@ -350,6 +350,7 @@ def test_the_owner_s_terminal_reads_every_tier_and_reports_the_status_lines_at_t
 # -- the portfolio (RFC 0037 §10.2, amended 15 October 2026) -------------------------------------------------
 
 FUND, ANGEL = "Fund I", "Angel"  # two portfolios, free text as the owner types them
+TO = "per-hansen"  # the crossing's destination: a person, never a name the policy keeps (policy.RESERVED)
 NOW = f"{TODAY}T18:30:00Z"  # 20:30 in Oslo on the sitting's day: the clock the portfolio tests read
 IDEA_ID = "019cadd3-6bc0-7dcd-9133-000000000401"
 ANY_ENTRY = (1, 2, 3)  # every max_tier a policy/crossing.json entry may hold
@@ -786,10 +787,10 @@ def test_no_crossing_carries_a_portfolio_under_any_entry(
     _in_portfolios(lb, capsys)
     policy_file = lb.root / "policy" / "crossing.json"
     for ceiling in ANY_ENTRY:
-        policy_file.write_text(json.dumps({"hermes": {"max_tier": ceiling}}), encoding="utf-8")
+        policy_file.write_text(json.dumps({TO: {"max_tier": ceiling}}), encoding="utf-8")
         tiers = "1" if ceiling == 1 else "1,2"
         out = tmp_path / f"crossing-{ceiling}"
-        code, _out, err = _run(capsys, "export", "crossing", "--to", "hermes", "--since", SINCE, "--until",
+        code, _out, err = _run(capsys, "export", "crossing", "--to", TO, "--since", SINCE, "--until",
                                UNTIL, "--tier", tiers, "--unsigned", "--out", str(out))  # fmt: skip
         assert code == 0, (ceiling, err)
         crossed = _jsonl(out / "entries.jsonl")
@@ -800,7 +801,7 @@ def test_no_crossing_carries_a_portfolio_under_any_entry(
         if ceiling < 3:
             head, before = Logbook(lb.root).meta["head"], _record_files(lb.root)
             refused = tmp_path / f"refused-{ceiling}"
-            code, _out, err = _run(capsys, "export", "crossing", "--to", "hermes", "--since", SINCE,
+            code, _out, err = _run(capsys, "export", "crossing", "--to", TO, "--since", SINCE,
                                    "--until", UNTIL, "--tier", "1,2,3", "--unsigned", "--out",
                                    str(refused))  # fmt: skip
             assert code == 2 and "above the ceiling" in err and not refused.exists(), ceiling
@@ -814,6 +815,7 @@ def test_no_shared_day_carries_a_portfolio_under_any_entry(
     tier and at the most the entry lets go without the owner typing 3: no status line, no word of a
     portfolio in the page; an entry below 3 refuses `--tier 3`, writing nothing."""
     _in_portfolios(lb, capsys)
+    signing.sign(lb, TODAY, at=NOW)  # only a signed day is shared (RFC 0034)
     policy_file = lb.root / "policy" / "crossing.json"
     for ceiling in ANY_ENTRY:
         policy_file.write_text(json.dumps({"ola": {"max_tier": ceiling}}), encoding="utf-8")
