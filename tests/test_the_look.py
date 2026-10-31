@@ -16,6 +16,7 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
+import test_library_golden as golden
 import test_names_held_to_their_tier as tiers_test
 import test_no_count_beside_a_name as guard
 from dream_fortnight import ENV, fake, run_cli
@@ -25,6 +26,7 @@ from logbook.contrib import (
     day_rhythm,
     demo,
     doors,
+    gaps,
     search_page,
     serve,
     shelf_agents,
@@ -334,6 +336,30 @@ def test_no_number_date_or_clock_touches_a_name_on_any_page_or_state(persona: Pa
             assert _beside(page, names) == [], (target, _beside(page, names)[:3])
             checked += 1
         assert checked >= 60, checked
+
+
+@pytest.mark.parametrize("name", ["library", "orgs", "ideas", "shelves", "places"])
+def test_no_number_touches_a_name_on_the_golden_records_either(
+    name: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The same guard over every page the golden test reaches on its other synthetic records: the
+    Manifest's orgs and their introductions, the ideas, the shelves' agents and promises, the places and
+    the long library's years of journeys, none of which the demo or the persona has."""
+    with golden._fixed():
+        lb, now = golden.RECORDS[name](tmp_path, monkeypatch)
+    monkeypatch.setattr(gaps, "now", lambda: now)  # `/gaps` reads the wall clock, as in the golden test
+    site = serve.Site(Logbook(lb.root), now=lambda: now)
+    names = sorted({*_people_names(site), *guard.NAMES})
+    checked = 0
+    for target in golden.crawl(site):
+        path, _, query = target.partition("?")
+        response = site.respond(path, query)
+        if not response.content_type.startswith("text/html"):
+            continue
+        page = response.body.decode("utf-8")
+        assert _beside(page, names) == [], (name, target, _beside(page, names)[:3])
+        checked += 1
+    assert checked >= 20, checked
 
 
 @pytest.mark.parametrize(
