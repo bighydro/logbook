@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Eva Nordmann · Logbook</title>
+<style>
+:root{color-scheme:light dark;--fg:#1c1c1c;--bg:#fff;--mute:#6a6a6a;--line:#ddd;--accent:#2f5d7c}
+@media (prefers-color-scheme:dark){
+:root{--fg:#e8e8e8;--bg:#141414;--mute:#9b9b9b;--line:#333;--accent:#8fb8d6}}
+:root{--stay:#2e7d4f;--move:#3a62b0;--aboard:#1f6f88;--flight:#a0521f;--gap:#c43b3b}
+@media (prefers-color-scheme:dark){
+:root{--stay:#6cc08a;--move:#88a8ea;--aboard:#6fc2da;--flight:#e39a55;--gap:#ec7a7a}}
+body{margin:0;font:15px/1.45 system-ui,sans-serif;color:var(--fg);background:var(--bg)}
+header{border-bottom:1px solid var(--line);padding:.6rem 1rem}
+nav{display:flex;flex-wrap:wrap;row-gap:.3rem}
+nav a{margin-right:1rem;color:var(--accent);text-decoration:none}
+nav a:first-child{font-weight:600}
+main{max-width:66rem;margin:0 auto;padding:1rem}
+footer{color:var(--mute);font-size:.875rem;padding:1rem;border-top:1px solid var(--line)}
+a{color:var(--accent)}
+h1{margin:.2rem 0 .6rem}
+h1 small{color:var(--mute);font-weight:400;font-size:.6em}
+h2{font-size:1.1rem;margin:1.4rem 0 .5rem}
+table{border-collapse:collapse;width:100%}
+th,td{text-align:left;padding:.3rem .5rem;border-bottom:1px solid var(--line);vertical-align:top}
+th{color:var(--mute);font-weight:500}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+td.day{white-space:nowrap}
+dl.header{display:grid;grid-template-columns:max-content 1fr;gap:.2rem 1rem;margin:0 0 1rem}
+dl.header dt{color:var(--mute)}
+dl.header dd{margin:0}
+ol.timeline,ol.inside,ul.attached,ul.unplaced,ul.plain,ul.proposals{list-style:none;padding:0;margin:0}
+li.proposal{padding:.15rem 0}
+.row{padding:.4rem 0;border-bottom:1px solid var(--line)}
+.clock{display:inline-block;min-width:7.5rem;font-variant-numeric:tabular-nums;color:var(--mute)}
+.kind{display:inline-block;min-width:5.5rem;font-size:.875rem;text-transform:uppercase;letter-spacing:.05em;
+color:var(--mute)}
+.row.stay>.kind{color:var(--stay)}
+.row.move>.kind{color:var(--move)}
+.row.flight>.kind{color:var(--flight)}
+.row.aboard>.kind{color:var(--aboard)}
+.row.gap>.kind{color:var(--gap)}
+ol.inside{margin:.3rem 0 0 2rem}
+ol.inside .row{border:0;padding:.15rem 0}
+details{margin:.3rem 0 0 7.5rem}
+summary{cursor:pointer;color:var(--accent);min-height:44px;box-sizing:border-box;padding:.6rem 0}
+ul.attached{margin:.3rem 0 0 1rem}
+details.synthesis,p.synthesis{margin:.2rem 0 .3rem 1.5rem;font-size:.92rem}
+details.synthesis p.segment{margin:.15rem 0}
+ul.attached li,ul.unplaced li{padding:.15rem 0}
+p.with{margin:.3rem 0 0 1rem;color:var(--mute)}
+form.window{display:flex;gap:.6rem;align-items:center;flex-wrap:wrap;margin:0 0 1rem}
+form.window input,form.window button{min-height:44px}
+td.day a{display:inline-block;min-height:44px;line-height:44px}
+input,button{font:inherit;padding:.2rem .4rem;background:var(--bg);color:var(--fg);
+border:1px solid var(--line);border-radius:3px}
+p.pager,p.mute,.mute{color:var(--mute)}
+p.pager a{display:inline-block;min-height:44px;line-height:44px}
+a.name{font-size:.8rem;margin-left:.5rem}
+form.star{display:inline;margin:0 0 0 .3rem}
+form.star button{border:0;padding:0 .15rem;background:none;color:var(--mute);cursor:pointer;
+font-size:1rem;line-height:1}
+form.star button[aria-pressed=true],.star.on{color:#c9a227}
+form.with{display:inline-flex;gap:.4rem;align-items:center;flex-wrap:wrap;margin-left:.6rem}
+form.with input[type=text]{min-width:12rem}
+ul.starred{list-style:none;padding:0;margin:0}
+ul.starred li{padding:.2rem 0}
+ol.timeline li:target,ul.attached li:target,ul.attached span:target,ul.unplaced li:target,
+dt#with:target{background:color-mix(in srgb,var(--accent) 10%,var(--bg))}
+ol.queue{list-style:none;padding:0;margin:0}
+li.cluster{display:grid;grid-template-columns:10rem 1fr;gap:.2rem 1rem;padding:.8rem 0;
+border-bottom:1px solid var(--line)}
+li.cluster:target{background:color-mix(in srgb,var(--accent) 10%,var(--bg))}
+li.cluster svg{grid-row:1/4;width:10rem;height:6.5rem;border:1px solid var(--line);border-radius:3px}
+li.cluster svg text{font:11px system-ui,sans-serif;fill:var(--mute)}
+li.cluster svg circle.spot{fill:var(--accent)}
+li.cluster svg circle.ring,li.cluster svg circle.near{fill:none;stroke:var(--mute);stroke-dasharray:3 2}
+li.cluster svg line{stroke:var(--mute)}
+li.cluster p.facts{margin:0}
+li.cluster p.facts b{font-variant-numeric:tabular-nums}
+ul.evidence{list-style:none;padding:0;margin:0;color:var(--mute);font-size:.9rem}
+li.cluster details{margin:0;font-size:.9rem}
+form.name{display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;margin:.3rem 0 0}
+form.name input[type=text]{min-width:16rem;flex:1}
+form.name input[type=text],form.name button{min-height:44px}
+a.skip{display:inline-flex;align-items:center;min-height:44px;box-sizing:border-box;padding:.2rem .6rem;
+border:1px solid var(--line);border-radius:3px;text-decoration:none}
+@media (max-width:40rem){li.cluster{grid-template-columns:1fr}li.cluster svg{grid-row:auto}}
+section.close form{margin:.6rem 0 1rem}
+section.close textarea{display:block;width:100%;box-sizing:border-box;min-height:7rem;font:inherit;
+padding:.4rem;background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:3px}
+section.close button{padding:.35rem .9rem;margin:.4rem .4rem 0 0}
+section.close details{margin:.4rem 0}
+section.close label{overflow-wrap:anywhere}
+section.close input[type=file]{max-width:100%}
+ol.proposals,ol.sentences{padding:0;margin:.3rem 0}
+ol.proposals{list-style:none}
+ol.sentences{padding-left:2rem}
+ol.proposals li{padding:.35rem 0;border-bottom:1px solid var(--line)}
+ol.proposals label{display:flex;gap:.6rem;align-items:baseline;cursor:pointer}
+ol.proposals input{flex:none;width:1.1rem;height:1.1rem}
+ul.signed{color:var(--mute);margin:.4rem 0}
+section.close button,section.close input[type=text],section.close input[type=date]{min-height:44px;
+box-sizing:border-box}
+section.close details>summary{min-height:44px;display:flex;align-items:center}
+section.close code{overflow-wrap:anywhere}
+ol.proposals label{min-height:44px;align-items:flex-start;padding:.3rem 0;box-sizing:border-box}
+fieldset.keep{border:0;padding:0;margin:.9rem 0;min-width:0}
+fieldset.keep legend{padding:0;font-weight:600;font-size:11px;letter-spacing:.13em;text-transform:uppercase;
+color:var(--mute)}
+fieldset.keep input[type=text]{width:100%;max-width:20rem}
+ol.keep{list-style:none;padding:0;margin:.3rem 0}
+ol.keep>li{padding:.3rem 0;border-bottom:1px solid var(--line)}
+ol.keep label.pick{display:flex;gap:.6rem;align-items:flex-start;min-height:44px;cursor:pointer;
+padding:.3rem 0;box-sizing:border-box}
+ol.keep input[type=checkbox],ol.keep input[type=radio],ol.proposals input{flex:none;width:1.5rem;
+height:1.5rem;margin:0}
+ol.keep span.head{display:block;font-size:11px;letter-spacing:.08em;text-transform:uppercase;
+color:var(--mute)}
+ol.keep li.pencil span.words{font-family:var(--serif);color:var(--graphite);background:var(--paper);
+border-radius:3px;padding:0 .3rem}
+ol.keep li.kept span.words,ol.keep li.task span.words{font-family:var(--serif);color:var(--ink)}
+ol.keep label.revisit{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;min-height:44px;
+margin-left:1.85rem;color:var(--mute)}
+ol.keep span.answers{display:flex;flex-wrap:wrap;gap:.4rem;margin:.3rem 0 0}
+ol.keep span.answers label{display:inline-flex;align-items:center;gap:.4rem;min-height:44px;
+padding:0 .8rem;border:1px solid var(--line);border-radius:999px;cursor:pointer;box-sizing:border-box}
+ol.keep span.answers input{margin:0}
+form.dream{display:flex;flex-wrap:wrap;align-items:center;gap:.6rem .8rem;margin:.6rem 0 1rem}
+form.dream p{margin:0;flex:1 1 16rem}
+code.sha{overflow-wrap:anywhere}
+footer .footnote{display:inline-block;margin-top:.3rem}
+@media (max-width:40rem){details{margin-left:1rem}.clock{min-width:0;margin-right:.5rem}
+table{display:block;overflow-x:auto}}
+ol.shelf{list-style:none;padding:0;margin:0}
+ol.shelf>li{padding:.55rem 0;border-bottom:1px solid var(--line);overflow-wrap:anywhere}
+ol.shelf>li:target{background:color-mix(in srgb,var(--accent) 10%,var(--bg))}
+ol.shelf p{margin:.1rem 0}
+p.head{display:flex;flex-wrap:wrap;gap:.1rem .8rem;align-items:baseline}
+p.head .mute{font-size:.9rem;font-variant-numeric:tabular-nums}
+details.evidence,details.draft{margin:.25rem 0 0}
+details.evidence>summary{color:var(--mute);font-size:.875rem}
+details.evidence ul.evidence{font-size:.875rem;margin:.2rem 0 0 .8rem}
+details.evidence details{margin:0 0 0 .8rem}
+span.id{font:.875rem ui-monospace,monospace;color:var(--mute)}
+details.draft>summary{font-size:.9rem}
+div.draft p.segment{margin:.3rem 0}
+p.segment.unsupported{border-left:2px solid var(--line);padding-left:.5rem}
+.dates{white-space:nowrap}
+svg.stays{display:block;width:100%;max-width:30rem;height:auto;margin:.5rem 0;
+border:1px solid var(--line);border-radius:3px}
+svg.stays circle{fill:var(--accent);fill-opacity:.85;stroke:var(--bg)}
+svg.stays text{font:11px system-ui,sans-serif;fill:var(--fg)}
+svg.stays line{stroke:var(--mute)}
+li.proposal form{display:flex;flex-wrap:wrap;gap:.5rem;margin:.3rem 0 0}
+</style>
+</head>
+<body>
+<header><nav><a href="../index.html">Logbook</a><a href="../trips.html">trips</a><a href="../places.html">places</a><a href="../people.html">people</a></nav></header>
+<main>
+<h1>Eva Nordmann</h1>
+<p>26 days together · 26 nights · 2000 – 2025 · last 2025-12-24</p>
+<h2>Years</h2>
+<table>
+<thead><tr><th>year</th><th class="num">days</th><th class="num">nights</th><th class="num">stays</th><th>last</th><th>places</th></tr></thead>
+<tbody>
+<tr><td class="day"><a href="../years/2000.html">2000</a></td><td class="num">1</td><td class="num">1</td><td class="num">1</td><td>2000-12-24</td><td>the family home</td></tr>
+<tr><td class="day"><a href="../years/2001.html">2001</a></td><td class="num">1</td><td class="num">1</td><td class="num">1</td><td>2001-12-24</td><td>the family home</td></tr>
+<tr><td class="day"><a href="../years/2002.html">2002</a></td><td class="num">1</td><td class="num">1</td><td class="num">1</td><td>2002-12-24</td><td>the family home</td></tr>
+<tr><td class="day"><a href="../years/2003.html">2003</a></td><td class="num">1</td><td class="num">1</td><td class="num">1</td><td>2003-12-24</td><td>the family home</td></tr>
+<tr><td class="day"><a href="../years/2004.html">2004</a></td><td class="num">1</td><td class="num">1</td><td class="num">1</td><td>2004-12-24</td><td>the family home</td></tr>
+<tr><td class="day"><a href="../years/2005.html">2005</a></td><td class="num">1</td><td class="num">1</td><td class="num">1</td><td>2005-12-24</td><td>the family home</td></tr>
+<tr><td class="day"><a href="../years/2006.html">2006</a></td><td class="num">1</td><td class="num">1</td><td class="num">1</td><td>2006-12-24</td><td>the family home</td></tr>
+<tr><td class="day"><a href="../years/2007.html">2007</a></td><td class="num">1</td><td class="num">1</td><td class="num">1</td><td>2007-12-24</td><td>the family home</td></tr>
+<tr><td class="day"><a href="../years/2008.html">2008</a></td><td class="num">1</td><td class="num">1</td><td class="num">1</td><td>2008-12-24</td><td>the family home</td></tr>
+<tr><td class="day"><a href="../years/2009.html">2009</a></td><td class="num">1</td><td class="num">1</td><td class="num">1</td><td>2009-12-24</td><td>the family home</td></tr>
+<tr><td class="day"><a href="../years/2010.html">2010</a></td><td class="num">1</td><td class="num">1</td><td class="num">1</td><td>2010-12-24</td><td>the family home</td></tr>
+<tr><td class="day"><a href="../years/2011.html">2011</a></td><td class="num">1</td><td class="num">1</td><td class="num">1</td><td>2011-12-24</td><td>the family home</td></tr>
+<tr><td class="day"><a href="../years/2012.html">2012</a></td><td class="num">1</td><td class="num">1</td><td class="num">1</td><td>2012-12-24</td><td>the family home</td></tr>
+<tr><td class="day"><a href="../years/2013.html">2013</a></td><td class="num">1</td><td class="num">1</td><td class="num">1</td><td>2013-12-24</td><td>the family home</td></tr>
+<tr><td class="day"><a href="../years/2014.html">2014</a></td><td class="num">1</td><td class="num">1</td><td class="num">1</td><td>2014-12-24</td><td>the family home</td></tr>
+<tr><td class="day"><a href="../years/2015.html">2015</a></td><td class="num">1</td><td class="num">1</td><td class="num">1</td><td>2015-12-24</td><td>the family home</td></tr>
+<tr><td class="day"><a href="../years/2016.html">2016</a></td><td class="num">1</td><td class="num">1</td><td class="num">1</td><td>2016-12-24</td><td>the family home</td></tr>
+<tr><td class="day"><a href="../years/2017.html">2017</a></td><td class="num">1</td><td class="num">1</td><td class="num">1</td><td>2017-12-24</td><td>the family home</td></tr>
+<tr><td class="day"><a href="../years/2018.html">2018</a></td><td class="num">1</td><td class="num">1</td><td class="num">1</td><td>2018-12-24</td><td>the family home</td></tr>
+<tr><td class="day"><a href="../years/2019.html">2019</a></td><td class="num">1</td><td class="num">1</td><td class="num">1</td><td>2019-12-24</td><td>the family home</td></tr>
+<tr><td class="day"><a href="../years/2020.html">2020</a></td><td class="num">1</td><td class="num">1</td><td class="num">1</td><td>2020-12-24</td><td>the family home</td></tr>
+<tr><td class="day"><a href="../years/2021.html">2021</a></td><td class="num">1</td><td class="num">1</td><td class="num">1</td><td>2021-12-24</td><td>the family home</td></tr>
+<tr><td class="day"><a href="../years/2022.html">2022</a></td><td class="num">1</td><td class="num">1</td><td class="num">1</td><td>2022-12-24</td><td>the family home</td></tr>
+<tr><td class="day"><a href="../years/2023.html">2023</a></td><td class="num">1</td><td class="num">1</td><td class="num">1</td><td>2023-12-24</td><td>the family home</td></tr>
+<tr><td class="day"><a href="../years/2024.html">2024</a></td><td class="num">1</td><td class="num">1</td><td class="num">1</td><td>2024-12-24</td><td>the family home</td></tr>
+<tr><td class="day"><a href="../years/2025.html">2025</a></td><td class="num">1</td><td class="num">1</td><td class="num">1</td><td>2025-12-24</td><td>the family home</td></tr>
+</tbody>
+</table>
+<h2>Trips</h2>
+<p class="mute">none</p>
+</main>
+<footer>exported from the record · tier 1,2 · Europe/Oslo · nothing here is fetched</footer>
+</body>
+</html>

@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Today · Logbook</title>
+<style>
+:root{color-scheme:light dark;--paper:#F4F1EA;--surface:#FBFAF6;--line:#E3DED3;--line-soft:#ECE7DD;--tint:#EDE8DE;--ink:#16181D;--pencil:#62666D;--pencil-rule:#8C8F95;--signal:#C8401A;--signal-deep:#A93413;--card-dark:#16181D;--card-dark-text:#F4F1EA;--card-dark-muted:#C9C4B8;--serif:"Instrument Serif","Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;--sans:Inter,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;--mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+@media (prefers-color-scheme:dark){:root{--paper:#16181D;--surface:#1D2026;--line:#33363D;--line-soft:#2A2D33;--tint:#24272D;--ink:#F4F1EA;--pencil:#A8ACB3;--pencil-rule:#7A7E85;--signal:#EE7A55;--signal-deep:#F49A7C;--card-dark:#262930;--card-dark-text:#F4F1EA;--card-dark-muted:#C9C4B8}}
+*,*::before,*::after{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font-size:16px;line-height:1.5;font-family:var(--sans);
+-webkit-text-size-adjust:100%;text-size-adjust:100%}
+a{color:inherit;text-decoration-color:var(--pencil-rule);text-underline-offset:.18em}
+a:hover{text-decoration-color:var(--signal)}
+:focus-visible{outline:2px solid var(--signal);outline-offset:2px}
+header.doors{display:flex;align-items:center;gap:.5rem 1.6rem;max-width:72rem;margin:0 auto;
+padding:.9rem 1.25rem;border-bottom:1px solid var(--line)}
+header.doors a.wordmark{font-weight:400;font-size:1.6rem;line-height:1;font-family:var(--serif);
+text-decoration:none;color:var(--ink);margin-right:.4rem}
+nav.doors{display:flex;gap:.2rem}
+nav.doors a{display:inline-flex;align-items:center;min-height:44px;padding:0 .7rem;border-radius:22px;
+font-weight:500;font-size:.95rem;text-decoration:none;color:var(--pencil)}
+nav.doors a:hover{color:var(--ink);background:var(--tint)}
+nav.doors a[aria-current=page]{color:var(--ink);background:var(--surface);
+box-shadow:inset 0 0 0 1px var(--line);text-decoration:underline 2px var(--ink);text-underline-offset:.4em}
+form.ask{flex:1;display:flex;justify-content:flex-end;margin:0}
+form.ask input{width:100%;max-width:22rem;min-height:44px;padding:0 1rem;border-radius:22px;
+border:1px solid var(--line);background:var(--surface);color:var(--ink);font:inherit;font-size:.95rem}
+form.ask input::placeholder{color:var(--pencil)}
+form.ask label,.hidden{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);
+white-space:nowrap}
+header.doors a.gear{display:inline-flex;align-items:center;justify-content:center;min-width:44px;
+min-height:44px;border-radius:22px;color:var(--pencil)}
+header.doors a.gear:hover{color:var(--ink);background:var(--tint)}
+header.doors a.gear[aria-current=page]{color:var(--ink);background:var(--surface);
+box-shadow:inset 0 0 0 1px var(--line)}
+header.doors a.gear svg{display:block;max-width:100%}
+main.door{max-width:44rem;margin:0 auto;padding:1.5rem 1.25rem 3rem}
+footer.door{max-width:44rem;margin:0 auto;padding:1rem 1.25rem 2rem;border-top:1px solid var(--line);
+color:var(--pencil);font-size:.8rem;overflow-wrap:anywhere}
+footer.door code{font-family:var(--mono);font-size:.95em}
+.pencil{color:var(--pencil);text-decoration:underline dotted var(--pencil-rule);text-underline-offset:.2em}
+.ink{font-family:var(--serif);color:var(--ink)}
+.fact{color:var(--pencil);font-size:.8rem;font-variant-numeric:tabular-nums}
+@media (max-width:40rem){
+header.doors{flex-wrap:wrap;gap:.6rem;padding:.7rem 1rem}
+header.doors a.wordmark{font-size:1.4rem;margin-right:auto}
+form.ask{order:3;flex:1 0 100%}
+form.ask input{max-width:none}
+nav.doors{position:fixed;left:0;right:0;bottom:0;z-index:10;justify-content:space-around;gap:0;
+padding:.25rem .5rem .5rem;background:var(--surface);
+border-top:1px solid var(--line)}
+nav.doors a{flex:1;justify-content:center;font-size:.85rem;padding:0 .3rem}
+nav.doors a[aria-current=page]{background:var(--ink);color:var(--paper);box-shadow:none;text-decoration:none}
+body{padding-bottom:4.5rem}
+main.door,footer.door{padding-left:1rem;padding-right:1rem}
+}
+
+section.date{margin:0 0 2rem}
+section.date p.eyebrow{margin:0 0 .3rem;color:var(--pencil);font-size:.75rem;font-weight:600;
+letter-spacing:.12em;text-transform:uppercase}
+section.date h1{margin:0;font-weight:400;font-size:2.6rem;line-height:1.05;font-family:var(--serif)}
+section.date h1 a{text-decoration:none}
+section.date p.where{margin:.45rem 0 0;color:var(--pencil);font-size:1rem}
+main.door h2{margin:0 0 .6rem;color:var(--pencil);font-size:.75rem;font-weight:600;
+letter-spacing:.12em;text-transform:uppercase}
+section.open,section.memory{margin:0 0 2.2rem}
+ul.open{list-style:none;margin:0;padding:0;border-top:1px solid var(--line)}
+ul.open li{display:flex;gap:.9rem;padding:.75rem 0;border-bottom:1px solid var(--line-soft)}
+ul.open span.mark{flex:0 0 .45rem;height:.45rem;margin-top:.55rem;border-radius:50%;
+background:var(--pencil-rule)}
+ul.open li.task span.mark{background:var(--ink)}
+ul.open div{min-width:0;overflow-wrap:anywhere}
+ul.open a.what{display:block;font-weight:400;font-size:1.2rem;line-height:1.3;font-family:var(--serif);
+text-decoration:none}
+ul.open a.what.pencil{color:var(--pencil);text-decoration:underline dotted var(--pencil-rule);
+text-underline-offset:.22em}
+ul.open span.sub{display:block;margin-top:.15rem;color:var(--pencil);font-size:.85rem}
+ul.open li.more{display:block;color:var(--pencil);font-size:.85rem}
+p.said{margin:0;color:var(--pencil)}
+span.person{white-space:nowrap}
+a.memory{display:block;padding:1.1rem 1.2rem;border-radius:14px;background:var(--card-dark);
+color:var(--card-dark-text);text-decoration:none;overflow-wrap:anywhere}
+a.memory img{display:block;width:100%;max-width:100%;height:auto;max-height:16rem;object-fit:cover;
+border-radius:8px;margin:0 0 .9rem}
+a.memory span{display:block}
+a.memory span.when{font-weight:400;font-size:1.5rem;line-height:1.2;font-family:var(--serif)}
+a.memory span.where{margin-top:.2rem;color:var(--card-dark-muted);font-size:.9rem}
+a.memory span.words{margin-top:.7rem;font-style:italic;font-weight:400;font-size:1.15rem;line-height:1.4;
+font-family:var(--serif)}
+a.memory span.open{margin-top:.8rem;font-size:.85rem;color:var(--card-dark-muted)}
+a.memory:hover span.when{text-decoration:underline;text-decoration-color:var(--signal)}
+section.close{margin:2.5rem 0 0;padding:1.5rem 0 0;border-top:1px solid var(--line)}
+section.close h2{margin:0 0 .6rem}
+section.close p,section.close ul{font-size:.9rem;color:var(--pencil)}
+section.close ul.signed{padding-left:1.1rem}
+section.close textarea{display:block;width:100%;min-height:8rem;margin:.4rem 0 .6rem;padding:.7rem .8rem;
+border:1px solid var(--line);border-radius:10px;background:var(--surface);
+color:var(--ink);font-size:1.05rem;line-height:1.5;font-family:var(--serif)}
+section.close button{min-height:44px;padding:0 1.2rem;border-radius:22px;border:1px solid var(--ink);
+background:var(--ink);color:var(--paper);font-weight:600;font-size:.9rem;font-family:var(--sans);cursor:pointer}
+section.close button[type=button]{background:transparent;color:var(--ink)}
+section.close form{margin:0 0 1rem}
+section.close label{display:block;font-size:.9rem;overflow-wrap:anywhere}
+section.close input[type=file]{max-width:100%}
+section.close ol.proposals{list-style:none;padding:0;margin:.3rem 0}
+section.close ol.proposals li{padding:.4rem 0;border-bottom:1px solid var(--line-soft)}
+section.close ol.proposals label{display:flex;gap:.6rem;align-items:baseline;color:var(--ink)}
+section.close ol.proposals input{flex:none;width:1.1rem;height:1.1rem}
+section.close details{margin:.4rem 0;font-size:.9rem}
+section.close code{font-family:var(--mono);font-size:.85em;overflow-wrap:anywhere}
+@media (max-width:40rem){section.date h1{font-size:2.2rem}}
+</style>
+</head>
+<body>
+<header class="doors"><a class="wordmark" href="today.html">Logbook</a><nav class="doors" aria-label="Doors"><a href="today.html" aria-current="page">Today</a><span>Life</span><a href="people.html">People</a><a href="places.html">Places</a></nav></header>
+<main class="door">
+<section class="date">
+<p class="eyebrow">The last day in the record</p>
+<h1><a href="days/2026.html#2026-06-30">Tuesday 30 June 2026</a></h1>
+<p class="where">Last night at Home</p>
+</section>
+<section class="open">
+<h2>What’s open</h2>
+<ul class="open">
+<li class="owed"><span class="mark"></span><div><a href="days/2026.html#2026-05-20" class="what">A reply owed</a><span class="sub"><span class="person">Per Hansen</span> wrote · since Wed 20 May</span></div></li>
+<li class="owed"><span class="mark"></span><div><a href="days/2026-06-03.html" class="what">A reply owed</a><span class="sub"><span class="person">Marta Keller</span> wrote · since Wed 3 June</span></div></li>
+<li class="owed"><span class="mark"></span><div><a href="days/2026.html#2026-06-05" class="what">A reply owed</a><span class="sub"><span class="person">Nils Haug</span> wrote · since Fri 5 June</span></div></li>
+<li class="owed"><span class="mark"></span><div><a href="days/2026.html#2026-06-12" class="what">A reply owed</a><span class="sub"><span class="person">Anders Vik</span> wrote · since Fri 12 June</span></div></li>
+<li class="promise"><span class="mark"></span><div><span class="what pencil" title="read as a promise by the rules: yours to confirm when you sign its day">“I&#x27;ll bring the charts and the good coffee.”</span><span class="sub"><span class="person">Sigrid Moen</span> promised you · since Sat 20 June</span></div></li>
+<li class="promise"><span class="mark"></span><div><span class="what pencil" title="read as a promise by the rules: yours to confirm when you sign its day">“I&#x27;ll meet you at the flat, bring a jumper, it&#x27;s windy.”</span><span class="sub"><span class="person">Freja Lund</span> promised you · since Tue 23 June</span></div></li>
+<li class="promise"><span class="mark"></span><div><span class="what pencil" title="read as a promise by the rules: yours to confirm when you sign its day">“I&#x27;ll keep the food warm.”</span><span class="sub">you promised <span class="person">Ola Nordmann</span> · since Wednesday</span></div></li>
+<li class="more">Three more, newer than these: every promise is on the Promises shelf.</li>
+</ul>
+</section>
+<section class="memory">
+<h2>A year ago today</h2>
+<a class="memory" href="days/2025.html#2025-06-30"><span class="when">Monday 30 June 2025</span><span class="where">The night at Home</span><span class="open">Open the day</span></a>
+</section>
+</main>
+<footer class="door">exported from the record · tier 1,2 · Europe/Oslo · nothing here is fetched</footer>
+</body>
+</html>
