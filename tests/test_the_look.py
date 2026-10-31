@@ -195,12 +195,31 @@ def test_a_rule_s_or_an_agent_s_proposal_is_drawn_in_pencil() -> None:
 def test_every_control_is_a_44_px_target() -> None:
     for rule in (r"main button,a\.skip\{", r"main input,main select\{", r"\nsummary\{",
                  r"p\.pager a,p\.zooms a,p\.facets a\{", r"a\.name\{",
-                 r"main form\.star button\{"):  # fmt: skip
+                 r"main form\.star button\{",
+                 r"p\.head>a,main h2>a,p\.people>a,p\.ids>a,p\.gear-crumb>a,"
+                 r"a\.person,p\.facts>a,dd>a\{"):  # fmt: skip
         found = re.search(rule + r"[^}]*", doors.PAGES)
         assert found is not None, rule
         assert "min-height:44px" in found.group(0) or "min-width:44px" in found.group(0), rule
     pill = re.search(r"main button,a\.skip\{[^}]*", doors.PAGES)
     assert pill is not None and "border-radius:23px" in pill.group(0)
+
+
+def test_a_date_stays_whole_in_a_table_and_a_line_and_the_signed_draft_sits_at_the_margin(
+    record: Path,
+) -> None:
+    """The blind review's layout findings: the Gaps table broke its dates at their hyphens on a desktop,
+    a line's JSON broke its timestamps on a phone, and the signed Day's folded draft stood 7.5rem in."""
+    assert "main td.at{white-space:nowrap}" in doors.PAGES
+    page = serve.Site(Logbook(record)).respond("/gaps").body.decode("utf-8")
+    row = re.search(r"<tbody>\n<tr>(.*?)</tr>", page, re.S)
+    assert row is not None and row.group(1).count('<td class="at">') == 4, (
+        "source, first, last, longest silence"
+    )
+    line = re.search(r"pre\.line\{[^}]*", doors.PAGES)
+    assert line is not None and "white-space:pre;" in line.group(0) and "anywhere" not in line.group(0)
+    assert "details.fold{margin:0}" in day_rhythm.STYLE
+    assert "li.hit a.at{margin-right:.6rem}" in search_page.SEARCH_STYLE, "a hit's time apart from its kind"
 
 
 def test_type_is_the_doors_serif_inter_and_mono() -> None:
