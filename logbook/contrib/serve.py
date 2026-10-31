@@ -3762,7 +3762,7 @@ class Site:
                 f'<span class="id" title="line {escape(i)}">{escape(drafts.short_id(i))}</span>'
                 for i in ids[:ID_SHOWN]
             )
-            more = f" +{len(ids) - ID_SHOWN}" if len(ids) > ID_SHOWN else ""
+            more = f" and {len(ids) - ID_SHOWN} more" if len(ids) > ID_SHOWN else ""  # words after a name
             rows.append(f"{text}{' ' + shown if shown else ''}{more}")
         count = _plural(len(lines), "line") if lines else _plural(len(items), "row")
         summary = f"{escape(label)}{DOT}{count}" if counted else escape(label)
@@ -3872,7 +3872,7 @@ class Site:
             facts.append(_plural(r.documents, "document"))
         out = [
             f'<li id="{escape(r.org.id)}"{cls}><p class="head">{" ".join(head)}</p>\n',
-            f'<p class="facts">{escape(DOT.join(facts))}</p>\n',
+            f'<p class="facts">{"<br>\n".join(escape(f) for f in facts)}</p>\n',  # a fact a line
         ]
         if r.status is not None and r.status.status in orgs.WITH_REASON and r.status.reason:
             out.append(f'<p class="reason">{escape(r.status.reason)}</p>\n')
@@ -4043,7 +4043,7 @@ class Site:
                 parts.append(
                     f'<li title="line {escape(intro.line)}">{escape(intro.by)} introduced'
                     f" {escape(', '.join(intro.introduced))}"
-                    f' <span class="mute">{escape(intro.day)}, “{escape(intro.subject)}”</span></li>\n'
+                    f' <span class="mute">on {escape(intro.day)}, “{escape(intro.subject)}”</span></li>\n'
                 )
             parts.append("</ul>\n")
         parts.append("<h2>Documents <small>references, never copies</small></h2>\n")
