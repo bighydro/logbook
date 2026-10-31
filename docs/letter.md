@@ -1,7 +1,7 @@
 # The letter
 
 `logbook export letter FROM TO` reads a range of your signed days back as one letter: a single HTML
-file to print from the browser or hand to someone, and the same content as Markdown. It is the press's
+file to print from the browser or hand to someone, and the same content as Markdown. It is Volumes'
 first object: what you kept of those days, in your words, with the dream's story beside them in pencil.
 
 ```bash

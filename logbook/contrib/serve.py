@@ -3210,7 +3210,7 @@ class Site:
         out = [
             f'<section class="review">\n<h2 id="{PHOTOS}">Photo review</h2>\n'
             f'<p class="mute">{_plural(len(waiting), "photo")} of the day not starred: Star makes one the'
-            " day's hero and the press's pick; Not a keeper stops asking, and writes no line.</p>\n"
+            " day's hero and the Volume's pick; Not a keeper stops asking, and writes no line.</p>\n"
             '<ul class="review">\n'
         ]
         for id_ in waiting:
