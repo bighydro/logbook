@@ -111,6 +111,7 @@ after the read gate, so a request the gate refuses at the door is refused at its
 | `/manifest/review`, `/manifest/status` | stay: the Manifest's acts (POST) | — |
 | `/agents?page=` | stays until the gear is built; then `/gear/agents?page=` | — |
 | `/line/ID`, `/photo/ID` | stay | — |
+| `/search?q=` | `/ask?q=` (§9: search in the Library is Ask v1) | the words; `kind`, `year` and `page` left behind |
 
 ## Today, the front door
 

@@ -72,6 +72,7 @@ class Moved:
 
 
 DAY_VALUE, YEAR_VALUE, SHARED_YEAR = "day", "year", "shared year"  # what a carried value must be
+WORDS = "words"  # the words asked, as typed: any text Ask takes, percent-encoded into the Location
 # Every Library address before the doors and where it lives now: RFC 0047 §9's rows, in order. The
 # server answers a row with a home with `REDIRECT_STATUS` to it (`moved`); a row without one, a row that
 # `waits`, and every POST, as it always did. A parameter an old address took that its new home does not
@@ -133,6 +134,9 @@ MOVED = (
     Moved("/agents", "/gear/agents", waits="the gear, #418"),  # its `page` and `day`
     Moved("/line/{ID}"),
     Moved("/photo/{ID}"),
+    # §9's prose: search in the Library (#363) is Ask v1. Its words carried; `kind`, `year` and `page`
+    # dropped: Ask takes none of the first two, and its pages count days, never hits
+    Moved("/search", "/ask", (("q", "q", WORDS),)),
 )
 _DAY = r"[0-9]{4}-[0-9]{2}-[0-9]{2}"  # ASCII digits only: `\d` is any script's
 _PARTS = {"DAY": _DAY, "FIRST": _DAY, "LAST": _DAY, "ID": r"[^/]+"}  # what each part of a row's address is
@@ -209,6 +213,9 @@ def _carried(names: list[str], kind: str, asked: dict[str, str], most: int | Non
     """The value the old query's `names` carry to the new home, as `kind` holds it; None when it
     names none."""
     given = {name: asked[name] for name in names if asked.get(name)}
+    if kind == WORDS:
+        (name,) = names
+        return given.get(name)
     if kind == YEAR_VALUE:
         (name,) = names
         if name not in given:

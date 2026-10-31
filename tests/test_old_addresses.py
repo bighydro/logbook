@@ -50,6 +50,13 @@ MOVES = {
         "/days?from=2026-06-08&shape=x&open=1",
         "/life?from=2026-06-08&zoom=day",
     ),
+    "search, the words": ("/search?q=Kari", "/ask?q=Kari"),
+    "search, what Ask does not take": (
+        "/search?q=Kari+Nordmann&kind=note&year=2026&page=2",
+        "/ask?q=Kari+Nordmann",
+    ),
+    "search, a line break typed": ("/search?q=a%0d%0aSet-Cookie:%20b=c", "/ask?q=a%0D%0ASet-Cookie%3A+b%3Dc"),
+    "search": ("/search", "/ask"),
     "a parameter given twice, the last": ("/trips?year=2025&year=2026", "/life?year=2026&zoom=year"),
 }
 # what answers as on main: the rows that stay, and the rows whose home is not built yet
@@ -320,7 +327,7 @@ AFTER_THE_TABLE = (
     "/timeline/life",
     "/week/2026-W25",
     "/week/2026-W25/close",
-    "/search",
+    "/ask",
 )
 
 
@@ -353,6 +360,7 @@ def test_the_table_is_section_9_s_rows_in_order() -> None:
         "/promises/{ID}", "/people", "/people/{ID}", "/people/review", "/places", "/places/review",
         "/world", "/assets", "/manifest", "/manifest/people", "/org/{ID}", "/manifest/review",
         "/manifest/status", "/agents", "/line/{ID}", "/photo/{ID}",
+        "/search",  # §9's prose: search in the Library is Ask v1
     ]  # fmt: skip
 
 
