@@ -164,6 +164,15 @@ def _day(text: str, name: str) -> date:
     return found
 
 
+def _id(text: str) -> str:
+    """An id in a path, as the new home's path carries it: escaped whole; `.` and `..` are none, since a
+    browser would read them as a step up the path."""
+    found = unquote(text)
+    if found in (".", ".."):
+        raise ValueError("the id is not one")
+    return quote(found, safe="")
+
+
 def _span(first: date | None, last: date | None, most: int | None, names: str) -> None:
     """Two days of a row run forward, and span fewer than `most` days when it says (Life's rule)."""
     if first is None or last is None:
@@ -184,7 +193,7 @@ def moved(path: str, query: str) -> str | None:
         if row.home is None or row.post or row.waits:
             return None
         parts = {
-            name: (_day(value, name).isoformat() if name != "ID" else quote(unquote(value), safe=""))
+            name: (_day(value, name).isoformat() if name != "ID" else _id(value))
             for name, value in found.groupdict().items()
         }
         if "FIRST" in parts:

@@ -12,6 +12,7 @@ import http.client
 import inspect
 import re
 from collections.abc import Iterator
+from datetime import UTC, datetime
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -92,6 +93,8 @@ INVALID = (
     "/agents?page=x",
     "/manifest?page=-1",
     "/agents?day=17%20June",
+    "/org/..",  # a dot segment: no org, and no path the browser would rewrite
+    "/org/.",
     "/days?from=2026-13-01",
     "/days?from=2026-06-08&to=2026-06-01",  # backwards
     "/days?from=2026-01-01&to=2026-06-30",  # longer than Life's window of days
@@ -414,3 +417,56 @@ def test_the_docs_name_every_old_address_and_point_at_the_rfc() -> None:
         assert f"`{row.old.replace('{', '').replace('}', '')}`" in text, row.old
         if row.home is not None:
             assert f"`{row.home.replace('{', '').replace('}', '')}" in text, row.home
+
+
+# -- the build ----------------------------------------------------------------------------------------------
+
+
+def test_an_act_drops_the_built_page_its_old_address_leads_to(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A form on an old page in the gear returns to the old address (`back=/org/ID`), which leads to
+    `/gear/org/ID`: under the build, the act drops that page too, so the owner sees what was written."""
+    import orgs_record
+
+    from logbook.contrib import library_build, orgs
+
+    lb = orgs_record.settled_record(tmp_path, monkeypatch)
+    now = datetime(2026, 10, 12, 20, 0, tzinfo=UTC)
+    org = sorted(orgs.read(lb, orgs.gate(None, False)).orgs)[0]
+    home = f"/gear/org/{org}"
+    library = library_build.Library(lb, now=lambda: now)
+    library_build.build(lb, serve.Site(lb, now=lambda: now), library, only=[home, "/gear/manifest"])
+    assert home in library.pages()
+    site = serve.Site(lb, now=lambda: now, library=library)
+    form = {
+        "act": "status",
+        "org": org,
+        "back": f"/org/{org}",
+        "status": "hold",
+        "reason": "Still building boats",
+        "at": "",
+    }
+    answered = site.write(serve.MANIFEST_STATUS, form, LOOPBACK, None)
+    assert answered.status == 303 and answered.location == f"/org/{org}", answered.body.decode("utf-8")[-400:]
+    assert home not in library.pages(), "the page the 303 leads to, through the table, is dropped"
+    assert "/gear/manifest" in library.pages(), "the rest is the rebuild's"
+
+
+def test_the_org_s_page_through_the_table_is_its_page_in_the_gear(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A real org, not a 404: `/org/ID` and `?money=1` lead to the gear's page of the same org, which
+    renders it."""
+    import orgs_record
+
+    from logbook.contrib import orgs
+
+    lb = orgs_record.settled_record(tmp_path, monkeypatch)
+    site = serve.Site(lb, now=lambda: datetime(2026, 10, 12, 20, 0, tzinfo=UTC))
+    org = sorted(orgs.read(lb, orgs.gate(None, False)).orgs)[0]
+    for query, home in (("", f"/gear/org/{org}"), ("money=1", f"/gear/org/{org}?money=1")):
+        found = site.moved(f"/org/{org}", query)
+        assert found is not None and found.location == home, (query, found)
+        path, _, asked = home.partition("?")
+        assert site.respond(path, asked).status == 200, home

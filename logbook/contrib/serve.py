@@ -1114,11 +1114,20 @@ class Site:
         them until the build writes them again, so the owner sees what was written), and the rebuild is
         asked for (`on_act`). Which pages: the page the act returns to and the front page; refused
         because the page was older than the record (409), the page the form was on, so the reload is
-        the page as it stands (`library_build.touched`)."""
+        the page as it stands (`library_build.touched`). A page the act returns to at an old address
+        (`back=/org/ID`) is answered by its new home (`moved`), and that page is dropped too."""
         if self.library is None:
             return
-        back = urlsplit(response.location or "").path
-        self.library.drop(library_build.touched(self.library.pages(), path, response.status, back, form))
+        returned = urlsplit(response.location or "")
+        pages = self.library.pages()
+        dropped = library_build.touched(pages, path, response.status, returned.path, form)
+        try:
+            home = doors.moved(returned.path, returned.query) if returned.path else None
+        except ValueError:
+            home = None
+        if home is not None:
+            dropped += library_build.touched(pages, path, response.status, urlsplit(home).path, form)
+        self.library.drop(dropped)
         if self.on_act is not None and response.status < 400:
             self.on_act()
 
