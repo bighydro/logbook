@@ -920,6 +920,28 @@ class Site:
             f" the name this page was asked at is not this machine's{written}.",
         )
 
+    def moved(self, path: str, query: str) -> Response | None:
+        """An old address of the Library (RFC 0047 §9, `doors.MOVED`): `doors.REDIRECT_STATUS` to its
+        new home, the moment it named carried, on a page that reads nothing of the record; a 404 for a
+        value its new home would refuse; None for every other address, answered as it always was. The
+        handler asks it after the read gate (`gate`), so a request the gate refuses is refused here as
+        at the new home, and before the build's pages, so a page built at an old address is never the
+        answer. The Location is the table's path and the values it parsed, never the request's Host."""
+        try:
+            location = doors.moved(path, query)
+        except ValueError as e:
+            return refused(404, f"no page at {path}: {e}")
+        if location is None:
+            return None
+        status = doors.REDIRECT_STATUS
+        body = (
+            '<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n'
+            f"<title>{status} · Logbook</title>\n</head>\n<body>\n"
+            f'<p>This page has moved: <a href="{escape(location)}">{escape(location)}</a></p>\n'
+            "</body>\n</html>\n"
+        )
+        return Response(status, body.encode("utf-8"), location=location)
+
     def still_reading(self, path: str, query: str, limit_s: float) -> Response:
         """The page a reading over the limit is answered with (503): what happened and when the page
         will be there, in one sentence each, never a spinner. With the build, the page is being
@@ -1092,11 +1114,20 @@ class Site:
         them until the build writes them again, so the owner sees what was written), and the rebuild is
         asked for (`on_act`). Which pages: the page the act returns to and the front page; refused
         because the page was older than the record (409), the page the form was on, so the reload is
-        the page as it stands (`library_build.touched`)."""
+        the page as it stands (`library_build.touched`). A page the act returns to at an old address
+        (`back=/org/ID`) is answered by its new home (`moved`), and that page is dropped too."""
         if self.library is None:
             return
-        back = urlsplit(response.location or "").path
-        self.library.drop(library_build.touched(self.library.pages(), path, response.status, back, form))
+        returned = urlsplit(response.location or "")
+        pages = self.library.pages()
+        dropped = library_build.touched(pages, path, response.status, returned.path, form)
+        try:
+            home = doors.moved(returned.path, returned.query) if returned.path else None
+        except ValueError:
+            home = None
+        if home is not None:
+            dropped += library_build.touched(pages, path, response.status, urlsplit(home).path, form)
+        self.library.drop(dropped)
         if self.on_act is not None and response.status < 400:
             self.on_act()
 
@@ -6001,6 +6032,9 @@ class Handler(BaseHTTPRequestHandler):
             self._send(refusal, body)
             return
         path, _, query = self.path.partition("?")
+        if (moved := server.site.moved(path, query)) is not None:  # an old address: its door (RFC 0047 §9)
+            self._send(moved, body)
+            return
         inm = self.headers.get("If-None-Match")
         quick = server.site.quick(path, query, inm)
         if quick is not None:

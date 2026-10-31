@@ -71,6 +71,48 @@ move or a night is `logbook/core/day.py`'s and `logbook/core/days.py`'s, a trip'
 silence's is `logbook/contrib/gaps.py`'s. A number here points at the lines it came from as it does under
 `--json`: hover an attachment and its line ids are the tooltip.
 
+### Old addresses
+
+Every address the Library answered before the doors still works ([RFC 0047 §9](../rfcs/0047-the-librarys-doors.md#9-every-page-today-and-its-new-home)).
+A page that moved answers with a redirect to its door, carrying the moment it named: a 302 in 1.1, a 301
+from 1.2 ([§15](../rfcs/0047-the-librarys-doors.md#the-captains-answers-25-october-2026), answer 8). A
+value the door would refuse (a day that is not one, a window that runs backwards or longer than Life's) is a
+404, and a parameter the door does not take is left behind. An address that named no moment opens its door
+at the door's own: `/days` alone is the fortnight to this Sunday, `/trips` and `/journeys` alone this
+year, `/world` alone the last year of the globe (the old pages showed the record's last). A form's address is never redirected: a POST is
+answered where it always was. The table is `MOVED` in `logbook/contrib/doors.py`, read by the server
+after the read gate, so a request the gate refuses at the door is refused at its old address too.
+
+| Old address | Now | The moment carried |
+|---|---|---|
+| `/` | stays: Today | — |
+| `/today` | stays: a redirect to today's Day | — |
+| `/day/DAY` | stays | — |
+| `/day/DAY/reflect`, `/day/DAY/sign`, `/star`, `/with` | stay: the Day's acts (POST) | — |
+| `/days?from=&to=` | `/life?from=&to=&zoom=day` | the window, at most 92 days, Life's; a whole calendar year (`from=YYYY-01-01&to=YYYY-12-31`, as Life's Volumes link it) is `/life?year=YYYY&zoom=year` |
+| `/trips?year=` | `/life?year=&zoom=year` | the year; Life draws a year's trips at the year zoom |
+| `/journeys?year=` | `/life?year=&zoom=year` | the year |
+| `/journeys/FIRST/LAST` | stays until Life's trip view holds the journey's name form, promises and photos; then `/life?trip=FIRST/LAST` | — |
+| `/journeys/name` | stays: Life's form posts here | — |
+| `/goals` | `/life` | the year's goals are at the top of Life |
+| `/goals/ID` | stays until Life shows a goal's thread | — |
+| `/ideas`, `/idea/ID` | stay: the Ideas shelf is kept in the gear | — |
+| `/ideas/review`, `/ideas/status` | stay: the Ideas' acts (POST) | — |
+| `/gaps` | stays: the gear keeps the table of silences a link away (its sources are `/gear/sources`) | — |
+| `/promises` | stays: the full list is kept in the gear | — |
+| `/promises/ID` | stays until People shows a person's promise | — |
+| `/people`, `/people/ID` | stay: the People door | — |
+| `/people/review` | stays (POST) | — |
+| `/places` | stays: the Places door | — |
+| `/places/review` | stays (POST) | — |
+| `/world?from=&to=` | `/places?at=YYYY` | the year the window opens in (`from`'s, else `to`'s); Places turns its globe by the year |
+| `/assets` | `/gear/assets` | — |
+| `/manifest?page=&portfolio=`, `/manifest/people`, `/org/ID?money=1` | `/gear/manifest?page=&portfolio=`, `/gear/manifest/people`, `/gear/org/ID?money=1` | the page, the portfolio, the org and whether its money was asked |
+| `/manifest/review`, `/manifest/status` | stay: the Manifest's acts (POST) | — |
+| `/agents?page=&day=` | `/gear/agents?page=&day=` | the page and the day |
+| `/line/ID`, `/photo/ID` | stay | — |
+| `/search?q=` | `/ask?q=` (§9: search in the Library is Ask v1) | the words; `kind`, `year` and `page` left behind |
+
 ## Today, the front door
 
 `/` is what you read at 07:00, on a phone first (RFC 0047 §4.1), in the frame every door shares: the
