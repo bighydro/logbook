@@ -210,12 +210,13 @@ def test_a_date_stays_whole_in_a_table_and_a_line_and_the_signed_draft_sits_at_t
 ) -> None:
     """The blind review's layout findings: the Gaps table broke its dates at their hyphens on a desktop,
     a line's JSON broke its timestamps on a phone, and the signed Day's folded draft stood 7.5rem in."""
-    assert "main td.at{white-space:nowrap}" in doors.PAGES
+    assert "main td.at,main span.run{white-space:nowrap}" in doors.PAGES
     page = serve.Site(Logbook(record)).respond("/gaps").body.decode("utf-8")
     row = re.search(r"<tbody>\n<tr>(.*?)</tr>", page, re.S)
     assert row is not None and row.group(1).count('<td class="at">') == 4, (
         "source, first, last, longest silence"
     )
+    assert '<span class="run">' in page, "a run kept whole"
     line = re.search(r"pre\.line\{[^}]*", doors.PAGES)
     assert line is not None and "white-space:pre;" in line.group(0) and "anywhere" not in line.group(0)
     assert "details.fold{margin:0}" in day_rhythm.STYLE

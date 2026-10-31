@@ -227,7 +227,7 @@ vertical-align:top}
 main th{font-weight:500;font-size:13px;font-family:var(--mono);letter-spacing:.12em;text-transform:uppercase;
 color:var(--pencil);border-bottom-color:var(--line)}
 main td.num,main th.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
-main td.day{white-space:nowrap}
+main td.day,main td.at,main span.run{white-space:nowrap}
 main td.day a{display:inline-flex;align-items:center;min-height:44px}
 dl.header{display:grid;grid-template-columns:max-content 1fr;gap:.45rem 1.4rem;margin:0 0 1.4rem;
 align-items:baseline}
@@ -376,12 +376,14 @@ p.note{margin:.2rem 0 0;font-style:italic;font-family:var(--serif);font-size:17p
 p.summary{margin:.2rem 0;overflow-wrap:anywhere}
 p.refs{overflow-wrap:anywhere}
 pre.file{white-space:pre-wrap;overflow-wrap:anywhere;max-width:100%;font-family:var(--mono);font-size:14px}
-pre.line{max-width:100%;overflow-x:auto;white-space:pre-wrap;overflow-wrap:anywhere;
+pre.line{max-width:100%;overflow-x:auto;white-space:pre;
 font:14px/1.5 var(--mono);padding:20px 24px;background:var(--surface);border:1px solid var(--line);
 border-radius:20px}
 dl.header dd{overflow-wrap:anywhere}
 @media (max-width:40rem){
 main{padding:1.5rem 1rem 3rem}
+p.head>a,main h2>a,p.people>a,p.ids>a,p.gear-crumb>a,a.person,p.facts>a,dd>a{display:inline-flex;
+align-items:center;min-height:44px}
 body>footer{padding-left:1rem;padding-right:1rem}
 main h1{font-size:40px;line-height:1.05}
 main h2{font-size:28px}

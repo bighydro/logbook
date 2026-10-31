@@ -203,6 +203,7 @@ p.nothing,p.quiet{color:var(--pencil);font-size:14px;margin:14px 0}
 section.record{margin:0 0 8px;padding:4px 28px;background:var(--surface);border:1px solid var(--line);
 border-radius:20px}
 section.record>h2{margin-top:20px}
+details.fold{margin:0}
 section.record details.fold{margin:0;padding:0;border-top:1px solid var(--line-soft)}
 details.fold>summary{list-style:none;cursor:pointer;display:flex;flex-wrap:wrap;align-items:center;
 column-gap:.6rem;min-height:56px;padding:6px 0;color:var(--ink)}

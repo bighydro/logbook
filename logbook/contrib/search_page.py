@@ -78,7 +78,8 @@ li.hit a.id{display:inline-block;min-height:2.75rem;line-height:2.75rem;
 font:14px/2.75rem var(--mono);color:var(--pencil);overflow-wrap:anywhere}
 li.hit .superseded{color:var(--pencil);font-size:14px}
 li.hit .superseded a{display:inline-block;min-height:2.75rem;line-height:2.75rem}
-@media (max-width:40rem){form.search button{padding:0 .6rem}li.hit .kind{min-width:0;margin-right:.4rem}}
+@media (max-width:40rem){form.search button{padding:0 .6rem}li.hit .kind{min-width:0;margin-right:.4rem}
+li.hit a.at{margin-right:.6rem}}
 """
 ASKED = "the words in the field"  # what a sentence says of words asked that set a number beside a name
 PAST = "Page {page} is past the last hit."  # a page asked for beyond them

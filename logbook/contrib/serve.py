@@ -4695,13 +4695,15 @@ class Site:
             missing = s["missing_days"]
             rows.append(
                 [
-                    escape(s["source"]),
+                    (escape(s["source"]), "at"),  # kept whole: a source's name, its days and clocks
                     _num(s["lines"]),
-                    escape(_clock(s["first"], tz)),
-                    escape(_clock(s["last"], tz)),
-                    escape(stretch),
+                    (escape(_clock(s["first"], tz)), "at"),
+                    (escape(_clock(s["last"], tz)), "at"),
+                    (escape(stretch), "at"),
                     _num(len(missing)),
-                    escape(gaps.runs(missing)),
+                    ", ".join(
+                        f'<span class="run">{escape(r)}</span>' for r in gaps.runs(missing).split(", ")
+                    ),
                 ]
             )
         newest = max(s["last"] for s in data["sources"] if s["lines"])
