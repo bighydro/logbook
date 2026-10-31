@@ -18,7 +18,7 @@ from urllib.parse import urlsplit
 import pytest
 from test_serve_hosts import FORWARDED, HOST, LOGIN, LOOPBACK, WEDNESDAY, Served
 
-from logbook.contrib import door_life, doors, phone, serve
+from logbook.contrib import door_gear, door_life, doors, phone, serve
 
 DOCS = Path(__file__).resolve().parent.parent / "docs" / "serve.md"
 
@@ -57,6 +57,19 @@ MOVES = {
     ),
     "search, a line break typed": ("/search?q=a%0d%0aSet-Cookie:%20b=c", "/ask?q=a%0D%0ASet-Cookie%3A+b%3Dc"),
     "search": ("/search", "/ask"),
+    "assets": ("/assets", "/gear/assets"),
+    "manifest": ("/manifest", "/gear/manifest"),
+    "manifest, a page and a portfolio": (
+        "/manifest?page=1&portfolio=Fund+I",
+        "/gear/manifest?page=1&portfolio=Fund+I",
+    ),
+    "manifest, people": ("/manifest/people", "/gear/manifest/people"),
+    "an org": ("/org/0a1b", "/gear/org/0a1b"),
+    "an org, its money asked": ("/org/0a1b?money=1", "/gear/org/0a1b?money=1"),
+    "an org, its money not asked": ("/org/0a1b?money=0", "/gear/org/0a1b"),
+    "an org, its id escaped": ("/org/kari%20nordmann%2Fx", "/gear/org/kari%20nordmann%2Fx"),
+    "agents": ("/agents", "/gear/agents"),
+    "agents, a page and a day": ("/agents?page=2&day=2026-06-17", "/gear/agents?page=2&day=2026-06-17"),
     "a parameter given twice, the last": ("/trips?year=2025&year=2026", "/life?year=2026&zoom=year"),
 }
 # what answers as on main: the rows that stay, and the rows whose home is not built yet
@@ -67,18 +80,18 @@ STAYS = (
     "/people",
     "/places",
     "/goals/nobody",
+    "/gaps",  # the gear keeps it a link away
     "/journeys/2026-06-12/2026-06-14",  # waits: Life has no journey's name form yet
     "/journeys/2026-02-30/2026-03-01",
     "/ideas",
     "/promises",
-    "/gaps",
-    "/assets",
-    "/manifest",
-    "/manifest/people",
-    "/agents",
 )
 # a value the new home would refuse: no redirect, a 404, nothing of the value said back
 INVALID = (
+    "/agents?page=0",
+    "/agents?page=x",
+    "/manifest?page=-1",
+    "/agents?day=17%20June",
     "/days?from=2026-13-01",
     "/days?from=2026-06-08&to=2026-06-01",  # backwards
     "/days?from=2026-01-01&to=2026-06-30",  # longer than Life's window of days
@@ -154,8 +167,11 @@ def test_an_old_address_leads_to_its_door_with_its_moment(
 
 @pytest.mark.parametrize(("old", "location"), MOVES.values(), ids=MOVES.keys())
 def test_the_new_home_answers_the_moment_it_was_given(served: Served, old: str, location: str) -> None:
+    """The new home answers with a page, or with the 404 the old page gave (an org nobody named)."""
     reply = served.get(location, _here(served))
-    assert reply.status == 200, (old, location, reply.status)
+    path, _, query = old.partition("?")
+    was = served.site.respond(path, query).status
+    assert reply.status == 200 or reply.status == was == 404, (old, location, reply.status, was)
 
 
 def test_every_row_that_moves_answers_with_the_one_status() -> None:
@@ -262,6 +278,14 @@ def test_a_value_the_new_home_would_refuse_is_a_404_and_no_redirect(served: Serv
 
 
 DOOR_PAGES = ("/", "/life", "/life?zoom=life", "/life?trip=2026-06-12/2026-06-14", "/people", "/places")
+DOOR_PAGES += (
+    "/gear",
+    "/gear/sources",
+    "/gear/agents",
+    "/gear/manifest",
+    "/gear/manifest/people",
+    "/gear/assets",
+)
 
 
 @pytest.mark.parametrize("page", (*DOOR_PAGES, f"/day/{WEDNESDAY}"))
@@ -314,6 +338,10 @@ def _routes() -> list[re.Pattern[str]]:
         found.append(re.compile(re.escape(getattr(serve, name))))
     found.extend(re.compile(re.escape(p)) for p in (*serve.WRITE_PATHS, *serve.LINE_ACTS))
     found.extend((serve.DAY_ACT, serve.WEEK_ACT))
+    # the gear's addresses, which `_page` hands to `door_gear.page` by their prefix
+    gear = (door_gear.GEAR, door_gear.SOURCES, door_gear.CROSSINGS, door_gear.BUILD, *door_gear.OLD)
+    found.extend(re.compile(re.escape(p)) for p in gear)
+    found.append(re.compile(door_gear.ORG_PATH.pattern.removeprefix("^").removesuffix("$")))
     return found
 
 
@@ -328,6 +356,15 @@ AFTER_THE_TABLE = (
     "/week/2026-W25",
     "/week/2026-W25/close",
     "/ask",
+    "/gear",
+    "/gear/sources",
+    "/gear/crossings",
+    "/gear/build",
+    "/gear/agents",
+    "/gear/manifest",
+    "/gear/manifest/people",
+    "/gear/assets",
+    "/gear/org/0a1b",
 )
 
 

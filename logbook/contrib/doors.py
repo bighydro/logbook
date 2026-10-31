@@ -73,6 +73,7 @@ class Moved:
 
 DAY_VALUE, YEAR_VALUE, SHARED_YEAR = "day", "year", "shared year"  # what a carried value must be
 WORDS = "words"  # the words asked, as typed: any text Ask takes, percent-encoded into the Location
+PAGE_VALUE, FLAG = "page", "flag"  # a page number from 1; a flag, carried only as "1", as the page reads it
 # Every Library address before the doors and where it lives now: RFC 0047 §9's rows, in order. The
 # server answers a row with a home with `REDIRECT_STATUS` to it (`moved`); a row without one, a row that
 # `waits`, and every POST, as it always did. A parameter an old address took that its new home does not
@@ -114,7 +115,7 @@ MOVED = (
     Moved("/idea/{ID}"),  # likewise: Life takes no `idea=` yet
     Moved("/ideas/review", post=True),
     Moved("/ideas/status", post=True),
-    Moved("/gaps", "/gear/sources", waits="the gear, #418"),  # its `since` dropped: the sources take none
+    Moved("/gaps"),  # stays: the gear keeps the table of silences a link away (`door_gear.SHELVES`)
     Moved("/promises"),  # the full list of every promise stays in the gear (§15, 4), at its own address
     Moved("/promises/{ID}"),  # waits: People takes no `promise=` yet, and the person is the record's
     Moved("/people"),  # its `year` and `page` as they were
@@ -125,13 +126,14 @@ MOVED = (
     # Places at the year the window lies in: Places takes `at=YYYY`, no window, so `from` and `to` are
     # dropped and the year it opens in carried (`from`'s, else `to`'s); without either, Places' own year
     Moved("/world", "/places", (("from to", "at", SHARED_YEAR),)),
-    Moved("/assets", "/gear/assets", waits="the gear, #418"),
-    Moved("/manifest", "/gear/manifest", waits="the gear, #418"),  # its `page` and `portfolio`
-    Moved("/manifest/people", "/gear/manifest/people", waits="the gear, #418"),
-    Moved("/org/{ID}", "/gear/org/{ID}", waits="the gear, #418"),  # its `money`
+    # the gear (#418) renders the old page itself, with the query it is given: each carried as it reads it
+    Moved("/assets", "/gear/assets"),
+    Moved("/manifest", "/gear/manifest", (("page", "page", PAGE_VALUE), ("portfolio", "portfolio", WORDS))),
+    Moved("/manifest/people", "/gear/manifest/people"),
+    Moved("/org/{ID}", "/gear/org/{ID}", (("money", "money", FLAG),)),
     Moved("/manifest/review", post=True),
     Moved("/manifest/status", post=True),
-    Moved("/agents", "/gear/agents", waits="the gear, #418"),  # its `page` and `day`
+    Moved("/agents", "/gear/agents", (("page", "page", PAGE_VALUE), ("day", "day", DAY_VALUE))),
     Moved("/line/{ID}"),
     Moved("/photo/{ID}"),
     # §9's prose: search in the Library (#363) is Ask v1. Its words carried; `kind`, `year` and `page`
@@ -196,7 +198,7 @@ def moved(path: str, query: str) -> str | None:
             if value is not None:
                 pairs.append((new, value))
         pairs.extend((new, template.format(**parts)) for new, template in row.fixed)
-        return row.home + (f"?{urlencode(pairs, safe='/')}" if pairs else "")
+        return row.home.format(**parts) + (f"?{urlencode(pairs, safe='/')}" if pairs else "")
     return None
 
 
@@ -216,6 +218,16 @@ def _carried(names: list[str], kind: str, asked: dict[str, str], most: int | Non
     if kind == WORDS:
         (name,) = names
         return given.get(name)
+    if kind == FLAG:
+        (name,) = names
+        return "1" if given.get(name) == "1" else None
+    if kind == PAGE_VALUE:
+        (name,) = names
+        if name not in given:
+            return None
+        if re.fullmatch(r"[0-9]+", given[name]) is None or int(given[name]) < 1:
+            raise ValueError(f"{name} is not a page, a number from 1")
+        return str(int(given[name]))
     if kind == YEAR_VALUE:
         (name,) = names
         if name not in given:

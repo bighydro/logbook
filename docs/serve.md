@@ -98,7 +98,7 @@ after the read gate, so a request the gate refuses at the door is refused at its
 | `/goals/ID` | stays until Life shows a goal's thread | — |
 | `/ideas`, `/idea/ID` | stay: the Ideas shelf is kept in the gear | — |
 | `/ideas/review`, `/ideas/status` | stay: the Ideas' acts (POST) | — |
-| `/gaps` | stays until the gear is built; then `/gear/sources` | — |
+| `/gaps` | stays: the gear keeps the table of silences a link away (its sources are `/gear/sources`) | — |
 | `/promises` | stays: the full list is kept in the gear | — |
 | `/promises/ID` | stays until People shows a person's promise | — |
 | `/people`, `/people/ID` | stay: the People door | — |
@@ -106,10 +106,10 @@ after the read gate, so a request the gate refuses at the door is refused at its
 | `/places` | stays: the Places door | — |
 | `/places/review` | stays (POST) | — |
 | `/world?from=&to=` | `/places?at=YYYY` | the year the window opens in (`from`'s, else `to`'s); Places turns its globe by the year |
-| `/assets` | stays until the gear is built; then `/gear/assets` | — |
-| `/manifest`, `/manifest/people`, `/org/ID` | stay until the gear is built; then `/gear/manifest`, `/gear/manifest/people`, `/gear/org/ID` | — |
+| `/assets` | `/gear/assets` | — |
+| `/manifest?page=&portfolio=`, `/manifest/people`, `/org/ID?money=1` | `/gear/manifest?page=&portfolio=`, `/gear/manifest/people`, `/gear/org/ID?money=1` | the page, the portfolio, the org and whether its money was asked |
 | `/manifest/review`, `/manifest/status` | stay: the Manifest's acts (POST) | — |
-| `/agents?page=` | stays until the gear is built; then `/gear/agents?page=` | — |
+| `/agents?page=&day=` | `/gear/agents?page=&day=` | the page and the day |
 | `/line/ID`, `/photo/ID` | stay | — |
 | `/search?q=` | `/ask?q=` (§9: search in the Library is Ask v1) | the words; `kind`, `year` and `page` left behind |
 
