@@ -44,9 +44,12 @@ logbook digest 2026-06-10 --json     # the whole sets behind the lines, every ro
    from the day with those sources expected, counts the day among its missing days or holds no line
    of it at all. A note written once in the fortnight is not usual, so it is never missed.
 7. **tomorrow** — the timed calendar entries of the next local day, from the `event/v1` lines
-   standing (retracted lines out; an entry several calendars carry is one, `×N sources`, as the Day
-   folds them), with the attendees the record names: `12:00–13:00  Lunch · with Kari Nordmann`.
-   An all-day entry is not timed and is not here. Three at most, then `+N more entries`.
+   standing (retracted lines out; an entry several calendars carry is one, `from N sources`, as the
+   Day folds them), with the attendees the record names: `Lunch, from 12:00 to 13:00 · with Kari
+   Nordmann`, the title first and its time after a word, so no clock touches a name a title opens
+   with. An all-day entry is not timed: it comes first and says so, `Kari in town, all day`, whether its
+   calendar flags it all-day or another calendar carries it from midnight to midnight. Three at most,
+   then `+N more entries`.
 8. **The question**, last, after a blank line. One, from the record's own bank —
    `policy/questions.json`, written with its defaults the first time and yours to edit — so that
    the owner can answer in a word and the day closes itself (ADR 0005: one nudge, one channel).
@@ -103,8 +106,8 @@ cafe, a promise made the evening before, and two entries in tomorrow's calendar:
   with       Kari Nordmann
   attached   1 event, 1 photo
   due        “I'll send Ola the mooring photos by Friday.”  you, 2026-06-12 (by Friday)
-  tomorrow   09:00–09:30  Standup
-  tomorrow   12:00–13:00  Lunch · with Kari Nordmann
+  tomorrow   Standup, from 09:00 to 09:30
+  tomorrow   Lunch, from 12:00 to 13:00 · with Kari Nordmann
 
 Anything to add?
 ```
@@ -117,7 +120,7 @@ The Monday they fly to Zürich:
   with       nobody confirmed
   attached   1 event
   flight     XY 561 OSL→ZRH  07:05–09:15
-  tomorrow   19:00–21:00  Dinner · with Ola Nordmann
+  tomorrow   Dinner, from 19:00 to 21:00 · with Ola Nordmann
 
 Anything to add?
 ```
@@ -151,8 +154,8 @@ question in bold on its own:
 with `where`, `home`, `aboard`, `in_transit`; `with` with `confirmed` and `proposed` as names;
 `attached` as `count` and `noun` pairs; `unplaced`); `flights`, the Day's own with their line ids;
 `promises` (`within_days`, `judged`, and `open`, every proposal as `promises --json` prints it);
-`gaps` (`usual` and `missing`); `tomorrow` (`day` and `entries`, each with `title`, `start`, `end`,
-their local forms, `with`, `sources` and `lines`); `unplaced`, the Day's list; `sources`, the names
+`gaps` (`usual` and `missing`); `tomorrow` (`day`, and `entries`, the timed ones, and `all_day`, each
+with `title`, `all_day`, `start`, `end`, their local forms, `with`, `sources` and `lines`); `unplaced`, the Day's list; `sources`, the names
 with a line on the day; `question` (`id` and `kind` of the question in the bank, `text` with its
 placeholders filled, and `facts`, the names of the day's facts that held, so a `when` can be written
 against what the chooser saw; `id` is null when nothing in the bank could be asked); and `lines`.

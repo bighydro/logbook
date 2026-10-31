@@ -618,7 +618,8 @@ def draft_done(task: Task, at: str, evidence: str | None = None) -> dict[str, An
 
 def rows(report: Report, tasks: Sequence[Task], clock: Any, open_only: bool = False) -> list[str]:
     """`logbook tasks` as text: a header with the counts, one row per task (day, time, status, the
-    due day, the list, the title, the id). `clock(at)` formats an instant as the record's wall clock."""
+    title, then after a word each the due day, the list and the id). `clock(at)` formats an instant as
+    the record's wall clock."""
     if not report.tasks:
         return ["no tasks in the record (task/v1, RFC 0016)"]
     open_count = len(report.open)
@@ -630,13 +631,13 @@ def rows(report: Report, tasks: Sequence[Task], clock: Any, open_only: bool = Fa
         head = f"{_plural(len(report.tasks), 'task')}, {open_count} open"
     out = [head + " (the latest snapshot of each task is its state, RFC 0016)"]
     status_width = max(len(t.status) for t in tasks) if tasks else 4
-    for t in tasks:
-        due = f"due {t.due}" if t.due else ""
-        where = f"[{t.list}]" if t.list else ""
+    for t in tasks:  # the title after a word, and a word after it before the due day and the id:
+        # a title may open or end with a name, and a date or an id never touches one
         out.append(
-            f"  {t.day}  {clock(t.at)}  {t.status:<{status_width}}  {due:<14}  “{_cut(t.title)}”"
-            + (f"  {where}" if where else "")
-            + f"  {t.id}"
+            f"  {t.day}  {clock(t.at)}  {t.status:<{status_width}}  “{_cut(t.title)}”"
+            + (f", due {t.due}" if t.due else "")
+            + (f", in [{t.list}]" if t.list else "")
+            + f", task {t.id}"
         )
     return out
 
@@ -644,7 +645,8 @@ def rows(report: Report, tasks: Sequence[Task], clock: Any, open_only: bool = Fa
 def proposal_rows(report: Report, clock: Any) -> list[str]:
     """`logbook tasks --propose-done` as text: a header that says these are proposals, then for each
     open task with evidence its title, day and id, and under it one row per evidence line (day, time,
-    kind, the text, the words shared, `from N sources`, the line id); last, how many open tasks had none."""
+    kind, the text, the words shared, `from N sources`, the line id, each after a word, so a date or an
+    id never touches a name a text ends with); last, how many open tasks had none."""
     if not report.tasks:
         return ["no tasks in the record (task/v1, RFC 0016)"]
     if not report.open:
@@ -668,12 +670,12 @@ def proposal_rows(report: Report, clock: Any) -> list[str]:
         found = by_task.get(task.id)
         if not found:
             continue
-        out.append(f"  “{_cut(task.title)}”  ({task.day}, {task.id})")
+        out.append(f"  “{_cut(task.title)}”, the task of {task.day}, task {task.id}")
         for p in found:
-            tail = f"  from {len(p.sources)} sources" if len(p.sources) > 1 else ""
+            shared = f", shared: {' '.join(p.evidence.shared)}" if p.evidence.shared else ""
+            tail = f", from {len(p.sources)} sources" if len(p.sources) > 1 else ""
             out.append(
-                f"    {p.day}  {clock(p.at)}  {p.kind:<11}  “{_cut(p.text)}”  {' '.join(p.evidence.shared)}"
-                f"{tail}  {p.line}"
+                f"    {p.day}  {clock(p.at)}  {p.kind:<11}  “{_cut(p.text)}”{shared}{tail}, line {p.line}"
             )
     if without:
         out.append(f"  {_plural(without, 'open task')} with no evidence found")
