@@ -78,8 +78,8 @@ wordmark, the four doors (Today, Life, People, Places; until their own pages are
 `/days`, People `/people` and Places `/places`), the *Ask* field (`/ask`, [below](#ask))
 and the gear. On a phone the doors are a bar at the foot of the screen and *Ask* is at the top. Every
 other page of the Library carries the same header above its own body, the door it belongs to marked
-(the Days are Life's, a person People's, a place Places'); the body keeps its look until its own door
-is built.
+(the Days are Life's, a person People's, a place Places'), and the doors' look: the same paper, type,
+cards and pills (`doors.library_style`), its content, order and address as they were.
 
 From the top:
 
@@ -134,6 +134,20 @@ The frame (`logbook/contrib/doors.py`) is one stylesheet: the owner's tokens as 
 `--card-dark-muted`), the same for a dark page, and the three families with their fallbacks
 (`--serif` Instrument Serif, `--sans` Inter, `--mono` JetBrains Mono). A door's own rules read the
 tokens with a fallback, `var(--paper, #F4F1EA)`, and never define `:root`.
+
+Every other page of the Library reads the same sheet and the pages' rules after it (`doors.PAGES`):
+page titles in the serif, 72 px (40 px on a phone), section titles 36 px, names and moments 22 to 26 px;
+the body in Inter, 15 px, secondary lines 14 px; small labels (a table's heading, the Day's `night
+before`) in the mono, 13 px, upper case, a row's kind and a line's id 14 px, no text under the floor a
+phone needs (`tests/test_phone_targets.py`); lists of things, tables and the close on cards
+(the surface, a 1 px rule, 20 px corners); the page's actions as pills, every control at least 44 px.
+A table scrolls inside its own box on a phone. The chart colours (a stay, a move, aboard, a call)
+are for graphics alone; a legend's words are ink beside a swatch. Ink is the owner's words in the
+serif; pencil a model's or a rule's, lighter, with a dotted rule and its author in a `title`
+(*Pencil: drafted by MODEL*). The signal is text only as `--signal-deep`: `--signal` on the paper is
+4.4:1. Every text token keeps 4.5:1 on the paper, the surface and the tint, in both faces
+(`tests/test_the_look.py` computes it). `/world` keeps the map's own sheet, the export's, under the
+doors' tokens.
 
 ## The gear
 

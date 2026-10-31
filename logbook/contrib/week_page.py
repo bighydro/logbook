@@ -76,6 +76,7 @@ if TYPE_CHECKING:  # the Site passes itself; serve imports this module, never th
     from .serve import Site
 
 DOT = day_rhythm.DOT
+PROPOSAL_PENCIL = "Pencil: the week's proposal, a model's words until you keep them"  # the field's title
 DASH = day_rhythm.DASH
 MONTHS = ("January", "February", "March", "April", "May", "June", "July", "August", "September", "October",
           "November", "December")  # fmt: skip
@@ -100,16 +101,17 @@ NO_VERDICT = "no verdict"  # the choice a goal starts at: nothing written for it
 BESIDE = "[\\s(:×x#·,]*"  # what may stand between a name and a number and still be beside it
 WEEK_STYLE = """
 ol.week{list-style:none;padding:0;margin:0}
-ol.week>li{padding:4px 0;border-bottom:1px solid var(--line)}ol.week>li:last-child{border-bottom:0}
-ol.week p.day{margin:0;font-size:13.5px}
+ol.week>li{padding:8px 0;border-bottom:1px solid var(--line-soft)}ol.week>li:last-child{border-bottom:0}
+ol.week p.day{margin:0;font-size:15px}
 ol.week p.day a{display:inline-flex;align-items:center;min-height:44px}
 p.line,li.line{overflow-wrap:anywhere}
-p.ids{margin:0;font-size:11.5px;color:var(--mute);overflow-wrap:anywhere}div.paper p.ids{line-height:28px}
-code.cmd{font-family:var(--mono);font-size:12.5px;overflow-wrap:anywhere;white-space:normal}
+p.ids{margin:0;font-size:13px;font-family:var(--mono);color:var(--pencil);overflow-wrap:anywhere}
+code.cmd{font-family:var(--mono);font-size:14px;overflow-wrap:anywhere;white-space:normal}
 ul.plain{list-style:none;padding:0;margin:0 0 6px}ul.plain>li{padding:2px 0;overflow-wrap:anywhere}
-p.later{color:var(--mute);font-size:12.5px;margin:18px 0 6px}
-fieldset.verdict{border:0;border-top:1px solid var(--line);padding:8px 0 4px;margin:0;min-width:0}
-fieldset.verdict legend{padding:0;font-weight:600;overflow-wrap:anywhere;max-width:100%}
+p.later{color:var(--pencil);font-size:14px;margin:18px 0 6px}
+fieldset.verdict{border:0;border-top:1px solid var(--line-soft);padding:8px 0 4px;margin:0;min-width:0}
+fieldset.verdict legend{padding:0;font-weight:400;font-size:22px;font-family:var(--serif);
+overflow-wrap:anywhere;max-width:100%}
 p.choices{display:flex;flex-wrap:wrap;gap:0 14px;margin:4px 0}
 p.choices label,label.keep{display:inline-flex;align-items:center;gap:6px;min-height:44px}
 p.choices input,label.keep input{width:1.2rem;height:1.2rem;margin:0}
@@ -628,9 +630,10 @@ def close_html(
         else:
             what = "No proposal to keep: say the week ahead in a sentence of your own."
     command = f'logbook day reflect {sunday} --intention "…"'
+    pencil = f' class="pencil" title="{PROPOSAL_PENCIL}"' if prefill else ""  # a model's words, until kept
     out.append(
         f'<p class="mute">{escape(what)}</p>\n'
-        f'<textarea name="intention" rows="3" aria-label="next week\'s intention"'
+        f'<textarea name="intention"{pencil} rows="3" aria-label="next week\'s intention"'
         f' spellcheck="true">{escape(prefill, quote=False)}</textarea>\n'
         '<label class="keep"><input type="checkbox" name="keep" value="1"> Keep these words as next'
         " week's intention</label>\n"

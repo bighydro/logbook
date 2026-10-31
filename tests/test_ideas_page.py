@@ -179,6 +179,7 @@ def test_an_idea_page_is_its_status_form_first_said_timeline_people_documents_an
     assert "2026-09 +660" in text, "the words by month, no bot's"
     assert "2026-09-14 exploring (owner): " + KIOSK_REASON + " current" in text
     assert "Proposed for this idea" in text, "the queue's match for it: the page titled like it"
+    assert f'<p class="head" title="{serve.PROPOSED}">' in page, "the rules' proposal is pencil, never ink"
 
 
 def test_every_ideas_page_is_one_document_that_fetches_nothing(lb: Logbook) -> None:

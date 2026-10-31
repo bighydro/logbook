@@ -1,8 +1,8 @@
 """The Library's doors share one frame (RFC 0047 §6): the header, one stylesheet of the owner's tokens,
 and three typefaces served by the Library itself. Today (`door_today`) is the first page in it; Life,
 People and Places (`door_life`, `door_people`, `door_places`) render through `page` too. Every other
-page of the Library carries the same header (`header`, with `header_style`: the tokens on the header
-alone) above its own body, which keeps `serve.STYLE` and its look until its own pull request.
+page of the Library carries the same header (`header`) and reads the same sheet with the pages' rules
+after it (`library_style`, `PAGES`): the doors' look, its content, order and address as they were.
 
 The header, from the left: the wordmark (a link to Today), the four doors, the Ask field and the gear.
 A door not yet built links to the page that holds its moments today (`DOORS`: People to `/people`,
@@ -200,6 +200,206 @@ nav.doors{{flex-wrap:nowrap}}
 nav.doors a{{margin:0}}
 """
 BAND = "header.doors{border-bottom-color:transparent}\n"  # after `HEADER`: the band's own rule, edge to edge
+# the Library's every other page in the doors' look (`library_style`): its main and footer in the header's
+# column; the serif for page titles, section titles and names, Inter for the body, the mono for labels;
+# lists of things and tables on cards; the page's actions as pills; every control 44px; the chart colours
+# (`--stay`, `--move`, ...) on `main` alone, for graphics and never for text. No `:root` here: the tokens
+# are `ROOT`'s, and the dark face is `DARK`'s. Text keeps the Library's floor at a phone's width
+# (tests/test_phone_targets.py): 14 px, the mono labels 13 px.
+PAGES = """main{max-width:72rem;margin:0 auto;padding:2.5rem 1.25rem 4rem;font-size:15px;
+--stay:#2e7d4f;--move:#3a62b0;--aboard:#1f6f88;--call:#a35a16;--plan:#868b93;--star:#9a760f}
+body>footer{max-width:72rem;margin:0 auto;padding:1rem 1.25rem 2rem;border-top:1px solid var(--line);
+color:var(--pencil);font-size:14px;overflow-wrap:anywhere}
+body>footer code{font-family:var(--mono);font-size:.95em}
+main h1{margin:0 0 1.2rem;font-weight:400;font-size:72px;line-height:1.02;font-family:var(--serif);
+overflow-wrap:anywhere}
+main h1 small{font-weight:400;font-size:15px;line-height:1.5;font-family:var(--sans);color:var(--pencil);
+letter-spacing:0}
+main h2{margin:2.6rem 0 .9rem;font-weight:400;font-size:36px;line-height:1.1;font-family:var(--serif)}
+main h2 small{font-weight:400;font-size:14px;font-family:var(--sans);color:var(--pencil)}
+main h3{margin:1.4rem 0 .5rem;font-weight:500;font-size:13px;line-height:1.4;font-family:var(--mono);
+letter-spacing:.13em;text-transform:uppercase;color:var(--pencil)}
+main code{font-family:var(--mono);font-size:.9em;overflow-wrap:anywhere}
+main table{width:100%;border-collapse:separate;border-spacing:0;margin:.6rem 0 1.4rem;
+background:var(--surface);border:1px solid var(--line);border-radius:20px}
+main th,main td{text-align:left;padding:.75rem .9rem;border-bottom:1px solid var(--line-soft);
+vertical-align:top}
+main th{font-weight:500;font-size:13px;font-family:var(--mono);letter-spacing:.12em;text-transform:uppercase;
+color:var(--pencil);border-bottom-color:var(--line)}
+main td.num,main th.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+main td.day,main td.at,main span.run{white-space:nowrap}
+main td.day a{display:inline-flex;align-items:center;min-height:44px}
+dl.header{display:grid;grid-template-columns:max-content 1fr;gap:.45rem 1.4rem;margin:0 0 1.4rem;
+align-items:baseline}
+dl.header dt{font-weight:500;font-size:13px;font-family:var(--mono);letter-spacing:.12em;
+text-transform:uppercase;color:var(--pencil)}
+dl.header dd{margin:0;min-width:0}
+ol.timeline,ol.inside,ul.attached,ul.unplaced,ul.plain,ul.proposals{list-style:none;padding:0;margin:0}
+li.proposal{padding:.4rem 0}
+li.proposal>p.head{color:var(--pencil);text-decoration:underline dotted var(--pencil-rule);
+text-underline-offset:.2em}
+main textarea.pencil{color:var(--pencil);border-style:dotted}
+.row{padding:.7rem 0;border-bottom:1px solid var(--line-soft)}
+.clock{display:inline-block;min-width:7.5rem;font-variant-numeric:tabular-nums;color:var(--pencil);
+font-size:14px;font-family:var(--mono)}
+.kind{display:inline-block;min-width:5.5rem;font-weight:500;font-size:14px;font-family:var(--mono);
+text-transform:uppercase;letter-spacing:.12em;color:var(--pencil)}
+ol.inside{margin:.3rem 0 0 2rem}
+ol.inside .row{border:0;padding:.15rem 0}
+details{margin:.3rem 0 0 7.5rem}
+summary{cursor:pointer;color:var(--pencil);min-height:44px;padding:.6rem 0}
+ul.attached{margin:.3rem 0 0 1rem}
+details.synthesis,p.synthesis{margin:.2rem 0 .3rem 1.5rem;font-size:14px}
+details.synthesis p.segment{margin:.15rem 0}
+ul.attached li,ul.unplaced li{padding:.3rem 0}
+p.with{margin:.3rem 0 0 1rem;color:var(--pencil)}
+form.window{display:flex;gap:.6rem;align-items:center;flex-wrap:wrap;margin:0 0 1.2rem}
+main input,main select{min-height:44px;padding:0 .9rem;border:1px solid var(--line);border-radius:12px;
+background:var(--surface);color:var(--ink);font:inherit;font-size:15px}
+main input[type=checkbox],main input[type=radio]{min-height:0;width:1.2rem;height:1.2rem;padding:0;
+accent-color:var(--ink)}
+main input[type=file]{padding:.5rem .9rem;max-width:100%}
+main textarea{display:block;width:100%;min-height:8rem;padding:.8rem 1rem;border:1px solid var(--line);
+border-radius:14px;background:var(--surface);color:var(--ink);font-size:17px;line-height:1.5;font-family:var(--serif)}
+main button,a.skip{display:inline-flex;align-items:center;justify-content:center;min-height:44px;
+padding:0 1.2rem;border-radius:23px;border:1px solid var(--ink);background:var(--ink);color:var(--paper);
+font-weight:600;font-size:14px;font-family:var(--sans);text-decoration:none;cursor:pointer}
+main a.skip,main form.act button,main form.window button,main button[value=reject]{border-color:var(--line);
+background:var(--surface);color:var(--ink)}
+main form.act button[value=name]{border-color:var(--ink);background:var(--ink);color:var(--paper)}
+main button:hover,a.skip:hover{border-color:var(--signal)}
+p.pager,p.mute,.mute{color:var(--pencil)}
+p.pager a,p.zooms a,p.facets a{display:inline-flex;align-items:center;min-height:44px}
+a.name{display:inline-flex;align-items:center;min-height:44px;font-size:14px;margin-left:.5rem;color:var(--pencil)}
+main form.star{display:inline;margin:0 0 0 .3rem}
+main form.star button{min-width:44px;padding:0;border:0;background:none;color:var(--pencil-rule);
+font-weight:400;font-size:1.05rem;line-height:1}
+main form.star button[aria-pressed=true],.star.on{color:var(--star)}
+form.with{display:inline-flex;gap:.4rem;align-items:center;flex-wrap:wrap;margin-left:.6rem}
+form.with input[type=text]{width:12rem;min-width:0;max-width:100%}
+ul.starred{list-style:none;padding:0;margin:0}
+ul.starred li{padding:.3rem 0}
+ol.timeline li:target,ul.attached li:target,ul.attached span:target,ul.unplaced li:target,
+dt#with:target,li.cluster:target,ol.shelf>li:target{background:var(--tint)}
+ol.queue,ol.shelf{list-style:none;margin:.6rem 0 1.4rem;padding:.4rem 28px;background:var(--surface);
+border:1px solid var(--line);border-radius:20px}
+li.cluster{display:grid;grid-template-columns:10rem 1fr;gap:.4rem 1.4rem;padding:1.4rem 0;
+border-bottom:1px solid var(--line-soft)}
+ol.queue>li:last-child,ol.shelf>li:last-child{border-bottom:0}
+li.cluster svg{grid-row:1/4;width:10rem;height:6.5rem;border:1px solid var(--line);border-radius:12px;
+background:var(--paper)}
+li.cluster svg text{font:12px var(--sans);fill:var(--pencil)}
+li.cluster svg circle.spot{fill:var(--ink)}
+li.cluster svg circle.ring,li.cluster svg circle.near{fill:none;stroke:var(--pencil);stroke-dasharray:3 2}
+li.cluster svg line{stroke:var(--pencil-rule)}
+li.cluster p.facts{margin:0}
+li.cluster p.facts b{font-weight:500;font-variant-numeric:tabular-nums}
+ul.evidence{list-style:none;padding:0;margin:0;color:var(--pencil);font-size:14px}
+li.cluster details{margin:0;font-size:14px}
+form.name{display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;margin:.5rem 0 0}
+form.name input[type=text]{min-width:16rem;flex:1}
+section.close{margin:2.6rem 0 0;padding:28px 32px;background:var(--surface);border:1px solid var(--line);
+border-radius:20px}
+section.close h2{margin-top:0}
+section.part.close{margin:0;padding:0;background:none;border:0;border-radius:0}
+section.close form{margin:.6rem 0 1rem}
+section.close button{margin:.6rem .4rem 0 0}
+section.close details{margin:.4rem 0}
+section.close label{overflow-wrap:anywhere}
+ol.proposals,ol.sentences{padding:0;margin:.3rem 0}
+ol.proposals{list-style:none}
+ol.sentences{padding-left:2rem}
+ol.proposals li{padding:.5rem 0;border-bottom:1px solid var(--line-soft)}
+ol.proposals label{display:flex;gap:.6rem;align-items:baseline;min-height:44px;cursor:pointer}
+ol.proposals input{flex:none}
+ul.signed{color:var(--pencil);margin:.4rem 0}
+code.sha{overflow-wrap:anywhere}
+footer .footnote{display:inline-block;margin-top:.3rem}
+ol.shelf>li{padding:1.1rem 0;border-bottom:1px solid var(--line-soft);overflow-wrap:anywhere}
+ol.shelf p{margin:.15rem 0}
+p.head{display:flex;flex-wrap:wrap;gap:.1rem .8rem;align-items:baseline}
+p.head>a{font-weight:400;font-size:24px;line-height:1.25;font-family:var(--serif);
+text-decoration:none}
+p.head>a:hover{text-decoration:underline;text-decoration-color:var(--signal)}
+p.head .mute{font-size:14px;font-variant-numeric:tabular-nums}
+p.facts{color:var(--pencil);font-size:14px;overflow-wrap:anywhere}
+details.evidence,details.draft{margin:.25rem 0 0}
+details.evidence>summary{font-size:14px}
+details.evidence ul.evidence{margin:.2rem 0 0 .8rem}
+details.evidence details{margin:0 0 0 .8rem}
+span.id{font-size:14px;font-family:var(--mono);color:var(--pencil)}
+details.draft>summary{font-size:14px}
+div.draft p.segment{margin:.3rem 0}
+p.segment.unsupported{border-left:2px solid var(--line);padding-left:.6rem}
+.dates{white-space:nowrap}
+svg.stays,svg.track{display:block;width:100%;max-width:30rem;height:auto;margin:.6rem 0;
+border:1px solid var(--line);border-radius:16px;background:var(--surface)}
+svg.stays circle,svg.track circle{fill:var(--ink);fill-opacity:.8;stroke:var(--surface)}
+svg.stays text,svg.track text{font:12px var(--sans);fill:var(--ink)}
+svg.stays line,svg.track line{stroke:var(--pencil-rule)}
+svg.track line{stroke-width:1.5}
+svg.track line.gap{stroke-dasharray:4 3}
+li.proposal form{display:flex;flex-wrap:wrap;gap:.5rem;margin:.4rem 0 0}
+.badge{display:inline-flex;align-items:center;min-height:22px;padding:0 .6rem;border:1px solid var(--line);
+border-radius:11px;font-weight:500;font-size:13px;font-family:var(--mono);text-transform:uppercase;
+letter-spacing:.12em;color:var(--pencil);background:var(--paper)}
+.badge.open,.badge.passed,.badge.stalled,.badge.past{color:var(--signal-deep);border-color:var(--signal-deep)}
+.badge.hold,.badge.add,.badge.sell,.badge.kept,.badge.advancing{color:var(--ink)}
+.badge.exited,.badge.let-go{color:var(--pencil)}
+.stale-flag{color:var(--signal-deep)}
+ol.shelf>li.stale{border-left:3px solid var(--signal);padding-left:.8rem}
+p.reason{margin:.2rem 0 0;font-style:italic;font-family:var(--serif);font-size:17px}
+form.act{display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;margin:.5rem 0}
+form.act input[type=text]{flex:1 1 10rem;min-width:0}
+form.act select,form.act input[type=date]{max-width:100%}
+section.acts{margin:1rem 0;padding:20px 28px;background:var(--surface);border:1px solid var(--line);
+border-radius:20px}
+s.retracted{color:var(--pencil)}
+blockquote.said{margin:.4rem 0;padding-left:.9rem;border-left:2px solid var(--line);overflow-wrap:anywhere;
+font-size:17px;font-family:var(--serif);color:var(--ink)}
+blockquote.machine{font-family:var(--sans);font-size:15px;color:var(--pencil);font-style:italic}
+q.said{overflow-wrap:anywhere;font-family:var(--serif);font-size:19px;color:var(--pencil);
+text-decoration:underline dotted var(--pencil-rule);text-underline-offset:.22em}
+main h1 q.said{font-size:inherit}
+ol.shelf p.pencil{font-family:var(--serif);font-size:19px}
+p.head>a b,blockquote.said b,main h1 b,main h2 b{font-weight:400}
+main h1 a,main h2 a{text-decoration:none}
+main h1 a:hover,main h2 a:hover{text-decoration:underline;text-decoration-color:var(--signal)}
+main input::placeholder,main textarea::placeholder{color:var(--pencil)}
+ol.shelf details{margin-left:0}
+main>ul.plain{margin:.6rem 0 1.4rem;padding:.4rem 28px;background:var(--surface);border:1px solid var(--line);
+border-radius:20px}
+main>ul.plain>li{padding:.8rem 0;border-bottom:1px solid var(--line-soft)}
+main>ul.plain>li:last-child{border-bottom:0}
+p.people{display:flex;flex-wrap:wrap;gap:.2rem .8rem;overflow-wrap:anywhere}
+p.note{margin:.2rem 0 0;font-style:italic;font-family:var(--serif);font-size:17px;overflow-wrap:anywhere}
+p.summary{margin:.2rem 0;overflow-wrap:anywhere}
+p.refs{overflow-wrap:anywhere}
+pre.file{white-space:pre-wrap;overflow-wrap:anywhere;max-width:100%;font-family:var(--mono);font-size:14px}
+pre.line{max-width:100%;overflow-x:auto;white-space:pre;
+font:14px/1.5 var(--mono);padding:20px 24px;background:var(--surface);border:1px solid var(--line);
+border-radius:20px}
+dl.header dd{overflow-wrap:anywhere}
+@media (max-width:40rem){
+main{padding:1.5rem 1rem 3rem}
+p.head>a,main h2>a,p.people>a,p.ids>a,main>p.mute:first-child>a,a.person,p.facts>a,dd>a{display:inline-flex;
+align-items:center;min-height:44px}
+body>footer{padding-left:1rem;padding-right:1rem}
+main h1{font-size:40px;line-height:1.05}
+main h2{font-size:28px}
+details{margin-left:1rem}
+.clock{min-width:0;margin-right:.5rem}
+main table{display:block;overflow-x:auto}
+main th,main td{white-space:nowrap}
+li.cluster{grid-template-columns:1fr}
+li.cluster svg{grid-row:auto;max-width:100%}
+ol.queue,ol.shelf{padding:.2rem 20px}
+section.close,section.acts{padding:20px}
+pre.line{font-size:14px;padding:16px}
+}
+@media (prefers-color-scheme:dark){main{--stay:#6cc08a;--move:#88a8ea;--aboard:#6fc2da;--call:#e39a55;
+--plan:#8d9299;--star:#e2bf52}}
+"""
 
 
 @functools.cache
@@ -207,6 +407,13 @@ def style(fonts: bool = True) -> str:
     """The doors' one stylesheet: the faces the server serves (`fonts`; none on an exported site), then
     the tokens and the frame. A door's own rules follow it."""
     return (_faces() if fonts else "") + FRAME
+
+
+@functools.cache
+def library_style(fonts: bool = True) -> str:
+    """The stylesheet of every page of the Library that is not a door's: the doors' one stylesheet
+    (`style`), then the pages' rules in its tokens (`PAGES`). A page's own rules follow it."""
+    return style(fonts) + PAGES
 
 
 @functools.cache

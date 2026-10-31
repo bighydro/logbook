@@ -1260,9 +1260,26 @@ body{box-sizing:border-box}
 header nav{display:flex;flex-wrap:wrap;row-gap:.3rem}
 #tools button,#play{min-width:44px;min-height:44px}
 #panel{top:calc(1rem + 44px);max-height:calc(100% - 1.9rem - 44px)}
-"""  # the Library's `/world` only: its canvases held to a phone's column, the doors' bar (its padding on
-# the body, on a phone) inside the screen's height, its own navigation wrapped and its buttons 44 px
-# targets, the panel under them; the exported file keeps STYLE
+html:root{--fg:var(--ink);--bg:var(--paper);--mute:var(--pencil);--accent:var(--ink)}
+body{font-size:15px;font-family:var(--sans);background:var(--paper);color:var(--ink)}
+body>header h1{font-weight:400;font-size:28px;line-height:1.2;font-family:var(--serif)}
+body>header h1 small{font-size:14px;font-family:var(--sans);color:var(--pencil)}
+#readout,#clock,#credit{color:var(--pencil);font-size:14px}
+#clock{font-family:var(--mono);font-size:13px}
+main button,footer button{min-height:44px;min-width:44px;padding:0 1rem;border:1px solid var(--line);
+border-radius:22px;background:var(--surface);color:var(--ink);font-weight:500;font-size:14px}
+main button:hover,footer button:hover{border-color:var(--signal)}
+#list{gap:.35rem}
+#panel{border-radius:20px;padding:20px 24px;background:var(--surface);border-color:var(--line)}
+#panel h2{font-weight:400;font-size:22px;font-family:var(--serif)}
+#panel dt{font-size:13px;font-family:var(--mono);letter-spacing:.12em;text-transform:uppercase}
+body>footer{background:var(--surface);border-top-color:var(--line)}
+#time{accent-color:var(--ink)}
+@media (max-width:40rem){body>footer{flex-wrap:wrap}.scrub{flex:1 0 100%;order:3}#credit{left:.6rem}}
+"""  # the Library's `/world` only, after the doors' tokens (`doors.ROOT`, with the header's sheet): its
+# canvases held to a phone's column, the doors' bar (its padding on the body, on a phone) inside the
+# screen's height, its own navigation wrapped and its buttons 44 px targets, the panel under them; the
+# map's text tokens the doors', its chrome the doors' look; the exported file keeps STYLE
 
 
 def page(json_text: str, nav: str = "", standalone: bool = True, shell: str = "", style: str = "") -> str:

@@ -38,12 +38,7 @@ ADD_FIRST = "logbook goal import ~/goals.txt"  # the empty shelf's one instructi
 FILE_SHAPE = "Sail the whole coast to Lofoten | life"  # a line of that file, as the shelf shows it
 DOT = goals.DOT
 SHELF_STYLE = """
-.badge{display:inline-block;font-size:.75rem;text-transform:uppercase;letter-spacing:.05em;padding:0 .35rem;
-border:1px solid var(--line);border-radius:3px;color:var(--mute)}
-.badge.advancing,.badge.open{color:#2e8b57}.badge.stalled,.badge.past{color:#c0652a}
-p.facts{margin:.1rem 0;color:var(--mute);overflow-wrap:anywhere}
-p.note{margin:.2rem 0 0;font-style:italic;overflow-wrap:anywhere}
-pre.file{white-space:pre-wrap;overflow-wrap:anywhere;max-width:100%}
+.badge.open{color:var(--ink);border-color:var(--line)}
 """  # what the Goals pages add to the one stylesheet; every rule keeps to the column
 
 
