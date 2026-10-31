@@ -200,6 +200,31 @@ def test_the_people_door_reads_the_people_once_and_each_thread_from_the_index(
 
 
 @pytest.mark.parametrize("lines", SIZES)
+def test_ask_reads_the_matches_and_the_days_of_its_page(
+    lines: int, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ask (`/ask?q=`, RFC 0047 §4.5) asks the index's search table for the words, reads the hits of its
+    page from the files, and for each of its days one reading of that day and the day before (one fold
+    of the stays): never a whole kind of words, never the record. The busiest word of the record,
+    a full page of it; then its next page; and a second visit at the same head reads nothing."""
+    lb, _built = _record(tmp_path, monkeypatch, lines)
+    site = serve.Site(lb, now=lambda: bench.NOW)
+    reads = Reads(monkeypatch)
+    who = {"resolution", "retraction", "signed-day", "star", "keeper", "review", "chapter", "goal"}
+    for query in ("q=harbour", "q=harbour&page=2", "q=sail+tide", "q=harbour&standing=1"):
+        reads.clear()
+        response = site.respond("/ask", query)
+        assert response.status == 200, query
+        assert response.body.count(b'class="words"') > 0, query
+        assert reads.folds <= 24, (query, reads.folds)  # as every page: a reading a day of the page
+        assert not {"message", "mail", "transcript", "note", "event"} & set(reads.whole), dict(reads.whole)
+        read = sum(n for (kind, _source), n in reads.lines.items() if kind not in who)
+        assert read < lines / 20, (query, dict(reads.lines))
+        reads.clear()
+        assert site.respond("/ask", query).body == response.body and reads.read == 0, dict(reads.lines)
+
+
+@pytest.mark.parametrize("lines", SIZES)
 def test_the_people_review_compares_only_who_could_be_the_same(
     lines: int, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -188,6 +188,7 @@ from . import (
     asset_status,
     day_photos,
     day_rhythm,
+    door_ask,
     door_life,
     door_people,
     door_places,
@@ -252,6 +253,7 @@ RECORD_PAGES = frozenset(
     | {"/search"}  # the record's words (`search_page`)
     | {SHELVES}  # the shelves listed, the front page before Today
     | {"/life"}  # the Life door (`door_life`)
+    | {door_ask.PATH}  # Ask v1, the record's words as moments (`door_ask`)
 )
 JOURNEY_PATH = re.compile(r"^/journeys/(\d{4}-\d{2}-\d{2})/(\d{4}-\d{2}-\d{2})$")  # its first and last day
 PERSON_PATH = re.compile(r"^/people/([^/]+)$")  # a canonical person, by entity id
@@ -954,6 +956,8 @@ class Site:
         if path == "/life":  # Life: a door, its fonts from here, no script
             csp = doors.CSP
         if path == "/people" or PERSON_PATH.match(path) is not None:  # People (`door_people`): its fonts
+            csp = doors.CSP
+        if path == door_ask.PATH:  # Ask: its fonts from here, nothing else
             csp = doors.CSP
         said = _READS.set(None)
         asked = _PATH.set(path)  # the header marks the door the page is in
@@ -2049,6 +2053,8 @@ class Site:
             return shelf_agents.page_agents(self, params.get("page") or "1", params.get("day") or None)
         if path == "/search":
             return search_page.page_search(self, params)
+        if path == "/ask":  # door_ask.PATH
+            return self.page_ask(params)
         if path == "/assets":
             return self.page_assets()
         if path == "/gaps":
@@ -2065,6 +2071,10 @@ class Site:
         """`/life`: the Life door (RFC 0047 §4.2, `door_life`): the chapter, the year's goals, the
         timeline at the zoom and the moment the address names, and the Volumes."""
         return door_life.page(self, params)
+
+    def page_ask(self, params: Mapping[str, str]) -> str:
+        """`/ask?q=…`: Ask v1, the record's words answered with moments (`door_ask`)."""
+        return door_ask.page_ask(self, params)
 
     def _error(self, status: int, message: str) -> Response:
         body = f"<h1>{status}</h1>\n<p>{escape(message)}</p>\n"
