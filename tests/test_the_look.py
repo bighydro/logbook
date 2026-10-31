@@ -182,6 +182,16 @@ def test_pencil_is_lighter_with_a_dotted_rule_and_its_author_on_hover(record: Pa
     assert found.startswith('<p class="proposal" title="Pencil: drafted by a-model">')
 
 
+def test_a_rule_s_or_an_agent_s_proposal_is_drawn_in_pencil() -> None:
+    """The review queues' proposals and a model's words in the week's field are pencil on the page, as
+    the promise the rules read is: lighter, the dotted rule where the text is a line of its own."""
+    assert (
+        "li.proposal>p.head{color:var(--pencil);text-decoration:underline dotted var(--pencil-rule)"
+        in doors.PAGES
+    )
+    assert "main textarea.pencil{color:var(--pencil);border-style:dotted}" in doors.PAGES
+
+
 def test_every_control_is_a_44_px_target() -> None:
     for rule in (r"main button,a\.skip\{", r"main input,main select\{", r"\nsummary\{",
                  r"p\.pager a,p\.zooms a,p\.facets a\{", r"a\.name\{",

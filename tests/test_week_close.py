@@ -108,6 +108,9 @@ def test_the_week_page_carries_one_form_to_close_the_week_and_no_script(lb: Logb
     assert "change the days" in part and "change the sentence" in part
     assert f"logbook day reflect {SUNDAY} --intention" in part, "the command beside the intention"
     assert '<textarea name="intention"' in part and KEPT in part, "the proposal in the field"
+    assert f'<textarea name="intention" class="pencil" title="{week_page.PROPOSAL_PENCIL}"' in part, (
+        "a model's words in the field are pencil until you keep them"
+    )
     assert '<input type="checkbox" name="keep" value="1">' in part and "checked" not in part.split("keep")[-1]
     assert beside(_seen(page), _names(lb)) == []
 

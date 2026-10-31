@@ -138,6 +138,7 @@ def test_the_queue_is_on_the_manifest_with_its_evidence_folded_and_its_acts(lb: 
     assert '<details class="evidence">' in li, "the evidence folded, closed"
     assert f'action="{serve.MANIFEST_REVIEW}"' in li
     assert 'value="name"' in li and 'value="reject"' in li and 'value="Nordmann Robåt"' in li
+    assert f'<p class="head" title="{serve.PROPOSED}">' in li, "the rules' proposal is pencil, never ink"
     assert "seen on mail 1" in _text(li) and "hint company" in _text(li)
 
 
