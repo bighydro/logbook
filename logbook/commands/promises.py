@@ -302,6 +302,8 @@ def _tasks_done(lb: Logbook, a: argparse.Namespace) -> None:
         payload=taskdone.draft_done(found, at, a.evidence),
     )
     tail = f", evidence {a.evidence}" if a.evidence else ""
+    # the title, then a word before its day: a title may end with a name, and a date never touches one
     print(
-        f"#{line['seq']} {line['at']}  done: “{found.title}”  ({found.day}, task/v1 line {line['id']}{tail})"
+        f"#{line['seq']} {line['at']}  done: “{found.title}”, the task of {found.day}"
+        f" (task/v1 line {line['id']}{tail})"
     )

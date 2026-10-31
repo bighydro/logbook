@@ -19,9 +19,11 @@ evening, in at most `LIMIT` lines, never a list of everything. In order:
    `expect`, the day as `since`): a source is usual when it has a line on `days.USUAL_SHARE` of the
    logged days of the `USUAL_DAYS` ending on the day (`days.usual_sources`), and it is missing when
    the report counts the day among its missing days or holds no line of it at all. One line.
-5. Tomorrow's timed calendar entries, from the `event/v1` lines standing on the next local day
-   (retracted lines out, the sources folded as the Day folds them, `events.fold`; an all-day entry
-   is not timed), with the attendees the record names: the first `TOMORROW_SHOWN` and `+N more`.
+5. Tomorrow's calendar entries, from the `event/v1` lines standing on the next local day (retracted
+   lines out, the sources folded as the Day folds them, `events.fold`), the all-day ones first and
+   said so, `all day` (`events.all_day`: any calendar of the set flags it, or it runs midnight to
+   midnight), then the timed ones in time order, with the attendees the record names: the first
+   `TOMORROW_SHOWN` and `+N more`.
 6. One closing question the owner can answer in a word, from the record's own bank
    (`logbook/contrib/questions.py`, RFC 0027): `policy/questions.json` lists the questions, each with the
    day's facts it asks on (`when`: travelled, aboard, night away, a reunion, no photos, long sleep,
@@ -89,7 +91,8 @@ def read(lb: Logbook, day: str, airports: Airports | None = None) -> dict[str, A
     report = promises.extract(lb)
     due = due_promises(report, day)
     missing, usual = _gaps(lb, d)
-    entries = _tomorrow(lb, tomorrow, tz)
+    found = _tomorrow(lb, tomorrow, tz)
+    all_day, entries = [e for e in found if e["all_day"]], [e for e in found if not e["all_day"]]
     shape = _shape(data)
     out = {
         "day": day,
@@ -103,7 +106,7 @@ def read(lb: Logbook, day: str, airports: Airports | None = None) -> dict[str, A
             "open": [p.to_json() for p in due],
         },
         "gaps": {"usual": usual, "missing": missing},
-        "tomorrow": {"day": tomorrow, "entries": entries},
+        "tomorrow": {"day": tomorrow, "entries": entries, "all_day": all_day},
         "unplaced": data["unplaced"],
         "sources": [s["source"] for s in data["sources"]],
         "question": questions.pick(lb.root, _facts(lb, data, shape, due, missing, entries, day), day),
@@ -204,7 +207,8 @@ def _gaps(lb: Logbook, d: date) -> tuple[list[str], list[str]]:
 
 
 def _tomorrow(lb: Logbook, day: str, tz: ZoneInfo) -> list[dict[str, Any]]:
-    """The timed calendar entries of `day`, standing and folded, in time order: title, start and
+    """The calendar entries of `day`, standing and folded, the all-day ones first (`all_day` true: the
+    digest's `tomorrow.all_day`), then the timed in time order (`tomorrow.entries`): title, start and
     end, the attendees the record names (never a bare address), the sources and the lines."""
     with lb.index() as idx:
         retracted = retractions(idx.retractions())
@@ -212,14 +216,13 @@ def _tomorrow(lb: Logbook, day: str, tz: ZoneInfo) -> list[dict[str, Any]]:
         names = _names(idx.resolutions())
     folded, stands_for = events.fold(found, flight_lines.Airlines.load())
     out = []
-    for line in folded:
+    for line in events.all_day(folded, stands_for, found, tz):
         payload = line.get("payload") or {}
-        if payload.get("all_day") is True:
-            continue
         kept = stands_for.get(str(line["id"]))
         out.append(
             {
                 "title": str(payload.get("title") or "an event"),
+                "all_day": payload.get("all_day") is True,
                 "start": line["at"],
                 "end": line.get("end"),
                 "start_local": _local(str(line["at"]), tz),
@@ -229,7 +232,7 @@ def _tomorrow(lb: Logbook, day: str, tz: ZoneInfo) -> list[dict[str, Any]]:
                 "lines": [str(line["id"])] if kept is None else list(kept.lines),
             }
         )
-    out.sort(key=lambda e: (str(e["start"]), e["title"]))
+    out.sort(key=lambda e: (not e["all_day"], str(e["start"]), e["title"]))
     return out
 
 
@@ -341,7 +344,7 @@ def _rows(data: Mapping[str, Any]) -> Iterator[str]:
         yield _row("due", f"+{len(due) - PROMISES_SHOWN} more due this week")
     if data["gaps"]["missing"]:
         yield _row("gaps", ", ".join(data["gaps"]["missing"]) + ": usual, no line")
-    entries = data["tomorrow"]["entries"]
+    entries = [*data["tomorrow"].get("all_day", []), *data["tomorrow"]["entries"]]  # the all-day first
     for e in entries[:TOMORROW_SHOWN]:
         yield _row("tomorrow", _entry_text(e, tz))
     if len(entries) > TOMORROW_SHOWN:
@@ -414,10 +417,10 @@ def _due_text(p: Mapping[str, Any]) -> str:
 
 
 def _entry_text(e: Mapping[str, Any], tz: ZoneInfo) -> str:
-    span = _clock(str(e["start"]), tz)
-    if e.get("end"):
-        span += f"{EN_DASH}{_clock(str(e['end']), tz)}"
-    text = f"{span}  {e['title']}"
+    """`Ola Nordmann's birthday, from 19:30`, `Kari in town, all day`: the title first, then its time
+    after a word, so no clock touches a name the title opens or ends with (the desk, after the tag)."""
+    when = "all day" if e.get("all_day") else day_reader.when_text(str(e["start"]), e.get("end"), tz)
+    text = f"{e['title']}, {when}"
     if len(e["sources"]) > 1:
         text += f"{DOT}from {len(e['sources'])} sources"  # a word between: the title may end with a name
     if e["with"]:

@@ -367,7 +367,10 @@ own record of the install, so `pipx reinstall` keeps it. `uv tool install --forc
 with exactly the extras it names, so name every one you already have. In a clone, `uv sync` does the
 same, so doctor's line names every extra the clone has beside the new one and removes none of them,
 nor the `dev` group; a package you added by hand with `uv pip install` is not in the lock, and `uv sync`
-removes it. Several
+removes it. The line stays that short while it syncs the environment doctor runs in as it is; it adds
+`--python` and the interpreter when the clone's `.python-version` (or `UV_PYTHON`, or uv's global
+pin) asks for another Python than the venv's, so `uv sync` does not make the venv again on that one, and
+`--no-default-groups` when the venv has no `dev` group, so `uv sync` adds none. Several
 at once are a comma-separated list: `"openlogbook[transcribe,speakers]"`. The quotes matter; the
 brackets mean something else to the terminal without them. The Homebrew formula installs the
 base package only: a Mac that needs an extra uses `pipx` or `uv` for Logbook instead, which is a

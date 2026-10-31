@@ -583,13 +583,15 @@ def ribbon(
 def _ribbon_said(
     plan: Sequence[str], lived: Mapping[str, int], rang: int, first: str, last: str, why: str
 ) -> str:
-    """The ribbon in a sentence: the day's span, the entries planned (one drawn hollow said so, as the
-    legend says it), and what was lived, counted, or why nothing was. The entries planned are one text
-    read aloud: `; then ` between them, so one's clock never touches the name the next one opens with."""
+    """The ribbon in a sentence: the day's span, what was lived, counted, or why nothing was, and the
+    entries planned (one drawn hollow said so, as the legend says it). The entries planned are one text
+    read aloud: `; then ` between them, so one's clock never touches the name the next one opens with;
+    and no clock stands before `Lived`, whose first letters may be a name (the demo's Liv: the desk,
+    after the tag), so the span ends in words and the plan, which ends with a clock, comes last."""
     planned_said = f"Planned: {'; then '.join(plan) if plan else NO_PLAN}."
     counts = [_plural(n, k) for k, n in lived.items()] + ([_plural(rang, "call")] if rang else [])
     lived_said = f"Lived: {', '.join(counts)}." if counts else f"Lived: {why}."
-    return f"The day from {first} to {last}. {planned_said} {lived_said}"
+    return f"The day from {first} to {last}, in two lanes. {lived_said} {planned_said}"
 
 
 def named(entry: Mapping[str, Any]) -> str:
@@ -657,9 +659,15 @@ def today_html(
     day: str,
     zone: ZoneInfo,
     person: Callable[[Mapping[str, Any]], str],
+    all_day: Sequence[str] = (),
 ) -> str:
-    """Today's timed plan in time order, then what is due on it: one row each."""
-    rows = []
+    """Today's all-day entries (`all_day`, their titles), then its timed plan in time order, then what
+    is due on it: one row each."""
+    rows = [
+        f'<li class="plan"><div class="t">all day</div><span>{escape(title)}'
+        '<span class="sub">from the calendar</span></span></li>\n'
+        for title in all_day
+    ]
     for p in plan:
         where = f"at {escape(p.where)}{DOT}" if p.where else ""
         rows.append(

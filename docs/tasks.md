@@ -31,16 +31,18 @@ its suffix its `modified_at`) and calls that the task. A retracted line is out; 
 
 ```
 7 tasks, 6 open (the latest snapshot of each task is its state, RFC 0016)
-  2026-06-01  11:00  open                  “Renew the boat insurance”  3096daca87cd18f9
-  2026-06-08  08:30  open  due 2026-06-20  “Book flights to Zürich”  [Work]  0dd9108fb6d5d715
-  2026-06-09  09:00  open                  “Call Ola about the mooring”  [Boat]  ead035a05df19fee
-  2026-06-11  14:10  done                  “Buy the long rope”  [Boat]  75c34488134f6542
+  2026-06-01  11:00  open  “Renew the boat insurance”, task 3096daca87cd18f9
+  2026-06-08  08:30  open  “Book flights to Zürich”, due 2026-06-20, in [Work], task 0dd9108fb6d5d715
+  2026-06-09  09:00  open  “Call Ola about the mooring”, in [Boat], task ead035a05df19fee
+  2026-06-11  14:10  done  “Buy the long rope”, in [Boat], task 75c34488134f6542
 ```
 
 - **The day and time** are the newest snapshot's `at`, in the record's zone: for Google Tasks the
   last modification (the export keeps no creation time), so a done task sits on the day it was done.
 - **The status** is the snapshot's: `open`, `done` or `cancelled`. `--open` keeps the first.
-- **The due day** and **the list** are the snapshot's `due` and `list`, when it has them.
+- **The title**, then after a word each **the due day** and **the list** (the snapshot's `due` and
+  `list`, when it has them) and **the id**: a title may open or end with a name, and a date or an id
+  never touches one.
 - **The id** is a digest of the source id, sixteen hex characters: the same for every snapshot of
   one task, however often it is exported, and the handle `tasks done` takes.
 
@@ -58,12 +60,12 @@ evidence; a retracted line, and one a later line of its kind `supersedes`, is no
 
 ```
 4 open tasks with evidence of being done, read by rules, not facts; close one with `logbook tasks done <id> --evidence <line>`
-  “Book flights to Zürich”  (2026-06-08, 0dd9108fb6d5d715)
-    2026-06-12  12:00  mail         “Your booking confirmation: Oslo – Zürich, 20 June”  zürich  01a0fda3-99b0-7af6-a986-0a377117a94b
-  “Call Ola about the mooring”  (2026-06-09, ead035a05df19fee)
-    2026-06-15  15:00  event        “Call with Ola Nordmann”  ola  ×2 sources  01a0fda3-99b0-7631-aeac-6035128fe018
-  “Pay the berth fee at Marina Solvind”  (2026-06-10, 5314e1030197326b)
-    2026-06-14  12:00  transaction  “Marina Solvind”  marina solvind  01a0fda3-99b1-7769-906c-19117862caf9
+  “Book flights to Zürich”, the task of 2026-06-08, task 0dd9108fb6d5d715
+    2026-06-12  12:00  mail         “Your booking confirmation: Oslo – Zürich, 20 June”, shared: zürich, line 01a0fda3-99b0-7af6-a986-0a377117a94b
+  “Call Ola about the mooring”, the task of 2026-06-09, task ead035a05df19fee
+    2026-06-15  15:00  event        “Call with Ola Nordmann”, shared: ola, from 2 sources, line 01a0fda3-99b0-7631-aeac-6035128fe018
+  “Pay the berth fee at Marina Solvind”, the task of 2026-06-10, task 5314e1030197326b
+    2026-06-14  12:00  transaction  “Marina Solvind”, shared: marina solvind, line 01a0fda3-99b1-7769-906c-19117862caf9
   2 open tasks with no evidence found
 ```
 
