@@ -236,6 +236,9 @@ text-transform:uppercase;color:var(--pencil)}
 dl.header dd{margin:0;min-width:0}
 ol.timeline,ol.inside,ul.attached,ul.unplaced,ul.plain,ul.proposals{list-style:none;padding:0;margin:0}
 li.proposal{padding:.4rem 0}
+li.proposal>p.head{color:var(--pencil);text-decoration:underline dotted var(--pencil-rule);
+text-underline-offset:.2em}
+main textarea.pencil{color:var(--pencil);border-style:dotted}
 .row{padding:.7rem 0;border-bottom:1px solid var(--line-soft)}
 .clock{display:inline-block;min-width:7.5rem;font-variant-numeric:tabular-nums;color:var(--pencil);
 font-size:14px;font-family:var(--mono)}

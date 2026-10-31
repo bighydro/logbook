@@ -300,15 +300,20 @@ def _row_html(site: Site, r: Row) -> str:
         f'<span class="badge {r.section}">{escape(r.section)}</span>',
         site.link(f'<q class="said" title="{PENCIL}">{escape(p.match.quote)}</q>', promise_path(p.id)),
     ]
-    facts = [_role(r), f"said {p.day}", f"{p.kind} {p.source}".strip()]
+    facts = [escape(_role(r)), escape(f"said {p.day}"), escape(f"{p.kind} {p.source}".strip())]
     verdict = verdict_text(p)
     if verdict:
-        facts.append(verdict)
-    evidence = site.link(f"the line {escape(p.line[:8])}…", day_line(p.day, p.line))
+        facts.append(_pencil(verdict))
+    facts.append(site.link(f"the line {escape(p.line[:8])}…", day_line(p.day, p.line)))
     return (
         f'<li id="{escape(p.id)}"><p class="head">{" ".join(head)}</p>\n'
-        f'<p class="facts">{escape(DOT.join(facts))}{DOT}{evidence}</p></li>\n'
+        f'<p class="facts">{DOT.join(facts)}</p></li>\n'
     )
+
+
+def _pencil(said: str) -> str:
+    """The reader's or the judge's words (`verdict_text`), pencil: a rule's reading, never the owner's."""
+    return f'<span class="pencil" title="{PENCIL}">{escape(said)}</span>'
 
 
 def page_promise(site: Site, pid: str) -> str:
@@ -336,7 +341,7 @@ def page_promise(site: Site, pid: str) -> str:
     parts.append(f'<p class="facts">{escape(DOT.join(facts))}</p>\n')
     verdict = verdict_text(p)
     if verdict:
-        parts.append(f'<p class="facts">the reader says: {escape(verdict)}</p>\n')
+        parts.append(f'<p class="facts">the reader says: {_pencil(verdict)}</p>\n')
     if p.judgement is not None:
         j = p.judgement
         parts.append(

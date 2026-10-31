@@ -76,6 +76,7 @@ if TYPE_CHECKING:  # the Site passes itself; serve imports this module, never th
     from .serve import Site
 
 DOT = day_rhythm.DOT
+PROPOSAL_PENCIL = "Pencil: the week's proposal, a model's words until you keep them"  # the field's title
 DASH = day_rhythm.DASH
 MONTHS = ("January", "February", "March", "April", "May", "June", "July", "August", "September", "October",
           "November", "December")  # fmt: skip
@@ -629,9 +630,10 @@ def close_html(
         else:
             what = "No proposal to keep: say the week ahead in a sentence of your own."
     command = f'logbook day reflect {sunday} --intention "…"'
+    pencil = f' class="pencil" title="{PROPOSAL_PENCIL}"' if prefill else ""  # a model's words, until kept
     out.append(
         f'<p class="mute">{escape(what)}</p>\n'
-        f'<textarea name="intention" rows="3" aria-label="next week\'s intention"'
+        f'<textarea name="intention"{pencil} rows="3" aria-label="next week\'s intention"'
         f' spellcheck="true">{escape(prefill, quote=False)}</textarea>\n'
         '<label class="keep"><input type="checkbox" name="keep" value="1"> Keep these words as next'
         " week's intention</label>\n"

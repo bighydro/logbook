@@ -281,6 +281,7 @@ DAY_ACT = re.compile(r"^/day/(\d{4}-\d{2}-\d{2})/(reflect|sign)$")  # the Day's 
 REFLECT, HEAR, SIGN = "reflect", "hear", "sign"  # the acts a Day's forms name
 DREAM = "dream"  # the evening's *Dream the day so far*, posted to the Day's reflect route (`Site._dream`)
 REVISIT, TASK = "revisit-", "task-"  # Keep and sign's fields: a decision's day by number, a task by its id
+PROPOSED = "Pencil: proposed by the review's rules, yours to accept, name or turn down"  # a queue's head
 PENCIL = "pencil"  # the anchor of the evening's pencil, where Dream the day so far sends the owner back
 STAR_PATH = "/star"  # the Day page's star on a row (RFC 0041), through `stars.star` and `stars.unstar`
 WITH_PATH = "/with"  # the Day page's "with…" field, through `presence.state`
@@ -3966,7 +3967,8 @@ class Site:
             )
         form.append("</form>\n")
         return (
-            f'<li class="proposal" id="{escape(p.id)}"><p class="head"><b>{p.number}.</b> {escape(shown)}'
+            f'<li class="proposal" id="{escape(p.id)}"><p class="head" title="{PROPOSED}">'
+            f"<b>{p.number}.</b> {escape(shown)}"
             f' {ARROW} {into} <span class="mute">{escape(score)}{DOT}{escape(o.hint or "-")}</span></p>\n'
             f"{self._evidence(items)}{''.join(form)}</li>\n"
         )
@@ -4314,7 +4316,8 @@ class Site:
             )
         form.append("</form>\n")
         return (
-            f'<li class="proposal" id="{escape(p.id)}"><p class="head"><b>{p.number}.</b> {escape(shown)}'
+            f'<li class="proposal" id="{escape(p.id)}"><p class="head" title="{PROPOSED}">'
+            f"<b>{p.number}.</b> {escape(shown)}"
             f' {ARROW} {into} <span class="mute">{escape(score)}</span></p>\n'
             f"{self._evidence(items)}{''.join(form)}</li>\n"
         )
