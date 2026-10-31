@@ -196,7 +196,7 @@ def test_every_control_is_a_44_px_target() -> None:
     for rule in (r"main button,a\.skip\{", r"main input,main select\{", r"\nsummary\{",
                  r"p\.pager a,p\.zooms a,p\.facets a\{", r"a\.name\{",
                  r"main form\.star button\{",
-                 r"p\.head>a,main h2>a,p\.people>a,p\.ids>a,p\.gear-crumb>a,"
+                 r"p\.head>a,main h2>a,p\.people>a,p\.ids>a,main>p\.mute:first-child>a,"
                  r"a\.person,p\.facts>a,dd>a\{"):  # fmt: skip
         found = re.search(rule + r"[^}]*", doors.PAGES)
         assert found is not None, rule

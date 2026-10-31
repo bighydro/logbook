@@ -382,7 +382,7 @@ border-radius:20px}
 dl.header dd{overflow-wrap:anywhere}
 @media (max-width:40rem){
 main{padding:1.5rem 1rem 3rem}
-p.head>a,main h2>a,p.people>a,p.ids>a,p.gear-crumb>a,a.person,p.facts>a,dd>a{display:inline-flex;
+p.head>a,main h2>a,p.people>a,p.ids>a,main>p.mute:first-child>a,a.person,p.facts>a,dd>a{display:inline-flex;
 align-items:center;min-height:44px}
 body>footer{padding-left:1rem;padding-right:1rem}
 main h1{font-size:40px;line-height:1.05}
