@@ -50,11 +50,16 @@ aboard the yacht Nordlys. Nothing in it is real.*
 | `/places` | the named places of `places.json` first (nights, last visit, kind, position), then *Name this place*: the review queue, twenty clusters a page, each with a dot on a plain canvas, its counts, its evidence folded, and a form that names it or rejects it | `logbook setup places list` and `setup places review` |
 | `/assets` | the registered assets and the last fix of each: the time, the position, the nearest named place, the speed, how long ago | `logbook setup assets status` |
 | `/gaps?since=` | where each source went quiet: lines, first and last line, the longest silence, the days with no line folded into runs | `logbook doctor sources --gaps` |
+| `/gear` | the gear, the machinery behind the header's icon: one card per part, each with one line of state, and the old shelves a link away ([the gear](#the-gear)) | — |
+| `/gear/sources?quiet=1` | one row per source: the lines it sent, the day of its last line, a source quiet for a week marked, and the command that brings it back; `?quiet=1` the quiet ones alone | `logbook doctor sources`, `--gaps` |
+| `/gear/crossings?to=` | every crossing line, the newest first: the destination, when, the tiers, the lines and the kinds, the policy entry, the line itself; `?to=` one destination's | `logbook export …` writes them |
+| `/gear/agents`, `/gear/manifest`, `/gear/manifest/people`, `/gear/org/ID`, `/gear/assets` | `/agents`, `/manifest`, `/manifest/people`, `/org/ID` and `/assets`, their contents exactly, with one line back to the gear; their forms post where they always did | as the old pages |
+| `/gear/build` | when the pages were last built, how long it took, each door and shelf with when it was built, the command that builds them again, and the serve service | `logbook serve --build`, `serve --status` |
 | `/world?from=&to=` | the globe you can scrub: the named places, the assets on their tracks, your stays and journeys, the chapters on the time scrubber; the page `export world` writes by default ([the world](world.md)) | `logbook export world` |
 
 `/` is Today, the front door ([below](#today-the-front-door)). `/shelves` is the front page it replaces:
-how many lines the record holds and the days it covers, and a link to each page; the gear in the
-doors' header links it until `/gear` is built.
+how many lines the record holds and the days it covers, and a link to each page; the gear links it,
+*Every shelf, as before*.
 `/today` redirects to the Day of the current date in the record's timezone (`logbook.json`), the date
 before until the record's `day_start` when it sets one (at 05:59 under `06:00`, yesterday's Day), whatever
 the clock of the device that asks: the page to bookmark on a phone.
@@ -129,6 +134,46 @@ The frame (`logbook/contrib/doors.py`) is one stylesheet: the owner's tokens as 
 `--card-dark-muted`), the same for a dark page, and the three families with their fallbacks
 (`--serif` Instrument Serif, `--sans` Inter, `--mono` JetBrains Mono). A door's own rules read the
 tokens with a fallback, `var(--paper, #F4F1EA)`, and never define `:root`.
+
+## The gear
+
+The gear is the icon at the end of the doors' header, and `/gear` is what it opens (RFC 0047 §4.6): the
+machinery, in its own words, out of the way of the doors. One card per part, each with one line of
+state (*24 sources, 2 quiet for a week or more.*, *last crossing: site, yesterday 06:10.*), then the old
+shelves a link away: every shelf as before (`/shelves`), every promise, the Ideas shelf and the table of
+silences (`/gaps`).
+
+- **Sources** (`/gear/sources`): one row per source, the quiet ones first: the lines it sent since its
+  first, the day of its last line (a link to that Day), *quiet* when that was a week ago or more, which
+  adapter reads it, and the command that brings it back (`logbook sync NAME` for a live source,
+  `logbook add NAME <file>` for an export); a source `policy/import.json` turns off says so instead.
+  The machine side of `/gaps` and of `logbook doctor sources`; `?quiet=1` lists the quiet ones alone.
+- **Crossings** (`/gear/crossings`): what left this machine, the newest first: each crossing line's
+  destination, when, the tiers that crossed, how many lines and of which kinds, the entry of
+  `policy/crossing.json` it crossed under and its ceiling, and a link to the line itself. `?to=site`
+  is one destination's. The Library's own destinations, the names `policy/crossing.json` keeps for its
+  readers and doors and never lets a person or a package take (`site`, `vault`, `world`, `folder`,
+  `letter`, `notion`, `mcp`, `dream`, `heard` and the rest), are named; a day or a package shared with a member of your circle
+  (`share day`, `export crossing --to`) says *a member of your circle*, never their name, and
+  `?to=circle` lists those.
+- **Agents**, **the Manifest** and **Assets**: `/agents`, `/manifest` (with `/manifest/people` and
+  `/org/ID`) and `/assets` at `/gear/agents`, `/gear/manifest`, `/gear/manifest/people`, `/gear/org/ID`
+  and `/gear/assets`, their contents exactly, with one line at the top back to the gear. Their forms
+  post where they always did, and the old addresses answer as they always did.
+- **The build** (`/gear/build`): when the pages were last built ([below](#built-ahead)), how many and
+  in how long, each door and shelf with when it was built and the seconds of the slowest, the command
+  that builds them again (`logbook serve --build`), and the serve service `serve --status` names. On a
+  machine that never built them, one sentence: every page renders live, and `logbook serve --built`
+  tries the build.
+
+The gear reads what the Library's gate lets through: a page that reads tier 1 lists no source whose
+lines are all above it, and counts a crossing's lines at the tiers it reads, naming no kind, no tier
+and no ceiling above them; its build page lists the doors and shelves alone. No number, date or clock
+stands beside a person's name on any of its pages, and its slowest pages are named by their section
+(`/people/…`), never by a person's id or a day. Its readings
+are the ones its parts keep (`/gaps`' activity, `/agents`' sessions, the Manifest's orgs), so the gear and
+then a part read once. The parts are built with every other shelf; `/gear` and `/gear/build` say how the
+build stands now, and are always rendered. Nothing on them writes, and an exported site has no gear.
 
 ## Three rules
 
@@ -219,7 +264,7 @@ wait ([RFC 0047](https://github.com/bighydro/logbook/blob/main/rfcs/0047-the-lib
 it, or `logbook serve --build`, turns the build on for this machine, and the 06:00 close keeps it
 built from then on. `--live` is still accepted and is the default. Every door and shelf (`/`, `/days`, `/trips`,
 `/journeys`, `/people`, `/places`, `/world`, `/manifest`, `/manifest/people`, `/ideas`, `/promises`,
-`/goals`, `/agents`, `/assets`, `/gaps`) is built, with the Days of the last fortnight and the pages
+`/goals`, `/agents`, `/assets`, `/gaps` and the gear's parts) is built, with the Days of the last fortnight and the pages
 those shelves link to first (60 of each kind: the people at the top of People, this year's journeys,
 the orgs, the ideas, the goals, the promises). A built page is the page the server would have rendered
 at that moment, byte for byte, with one sentence added to its footer: `built 06:02`.

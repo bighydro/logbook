@@ -189,6 +189,7 @@ from . import (
     day_photos,
     day_rhythm,
     door_ask,
+    door_gear,
     door_life,
     door_people,
     door_places,
@@ -244,7 +245,7 @@ CSP = (
 SHOWN_MESSAGES, LONG_CONVERSATION = 10, 30  # a conversation of more than 30 shows 10, the rest folded
 DAY_PATH = re.compile(r"^/day/(\d{4}-\d{2}-\d{2})$")
 TODAY = "/today"
-SHELVES = "/shelves"  # the shelves listed: the gear's index until `/gear` exists (`doors.GEAR`)
+SHELVES = "/shelves"  # the shelves listed, as before: a link from the gear (`door_gear`)
 # the record's pages, not the clock's (and every Day, journey, person and org)
 RECORD_PAGES = frozenset(
     {"/", "/days", "/trips", "/places", "/world", "/journeys", "/people", "/manifest", "/manifest/people"}
@@ -254,6 +255,7 @@ RECORD_PAGES = frozenset(
     | {SHELVES}  # the shelves listed, the front page before Today
     | {"/life"}  # the Life door (`door_life`)
     | {door_ask.PATH}  # Ask v1, the record's words as moments (`door_ask`)
+    | door_gear.RECORD_PAGES  # the gear's parts the record and its settings make (`door_gear`)
 )
 JOURNEY_PATH = re.compile(r"^/journeys/(\d{4}-\d{2}-\d{2})/(\d{4}-\d{2}-\d{2})$")  # its first and last day
 PERSON_PATH = re.compile(r"^/people/([^/]+)$")  # a canonical person, by entity id
@@ -292,8 +294,20 @@ WEEK_ACT = re.compile(r"^/week/(\d{4}-W\d{2})/close$")  # its one act, Close the
 CLOSE = "close"  # the Day page's anchor of Reflect and sign, where a write sends the owner back
 # pages the record's today moves too (this year, anniversaries, drift, the stale orgs and ideas): in the tag
 # /goals: a goal goes past; /world: its window ends on today, whatever the calendar holds after it;
-# /places: what comes next, and the last year its places are ordered by
-CLOCK_PAGES = ("/people", "/manifest", "/org/", "/ideas", "/idea/", "/goals", "/world", "/life", "/places")
+# /places: what comes next, and the last year its places are ordered by;
+# and the gear's: its quiet sources, its Manifest's stale orgs (`door_gear`)
+CLOCK_PAGES: tuple[str, ...] = (
+    "/people",
+    "/manifest",
+    "/org/",
+    "/ideas",
+    "/idea/",
+    "/goals",
+    "/world",
+    "/life",
+    "/places",
+)
+CLOCK_PAGES += door_gear.CLOCK_PAGES
 TRIP_KINDS: tuple[str, ...] | None = (
     trips.READ_KINDS
 )  # the lines a year's trips parse; the rest from the index
@@ -953,7 +967,9 @@ class Site:
             csp = DAY_CSP if self._records() else DAY_IMAGES
         if path == "/":  # Today: its fonts and its memory's thumbnail from here, the Day's forms
             csp = DOOR_CSP if self._records() else doors.CSP
-        if path == "/life":  # Life: a door, its fonts from here, no script
+        if (
+            path == "/life" or path in door_gear.FRAMED
+        ):  # Life and the gear's own pages: fonts from here, no script
             csp = doors.CSP
         if path == "/people" or PERSON_PATH.match(path) is not None:  # People (`door_people`): its fonts
             csp = doors.CSP
@@ -1870,6 +1886,7 @@ class Site:
             and PERSON_PATH.match(path) is None
             and PLACE_PATH.match(path) is None
             and ORG_PATH.match(path) is None
+            and door_gear.ORG_PATH.match(path) is None
             and IDEA_PATH.match(path) is None
             and LINE_PATH.match(path) is None
             and WEEK_PATH.match(path) is None
@@ -2065,6 +2082,8 @@ class Site:
             return week_page.page_week(self, m.group(1), expanded=params.get("open") == "1")
         if path == "/life":
             return self.page_life(params)
+        if path == door_gear.GEAR or path.startswith(f"{door_gear.GEAR}/"):
+            return self.page_gear(path, params)
         raise NotFound(f"no page at {path}")
 
     def page_life(self, params: Mapping[str, str]) -> str:
@@ -2075,6 +2094,10 @@ class Site:
     def page_ask(self, params: Mapping[str, str]) -> str:
         """`/ask?q=…`: Ask v1, the record's words answered with moments (`door_ask`)."""
         return door_ask.page_ask(self, params)
+
+    def page_gear(self, path: str, params: Mapping[str, str]) -> str:
+        """`/gear` and its parts (RFC 0047 §4.6): the machinery behind the header's icon (`door_gear`)."""
+        return door_gear.page(self, path, params)
 
     def _error(self, status: int, message: str) -> Response:
         body = f"<h1>{status}</h1>\n<p>{escape(message)}</p>\n"
@@ -2112,7 +2135,7 @@ class Site:
         if self.nav is not None:
             return f"<header><nav>{self.nav}</nav></header>\n"
         path = _PATH.get()
-        return doors.header(self, doors.GEAR if path == doors.GEAR else doors.door_of(path) or "")
+        return doors.header(self, doors.GEAR if doors.in_gear(path) else doors.door_of(path) or "")
 
     def header_style(self) -> str:
         """What the header adds to a page's stylesheet: the doors' header (`doors.header_style`, its fonts

@@ -146,7 +146,7 @@ def test_every_page_renders_on_the_four_years_and_points_at_nothing_but_itself(l
         assert response.headers["Content-Security-Policy"].startswith("default-src 'none'")
         assert response.etag is not None, f"{page}: the record's, kept by the browser"
         assert '<a href="/people"' in text and ">People</a>" in text, "in the doors' header"
-        assert '<a class="gear" href="/shelves"' in text, "the gear: every shelf, the Journeys among them"
+        assert '<a class="gear" href="/gear"' in text, "the gear: every shelf, the Journeys among them"
 
 
 def test_serving_the_shelves_writes_nothing(lb: Logbook) -> None:

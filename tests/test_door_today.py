@@ -28,7 +28,7 @@ from persona import CAFE, HOME, KARI, OLA, ZURICH, attendee, dwell, event, note,
 from test_day_rhythm import _seen, beside
 
 from logbook import cli
-from logbook.contrib import day_rhythm, demo, door_today, doors, library_build, serve
+from logbook.contrib import day_rhythm, demo, door_gear, door_today, doors, library_build, serve
 from logbook.core import index as index_module
 from logbook.core import people
 from logbook.core.store import Logbook
@@ -148,7 +148,7 @@ def test_the_front_door_is_today_in_the_doors_frame(lb: Logbook) -> None:
     assert '<a href="/" aria-current="page">Today</a>' in doors_
     ask = re.search(r'<form class="ask" method="get" action="/ask" role="search">.*?</form>', head)
     assert ask is not None and 'name="q"' in ask.group(0) and "<label" in ask.group(0)
-    gear = re.search(r'<a class="gear" href="/shelves"[^>]*aria-label="The gear"', head)
+    gear = re.search(r'<a class="gear" href="/gear"[^>]*aria-label="The gear"', head)
     assert gear is not None and "<svg" in head, "one icon, drawn inline"
     assert head.index("<nav") < head.index('<form class="ask"') < head.index('class="gear"'), "RFC 0047 §6"
     assert "<title>Today · Logbook</title>" in page
@@ -442,7 +442,7 @@ def test_the_shelves_listed_move_to_their_own_address_and_the_old_pages_keep_the
     shelves = site.respond("/shelves")
     assert shelves.status == 200 and shelves.etag is not None
     text = shelves.body.decode("utf-8")
-    assert "The last fortnight" in text and '<a class="gear" href="/shelves"' in text
+    assert "The last fortnight" in text and '<a class="gear" href="/gear"' in text
     days = site.respond("/days").body.decode("utf-8")
     # Life is its own door now (`door_life`): the Days page carries the header, Life a link to its door
     assert '<header class="doors">' in days and '<a href="/life">Life</a>' in days
@@ -450,7 +450,8 @@ def test_the_shelves_listed_move_to_their_own_address_and_the_old_pages_keep_the
     assert '<a href="/life" aria-current="page">Life</a>' in life
     assert serve.STYLE in days, "every other page keeps its own stylesheet and look under the header"
     assert f'href="/day/{TODAY}"' in _today(site), "the Day /today names, one tap from Today"
-    assert doors.GEAR == "/shelves"
+    assert doors.GEAR == "/gear", "the gear's icon opens the gear (`door_gear`)"
+    assert 'href="/shelves"' in site.respond("/gear").body.decode("utf-8"), "and the gear the shelves"
 
 
 def test_the_record_button_is_today_s_script_when_the_server_hears(lb: Logbook) -> None:
@@ -516,7 +517,8 @@ def test_every_page_carries_the_doors_header_and_marks_its_door(lb: Logbook) -> 
         marked = re.findall(r'<a href="([^"]+)" aria-current="page">', page)
         assert marked == [t for n, t in doors.DOORS if n == door], (target, marked)
         root = ":root{color-scheme:light dark;--paper"
-        own = target.partition("?")[0] in ("/", "/life")  # a door's own page (Today, Life): the doors' frame
+        # a door's own page (Today, Life) and the gear's own pages: the doors' frame
+        own = target.partition("?")[0] in ("/", "/life", *door_gear.FRAMED)
         if own or '<main class="door">' in page:  # and any page in it (Places): the doors' one stylesheet
             assert doors.style() in page and serve.STYLE not in page, target
             assert page.count(root) == 1, (target, "the tokens defined once, on :root")
@@ -528,8 +530,12 @@ def test_every_page_carries_the_doors_header_and_marks_its_door(lb: Logbook) -> 
     assert doors.door_of("/people/019cadd3") == doors.PEOPLE and doors.door_of("/day/2026-06-19") is None
     shelves = site.respond("/shelves").body.decode("utf-8")
     assert (
-        '<a class="gear" href="/shelves"' in shelves
-        and 'aria-label="The gear" aria-current="page"' in shelves
+        '<a class="gear" href="/gear"' in shelves and 'aria-label="The gear" aria-current="page"' in shelves
+    ), "the shelves listed, a link from the gear, are the gear's"
+    gear = site.respond("/gear").body.decode("utf-8")
+    assert (
+        'aria-label="The gear" aria-current="page"' in gear
+        and "aria-current" not in gear[gear.index('<nav class="doors"') : gear.index("</nav>")]
     )
     days = site.respond("/days").body.decode("utf-8")
     assert 'aria-label="The gear" aria-current' not in days, "the gear is marked on its own page alone"

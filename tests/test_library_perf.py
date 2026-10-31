@@ -160,6 +160,56 @@ def test_today_reads_its_days_and_the_readings_kept_beside_the_index(
     assert site.respond("/").body == response.body and reads.read == 0, dict(reads.lines)
 
 
+GEAR = (  # the gear (RFC 0047 §4.6) and its parts (`door_gear`)
+    "/gear/sources",
+    "/gear/crossings",
+    "/gear/agents",
+    "/gear/manifest",
+    "/gear/manifest/people",
+    "/gear/assets",
+    "/gear/build",
+    "/gear",
+)
+
+
+@pytest.mark.parametrize("lines", SIZES)
+def test_the_gear_reads_what_its_parts_keep_once_per_head(
+    lines: int, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The gear on the benchmark's record, as the shelves are held: every part answers, folds the owner's
+    stays as its old page does, never holds the messages whole, and a second visit at the same head reads
+    nothing (the assets' fixes age with the clock and are read again, as `/assets` is). `/gear`, after its
+    parts, reads nothing of its own: its one line a part is the reading the part keeps. Its sources are
+    the activity `/gaps` keeps beside the index, never a line of the files."""
+    lb, _built = _record(tmp_path, monkeypatch, lines)
+    site = serve.Site(lb, now=lambda: bench.NOW)
+    reads = Reads(monkeypatch)
+    for route in GEAR:
+        reads.clear()
+        response = site.respond(route)
+        assert response.status == 200, route
+        assert reads.folds <= 24, (route, reads.folds)
+        assert "message" not in reads.whole, (route, dict(reads.whole))
+        if route in ("/gear/sources", "/gear/build", "/gear"):
+            assert reads.read == 0, (route, dict(reads.lines))
+        reads.clear()
+        again = site.respond(route)
+        assert again.status == 200, route
+        if route not in ("/gear/assets", "/gear"):  # the fixes' age moves with the clock, as on /assets
+            assert again.body == response.body, route
+            assert reads.read == 0, (route, dict(reads.lines))
+    # a server started again, `/gear` first: each part reads less than it reads alone, what `/gear` kept
+    for route in ("/gear/agents", "/gear/manifest", "/gear/crossings"):
+        reads.clear()
+        assert serve.Site(lb, now=lambda: bench.NOW).respond(route).status == 200, route
+        alone = sum(reads.whole.values()) + reads.read
+        site = serve.Site(lb, now=lambda: bench.NOW)
+        assert site.respond("/gear").status == 200
+        reads.clear()
+        assert site.respond(route).status == 200, route
+        assert sum(reads.whole.values()) + reads.read < alone, (route, dict(reads.whole), dict(reads.lines))
+
+
 @pytest.mark.parametrize("lines", SIZES)
 def test_the_people_door_reads_the_people_once_and_each_thread_from_the_index(
     lines: int, tmp_path: Path, monkeypatch: pytest.MonkeyPatch

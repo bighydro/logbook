@@ -33,6 +33,7 @@ from orgs_record import TODAY, evidence_record, settle
 from persona import persona_record
 
 from logbook.contrib import (
+    door_gear,
     entity_review,
     ideas,
     orgs,
@@ -102,7 +103,9 @@ ROUTES = frozenset(
         "/timeline/Z",
         "/life",
     }
+    | {*door_gear.FRAMED, *door_gear.OLD, "/gear/org/ID"}  # the gear's, through `door_gear.page`
 )  # every page `Site._page` answers
+GEAR_DETAILS = (("/gear/org/ID", door_gear.ORG_PATH),)  # the gear's pages one of many
 EACH = 1  # pages of one kind (a route and the names in its query) the walk reads, beside its seeds
 ANSWERS = "an error or a redirect"  # the walk's pages that are not a 200
 
@@ -526,7 +529,7 @@ def test_the_owner_s_sentence_is_the_library_s_one_busy_answer() -> None:
 
 
 def _route(path: str) -> str:
-    return next((name for name, pattern in DETAILS if pattern.match(path)), path)
+    return next((name for name, pattern in (*DETAILS, *GEAR_DETAILS) if pattern.match(path)), path)
 
 
 def _sort(target: str) -> str:
@@ -580,6 +583,8 @@ def walked(
         assert site.write(f"/day/{WEDNESDAY}/reflect", said, LOOPBACK, None).status == 303
         day = site.respond(f"/day/{WEDNESDAY}", "").body.decode("utf-8")
         assert all(_forms(day, cls) for cls in ("reflect", "audio", "sign", "star", "with")), "every form"
+        orgs_site = _manifest_site(_copy(manifest, folder / "orgs", mp))
+        org = re.findall(r'href="/org/([^"?]+)"', orgs_site.respond("/manifest", "").body.decode("utf-8"))[0]
         sites = (
             (
                 site,
@@ -596,7 +601,7 @@ def walked(
                     "/ask?q=ola&page=0",  # and one refused
                 ],
             ),
-            (_manifest_site(_copy(manifest, folder / "orgs", mp)), ["/", "/manifest/people?money=1"]),
+            (orgs_site, ["/", "/manifest/people?money=1", f"/gear/org/{org}"]),  # an org, in the gear too
             (_ideas_site(_copy(shelf_of_ideas, folder / "ideas", mp)), ["/", "/ideas"]),
             # the Promises, Goals and Agents shelves, on their record (`shelves_record.py`)
             (
@@ -619,7 +624,14 @@ def test_the_walk_knows_every_page_the_server_answers(walked: dict[str, list[Pag
     source = inspect.getsource(serve.Site._page)
     literal = set(re.findall(r'path == "(/[^"]*)"', source))
     patterns = {getattr(serve, name) for name in re.findall(r"\b([A-Z_]+_PATH)\.match\(path\)", source)}
-    assert literal | {name for name, pattern in DETAILS if pattern in patterns} == ROUTES
+    assert "self.page_gear(path, params)" in source, "the gear's addresses are `door_gear.page`'s"
+    gear = inspect.getsource(door_gear.page)
+    gear_literal = {getattr(door_gear, name) for name in re.findall(r"\bpath == ([A-Z_]+)\b", gear)}
+    gear_literal |= set(door_gear.OLD) if "path in OLD" in gear else set()
+    gear_patterns = {getattr(door_gear, n) for n in re.findall(r"\b([A-Z_]+_PATH)\.match\(path\)", gear)}
+    assert gear_patterns == {pattern for _, pattern in GEAR_DETAILS}
+    answered = literal | gear_literal | {name for name, pattern in DETAILS if pattern in patterns}
+    assert answered | {name for name, _pattern in GEAR_DETAILS} == ROUTES
     assert patterns == {pattern for _, pattern in DETAILS}
     assert set(walked) == {*ROUTES, ANSWERS}, {*ROUTES, ANSWERS} ^ set(walked)
     assert {p.status for p in walked[ANSWERS]} >= {302, 400, 404}

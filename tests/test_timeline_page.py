@@ -111,7 +111,7 @@ def test_the_zooms_are_links_and_the_one_shown_is_not(demo: Logbook) -> None:
         f"/day/{OFFICE_DAY}",
     } <= links
     assert "<b>day</b>" in page and f"/timeline/day/{OFFICE_DAY}" not in links
-    assert '<a class="gear" href="/shelves"' in page  # the gear, on every page, opens the shelves listed
+    assert '<a class="gear" href="/gear"' in page  # the gear, on every page, opens the machinery
     # the shelves listed link it (the front page before Today, behind the gear: RFC 0047 §4.6)
     assert "/timeline" in HREF.findall(_site(demo).respond("/shelves").body.decode("utf-8"))
 

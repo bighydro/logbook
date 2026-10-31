@@ -59,7 +59,8 @@ NAV_BEFORE = (
 
 def test_the_front_page_links_every_page_the_navigation_does(record: Logbook) -> None:
     site = _site(record)
-    assert '<a class="gear" href="/shelves"' in _page(site, "/days"), "the gear, on every page"
+    assert '<a class="gear" href="/gear"' in _page(site, "/days"), "the gear, on every page"
+    assert '<a href="/shelves">' in _page(site, "/gear"), "and the gear the shelves listed"
     page = _page(site, "/shelves")  # the shelves listed: the front page before Today
     main = _main(page)
     linked = {href.split("?")[0] for href in re.findall(r'href="([^"]+)"', main)}
