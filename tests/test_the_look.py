@@ -292,6 +292,9 @@ def test_a_promise_the_rules_read_is_pencil_wherever_it_shows(record: Path) -> N
 # -- the rules of the record, on every page in the look ----------------------------------------------------
 
 ATTRIBUTE = re.compile(r'\b(?:title|aria-label|alt)="([^"]*)"')
+VERBATIM = re.compile(
+    r'<pre class="line">.*?</pre>', re.S
+)  # a line as written, its ids and addresses: no sentence
 SHAPES = ("", "?shape=morning", "?shape=live", "?shape=evening", "?shape=signed", "?open=1")
 
 
@@ -303,10 +306,13 @@ def _people_names(site: serve.Site) -> list[str]:
 
 def _beside(text: str, names: list[str]) -> list[str]:
     """`tests/test_no_count_beside_a_name.py`'s strong guard (#423, #430) for `names`: the markup taken out,
-    a row's link to its line and a draft's short ids left out as addresses, each SVG tooltip a text of its
+    a row's link to its line, a line's JSON as written (`/line/ID`: a message id is a clock and an address)
+    and a draft's short ids left out as addresses, each SVG tooltip a text of its
     own; every attribute a person reads (`title`, `aria-label`, `alt`) a text of its own too."""
     texts = [html.unescape(a) for a in ATTRIBUTE.findall(text)]
-    unmarked = re.sub(r"<[^>]*>", " ", guard.TOOLTIP_END.sub("\n", guard.RAW.sub(" ", text)))
+    unmarked = re.sub(
+        r"<[^>]*>", " ", guard.TOOLTIP_END.sub("\n", guard.RAW.sub(" ", VERBATIM.sub(" ", text)))
+    )
     texts += guard.SHORT.sub(" ", html.unescape(unmarked)).splitlines()
     return [t.strip() for t in texts for name in names if figures.adjacent(t, name)]
 
