@@ -214,8 +214,9 @@ def page_ask(site: Site, params: Mapping[str, str]) -> str:
         )
     parts.append('<ol class="moments">\n' + "".join(rows) + "</ol>\n")
     parts.append(_pager(text, standing, page, page < last))
-    top = max(int(hit.line.get("tier") or 0) for hit in shown)
-    parts.append(f'<p class="foot">{escape(f"Nothing read above tier {top}.")}</p>\n')
+    parts.append(
+        f'<p class="foot">{escape(f"Read at {site.gate_words()}.")}</p>\n'
+    )  # the gate, true of every name
     return _document(site, text, "".join(parts), names)
 
 
@@ -413,9 +414,11 @@ def _plain(text: str) -> str:
 
 
 def known_names(directory: people.Report) -> tuple[str, ...]:
-    """Every name of a person the record knows, whole and given, at any tier: only what no number may
-    stand beside, never printed (a name above the page's gate is held here too, the stricter way)."""
-    found = {part for p in directory.known.values() if p.name for part in (p.name, p.name.split()[0])}
+    """Every name of a person the record knows, whole and given, at any tier, the owner's too: only what
+    no number may stand beside, never printed (a name above the page's gate is held here too, the
+    stricter way)."""
+    every = [*(p.name for p in directory.known.values() if p.name), *directory.owner.names]
+    found = {part for name in every if name.strip() for part in (name.strip(), name.split()[0])}
     return tuple(sorted(found, key=len, reverse=True))
 
 

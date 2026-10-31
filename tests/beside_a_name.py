@@ -20,7 +20,11 @@ from logbook.contrib import demo
 
 NAMES = tuple(p.name for p in (demo.OWNER, *demo.PEOPLE))  # every person of the demo record, the owner too
 _ALT = "|".join(re.escape(n) for n in NAMES)
-GUARD = re.compile(rf"(\d[\s(:×x#·,]*(?:{_ALT}))|((?:{_ALT})\??[\s(:×x#·,]*\d)")
+_WORD = rf"(?<![^\W\d_xX])(?:{_ALT})(?![^\W\d_xX])"  # in another case: a word, or by an `x`
+GUARD = re.compile(
+    rf"(\d[\s(:×x#·,]*(?:{_ALT}))|((?:{_ALT})\??[\s(:×x#·,]*\d)"
+    rf"|(?i:\d[\s(:×x#·,]*{_WORD}|{_WORD}\??[\s(:×x#·,]*\d)"
+)
 ROW = frozenset({"li", "tr"})  # the elements a page lists one thing in: a row each
 DOT = " · "
 ADDRESS = re.compile(

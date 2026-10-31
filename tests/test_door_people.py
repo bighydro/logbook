@@ -372,7 +372,8 @@ def _beside(text: str, names: list[str]) -> list[str]:
     among it, and over every `title`, `aria-label` and `alt`, each on its own."""
     alt = "|".join(re.escape(n) for n in sorted(names, key=len, reverse=True))
     sep = figures.SEPARATORS
-    guard = re.compile(rf"(\d{sep}(?:{alt}))|((?:{alt})\??{sep}\d)")
+    word = rf"(?<![^\W\d_xX])(?:{alt})(?![^\W\d_xX])"  # in another case: a word, or by an `x`
+    guard = re.compile(rf"(\d{sep}(?:{alt}))|((?:{alt})\??{sep}\d)|(?i:\d{sep}{word}|{word}\??{sep}\d)")
     shown = [page_text.seen(text), *(html.unescape(t) for t in TITLES.findall(text))]
     short = re.compile(rf"…[0-9a-f-]{{{drafts.ID_SHORT}}}(?![0-9a-f])")  # a line's id, shortened: main's too
     return [

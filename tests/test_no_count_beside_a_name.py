@@ -36,7 +36,8 @@ _ALT = "|".join(re.escape(n) for n in NAMES)
 # or nothing at all; and no boundary is asked of the name on either side, so a digit stuck to it
 # (`Ola Nordmann2`, `3Ola`) or through a separator that is a letter (`3xOla`) is beside it
 SEP = figures.SEPARATORS
-GUARD = re.compile(rf"(\d{SEP}(?:{_ALT}))|((?:{_ALT})\??{SEP}\d)")
+_WORD = rf"(?<![^\W\d_xX])(?:{_ALT})(?![^\W\d_xX])"  # in another case: a word, or by an `x`
+GUARD = re.compile(rf"(\d{SEP}(?:{_ALT}))|((?:{_ALT})\??{SEP}\d)|(?i:\d{SEP}{_WORD}|{_WORD}\??{SEP}\d)")
 
 
 RAW = re.compile(r'<a class="raw"[^>]*>#\d+</a>')  # a row's link to its line as written: an address

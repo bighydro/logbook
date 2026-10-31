@@ -259,7 +259,7 @@ def test_a_shelf_header_says_what_its_tier_means(record: Logbook, path: str) -> 
     assert head is not None
     assert "tier -" not in head.group(0)
     said = _said(f"<main>{head.group(0)}</main>")
-    assert said.endswith("no lines") or re.search(r"nothing read above tier \d$", said), said
+    assert said.endswith("no lines") or re.search(r"read at tier \d$", said), said
     assert re.search(r'<small title="[^"]*highest tier[^"]*">', head.group(0)), head.group(0)
     assert "tier 3" not in serve.TIER_TITLE  # a gated page never says the tier it does not read
 

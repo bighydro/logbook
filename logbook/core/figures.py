@@ -73,7 +73,8 @@ def beside_a_name(
     text: str, names: Collection[str], years: Collection[str] | None = None, language: str | None = None
 ) -> bool:
     """Whether `text` sets any digit at all, a date's and a clock's included, beside one of `names`
-    (their full name, or their first name of three letters or more) with nothing but separators
+    (their full name, or their first name of three letters or more), in any case (`kari`, `KARI`),
+    with nothing but separators
     between them, or none, whatever stands around the name (`adjacent`); or names one of them, no
     letter stuck to either end, and writes a figure anywhere (`figures`: dates, clock times and the
     unit's `years` are not figures): a number beside a person."""
@@ -81,7 +82,11 @@ def beside_a_name(
     found |= {n.split()[0] for n in list(found) if len(n.split()[0]) >= 3}
     if any(adjacent(text, name) for name in found):  # a digit against the name, whatever is around it
         return True
-    named = [name for name in found if re.search(rf"{LETTER_BEFORE}{re.escape(name)}{LETTER_AFTER}", text)]
+    named = [
+        name
+        for name in found
+        if re.search(rf"{LETTER_BEFORE}{re.escape(name)}{LETTER_AFTER}", text, re.IGNORECASE)
+    ]
     return bool(named) and bool(figures(text, years=years, language=language))
 
 
@@ -99,12 +104,31 @@ SEPARATORS = (
 LETTER_BEFORE, LETTER_AFTER = r"(?<![^\W\d_])", r"(?![^\W\d_])"
 
 
+# a name in another case as a word, but for the one letter that is a separator too, the `x` of `3x`
+X_BEFORE, X_AFTER = r"(?<![^\W\d_xX])", r"(?![^\W\d_xX])"
+
+
 def adjacent(text: str, name: str) -> bool:
     """Whether a digit stands beside `name` in `text` with only `SEPARATORS` between them, on either
     side: `Ola Nordmann, 14:00`, `2026-06-17 · Ola`, `8 June · Ola` (a date in words is one figure,
     `CALENDAR`), a digit stuck to it with nothing between, `Ola Nordmann2`, `3Ola`, or through a
-    separator that is a letter, `3xOla`: no boundary is asked of the name on either side. `with Ola
-    at 14:00` has a word between; in `Olav 2` the `v` is no separator."""
+    separator that is a letter, `3xOla`: no boundary is asked of the name as written. In any other
+    case it is the name still, `kari 2026`, `2026 KARI` (`beside`), as a word: no letter touches it,
+    so `granola 1` and `1 person` are no Ola and no Per. `with Ola at 14:00` has a word between; in
+    `Olav 2` the `v` is no separator."""
     text = CALENDAR.sub(" 0 ", text)
-    name = re.escape(name)
-    return re.search(rf"\d{SEPARATORS}{name}|{name}\??{SEPARATORS}\d", text) is not None
+    return re.search(beside(re.escape(name), SEPARATORS), text) is not None
+
+
+def beside(names: str, separators: str) -> str:
+    """The strong guard's pattern for `names` (an alternation, escaped): a digit, then nothing but
+    `separators`, then a name; or a name, a `?` perhaps, `separators`, then a digit. A name as written
+    asks no boundary (`3Ola`); a name in any other case (`kari`, `KARI`) is one when no letter touches
+    it (`LETTER_BEFORE`, `LETTER_AFTER`) but the `x` on the digit's side (`3xkari`, `karix2`), so a
+    lower-case name typed is caught and a word that holds one (`granola`) is not."""
+    after = f"{X_BEFORE}(?:{names}){LETTER_AFTER}"  # after the digit: an `x` of a count may touch it
+    before = f"{LETTER_BEFORE}(?:{names}){X_AFTER}"  # before the digit: `karix2` as `Karix2`
+    return (
+        rf"\d{separators}(?:{names})|(?:{names})\??{separators}\d"
+        rf"|(?i:\d{separators}{after}|{before}\??{separators}\d)"
+    )

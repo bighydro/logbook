@@ -42,7 +42,7 @@ from typing import TYPE_CHECKING
 from urllib.parse import urlencode
 from zoneinfo import ZoneInfo
 
-from ..core import reading, search
+from ..core import figures, people, reading, search
 from ..core.chain import Line
 from ..core.index import RETRACTED, Index
 
@@ -87,6 +87,7 @@ li.hit .superseded a{display:inline-block;min-height:2.75rem;line-height:2.75rem
 @media (max-width:40rem){form.search button{padding:0 .6rem}li.hit .kind{min-width:0;margin-right:.4rem}}
 """
 )
+ASKED = "the words in the field"  # what a sentence says of words asked that set a number beside a name
 PAST = "Page {page} is past the last hit."  # a page asked for beyond them
 NO_SERVER = "Search answers in logbook serve, on this machine; an exported site has no server to ask."
 
@@ -129,7 +130,7 @@ def page_search(site: Site, params: Mapping[str, str]) -> str:
     if shown or kind is not None or year is not None:  # a filter that found nothing can be taken off
         parts.append(_filters(text, kind, year, years))
     if not shown:
-        said = _nothing(text, kind, year) if not hits else PAST.format(page=page)
+        said = _nothing(_echoed(site, text), kind, year) if not hits else PAST.format(page=page)
         parts.append(f"<p>{escape(said)}</p>\n")
         return _document(site, parts)
     top = max(int(hit.line.get("tier") or 0) for hit in shown)
@@ -156,6 +157,17 @@ def _gated(
         if len(hits) > wanted or not result.full or limit >= wanted * WIDEN:
             return hits[:wanted], len(hits) > wanted or result.full
         limit *= 4
+
+
+def _echoed(site: Site, text: str) -> str:
+    """The words asked as a sentence may say them back: as typed, unless they set a number beside the
+    name of a person the record knows, the owner's too, a name of any tier (the stricter way), in any
+    case (`figures.adjacent`: `kari 2026`, `2026 KARI`); then `ASKED`, and the words stay in the field
+    above, as typed, never hidden from the owner."""
+    directory = site._day_reading(("directory",), lambda: people.directory(site.lb))
+    every = [*(p.name for p in directory.known.values() if p.name), *directory.owner.names]  # the owner too
+    names = {part for name in every if name.strip() for part in (name.strip(), name.split()[0])}
+    return ASKED if any(figures.adjacent(text, name) for name in names) else text
 
 
 def _nothing(text: str, kind: str | None, year: str | None) -> str:
