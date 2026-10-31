@@ -40,10 +40,13 @@ from logbook.core.store import Logbook
 STYLE = re.compile(r"<style>(.*?)</style>", re.S)
 LEGACY = re.compile(r"var\(--(?:fg|bg|mute|accent|graphite|gfaint|rule|card)\)|#2f5d7c|#8fb8d6", re.I)
 ROOT_TOKENS = ":root{color-scheme:light dark;--paper"
+# the old pages, then the doors of 1.1, every one visited before a link the crawl finds
 SEEDS = ("/shelves", "/days", "/trips", "/journeys", "/people", "/places", "/promises", "/goals", "/ideas",
          "/manifest", "/manifest/people", "/agents", "/assets", "/gaps", "/timeline", "/search?q=home",
          "/week/2026-W23", "/day/2026-06-03", "/day/2026-06-03?shape=morning", "/day/2026-06-03?shape=live",
-         "/day/2026-06-03?shape=signed", "/nowhere")  # fmt: skip
+         "/day/2026-06-03?shape=signed", "/nowhere",
+         "/life", "/ask?q=home", "/gear", "/gear/sources", "/gear/crossings", "/gear/build", "/gear/agents",
+         "/gear/manifest", "/gear/manifest/people", "/gear/assets")  # fmt: skip
 
 
 @pytest.fixture(scope="module")
