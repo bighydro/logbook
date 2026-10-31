@@ -8,7 +8,7 @@ logbook/
              day, days, trips, year, people, person, the pages, places, the rollups
   contrib/   what reads the world into the record and the record out into the world: the adapters (one
              registry, one module per source), import-backup, sync, setup's stores, the exports (vault,
-             the paper edition, trip bundles), serve, the MCP server, the derived readers whose output is
+             Volumes, trip bundles), serve, the MCP server, the derived readers whose output is
              a reader's own (digest, promises, tasks, gaps, people merge, the trip page), the demo record
   labs/      everything that runs a model, or is still an experiment: transcribe, describe, promises
              --judge, demo --years

@@ -58,7 +58,7 @@ that is retracted or superseded (star the one that stands), a mark itself (a sta
 retraction), a model's draft, a note of more than one line, an `unstar` of a line that is not starred,
 and an `unstar` naming an `art` keeper (the Art album's mark is not a star).
 
-### A photo star is how the press picks pictures
+### A photo star is how a Volume picks pictures
 
 A photo's star is the record's older mark for a photo, a **keeper** of lane `memory` (RFC 0024):
 `logbook star` on a `photo/v1` line writes one, `source` `manual`, at the photo's tier, the note in
@@ -66,7 +66,7 @@ its `note`. A keeper is three things at once:
 
 - the Day's **hero photo**: the Day lists it under the row it falls in, `keeper  IMG_121030.HEIC
   (memory)`, and `logbook show keepers` lists it;
-- the **press's pick**: the paper edition, `logbook show year 2026 --html year.html --print` and
+- the **Volume's pick**: a Volume, `logbook show year 2026 --html year.html --print` and
   `logbook show trip ID --html trip.html --print` ([On paper](print.md)), lays out each month's or
   each day's keepers as its page of photos, and nothing else; a star's note is printed under the
   photo as its caption. To choose the pictures of the book, star them; to take one out, unstar it;
