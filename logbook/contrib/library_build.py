@@ -96,6 +96,12 @@ DOORS = (
     "/assets",
     "/gaps",
     "/life",
+    "/gear/sources",  # the gear's parts (`door_gear`); `/gear` and `/gear/build` say how the build stands now
+    "/gear/crossings",
+    "/gear/agents",
+    "/gear/manifest",
+    "/gear/manifest/people",
+    "/gear/assets",
 )
 EVERYWHERE = ("retraction", "resolution", "entity", "entity-review", "people-review")  # who is who
 DAY_PAGE = re.compile(r"^/day/(\d{4}-\d{2}-\d{2})$")
@@ -107,6 +113,7 @@ ASKED = 500  # addresses the server added on demand, the latest kept and rebuilt
 DETAIL = re.compile(r"^/(people|places|journeys|org|idea|goals|promises|day)/")
 HREF = re.compile(r"""href\s*=\s*["']([^"']*)["']""", re.I)
 LIVE_PREFIXES = ("/photo/",)  # pixels from the attachment store: cheap, and not a page
+LIVE_PAGES = ("/today", "/gear", "/gear/build")  # a redirect to today's Day; the gear and its build, as now
 FOOTER = "</footer>"
 REPLACE_TRIES = 40  # Windows: a file held open by a reader is replaced again for up to two seconds
 WORKERS_ENV, WORKERS_MOST = "LOGBOOK_BUILD_WORKERS", 4  # a build's processes from the command line
@@ -613,8 +620,9 @@ def _link_lock(lock: Path, data: bytes) -> None:
 
 def live(path: str, today: str) -> bool:
     """Whether the server renders `path` always, never from the build: today's Day (its shape moves
-    with the clock), `/today` (a redirect to it) and a photo's pixels."""
-    if path == "/today" or path.startswith(LIVE_PREFIXES):
+    with the clock), `/today` (a redirect to it), the gear and its build page (they say how the build
+    stands now) and a photo's pixels."""
+    if path in LIVE_PAGES or path.startswith(LIVE_PREFIXES):
         return True
     return path == f"/day/{today}"
 
@@ -625,8 +633,8 @@ FORM_PAGES = {
     "/places/review": ("/places",),
     "/journeys/name": ("/journeys",),
     "/people/review": ("/people",),
-    "/manifest/review": ("/manifest", "/org/"),
-    "/manifest/status": ("/manifest", "/org/"),
+    "/manifest/review": ("/manifest", "/org/", "/gear/manifest", "/gear/org/"),
+    "/manifest/status": ("/manifest", "/org/", "/gear/manifest", "/gear/org/"),
     "/ideas/review": ("/ideas", "/idea/"),
     "/ideas/status": ("/ideas", "/idea/"),
 }

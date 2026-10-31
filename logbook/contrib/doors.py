@@ -9,8 +9,8 @@ A door not yet built links to the page that holds its moments today (`DOORS`: Pe
 Places to `/places`); Life is its own page, `/life` (`door_life`). Ask is a GET form to `/ask?q=`
 (`door_ask`, Ask v1, RFC 0047 §4.5), which answers with moments; the page of an answer keeps the words
 asked in the field (`asked`). An exported site has no server to ask, and leaves it out.
-The gear is one icon, a link to the index of the machinery pages (`GEAR`, the shelves listed) until
-`/gear` exists. On a phone the doors are a bar at the foot of the screen and Ask is at the top.
+The gear is one icon, a link to the machinery (`GEAR`, `door_gear`), marked on the gear's pages and the
+shelves listed (`in_gear`). On a phone the doors are a bar at the foot of the screen and Ask is at the top.
 
 The stylesheet (`STYLE`) holds the tokens as custom properties on `:root` (`TOKENS`, and `DARK` for a
 browser that asks for a dark page) and the three families (`FAMILIES`) with their fallbacks. A door's
@@ -41,8 +41,8 @@ TODAY, LIFE, PEOPLE, PLACES = "Today", "Life", "People", "Places"
 # Holdings, goes between Places and Ask when it is built, and its place stays empty until then (§11)
 DOORS = ((TODAY, "/"), (LIFE, "/life"), (PEOPLE, "/people"), (PLACES, "/places"))
 ASK = "/ask"  # Ask v1 (`door_ask`): the record's words as moments, through the search of #363
-GEAR = "/shelves"  # the index of the machinery pages, until `/gear` exists
-GEAR_TITLE = "The gear: the sources, the agents, the Manifest, the assets and the gaps"
+GEAR = "/gear"  # the machinery behind one icon (`door_gear`, RFC 0047 §4.6)
+GEAR_TITLE = "The gear: the sources, the crossings, the agents, the Manifest, the assets and the build"
 FONT_DIR = Path(__file__).resolve().parent / "fonts"
 FONT_PATH = re.compile(r"^/font/([a-z-]+\.woff2)$")
 FONT_TYPE = "font/woff2"
@@ -218,6 +218,11 @@ def header_style(fonts: bool = True) -> str:
     return (_faces() if fonts else "") + SCOPED + HEADER + BAND + phone
 
 
+def in_gear(path: str) -> bool:
+    """Whether the page at `path` is the gear's: `/gear`, its parts, and the shelves listed it links."""
+    return path in (GEAR, "/shelves") or path.startswith(f"{GEAR}/")
+
+
 def door_of(path: str) -> str | None:
     """The door the page at `path` is in: the door whose page it is or is under; None for a page of
     none yet (a Day, the gear's shelves)."""
@@ -258,7 +263,7 @@ def header(site: Site, door: str, asked: str = "") -> str:
             "</form>"
         )
         title = escape(GEAR_TITLE)
-        here = ' aria-current="page"' if door == GEAR else ""  # the shelves listed: the gear's page
+        here = ' aria-current="page"' if door == GEAR else ""  # the gear's pages, the shelves listed
         parts.append(
             f'<a class="gear" href="{GEAR}" title="{title}" aria-label="The gear"{here}>{GEAR_ICON}</a>'
         )
