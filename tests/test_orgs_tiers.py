@@ -290,9 +290,10 @@ def test_through_a_gate_of_one_and_two_every_manifest_page_shows_no_status_no_re
         assert "<h2>Money" not in page and "show the money" not in text, (path, query)
         assert "transaction" not in text, (path, query, "a transaction row, or any word of the ledger")
     manifest = pages[("/manifest", "")]
-    assert re.search(
-        r'<h1>The Manifest <small title="[^"]*">4 orgs[^<]*nothing read above tier 2</small>', manifest
-    ), "the page's tier is 2"
+    assert re.search(r'<h1>The Manifest <small title="[^"]*">4 orgs[^<]*read at tier 2</small>', manifest), (
+        "the page's tier is 2"
+    )
+    assert orgs.shelf_of(lb, site._org_record()).tier == 2, "the highest tier the gate let the shelf read"
     assert "5 status lines not shown" in _text(manifest) and "<h2>no status</h2>" in manifest
     assert len(re.findall(r'<li id="([^"]+)"', manifest)) == 4, "every org listed, under no status"
     said = "status not shown: an org's status is tier 3, and this reads no tier 3"

@@ -67,7 +67,7 @@ from typing import TYPE_CHECKING, Any
 from urllib.parse import quote
 
 from ..core import day as day_reader
-from ..core import day_start, drafts, goals, notes, people
+from ..core import day_start, drafts, figures, goals, notes, people
 from ..core.export import day_range
 from ..core.store import retractions
 from . import day_rhythm, plan, shelf_goals, week_close, week_paper
@@ -127,10 +127,11 @@ def _person_path(entity: str) -> str:
 
 
 def beside(text: str, names: Iterable[str]) -> bool:
-    """Whether a digit stands beside one of `names` in `text` (the guard of `tests/test_day_rhythm.py`)."""
+    """Whether a digit stands beside one of `names` in `text`, the name in any case (`figures.beside`;
+    the guard of `tests/test_day_rhythm.py`)."""
     for name in names:
         n = re.escape(name)
-        if name and re.search(rf"(\d{BESIDE}{n})|({n}\??{BESIDE}\d)", text):
+        if name and re.search(figures.beside(n, BESIDE), text):
             return True
     return False
 

@@ -29,7 +29,8 @@ NAMES = ("Ola Nordmann", "Ola", "Kari Nordmann", "Kari")
 _ALT = "|".join(re.escape(n) for n in NAMES)
 SEP = "[\\s(:×x#·,\\-\u2013\u2014/|;=•.']*"  # with the en and em dash
 # the strong guard: a digit, then nothing but separators, then a name; or a name, then separators, a digit
-GUARD = re.compile(rf"(\d{SEP}(?:{_ALT})\b)|(\b(?:{_ALT})\??{SEP}\d)")
+_WORD = rf"(?<![^\W\d_xX])(?:{_ALT})(?![^\W\d_xX])"  # in another case: a word, or by an `x`
+GUARD = re.compile(rf"(\d{SEP}(?:{_ALT})\b)|(\b(?:{_ALT})\??{SEP}\d)|(?i:\d{SEP}{_WORD}|{_WORD}\??{SEP}\d)")
 OLD = "Ola Nordmann: 4 messages before lunch."  # a sentence a draft stored before the rule
 NIGHTS = "3 nights with Ola Nordmann."  # a model's journey sentence
 CALLS = "Ola Nordmann (3 calls)."  # a model's person sentence

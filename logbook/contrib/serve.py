@@ -349,7 +349,7 @@ NO_DEVICE_WITH = "no device saw this day: say who was there"  # the `with` row o
 DAY_WRITES = "Reflect and Sign, the with field and the stars write to your record; nothing else here does"
 NONE_CONFIRMED = "nobody confirmed; proposed below"  # the `with` row when only a row's proposals name anyone
 TIER_TITLE = (  # a shelf header's tier, on hover; never the words of a tier a gated page does not read
-    "The highest tier among the lines this page read (SPEC §4): 1 places, photos and the calendar;"
+    "The highest tier this page's gate reads (SPEC §4): 1 places, photos and the calendar;"
     " 2 notes, messages and mail; 3 money and health."
 )
 AUDIO_SUFFIXES = {
@@ -2167,10 +2167,28 @@ class Site:
         return reading.record_days(self.lb, "location") or reading.record_days(self.lb)
 
     def tier_small(self, facts: str, tier: int | None) -> str:
-        """A shelf header's `<small>`: its facts, then what its tier means in words — `nothing read
-        above tier N`, the highest tier among the lines it read, or `no lines` — the scale on hover."""
-        words = f"nothing read above tier {tier}" if tier else "no lines"
+        """A shelf header's `<small>`: its facts, then what is true of the page's tier — `read at tier
+        N`, the tier its gate reads (`gate_words`), when it read lines (`tier`, the highest among them,
+        is not none), or `no lines` — the scale on hover. Never the highest tier among its lines as a
+        bound: a name on the page may rest on a line above it (a person a tier-2 contact resolved)."""
+        words = f"read at {self.gate_words()}" if tier else "no lines"
         return f'<small title="{escape(TIER_TITLE)}">{escape(facts + DOT + words)}</small>'
+
+    def gate_words(self) -> str:
+        """The tiers the page's gate reads, in words: `tier 3` for every tier, `tier N` for a gate of
+        every tier up to N (tier 0 with them or not), `tier 3 alone` for one tier above 1, `tiers 1 and
+        3` for a gate with a gap, `tier 0` for a gate of tier 0 alone and `no tier` for an empty one."""
+        if self.tiers is None:
+            return "tier 3"
+        given = {int(t) for t in self.tiers}
+        read = sorted(t for t in given if t >= 1)
+        if not read:
+            return "tier 0" if 0 in given else "no tier"
+        if read == list(range(1, read[-1] + 1)):
+            return f"tier {read[-1]}"
+        if len(read) == 1:
+            return f"tier {read[0]} alone"
+        return "tiers " + ", ".join(map(str, read[:-1])) + f" and {read[-1]}"
 
     def _record_days(self) -> tuple[str, str] | None:
         """`_whole`, read once for the record as it stands (`shared`): `/assets` is never kept."""

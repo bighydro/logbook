@@ -239,7 +239,7 @@ def test_a_page_at_tier_1_shows_no_tier_2_line_name_or_count(lb: Logbook) -> Non
     page = _get(one, "q=lunch")  # the calendar entry is tier 1
     (moment,) = _moments(page)
     assert "<mark>Lunch</mark>" in moment and "Home" in moment
-    assert "Nothing read above tier 1." in page
+    assert "Read at tier 1." in page
     for words in ("boat", "harbour", "sail", "mooring"):  # a call, notes: tier 2
         held = _get(one, f"q={words}")
         assert door_ask.NOTHING in held and not _moments(held), words

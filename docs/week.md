@@ -8,7 +8,7 @@ its first and last week they are named, not linked. At its foot, **Close the wee
 script, through the writers that exist ([below](#close-the-week); RFC 0043 §8, the second part).
 
 ```
-The week 2026-W25          15–21 June 2026 · nothing read above tier 2
+The week 2026-W25          15–21 June 2026 · read at tier 3
 ← 2026-W24 · its Sunday, 2026-06-21 · 2026-W26 →
 From the draft as written, by qwen2.5-7b-instruct: its numbers are the code's, its sentences pencil.
 

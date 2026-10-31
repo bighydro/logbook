@@ -102,7 +102,7 @@ def test_a_hit_at_the_gate_shows_and_one_above_it_is_absent(lb: Logbook) -> None
     assert len(_hits(page)) == 2  # the note at 2 and the calendar entry at 1
     assert "Dinner with" in page and "Sailing Solvind" in page
     assert "Receipt" not in page and "pharmacy" not in page and '<span class="kind">mail</span>' not in page
-    assert "nothing read above tier 2" in page
+    assert "read at tier 2" in page
     # the Library reads every tier on this machine, as every other page of `logbook serve` does
     every = _get(serve.Site(lb), "/search", "q=kari")
     assert len(_hits(every)) == 3 and "Receipt for" in every
@@ -220,7 +220,13 @@ def test_no_number_beside_a_persons_name(lb: Logbook) -> None:
     # the page's own words, the excerpts (the record's words) left out
     chrome = page_text.seen(re.sub(r'<q class="excerpt">.*?</q>', "", page, flags=re.S))
     for name in NAMES:
-        assert re.search(rf"{name}\W{{0,3}}\d|\d\W{{0,3}}{name}", chrome) is None, name
+        word = rf"(?<![^\W\d_]){name}(?![^\W\d_])"  # in another case, the name as a word
+        assert (
+            re.search(
+                rf"{name}\W{{0,3}}\d|\d\W{{0,3}}{name}|(?i:{word}\W{{0,3}}\d|\d\W{{0,3}}{word})", chrome
+            )
+            is None
+        ), name
 
 
 def test_phone_width_first_and_touch_targets(lb: Logbook) -> None:

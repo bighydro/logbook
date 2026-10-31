@@ -408,7 +408,10 @@ def test_no_number_beside_a_person_s_name(tmp_path: Path, monkeypatch: pytest.Mo
         assert "Kari" in " ".join([words, *labels]), "the guard has a name to look at"
         for name in NAMES:
             n = re.escape(name)
-            beside = re.compile(rf"(\d[\s(:×x#·,]*{n})|({n}\??[\s(:×x#·,]*\d)")
+            word = rf"(?<![^\W\d_xX]){n}(?![^\W\d_xX])"  # in another case: a word, or by an `x`
+            beside = re.compile(
+                rf"(\d[\s(:×x#·,]*{n})|({n}\??[\s(:×x#·,]*\d)|(?i:\d[\s(:×x#·,]*{word}|{word}\??[\s(:×x#·,]*\d)"
+            )
             for text in (words, *labels):
                 assert not beside.search(text), (query, name, text[:200])
 

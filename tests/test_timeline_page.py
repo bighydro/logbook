@@ -89,7 +89,7 @@ def test_every_zoom_is_a_page_with_no_script_that_fits_a_phone(demo: Logbook, pa
     assert "@import" not in page and "url(" not in own, "nothing fetched"
     assert phone_width.problems(page) == [], path
     assert phone_width.phone_breakpoints(phone_width.parse(page)[1]), path
-    assert "nothing read above tier" in page
+    assert "read at tier" in page
 
 
 @pytest.mark.parametrize("path", PAGES)
@@ -156,7 +156,10 @@ def _beside(name: str) -> re.Pattern[str]:
     """A digit before `name`, or after it (a proposed name's `?` aside), with nothing between but
     `BESIDE`: a space, a bracket, a colon, a times sign, a hash, the middle dot, a comma."""
     named = re.escape(name)
-    return re.compile(rf"(\d{BESIDE}{named})|({named}\??{BESIDE}\d)")
+    word = rf"(?<![^\W\d_xX]){named}(?![^\W\d_xX])"  # in another case: a word, or by an `x`
+    return re.compile(
+        rf"(\d{BESIDE}{named})|({named}\??{BESIDE}\d)|(?i:\d{BESIDE}{word}|{word}\??{BESIDE}\d)"
+    )
 
 
 def test_the_guard_catches_a_number_beside_a_name() -> None:
@@ -209,7 +212,7 @@ def test_a_gate_without_tier_three_shows_no_payment(demo: Logbook) -> None:
     held = _text(_site(demo, (0, 1, 2)).respond(f"/timeline/day/{OFFICE_DAY}").body.decode("utf-8"))
     assert "Havnekiosken" in whole and "paid" in whole
     assert "Havnekiosken" not in held and "paid" not in held and "payment" not in held
-    assert "nothing read above tier 2" in held
+    assert "read at tier 2" in held
     gap = _text(_site(demo).respond("/timeline/day/2026-07-15").body.decode("utf-8"))
     assert "No payment source covers this day; the last day one covers is 2026-06-" in gap
     held_gap = _site(demo, (0, 1, 2)).respond("/timeline/day/2026-07-15").body.decode("utf-8")

@@ -219,7 +219,7 @@ def _main(page: str) -> str:
 
 
 def _header_tier(page: str) -> str:
-    """The tier the page's heading says: N of a shelf's `nothing read above tier N` or of a detail
+    """The tier the page's heading says: N of a shelf's `read at tier N` (its gate's) or of a detail
     page's `tier N`, `-` for a shelf's `no lines`."""
     found = re.search(r"<h1>.*?(?:tier (\S+)|no lines)</small></h1>", page, re.S)
     assert found is not None, page[:400]
@@ -592,13 +592,18 @@ def test_a_goal_or_a_review_above_the_gate_serves_no_session(lb: Logbook) -> Non
 
 
 def test_each_page_s_tier_is_the_highest_tier_it_read(persona: Logbook) -> None:
-    """Read whole, every shelf has read a tier-3 line and says so; through 1 and 2, tier 2; through
-    tier 1 alone nothing is read and the pages say `tier -` (Goals says why)."""
+    """Read whole, every shelf has read a tier-3 line, and every page says the tier its gate reads,
+    3; the goals' lines are tier 2 even whole (the shelf's `tier`), and the Goals page says its gate's,
+    3, never a bound its lines set; through 1 and 2, tier 2; through tier 1 alone nothing is read and
+    the pages say `tier -` (Goals says why)."""
     found = sr.ids(persona)
     pages = ("/promises", "/goals", "/agents", f"/goals/{found['quarter']}", "/agents?day=2026-03-01")
     for target in ("/promises", "/agents"):
         assert _header_tier(_page(persona, None, target)) == "3", target
-    assert _header_tier(_page(persona, None, "/goals")) == "2"  # every goal line is tier 2, even whole
+    assert shelf_goals.read(persona).tier == 2  # every goal line is tier 2, even whole
+    assert _header_tier(_page(persona, None, "/goals")) == "3"  # the page says its gate's tier
+    for read in (shelf_promises.read, shelf_goals.read, shelf_agents.read):  # what the gate let them read
+        assert read(persona, GATE).tier == 2, read.__module__
     for target in pages:
         page = _page(persona, GATE, target)
         assert _header_tier(page) == "2", target

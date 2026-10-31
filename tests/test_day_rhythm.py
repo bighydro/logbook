@@ -455,7 +455,13 @@ def beside(text: str, names: Iterable[str]) -> list[str]:
     found = []
     for name in names:
         n = re.escape(name)
-        found += [m.group(0) for m in re.finditer(rf"(\d{BESIDE}{n})|({n}\??{BESIDE}\d)", text)]
+        word = rf"(?<![^\W\d_xX]){n}(?![^\W\d_xX])"  # in another case: a word, or by an `x`
+        found += [
+            m.group(0)
+            for m in re.finditer(
+                rf"(\d{BESIDE}{n})|({n}\??{BESIDE}\d)|(?i:\d{BESIDE}{word}|{word}\??{BESIDE}\d)", text
+            )
+        ]
     return found
 
 
