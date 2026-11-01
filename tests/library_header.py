@@ -1,8 +1,9 @@
 """The doors' header on a page `logbook serve` renders (`logbook/contrib/doors.py`, `header` and
-`header_style`): on every page, with its one form (Ask, a GET to `/search`), and the stylesheet with the
-faces the Library serves itself. A test that holds a page to having no form, or no `url()` in its style,
-reads the page without them (`without_shell`), after checking they are exactly the doors' and nothing
-else: what the page itself carries is held as strictly as before the header."""
+`library_style`): on every page, with its one form (Ask, a GET to `/search`), and the stylesheet with the
+faces the Library serves itself (`/world`'s header carries `header_style` beside the map's own sheet). A
+test that holds a page to having no form, or no `url()` in its style, reads the page without them
+(`without_shell`), after checking they are exactly the doors' and nothing else: what the page itself
+carries is held as strictly as before the header."""
 
 from __future__ import annotations
 
@@ -36,6 +37,7 @@ def without_shell(
     header = header_of(page)
     unmarked = header.replace(' aria-current="page"', "")
     assert unmarked == doors.header(_Site(href, static), ""), header[:200]  # type: ignore[arg-type]
-    style = doors.header_style(fonts=not static)
-    assert page.count(style) == 1, "the header's stylesheet, once"
+    sheets = (doors.library_style(fonts=not static), doors.header_style(fonts=not static))
+    style = next((sheet for sheet in sheets if sheet in page), sheets[0])  # a page's, or the world's header's
+    assert page.count(style) == 1, "the Library's stylesheet, once"
     return page.replace(header, "", 1).replace(style, "", 1)

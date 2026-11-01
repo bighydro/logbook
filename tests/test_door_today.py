@@ -437,7 +437,7 @@ def test_live_what_reads_beyond_the_day_is_read_beside_the_page_and_said_until_i
     assert NOTE_HOME in said and TASK in said and "Still reading" not in said
 
 
-def test_the_shelves_listed_move_to_their_own_address_and_the_old_pages_keep_their_look(lb: Logbook) -> None:
+def test_the_shelves_listed_move_to_their_own_address_and_the_old_pages_wear_the_look(lb: Logbook) -> None:
     site = _site(lb)
     shelves = site.respond("/shelves")
     assert shelves.status == 200 and shelves.etag is not None
@@ -448,7 +448,7 @@ def test_the_shelves_listed_move_to_their_own_address_and_the_old_pages_keep_the
     assert '<header class="doors">' in days and '<a href="/life">Life</a>' in days
     life = site.respond("/life").body.decode("utf-8")
     assert '<a href="/life" aria-current="page">Life</a>' in life
-    assert serve.STYLE in days, "every other page keeps its own stylesheet and look under the header"
+    assert doors.library_style() in days, "every other page in the doors' look, under the header"
     assert f'href="/day/{TODAY}"' in _today(site), "the Day /today names, one tap from Today"
     assert doors.GEAR == "/gear", "the gear's icon opens the gear (`door_gear`)"
     assert 'href="/shelves"' in site.respond("/gear").body.decode("utf-8"), "and the gear the shelves"
@@ -520,13 +520,14 @@ def test_every_page_carries_the_doors_header_and_marks_its_door(lb: Logbook) -> 
         # a door's own page (Today, Life) and the gear's own pages: the doors' frame
         own = target.partition("?")[0] in ("/", "/life", *door_gear.FRAMED)
         if own or '<main class="door">' in page:  # and any page in it (Places): the doors' one stylesheet
-            assert doors.style() in page and serve.STYLE not in page, target
+            assert doors.style() in page and doors.PAGES not in page, target
             assert page.count(root) == 1, (target, "the tokens defined once, on :root")
         elif door == doors.PEOPLE:  # the People door and each thread: the doors' frame, its tokens on :root
-            assert doors.style() in page and root in page and serve.STYLE not in page, target
-        else:  # a page that is not a door's: its own stylesheet, the header's beside it
-            assert (doors.header_style() in page and serve.STYLE in page) or target == "/world", target
-            assert root not in page, (target, "the tokens on the header alone")
+            assert doors.style() in page and root in page and doors.PAGES not in page, target
+        else:  # a page that is not a door's: the doors' sheet and the pages' rules after it
+            sheet = doors.header_style() if target.startswith("/world") else doors.library_style()
+            assert page.count(sheet) == 1, target
+            assert page.count(root) == 1, (target, "the tokens on :root, once: the doors'")
     assert doors.door_of("/people/019cadd3") == doors.PEOPLE and doors.door_of("/day/2026-06-19") is None
     shelves = site.respond("/shelves").body.decode("utf-8")
     assert (
@@ -548,7 +549,8 @@ TRAPS = ("clip-path", "overflow", "contain", "transform", "filter", "perspective
 def test_the_header_never_clips_the_phone_s_door_bar() -> None:
     """On a phone the doors are a bar fixed at the foot of the screen, inside the header; a rule on the
     header that clips it (a `clip-path` drawing the band) or holds it to the header hides the bar."""
-    for sheet in (doors.header_style(), doors.header_style(fonts=False), doors.style()):
+    sheets = (doors.header_style(), doors.header_style(fonts=False), doors.style(), doors.library_style())
+    for sheet in sheets:
         for selectors, body in re.findall(r"([^{}]+)\{([^{}]*)\}", sheet):
             if "header.doors" in [s.strip() for s in selectors.split(",")]:
                 properties = [d.split(":")[0].strip() for d in body.split(";") if ":" in d]

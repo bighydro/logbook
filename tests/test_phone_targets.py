@@ -15,7 +15,7 @@ import phone_width
 import pytest
 
 from logbook import cli
-from logbook.contrib import day_rhythm, serve, shelf_promises, world
+from logbook.contrib import day_rhythm, doors, serve, world
 from logbook.core.store import Logbook
 
 NOW = datetime(2026, 7, 1, 12, 0, tzinfo=UTC)  # after the record: every Day in its evening shape
@@ -287,59 +287,75 @@ def _ratio(a: str, b: str) -> float:
 
 
 def _faces(css: str) -> tuple[dict[str, str], dict[str, str]]:
-    """The tokens a stylesheet sets on `:root`, light and under its dark media rules, each face in the
-    order the sheet sets them."""
+    """The tokens a stylesheet sets, light and under its dark media rules, each face in the order the
+    sheet sets them."""
     dark = "".join(DARK.findall(css))
     return dict(TOKEN.findall(DARK.sub("", css))), dict(TOKEN.findall(dark))
 
 
 def _colour_of(css: str, selector: str) -> str:
-    found = re.search(re.escape(selector) + r"\{color:([^;}]+)", css)
+    """The colour the last rule naming `selector` in its list sets (`a,b{color:...}` names both)."""
+    found = None
+    for names, body in re.findall(r"([^{}]+)\{([^{}]*)\}", css):
+        colour = re.search(r"(?:^|;)color:([^;}]+)", body)
+        if colour and selector in [n.strip() for n in names.split(",")]:
+            found = colour.group(1)
     assert found is not None, selector
-    return found.group(1)
+    return found
 
 
 KINDS = ("stay", "move", "flight", "aboard", "gap")
+GROUNDS = ("--paper", "--surface", "--tint")  # the page, a card, a pencil's ground
+SHEET = doors.library_style() + serve.DAY_STYLE + day_rhythm.STYLE  # the Day's, after the Library's
+
+
+def _faces_of_the_doors() -> tuple[tuple[str, dict[str, str]], ...]:
+    """The doors' two faces with the chart colours `doors.PAGES` sets beside them."""
+    light, dark = ({f"--{k}": v for k, v in face.items()} for face in _faces(doors.PAGES))
+    return (("light", {**dict(doors.TOKENS), **light}), ("dark", {**dict(doors.DARK), **light, **dark}))
+
+
+def _keeps(colour: str, what: str) -> None:
+    assert not HEX.search(colour), f"{what}: a hard-coded colour has no dark value"
+    token = colour.removeprefix("var(").removesuffix(")")
+    for face, tokens in _faces_of_the_doors():
+        for ground in GROUNDS:
+            assert _ratio(tokens[token], tokens[ground]) >= RATIO, (what, face, ground, tokens[token])
 
 
 @pytest.mark.parametrize("kind", KINDS)
 def test_a_row_s_kind_is_a_token_that_keeps_4_5_to_1_in_both_faces(kind: str) -> None:
-    colour = _colour_of(serve.STYLE, f".row.{kind}>.kind")
-    assert not HEX.search(colour), f"{kind}: a hard-coded colour has no dark value"
-    token = colour.removeprefix("var(--").removesuffix(")")
-    light, dark = _faces(serve.STYLE)
-    day_light, day_dark = _faces(day_rhythm.STYLE)
-    for face, tokens in (
-        ("light", light),
-        ("dark", {**light, **dark}),
-        ("the Day's light", {**light, **day_light}),  # the Day sets its tokens after the old pages'
-        ("the Day's dark", {**light, **dark, **day_light, **day_dark}),
-    ):
-        assert _ratio(tokens[token], tokens["bg"]) >= RATIO, (kind, face, tokens[token], tokens["bg"])
+    """A row's kind is a mono label in the doors' look: the colour of `.row.KIND>.kind` where a rule
+    names it, else `.kind`'s, a token that keeps 4.5:1 on the paper, a card and the tint, light and
+    dark."""
+    try:
+        colour = _colour_of(SHEET, f".row.{kind}>.kind")
+    except AssertionError:
+        colour = _colour_of(SHEET, ".kind")
+    _keeps(colour, kind)
+
+
+def test_a_row_s_kind_on_the_day_is_drawn_in_a_token_that_keeps_4_5_to_1(demo: Logbook) -> None:
+    """The same, read from the Day as a phone lays it out: every kind in a row of the timeline."""
+    found = list(_styled(_page(demo, f"/day/{DAY}"), _within(_tag("span", "kind"), _tag("li", "row"))))
+    assert found
+    for n, s in found:
+        _keeps(s.get("color", ""), n.label())
 
 
 def test_the_day_keeps_the_tokens_of_its_own_design() -> None:
-    """The Day's kinds are the owner's tokens (`day_rhythm.LIGHT`, `DARK`): the old pages carry the same
-    values, so a kind is one colour wherever it is shown."""
-    light, dark = _faces(serve.STYLE)
+    """The Day's kinds are one colour wherever they are shown: their chart tokens are set once, beside
+    the doors' (`doors.PAGES`), in both faces, and the Day's own sheet sets none of its own."""
+    light, dark = _faces(doors.PAGES)
     for token in ("stay", "move", "aboard"):
-        assert light[token] == dict(TOKEN.findall(day_rhythm.LIGHT))[token]
-        assert dark[token] == dict(TOKEN.findall(day_rhythm.DARK))[token]
+        assert light[token] and dark[token] and light[token] != dark[token], token
+    assert _faces(day_rhythm.STYLE) == ({}, {}) and _faces(serve.DAY_STYLE) == ({}, {})
 
 
 @pytest.mark.parametrize(
-    ("css", "selectors"),
-    [
-        (shelf_promises.SHELF_STYLE, (".badge.open", ".badge.kept")),
-        (serve.MANIFEST_STYLE, (".badge.passed", ".badge.sell", ".stale-flag")),
-    ],
+    "selectors",
+    [(".badge.open", ".badge.kept"), (".badge.passed", ".badge.sell", ".stale-flag")],
 )
-def test_a_badge_keeps_4_5_to_1_in_both_faces(css: str, selectors: tuple[str, ...]) -> None:
-    light, dark = _faces(serve.STYLE)
-    dark = {**light, **dark}
+def test_a_badge_keeps_4_5_to_1_in_both_faces(selectors: tuple[str, ...]) -> None:
     for selector in selectors:
-        colour = _colour_of(css, selector)
-        assert not HEX.search(colour), f"{selector}: a hard-coded colour has no dark value"
-        token = colour.removeprefix("var(--").removesuffix(")")
-        for face, tokens in (("light", light), ("dark", dark)):
-            assert _ratio(tokens[token], tokens["bg"]) >= RATIO, (selector, face, tokens[token])
+        _keeps(_colour_of(doors.PAGES, selector), selector)
