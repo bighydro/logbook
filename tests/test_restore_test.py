@@ -16,13 +16,14 @@ import pytest
 
 from logbook import cli
 from logbook.contrib import backup, doctor, last_run
-from logbook.core import sealing
+from logbook.core import sealing, store
 from logbook.core.store import Logbook
 
 pytest.importorskip("pyrage")
 
 BACKUP_AT = datetime(2026, 10, 3, 3, 0, tzinfo=UTC)
 TEST_AT = datetime(2026, 10, 4, 5, 0, 12, tzinfo=UTC)
+SEALED_AT = "2026-10-02T12:00:00Z"  # `seal_all`'s migration line: October, whatever month the suite runs in
 NOTE = {"schema": "note/v1", "text": "coffee with Kari Nordmann at the marina"}
 
 
@@ -45,7 +46,10 @@ def lb(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Logbook:
 @pytest.fixture
 def sealed(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, lb: Logbook) -> tuple[Logbook, Path]:
     """The same record, sealing tiers 2 and 3 for two recipients, the first identity's file where
-    `LOGBOOK_IDENTITY_FILE` points; the tier-2 line sealed."""
+    `LOGBOOK_IDENTITY_FILE` points; the tier-2 line sealed. `seal_all` stamps its migration line with
+    `store.now_utc()`, pinned here to `SEALED_AT` so the line lands in October's month file beside the
+    other two on any date the suite runs, not in a month file of its own."""
+    monkeypatch.setattr(store, "now_utc", lambda: SEALED_AT)
     pairs = [sealing.generate_identity() for _ in range(2)]
     meta = lb.meta
     meta["recipients"] = [recipient for _, recipient in pairs]
@@ -171,6 +175,7 @@ def test_a_tampered_backup_fails_and_doctor_fails_with_the_reason(
     _cli(capsys, str(dest))
     snapshot = dest / lb.meta["owner_id"] / "2026-10-03T030000Z"
     [month] = (snapshot / "logbook").rglob("*.jsonl")
+    assert month.relative_to(snapshot / "logbook").parts == ("2026", "10.jsonl")
     month.write_text(
         month.read_text(encoding="utf-8").replace("Kari Nordmann", "Kari Normann"), encoding="utf-8"
     )
@@ -260,6 +265,7 @@ def test_a_sealed_line_the_identity_cannot_open_fails(
     _cli(capsys, str(dest))
     snapshot = dest / lb.meta["owner_id"] / "2026-10-03T030000Z"
     [month] = (snapshot / "logbook").rglob("*.jsonl")
+    assert month.relative_to(snapshot / "logbook").parts == ("2026", "10.jsonl")
     lines = month.read_text(encoding="utf-8").splitlines()
     sealed_line = json.loads(lines[1])
     assert "payload_enc" in sealed_line

@@ -21,6 +21,7 @@ from logbook.core.store import Logbook
 TZ = "Europe/Oslo"
 EX = "example.org"  # every merchant here is invented, at a reserved domain
 SINCE = "2026-09-01"
+REVIEWED_AT = "2026-10-05T12:00:00Z"  # what `reject` stamps its line: inside the window read back
 OWNER = {"name": "Ines Nordmann", "email": "ines@example.org"}
 KARI = {
     "id": "019cadd3-6bc0-7dcd-9133-000000000112",
@@ -119,6 +120,7 @@ def drafts() -> list[dict[str, Any]]:
 def lb(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Logbook:
     found = Logbook.init(tmp_path / "lb", TZ)
     monkeypatch.setenv("LOGBOOK_HOME", str(found.root))
+    monkeypatch.setattr(receipts, "now_utc", lambda: REVIEWED_AT)  # `reject` stamps its line now
     found.set_owner_emails([OWNER["email"]])
     found.append_many(drafts())
     return found
