@@ -47,17 +47,11 @@ SOURCES = {"claude-code": "Claude Code", "claude": "Claude", "telegram": "Telegr
 KEPT_FILE, KEPT_VERSION = "agents-sessions.json", 1  # which lines are a session's, by seq
 PAGE_DAYS = 14  # days of sessions a page; "earlier" is the next page
 SHOWN = 3  # the owner's turns shown before the rest fold
+SUMMARY_PENCIL = "Pencil: the agent's own summary"  # its title: the agent's words, never the owner's
 CHARS = 280  # a turn shown longer than this is cut, and whole in a fold of its own; a folded turn is whole
 DOT = goals.DOT
 SHELF_STYLE = """
-.badge{display:inline-block;font-size:.75rem;text-transform:uppercase;letter-spacing:.05em;padding:0 .35rem;
-border:1px solid var(--line);border-radius:3px;color:var(--mute)}
-p.facts{margin:.1rem 0;color:var(--mute);overflow-wrap:anywhere}
-blockquote.said{margin:.3rem 0;padding-left:.6rem;border-left:3px solid var(--line);overflow-wrap:anywhere;
-white-space:pre-wrap}
-blockquote.machine{color:var(--mute);font-style:italic}
-p.summary{margin:.2rem 0;overflow-wrap:anywhere}
-p.pager{display:flex;flex-wrap:wrap;gap:.8rem}
+p.pager{display:flex;flex-wrap:wrap;gap:0 .8rem}
 """  # what the Agents page adds to the one stylesheet; every rule keeps to the column
 
 
@@ -515,7 +509,8 @@ def _session_html(site: Site, s: Session) -> str:
         out.append(f'<p class="facts">served {links}, as your review says</p>\n')
     if s.summary:
         out.append(
-            f'<p class="summary"><span class="mute">the agent\'s summary:</span> {escape(s.summary)}</p>\n'
+            f'<p class="summary"><span class="mute">the agent\'s summary:</span>'
+            f' <span class="pencil" title="{SUMMARY_PENCIL}">{escape(s.summary)}</span></p>\n'
         )
     out.append(_said(s.owner, "your words", "said"))
     out.append(_said(s.machine, "the agent's words, machine text", "said machine", folded=True))

@@ -226,6 +226,10 @@ def test_a_session_shows_its_length_the_owner_s_words_and_the_agent_s_apart(lb: 
     assert mine < theirs and "machine text" in row[mine:theirs]
     assert '<blockquote class="said machine">' in row
     assert "the agent's summary:" in row and "/goals/" in row
+    assert (
+        f'<span class="pencil" title="{shelf_agents.SUMMARY_PENCIL}">Passage planner for Solvind</span>'
+        in row
+    )
 
 
 def test_a_telegram_day_is_one_session_and_a_forward_is_not_the_owner_s(lb: Logbook) -> None:
@@ -351,6 +355,9 @@ def test_the_person_filter_never_keeps_an_agent(lb: Logbook) -> None:
 def test_a_verdict_names_the_judgement_apart(lb: Logbook) -> None:
     judged = next(r for r in shelf_promises.read(lb).rows if r.proposal.match.quote == sr.OPEN)
     assert shelf_promises.verdict_text(judged.proposal) == "due 2026-03-09? · judged 0.9"
+    pencil = f'<span class="pencil" title="{shelf_promises.PENCIL}">due 2026-03-09? · judged 0.9</span>'
+    for path in ("/promises", shelf_promises.promise_path(judged.proposal.id)):
+        assert pencil in _get(_site(lb), path)[1], (path, "the reader's and the judge's words are pencil")
 
 
 def test_a_cut_first_line_is_the_owner_s_never_the_agent_s_summary() -> None:

@@ -46,17 +46,9 @@ CACHE_FILE = PurePosixPath("policy/promises-cache.json")  # `promises --judge`'s
 OPEN, KEPT, DROPPED = "open", "kept", "dropped"
 SECTIONS = ((OPEN, "Open"), (KEPT, "Kept"), (DROPPED, "Dropped"))
 DOT = " · "
+PENCIL = "Pencil: read as a promise by the rules, yours to confirm when you sign its day"  # its title
 JUDGED = re.compile(r"^(?:no )?\d")  # the judgement's part of `promises._tail`: `0.9 to Ola`, `no 0.3`
 NOTE_WHO = "(note)"  # a promise in a note names nobody it is to
-SHELF_STYLE = """
-.badge{display:inline-block;font-size:.75rem;text-transform:uppercase;letter-spacing:.05em;padding:0 .35rem;
-border:1px solid var(--line);border-radius:3px;color:var(--mute)}
-.badge.open{color:var(--flight)}.badge.kept{color:var(--stay)}
-p.facts{margin:.1rem 0;color:var(--mute);overflow-wrap:anywhere}
-q.said{overflow-wrap:anywhere}
-p.people{display:flex;flex-wrap:wrap;gap:.2rem .8rem;overflow-wrap:anywhere}
-blockquote.said{margin:.3rem 0;padding-left:.6rem;border-left:3px solid var(--line);overflow-wrap:anywhere}
-"""  # what the Promises pages add to the one stylesheet; every rule keeps to the column
 
 
 class PromiseNotFound(LookupError):
@@ -265,7 +257,7 @@ def page_promises(site: Site, person: str | None = None) -> str:
                 " notes, your mail and messages sent and your turns in a transcript"
                 " (<code>logbook promises</code>).</p>\n"
             )
-        return site.document("promises", "".join(parts), style=SHELF_STYLE)
+        return site.document("promises", "".join(parts))
     parts.append(
         '<p class="mute">What your words suggest you promised, and what was asked of you: read by rules,'
         " not facts, and a verdict only where the local model already gave one. Close one with"
@@ -292,7 +284,7 @@ def page_promises(site: Site, person: str | None = None) -> str:
         parts.append('<ol class="shelf">\n')
         parts.extend(_row_html(site, r) for r in found)
         parts.append("</ol>\n")
-    return site.document("promises", "".join(parts), style=SHELF_STYLE)
+    return site.document("promises", "".join(parts))
 
 
 def _role(r: Row) -> str:
@@ -306,17 +298,22 @@ def _row_html(site: Site, r: Row) -> str:
     p = r.proposal
     head = [
         f'<span class="badge {r.section}">{escape(r.section)}</span>',
-        site.link(f'<q class="said">{escape(p.match.quote)}</q>', promise_path(p.id)),
+        site.link(f'<q class="said" title="{PENCIL}">{escape(p.match.quote)}</q>', promise_path(p.id)),
     ]
-    facts = [_role(r), f"said {p.day}", f"{p.kind} {p.source}".strip()]
+    facts = [escape(_role(r)), escape(f"said {p.day}"), escape(f"{p.kind} {p.source}".strip())]
     verdict = verdict_text(p)
     if verdict:
-        facts.append(verdict)
-    evidence = site.link(f"the line {escape(p.line[:8])}…", day_line(p.day, p.line))
+        facts.append(_pencil(verdict))
+    facts.append(site.link(f"the line {escape(p.line[:8])}…", day_line(p.day, p.line)))
     return (
         f'<li id="{escape(p.id)}"><p class="head">{" ".join(head)}</p>\n'
-        f'<p class="facts">{escape(DOT.join(facts))}{DOT}{evidence}</p></li>\n'
+        f'<p class="facts">{DOT.join(facts)}</p></li>\n'
     )
+
+
+def _pencil(said: str) -> str:
+    """The reader's or the judge's words (`verdict_text`), pencil: a rule's reading, never the owner's."""
+    return f'<span class="pencil" title="{PENCIL}">{escape(said)}</span>'
 
 
 def page_promise(site: Site, pid: str) -> str:
@@ -331,7 +328,8 @@ def page_promise(site: Site, pid: str) -> str:
         raise NotFound(f"no page at {promise_path(pid)}: {e}, or none this page reads") from None
     p = r.proposal
     parts = [
-        f'<h1><q class="said">{escape(p.match.quote)}</q> <small>promise{DOT}tier {r.tier}</small></h1>\n',
+        f'<h1><q class="said" title="{PENCIL}">{escape(p.match.quote)}</q>'
+        f" <small>promise{DOT}tier {r.tier}</small></h1>\n",
         f'<p class="head"><span class="badge {r.section}">{escape(r.section)}</span>'
         f' <span class="mute">{escape(_role(r))}</span></p>\n',
     ]
@@ -343,7 +341,7 @@ def page_promise(site: Site, pid: str) -> str:
     parts.append(f'<p class="facts">{escape(DOT.join(facts))}</p>\n')
     verdict = verdict_text(p)
     if verdict:
-        parts.append(f'<p class="facts">the reader says: {escape(verdict)}</p>\n')
+        parts.append(f'<p class="facts">the reader says: {_pencil(verdict)}</p>\n')
     if p.judgement is not None:
         j = p.judgement
         parts.append(
@@ -384,7 +382,7 @@ def page_promise(site: Site, pid: str) -> str:
     parts.append("</ul>\n")
     parts.append(f'<p class="mute">proposal {escape(p.id)}</p>\n')
     parts.append(f"<p>{site.link('Promises', '/promises')}</p>\n")
-    return site.document(p.match.quote, "".join(parts), style=SHELF_STYLE)
+    return site.document(p.match.quote, "".join(parts))
 
 
 def _tiers_text(tiers: Sequence[int]) -> str:
