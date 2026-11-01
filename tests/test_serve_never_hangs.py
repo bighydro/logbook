@@ -27,7 +27,8 @@ from logbook.core.store import Logbook
 
 JUNE = datetime(2026, 6, 21, 10, 0, tzinfo=UTC)
 LOOPBACK = "127.0.0.1"
-SLOW = "/days"  # the page made slow here: it reads a line at a time, for ever, until it is stopped
+SLOW = "/life"  # the page made slow here: it reads a line at a time, for ever, until it is stopped (`/days`
+# until 1.1, which now leads to Life, RFC 0047 §9)
 
 
 class Slow:

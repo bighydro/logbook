@@ -22,16 +22,23 @@ each with its SIL Open Font License, Latin only (the fontsource cuts, 5.3.0; a g
 falls back to the system's face). The server answers `/font/NAME` from that folder and nothing else
 (`font_bytes`): no font is ever fetched from anywhere, and a page's policy allows fonts from the server alone
 (`CSP`). An exported site (`export site`) carries no font: its pages keep the families' fallbacks, as
-its rule of one file a page and nothing beside it says."""
+its rule of one file a page and nothing beside it says.
+
+Every address the Library answered before the doors is a row of `MOVED`, RFC 0047 §9's table in its
+order: a row with a home is answered with `REDIRECT_STATUS` (302 for 1.1, 301 from 1.2, §15) to it, the
+moment it named carried (`moved`); a row without one, and every POST, as it always was."""
 
 from __future__ import annotations
 
 import functools
 import hashlib
 import re
+from dataclasses import dataclass
+from datetime import date
 from html import escape
 from pathlib import Path
 from typing import TYPE_CHECKING
+from urllib.parse import parse_qs, quote, unquote, urlencode
 
 if TYPE_CHECKING:  # the Site passes itself; serve imports this module, never the other way at import
     from .serve import Site
@@ -40,6 +47,215 @@ TODAY, LIFE, PEOPLE, PLACES = "Today", "Life", "People", "Places"
 # the four doors and where each opens until its own page is on main (RFC 0047 §4, §5); the fifth,
 # Holdings, goes between Places and Ask when it is built, and its place stays empty until then (§11)
 DOORS = ((TODAY, "/"), (LIFE, "/life"), (PEOPLE, "/people"), (PLACES, "/places"))
+REDIRECT_STATUS = 302  # RFC 0047 §15 (8): 302 for one release, 1.1; 301 from 1.2, this line alone
+
+
+@dataclass(frozen=True)
+class Moved:
+    """One row of RFC 0047 §9: an address the Library answered before the doors (`old`, its parts
+    `{DAY}`, `{FIRST}`, `{LAST}` and `{ID}`) and its new home (`home`; None: it stays, or its home is not
+    built yet). `query` is what the old address's query carries to the new one, `(old name, new name,
+    kind)`; `fixed` is what the new home's query adds, its parts named as `old`'s; `most` is the most
+    days the row's two days may span (Life's own window), and `year` the home of a window that is one
+    calendar year, `{YEAR}` its year, whatever `most` says. `waits` names what a row with a home waits
+    for (its home not on main yet, or not yet holding what the old page held): until then it is
+    answered as it always was. `post` marks a form's address."""
+
+    old: str
+    home: str | None = None
+    query: tuple[tuple[str, str, str], ...] = ()
+    fixed: tuple[tuple[str, str], ...] = ()
+    most: int | None = None
+    year: str | None = None
+    waits: str = ""
+    post: bool = False
+
+
+DAY_VALUE, YEAR_VALUE, SHARED_YEAR = "day", "year", "shared year"  # what a carried value must be
+WORDS = "words"  # the words asked, as typed: any text Ask takes, percent-encoded into the Location
+PAGE_VALUE, FLAG = "page", "flag"  # a page number from 1; a flag, carried only as "1", as the page reads it
+# Every Library address before the doors and where it lives now: RFC 0047 §9's rows, in order. The
+# server answers a row with a home with `REDIRECT_STATUS` to it (`moved`); a row without one, a row that
+# `waits`, and every POST, as it always did. A parameter an old address took that its new home does not
+# is named in the row's comment and dropped, never passed on.
+MOVED = (
+    Moved("/"),  # Today
+    Moved("/today"),  # already a 302 to today's Day, which Today is: left as it is (tests pin it)
+    Moved("/day/{DAY}"),
+    Moved("/day/{DAY}/reflect", post=True),
+    Moved("/day/{DAY}/sign", post=True),
+    Moved("/star", post=True),
+    Moved("/with", post=True),
+    # Life, the day zoom; Life's window of days is at most `door_life.DAY_MOST`, and a whole calendar
+    # year (Life's own Volumes link one) is Life at that year
+    Moved(
+        "/days",
+        "/life",
+        (("from", "from", DAY_VALUE), ("to", "to", DAY_VALUE)),
+        (("zoom", "day"),),
+        most=92,
+        year="/life?year={YEAR}&zoom=year",
+    ),
+    # Life at the year, the zoom that draws a year's trips: Life has no `zoom=trip` (§9's), so not that
+    Moved("/trips", "/life", (("year", "year", YEAR_VALUE),), (("zoom", "year"),)),
+    Moved("/journeys", "/life", (("year", "year", YEAR_VALUE),), (("zoom", "year"),)),
+    # Life at that trip, at most `door_life.TRIP_MOST` days, once Life holds what the journey's page does:
+    # its name form (`/journeys/name`), its promises and photos; Life's trip links here until then
+    Moved(
+        "/journeys/{FIRST}/{LAST}",
+        "/life",
+        fixed=(("trip", "{FIRST}/{LAST}"),),
+        most=366,
+        waits="Life's trip view: the journey's name form, promises and photos",
+    ),
+    Moved("/journeys/name", post=True),  # Life's form posts here
+    Moved("/goals", "/life"),  # the year's goals at the top of Life (§15, 6)
+    Moved("/goals/{ID}"),  # waits: Life takes no `goal=` yet, and a goal's thread is not dropped
+    Moved("/ideas"),  # the Ideas shelf is kept in the gear (§15, 6), at its own address
+    Moved("/idea/{ID}"),  # likewise: Life takes no `idea=` yet
+    Moved("/ideas/review", post=True),
+    Moved("/ideas/status", post=True),
+    Moved("/gaps"),  # stays: the gear keeps the table of silences a link away (`door_gear.SHELVES`)
+    Moved("/promises"),  # the full list of every promise stays in the gear (§15, 4), at its own address
+    Moved("/promises/{ID}"),  # waits: People takes no `promise=` yet, and the person is the record's
+    Moved("/people"),  # its `year` and `page` as they were
+    Moved("/people/{ID}"),
+    Moved("/people/review", post=True),
+    Moved("/places"),
+    Moved("/places/review", post=True),
+    # Places at the year the window lies in: Places takes `at=YYYY`, no window, so `from` and `to` are
+    # dropped and the year it opens in carried (`from`'s, else `to`'s); without either, Places' own year
+    Moved("/world", "/places", (("from to", "at", SHARED_YEAR),)),
+    # the gear (#418) renders the old page itself, with the query it is given: each carried as it reads it
+    Moved("/assets", "/gear/assets"),
+    Moved("/manifest", "/gear/manifest", (("page", "page", PAGE_VALUE), ("portfolio", "portfolio", WORDS))),
+    Moved("/manifest/people", "/gear/manifest/people"),
+    Moved("/org/{ID}", "/gear/org/{ID}", (("money", "money", FLAG),)),
+    Moved("/manifest/review", post=True),
+    Moved("/manifest/status", post=True),
+    Moved("/agents", "/gear/agents", (("page", "page", PAGE_VALUE), ("day", "day", DAY_VALUE))),
+    Moved("/line/{ID}"),
+    Moved("/photo/{ID}"),
+    # §9's prose: search in the Library (#363) is Ask v1. Its words carried; `kind`, `year` and `page`
+    # dropped: Ask takes none of the first two, and its pages count days, never hits
+    Moved("/search", "/ask", (("q", "q", WORDS),)),
+)
+_DAY = r"[0-9]{4}-[0-9]{2}-[0-9]{2}"  # ASCII digits only: `\d` is any script's
+_PARTS = {"DAY": _DAY, "FIRST": _DAY, "LAST": _DAY, "ID": r"[^/]+"}  # what each part of a row's address is
+_YEAR = re.compile(r"[0-9]{4}")
+
+
+@functools.cache
+def pattern(old: str) -> re.Pattern[str]:
+    """The paths a row's address names: its literal parts as they are, each `{PART}` as `_PARTS` says."""
+    pieces = re.split(r"\{([A-Z]+)\}", old)
+    return re.compile(
+        "".join(f"(?P<{p}>{_PARTS[p]})" if n % 2 else re.escape(p) for n, p in enumerate(pieces))
+    )
+
+
+def _day(text: str, name: str) -> date:
+    try:
+        found = date.fromisoformat(text)
+    except ValueError:
+        found = None
+    if found is None or found.isoformat() != text:
+        raise ValueError(f"{name} is not a day, YYYY-MM-DD")
+    return found
+
+
+def _id(text: str) -> str:
+    """An id in a path, as the new home's path carries it: escaped whole; `.` and `..` are none, since a
+    browser would read them as a step up the path."""
+    found = unquote(text)
+    if found in (".", ".."):
+        raise ValueError("the id is not one")
+    return quote(found, safe="")
+
+
+def _span(first: date | None, last: date | None, most: int | None, names: str) -> None:
+    """Two days of a row run forward, and span fewer than `most` days when it says (Life's rule)."""
+    if first is None or last is None:
+        return
+    if last < first or (most is not None and (last - first).days >= most):
+        raise ValueError(f"{names}: two days, the first on or before the last, under {most} days apart")
+
+
+def moved(path: str, query: str) -> str | None:
+    """Where the old address `path?query` lives now (RFC 0047 §9, `MOVED`): its new home with the
+    moment it named, built from the table and the values parsed from the request alone, each held to
+    what its new home takes; None when the address stays, waits for its home, or no row names it.
+    `ValueError` for a value the new home would refuse, which says what it is and never repeats it."""
+    for row in MOVED:
+        found = pattern(row.old).fullmatch(path)
+        if found is None:
+            continue
+        if row.home is None or row.post or row.waits:
+            return None
+        parts = {
+            name: (_day(value, name).isoformat() if name != "ID" else _id(value))
+            for name, value in found.groupdict().items()
+        }
+        if "FIRST" in parts:
+            _span(date.fromisoformat(parts["FIRST"]), date.fromisoformat(parts["LAST"]), row.most, "the trip")
+        asked = {k: v[-1] for k, v in parse_qs(query, keep_blank_values=True).items()}
+        if row.year is not None and (year := _calendar_year(asked)) is not None:
+            return row.year.format(YEAR=year)
+        pairs: list[tuple[str, str]] = []
+        for old, new, kind in row.query:
+            value = _carried(old.split(), kind, asked, row.most)
+            if value is not None:
+                pairs.append((new, value))
+        pairs.extend((new, template.format(**parts)) for new, template in row.fixed)
+        return row.home.format(**parts) + (f"?{urlencode(pairs, safe='/')}" if pairs else "")
+    return None
+
+
+def _calendar_year(asked: dict[str, str]) -> str | None:
+    """The year `from` and `to` are, when they are its first and its last day; else None."""
+    first, last = asked.get("from") or "", asked.get("to") or ""
+    year = first[:4]
+    if _YEAR.fullmatch(year) is None or (first, last) != (f"{year}-01-01", f"{year}-12-31"):
+        return None
+    return year
+
+
+def _carried(names: list[str], kind: str, asked: dict[str, str], most: int | None) -> str | None:
+    """The value the old query's `names` carry to the new home, as `kind` holds it; None when it
+    names none."""
+    given = {name: asked[name] for name in names if asked.get(name)}
+    if kind == WORDS:
+        (name,) = names
+        return given.get(name)
+    if kind == FLAG:
+        (name,) = names
+        return "1" if given.get(name) == "1" else None
+    if kind == PAGE_VALUE:
+        (name,) = names
+        if name not in given:
+            return None
+        if re.fullmatch(r"[0-9]+", given[name]) is None or int(given[name]) < 1:
+            raise ValueError(f"{name} is not a page, a number from 1")
+        return str(int(given[name]))
+    if kind == YEAR_VALUE:
+        (name,) = names
+        if name not in given:
+            return None
+        if _YEAR.fullmatch(given[name]) is None:
+            raise ValueError(f"{name} is not a year, YYYY")
+        return given[name]
+    days = {name: _day(value, name) for name, value in given.items()}
+    if kind == DAY_VALUE:
+        (name,) = names
+        if name == "from":
+            _span(days.get("from"), _day(asked["to"], "to") if asked.get("to") else None, most, "from and to")
+        return None if name not in days else days[name].isoformat()
+    first, last = days.get(names[0]), days.get(names[1])  # SHARED_YEAR: a window, the year it lies in
+    _span(first, last, most, " and ".join(names))
+    opens = first or last
+    return None if opens is None else f"{opens.year:04d}"
+
+
 ASK = "/ask"  # Ask v1 (`door_ask`): the record's words as moments, through the search of #363
 GEAR = "/gear"  # the machinery behind one icon (`door_gear`, RFC 0047 §4.6)
 GEAR_TITLE = "The gear: the sources, the crossings, the agents, the Manifest, the assets and the build"
