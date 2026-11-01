@@ -58,7 +58,6 @@ dispositions in the crossing) and the pile untouched for 90 days."""
 from __future__ import annotations
 
 import json
-import re
 from collections.abc import Iterable, Mapping, Sequence
 from datetime import date, timedelta
 from html import escape
@@ -97,11 +96,11 @@ WITHHELD_BESIDE = "Withheld here: it sets a number beside a person's name."
 LATER = "Later: time by project, the sprint's done, rolled and let go, and the pile untouched for 90 days."
 CLOSE = "close"  # the anchor of Close the week, where its form sends the owner back
 NO_VERDICT = "no verdict"  # the choice a goal starts at: nothing written for it
-BESIDE = "[\\s(:×x#·,]*"  # what may stand between a name and a number and still be beside it
 WEEK_STYLE = """
 ol.week{list-style:none;padding:0;margin:0}
 ol.week>li{padding:4px 0;border-bottom:1px solid var(--line)}ol.week>li:last-child{border-bottom:0}
 ol.week p.day{margin:0;font-size:13.5px}
+ol.week p.allday{margin:0;font-size:12.5px;color:var(--mute);overflow-wrap:anywhere}
 ol.week p.day a{display:inline-flex;align-items:center;min-height:44px}
 p.line,li.line{overflow-wrap:anywhere}
 p.ids{margin:0;font-size:11.5px;color:var(--mute);overflow-wrap:anywhere}div.paper p.ids{line-height:28px}
@@ -127,13 +126,12 @@ def _person_path(entity: str) -> str:
 
 
 def beside(text: str, names: Iterable[str]) -> bool:
-    """Whether a digit stands beside one of `names` in `text`, the name in any case (`figures.beside`;
-    the guard of `tests/test_day_rhythm.py`)."""
-    for name in names:
-        n = re.escape(name)
-        if name and re.search(figures.beside(n, BESIDE), text):
-            return True
-    return False
+    """Whether a digit, a date's or a clock's included, stands beside one of `names` in `text`, their
+    full name or their first of three letters or more, the name in any case, with only separators
+    between: the main guard, `figures.adjacent` (the desk, after the tag)."""
+    found = {n.strip() for n in names if n and n.strip()}
+    found |= {n.split()[0] for n in list(found) if len(n.split()[0]) >= 3}
+    return any(figures.adjacent(text, name) for name in found)
 
 
 def span_text(monday: str, sunday: str) -> str:
@@ -350,7 +348,10 @@ def _seven(
         lived += 1 if data["sources"] else 0
         when = date.fromisoformat(day)
         label = escape(f"{data['weekday']} {when.day} {MONTHS[when.month - 1]}")
-        rows.append(f'<li><p class="day">{site.link(label, f"/day/{day}")}</p>\n{svg}</li>\n')
+        # the day's all-day entries under its ribbon, which draws none: `all day`, never midnight to midnight
+        titles = [escape(str(a["title"])) for a in data.get("all_day") or []]
+        all_day = f'<p class="allday">all day: {day_reader.ALL_DAY_AND.join(titles)}</p>\n' if titles else ""
+        rows.append(f'<li><p class="day">{site.link(label, f"/day/{day}")}</p>\n{svg}{all_day}</li>\n')
     summary = f"{_plural(lived, 'day')} with lines{DOT}{_plural(planned, 'entry', 'entries')} planned"
     return summary, f'<ol class="week">\n{"".join(rows)}</ol>\n{legend}'
 

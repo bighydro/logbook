@@ -185,6 +185,7 @@ SYNTHESIS_NOUNS = {
 HEAD_SHORT = 8  # `read at bb97e90d`: the first 8 hex of the head
 SUBJECT_SHOWN = 3  # `show` names a subject of more entries by its first and how many lines follow
 ID_SHORT = 8  # an evidence id shortened to its last 8 characters in text
+EVIDENCE = "from"  # the word before a sentence's evidence ids, `… Kari Nordmann.  from […6742a9f5]`
 LANGUAGE = re.compile(r"[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*\Z")  # a BCP 47 tag, loosely
 SHA256_HEX = 64
 NOT_ON_DAY = "evidence names a line that is not on the day"
@@ -1500,7 +1501,8 @@ def _segment_row(segment: Mapping[str, Any], indent: str) -> str:
     if segment.get("kept"):
         tail = f"kept as #{segment['kept']['seq']}"
     elif segment["supported"]:
-        tail = "[" + ", ".join(short_id(e) for e in segment["evidence"]) + "]"
+        # a word before the ids: an id may open with a digit, and the sentence may end with a name
+        tail = EVIDENCE + " [" + ", ".join(short_id(e) for e in segment["evidence"]) + "]"
     else:
         tail = UNSUPPORTED if not segment.get("why") else f"{UNSUPPORTED}: {segment['why']}"
     if segment.get("keep") and segment["supported"] and not segment.get("kept"):  # `--keep`'s number (RFC

@@ -515,7 +515,7 @@ def test_the_day_shows_the_draft_above_the_timeline_and_hides_it_under_no_dream(
     head = next(i for i, row in enumerate(rows) if row.startswith("  draft "))
     assert f"model:{MODEL}" in rows[head] and f"read at {line['payload']['read_head'][:8]}" in rows[head]
     assert "dreamed 1×, last on" in rows[head] and "1 unsupported" in rows[head]
-    assert rows[head + 1].startswith("      story     A day at home.  […")
+    assert rows[head + 1].startswith("      story     A day at home.  from […")
     assert rows[head + 4] == "    ~ question  Was the evening what you wanted?  unsupported"
     timeline = next(i for i, row in enumerate(rows) if "stay   Home" in row)
     assert head < timeline  # above every note of the day

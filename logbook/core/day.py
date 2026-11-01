@@ -276,6 +276,7 @@ def of_reading(
     placeable = _standing_transcripts(lines)  # a transcript heard again stands for the one it supersedes
     folded, stands_for = events.fold(placeable, flight_lines.Airlines.load())  # one row per calendar entry
     folded, stands_for = events.backfilled(folded, stands_for)  # and per Notion row a backfill saw again
+    folded = events.all_day(folded, stands_for, placeable, tz)  # all-day, by any calendar's word
     owner = rd.owner
     segments = [s for s in rd.derived.folded if s.start < day_end and s.end > day_start]
     flights = _flights(rd, day, tz)
@@ -1218,7 +1219,7 @@ def rows(data: dict[str, Any]) -> Iterator[str]:
         entries = (
             _mark(marks, a["line"], also=a["lines"]) + a["title"] + sources_text(a) for a in data["all_day"]
         )
-        yield _row("all day", ", ".join(entries))
+        yield _row("all day", ALL_DAY_AND.join(entries))
     if any(c["stated"] for c in company):  # the owner's word on the day: everyone, theirs marked
         yield _row("with", company_text(company))
     if data.get("reflection"):
@@ -1418,6 +1419,11 @@ def received_text(page: dict[str, Any]) -> str:
     if created:
         parts.append(f"shared {created[:10]}")
     return DOT.join(parts)
+
+
+# between two all-day entries a word, never a mark alone: a title may end with a name and the next
+# open with a figure (`Away with Per Hansen and 17 May dinner`)
+ALL_DAY_AND = " and "
 
 
 def _row(label: str, text: str) -> str:

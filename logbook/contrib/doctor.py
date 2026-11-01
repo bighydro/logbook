@@ -40,16 +40,18 @@ The checks, in the order they print:
   from the month files. A settings file that is not the shape is a fail naming it.
 - `extra:<name>`: each optional extra (`ais`, `crypto`, `sealed`, `speakers`, `transcribe`) is installed,
   with its install line when not (a warn): the line adds the extra to this Logbook exactly as it is
-  installed (its Python, its venv's options, its source and version, a pipx suffix, uv's companions):
-  this venv's pip at the installed version, `pipx inject` into pipx's venv (with `PIPX_HOME` only when
-  the venv is not in the home a bare `pipx` uses), `uv tool install --force` with every extra (and the
-  `--python` the receipt asked for, if any), or, in a clone, `uv sync --extra <name>`, run in the clone
-  the warn names, with an `--extra` for every extra it has too, since `uv sync` keeps only what it is
-  given. Where doctor proves no such line (Homebrew, whose formula adds no extra, a
-  receipt it cannot read, a source that may have changed since, uv's cache) it prints none: the warn
-  says why and points to docs/install.md, in one sentence. Nothing is imported to find out: a module's
-  spec is looked for, and pyannote.audio (`speakers`) is asked by its installed distribution, as
-  `diarize.installed` asks it, since its spec alone would import the `pyannote` package around it.
+  installed (its Python, its venv's options, its source and version, a pipx suffix, uv's companions): this
+  venv's pip at the installed version, `pipx inject` into pipx's venv (with `PIPX_HOME` only when the venv
+  is not in the home a bare `pipx` uses), `uv tool install --force` with every extra (and the `--python` the
+  receipt asked for, if any), or, in a clone, `uv sync --extra <name>`, run in the clone the warn names,
+  with an `--extra` for every extra it has too, since `uv sync` keeps only what it is given, and only what
+  keeps it this environment: `--python` when uv would ask for another Python than the one running
+  (`UV_PYTHON`, the clone's or uv's global `.python-version`), `--no-default-groups` when a default group is
+  not installed here. Where doctor proves no such line (Homebrew, whose formula adds no extra, a receipt it
+  cannot read, a source that may have changed since, uv's cache) it prints none: the warn says why and
+  points to docs/install.md, in one sentence. Nothing is imported to find out: a module's spec is looked
+  for, and pyannote.audio (`speakers`) is asked by its installed distribution, as `diarize.installed` asks
+  it, since its spec alone would import the `pyannote` package around it.
 - `google`: when either variable of the one Google service-account key is set (`LOGBOOK_DRIVE_SA_KEY`,
   `LOGBOOK_DRIVE_USER`), whether the key file is there and is a service-account key, whether the user
   is an address, which of the sources on the key (gmail, gcal, drive, gtasks, meet, gaudit) are
@@ -973,7 +975,8 @@ def _pip(prefix: Path, here: Here) -> Install:
             if not here.executable:
                 raise NoLine("the interpreter it runs in cannot be named")
             _arg(here.executable)
-            return Install("checkout", folder=folder, python=here.executable)
+            options = _sync_options(Path(folder), here)
+            return Install("checkout", folder=folder, python=here.executable, options=options)
         except NoLine as e:
             return Install("checkout", why=str(e))
     if not requirement or folder or requirement.startswith(" @"):
@@ -989,6 +992,79 @@ def _pip(prefix: Path, here: Here) -> Install:
     return Install(
         "pip", requirement=requirement, python=here.executable, uv_pip=uv_pip, windows=here.windows
     )
+
+
+def _sync_options(folder: Path, here: Here) -> tuple[str, ...]:
+    """What `uv sync` run in the clone `folder` needs, beside its extras, to sync the environment this
+    process runs in as it is (the desk, after the tag): `--python` and this interpreter (its base) when
+    uv would ask for another (`UV_PYTHON`, else the clone's `.python-version`, else uv's global pin),
+    since uv would make the venv again on that one; `--no-default-groups` when a default group of the
+    clone's `pyproject.toml` is not installed here, since uv would add it. Nothing when neither: the
+    short line. `NoLine` when the `pyproject.toml` does not read, or when `UV_NO_DEV` or
+    `UV_NO_DEFAULT_GROUPS` would have `uv sync` remove the groups installed."""
+    options: list[str] = []
+    if not _python_kept(folder, here):
+        options += ["--python", _arg(here.base or here.executable)]
+    if not _groups_installed(folder, here):
+        options.append("--no-default-groups")
+    elif any(here.env.get(v) for v in ("UV_NO_DEV", "UV_NO_DEFAULT_GROUPS")):
+        raise NoLine("UV_NO_DEV or UV_NO_DEFAULT_GROUPS is set, so `uv sync` would remove the dev group")
+    return tuple(options)
+
+
+def _python_kept(folder: Path, here: Here) -> bool:
+    """Whether what uv asks for in `folder` is this interpreter (`_python_agrees`): no request at all
+    (the venv met `requires-python` when uv made it), a version it starts with (`3.12` of 3.12.3), or
+    its path; a request doctor does not hold it to (another implementation, a range) is not."""
+    request = here.env.get("UV_PYTHON") or ""
+    for pinned in (folder / ".python-version", _global_pin(here)):  # uv reads none above the project
+        if request:
+            break
+        if pinned is not None and pinned.is_file():
+            lines = pinned.read_text(encoding="utf-8").splitlines()
+            request = next((x.strip() for x in lines if x.strip() and not x.startswith("#")), "")
+    return _python_agrees(request or None, here)
+
+
+def _global_pin(here: Here) -> Path | None:
+    """The file `uv python pin --global` writes, which uv reads when the project pins nothing:
+    `%APPDATA%\\uv` on Windows, else `$XDG_CONFIG_HOME/uv` or `~/.config/uv`."""
+    if here.windows:
+        appdata = here.env.get("APPDATA")
+        return Path(appdata) / "uv" / ".python-version" if appdata else None
+    config = here.env.get("XDG_CONFIG_HOME") or str(Path.home() / ".config")
+    return Path(config) / "uv" / ".python-version"
+
+
+def _groups_installed(folder: Path, here: Here) -> bool:
+    """Whether every requirement of the clone's default groups (`tool.uv.default-groups`, else `dev`)
+    is installed here (`here.version_of`): the clone's own package and a requirement with a marker,
+    which doctor does not read, aside. `NoLine` when the `pyproject.toml` does not read."""
+    try:
+        project = tomllib.loads((folder / "pyproject.toml").read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError):
+        raise NoLine("the clone's pyproject.toml does not read") from None
+    groups = project.get("dependency-groups") or {}
+    chosen = ((project.get("tool") or {}).get("uv") or {}).get("default-groups", ["dev"])
+    names = list(groups) if chosen == "all" else [str(g) for g in chosen if isinstance(g, str)]
+    own = re.sub(r"[-_.]+", "-", str((project.get("project") or {}).get("name") or "")).lower()
+    seen: set[str] = set()
+    while names:
+        group = names.pop()
+        if group in seen:
+            continue
+        seen.add(group)
+        for requirement in groups.get(group) or []:
+            if isinstance(requirement, dict):  # `{include-group = "…"}`
+                names.extend(str(v) for k, v in requirement.items() if k == "include-group")
+                continue
+            text = str(requirement)
+            name = re.match(r"[A-Za-z0-9][A-Za-z0-9._-]*", text.strip())
+            if name is None or ";" in text or re.sub(r"[-_.]+", "-", name.group(0)).lower() == own:
+                continue
+            if here.version_of(name.group(0)) is None:
+                return False
+    return True
 
 
 def here_now() -> Here:
@@ -1051,7 +1127,8 @@ def install_line(install: Install, extras: set[str] | frozenset[str]) -> str | N
     names = ",".join(sorted(extras))
     try:
         if install.how == "checkout":  # run in the clone (`extras_checks` names it), the short line
-            return "uv sync" + "".join(f" --extra {e}" for e in sorted(extras))
+            options = "".join(f" {o}" for o in install.options)  # what keeps it this venv (`_sync_options`)
+            return "uv sync" + options + "".join(f" --extra {e}" for e in sorted(extras))
         if install.folder:
             requirement = f"--editable {_arg(f'{install.folder}[{names}]')}"
         else:

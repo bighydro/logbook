@@ -110,10 +110,13 @@ def test_an_office_day_in_three_lines_plus_the_question(
     assert lines[1].startswith("  where") and "Home" in lines[1] and "Office" in lines[1]
     assert lines[2].startswith("  with") and "Kari Nordmann" in lines[2]
     assert lines[3].startswith("  attached") and "1 event, 1 photo" in lines[3]
-    assert any(line.startswith("  tomorrow") and f"09:00{EN_DASH}09:30  Standup" in line for line in lines)
+    assert any(line.startswith("  tomorrow") and "Standup, from 09:00 to 09:30" in line for line in lines)
     assert any("Lunch" in line and "Kari Nordmann" in line for line in lines if line.startswith("  tomorrow"))
     assert lines[-1] == data["question"]["text"] and lines[-2] == "", "the question closes the digest"
-    assert "Kari in town" not in text
+    # the all-day entry is not timed: said `all day`, first, and never with a clock (the desk, after the tag)
+    (all_day,) = [line for line in lines if "Kari in town" in line]
+    assert all_day == "  tomorrow   Kari in town, all day", all_day
+    assert lines.index(all_day) < next(i for i, line in enumerate(lines) if "Standup" in line)
 
 
 def test_a_travel_day_names_its_flight_and_sleeps_away(

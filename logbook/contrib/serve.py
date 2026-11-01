@@ -698,10 +698,11 @@ class Closing(NamedTuple):
     would keep from it, and `digest`, the proposals as shown, which the Sign form carries back. For
     Keep and sign: `pencil`, the standing draft as `--keep` reads it (`drafts.for_day` under the `dream`
     entry and through the page's tier gate, its sentences and links numbered and marked kept), and
-    `word`, the day in a word standing. `hidden`: the reflection Sign signs with is above the page's
-    gate, so the page shows, quotes, offers and numbers nothing of it (no proposals, no dictation),
-    and `named` is what the Sign form carries for it: its id, or, when hidden, a digest of it that
-    names no line."""
+    `word`, the day in a word standing. `hidden`: the page reads no notes, so it shows, quotes,
+    offers and numbers nothing of a reflection, nor whether there is one (no proposals, no dictation),
+    and `named` is what the Sign form carries for it: its id, or, when hidden, the last line the page
+    read (`_read_through`), the same with a reflection or without. A page that reads notes but not the
+    tier a reflection is at reads the day as if it had none."""
 
     lines: list[Line]
     retracted: set[str]
@@ -1437,7 +1438,11 @@ class Site:
                             f" reflection among the lines it confirms (`logbook day sign {day}` signs it"
                             " without one); nothing was written"
                         )
-                    if form.get("reflection") != found.named or form.get("proposals") != found.digest:
+                    if found.hidden:
+                        changed = self._reflection_since(found, form.get("reflection") or "")
+                    else:
+                        changed = form.get("reflection") != found.named
+                    if changed or form.get("proposals") != found.digest:
                         raise Stale(
                             f"the reflection or its proposals changed since this page was read; /day/{day}"
                             " is the day as it stands, and nothing was written"
@@ -1524,13 +1529,19 @@ class Site:
         seen = {str(line["id"]) for line in reading.crossing(lines, self.tiers)}
         dictated = [d for d in reflect.dictations(self.lb, lines, retracted) if d.id in seen]
         pending = reflect.drafts(dictated, standing)
+        if self._notes_seen():  # the newest reflection the page reads: one above its gate is not there
+            standing = [line for line in standing if str(line["id"]) in seen]
         r = reflect.on_the_day(standing[-1]) if standing else None
-        # a page that reads no notes holds none of the day's reflections, nor whether there is one
-        hidden = not self._notes_seen() or (
-            r is not None and r.note is not None and str(r.note["id"]) not in seen
-        )
+        # a page that reads no notes holds none of the day's reflections, nor whether there is one: its
+        # Sign form carries how far it read (`_read_through`), never the reflection or a digest of it;
+        # a page that reads notes and not the tier a reflection is at reads the day as if it had not that one
+        hidden = not self._notes_seen()
         note = "" if r is None or r.note is None else str(r.note["id"])
-        named = _reflection_named(note, hidden) if note or hidden else ""
+        if hidden:
+            with self.lb.index() as idx:
+                named = _read_through(idx.indexed()[0])
+        else:
+            named = note
         proposals: list[reflect.Proposal] = []
         if r is not None and r.note is not None and not hidden:
             mine = str(r.note["id"])
@@ -1552,6 +1563,19 @@ class Site:
         return Closing(
             lines, retracted, r, proposals, draft, earlier, kept, digest, pencil, word, hidden, named
         )
+
+    def _reflection_since(self, found: Closing, read: str) -> bool:
+        """Whether the reflection Sign would sign with is not the one standing when a page that reads no
+        notes was read (`read`, `_read_through`): it was written after the page's last line, or a line of
+        the day was retracted after it; a value that is not one is a change."""
+        seq = int(read, 16) if re.fullmatch(r"[0-9a-f]{16}", read) else -1
+        r = found.reflection
+        if seq < 0 or r is None or r.note is None or int(r.note["seq"]) > seq:
+            return True
+        day = {str(line["id"]) for line in found.lines}
+        with self.lb.index() as idx:
+            later = [line for line in idx.retractions() if int(line["seq"]) > seq]
+        return any(str((line.get("payload") or {}).get("supersedes")) in day for line in later)
 
     def _star(self, form: Mapping[str, str]) -> Response:
         """The Day page's star: `act` `star` or `unstar` on the `line` of a row of `day`, through
@@ -2371,7 +2395,8 @@ class Site:
         if morning:
             entries = day_rhythm.planned(data, marks.lines)
             due = day_rhythm.due_on(near, day)
-            today_parts = [ribbon + day_rhythm.today_html(entries, due, day, tz, person)]
+            all_day = [str(a["title"]) for a in data["all_day"]]
+            today_parts = [ribbon + day_rhythm.today_html(entries, due, day, tz, person, all_day)]
             if plan is not None:
                 said, body = day_rhythm.tasks_html(plan, tz, link)
                 if body:
@@ -2546,7 +2571,7 @@ class Site:
             _signed_html(data.get("signed")),
         ]
         if data["all_day"]:
-            entries = ", ".join(
+            entries = day_reader.ALL_DAY_AND.join(
                 escape(a["title"] + day_reader.sources_text(a))
                 + star([a["line"], *a["lines"]], False)
                 + extras.raw([a["line"]])
@@ -5082,7 +5107,10 @@ def _draft_body(draft: Mapping[str, Any], star: Toggle | None = None) -> str:
                 f'<span class="id" title="line {escape(e)}">{escape(drafts.short_id(e))}</span>'
                 for e in segment["evidence"]
             )
-            parts.append(f'<p class="segment">{head}{escape(segment["text"])} <small>[{ids}]</small></p>\n')
+            parts.append(
+                f'<p class="segment">{head}{escape(segment["text"])}'
+                f" <small>{drafts.EVIDENCE} [{ids}]</small></p>\n"
+            )
         else:
             why = f": {escape(str(segment['why']))}" if segment.get("why") else ""
             parts.append(
@@ -5660,11 +5688,11 @@ def _reflect_elsewhere(day: str) -> str:
     )
 
 
-def _reflection_named(note: str, hidden: bool) -> str:
-    """What the Sign form carries for the reflection it signs with: its id, or, above the page's gate,
-    a digest of it, so the page holds no reference to a line it cannot show and a form older than the
-    record is still told apart."""
-    return hashlib.sha256(f"reflection {note}".encode()).hexdigest()[:16] if hidden else note
+def _read_through(seq: int) -> str:
+    """What the Sign form of a page that reads no notes carries for the reflection it cannot show: the
+    last line the page read, sixteen hex digits, the same whether the day has a reflection or not (the
+    desk, after the tag), so `Site._reflection_since` tells a form older than the reflection apart."""
+    return f"{max(seq, 0):016x}"
 
 
 def _keep_cli_html(day: str) -> str:

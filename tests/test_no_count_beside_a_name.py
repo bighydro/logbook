@@ -44,7 +44,6 @@ RAW = re.compile(r'<a class="raw"[^>]*>#\d+</a>')  # a row's link to its line as
 TOOLTIP_END = re.compile(
     r"</title>", re.I
 )  # an SVG tooltip is a text of its own, as the Day page's guard reads it
-SHORT = re.compile(rf"…[0-9a-f-]{{{drafts.ID_SHORT}}}(?![0-9a-f])")  # an evidence id, `[…6742a9f5]`: one too
 
 
 def beside(texts: str | Iterable[str]) -> list[str]:
@@ -52,13 +51,15 @@ def beside(texts: str | Iterable[str]) -> list[str]:
     out first; a date and a clock time are numbers too, each read as one figure (`figures.CALENDAR`, so
     `8 June` is as near a name as `8`; the owner, 27 October: words between are fine, separators
     alone are not). A page's link from a row to its line as written (`#SEQ`, `RAW`) is the line's
-    address, not a number of the person, and so is a draft's evidence, its ids shortened (`SHORT`).
+    address, not a number of the person; a draft's evidence, its ids shortened (`[…6742a9f5]`), is read
+    as it is printed: an id that opens with a digit right after a name is beside it (the desk, after
+    the tag), so a reader puts a word between them.
     An SVG `<title>` is a tooltip, a text of its own (`TOOLTIP_END`): one ends where the next begins,
     and every other tag is a space."""
     found: list[str] = []
     for text in [texts] if isinstance(texts, str) else texts:
         unmarked = re.sub(r"<[^>]*>", " ", TOOLTIP_END.sub("\n", RAW.sub(" ", text)))
-        for row in SHORT.sub(" ", html.unescape(unmarked)).splitlines():
+        for row in html.unescape(unmarked).splitlines():
             if GUARD.search(figures.CALENDAR.sub("0", row)):
                 found.append(row.strip())
     return found
@@ -99,7 +100,10 @@ def test_the_guard_finds_a_count_a_date_or_a_clock_on_either_side_and_lets_words
     assert beside("Olav 2") == [], "a letter that is no separator stands between: another word"
     # and the marks no letter is: guillemets (Norwegian quotes), an ellipsis, a plus, a tilde, an
     # underscore, a space of no width
-    assert beside("Most of all with Kari Nordmann.  […6742a9f5]") == [], "an evidence id is an address"
+    assert beside("Most of all with Kari Nordmann.  […6742a9f5]"), (
+        "an evidence id right after a name is beside it"
+    )
+    assert beside("Most of all with Kari Nordmann.  from […6742a9f5]") == [], "a word between: it stands"
     assert beside("Kari Nordmann …42"), "an ellipsis before a figure is still a separator"
     for said in ("Ola: «2»", "«2» Ola", "Ola…2", "Ola+2", "Ola~2", "Ola_2", "Ola\u200b2", "2\u2060Ola"):
         assert beside(said), repr(said)

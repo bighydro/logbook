@@ -19,6 +19,12 @@ in the order given. The others are named in its evidence: `Folded.sources`, its 
 then the others in evidence order (`ics (Work)` when one source brings the entry from two of its
 calendars), and `Folded.lines`, every line's id, the kept one's first. Nothing here reads a file.
 
+`all_day` is the readers' own, after `fold`: an entry is all-day when any calendar of its set flags it
+so (the kept line, a timed one, may come from a calendar that does not, as Notion's date-only pages and
+a calendar's copy of another's birthday do), or when it runs from one midnight to a later one on the
+record's clock; such a line is read with `all_day` set, so every reader says `all day` of it and none
+`from 00:00 to 00:00+1` (the desk, after the tag). The line in the log is not touched.
+
 `backfilled` is the Day's own, after `fold`: a Notion row seen live and then again by `sync notion
 --relations-backfill` is one row. The backfill's `relations` line adds a row's relations to an edit
 the record holds already, at that edit, so it is no happening of its own: it folds into the last
@@ -30,7 +36,7 @@ from __future__ import annotations
 
 import unicodedata
 from collections.abc import Container, Mapping, Sequence
-from datetime import datetime
+from datetime import datetime, time, tzinfo
 from typing import Any, NamedTuple
 
 from .chain import Line
@@ -155,6 +161,32 @@ def _same_event(a: Line, b: Line, airlines: Airlines) -> bool:
 def _payload(line: Line) -> dict[str, Any]:
     payload = line.get("payload")
     return payload if isinstance(payload, dict) else {}
+
+
+def all_day(
+    folded: Sequence[Line], stands_for: Mapping[str, Folded], lines: Sequence[Line], tz: tzinfo
+) -> list[Line]:
+    """`folded` with each calendar entry that is all-day read as one (`all_day` set in a copy of its
+    payload): one a line of its set flags all-day, or one from a midnight to a later midnight in `tz`.
+    `lines` are the lines `fold` was given; every other line is returned as it is."""
+    flagged = {str(line["id"]) for line in lines if line.get("kind") == "event" and _all_day(line)}
+    out: list[Line] = []
+    for line in folded:
+        if line.get("kind") == "event" and not _all_day(line):
+            kept = stands_for.get(str(line["id"]))
+            ids = set(kept.lines) if kept is not None else {str(line["id"])}
+            if ids & flagged or whole_days(line, tz):
+                line = {**line, "payload": {**_payload(line), "all_day": True}}
+        out.append(line)
+    return out
+
+
+def whole_days(line: Line, tz: tzinfo) -> bool:
+    """Whether `line` runs from a midnight to a later midnight on the clock of `tz`: a day or more, whole."""
+    start, end = instant(line.get("at")), instant(line.get("end"))
+    if start is None or end is None or end <= start:
+        return False
+    return all(t.astimezone(tz).time() == time.min for t in (start, end))
 
 
 def _all_day(line: Line) -> bool:
