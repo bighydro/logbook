@@ -1,5 +1,131 @@
 # Changelog
 
+## 1.1.0 — 2026-11-02
+
+### Fixed
+- A request counts only when a person wrote it. `promises` proposes "asked of you" from a mail only when
+  it is a person's mail (RFC 0045: the sender resolves to a person, is no no-reply address, no agent's)
+  and from a message only when its sender resolves to a person, never in a conversation with an agent.
+  A newsletter's "please let us know", a notification, a company's mail and a message from a number
+  nobody is named by no longer show as asked of you, in `promises`, on the Day page's loose ends, the
+  person page, the shelf or the Notion export; resolve the sender to a person and they count again.
+  Commitments, transcripts and notes are read as before.
+- An all-day entry says `all day`, never `from 00:00 to 00:00+1`, whichever calendar carries it: one that another calendar carries timed (a Notion date-only page, a copy of a birthday) and one that runs from a midnight to a later one are all-day too, on the Day's `all day` row, in Today's plan, under the day's ribbon on the week page, and first in `digest`'s tomorrow (`tomorrow.all_day` in its JSON). Two all-day entries have a word between them, `Away with Per Hansen and 17 May dinner`.
+- `doctor`'s install hint in a clone is the short `uv sync --extra <name>` where that syncs the environment doctor runs in as it is, and adds `--python` (when the clone's `.python-version`, uv's global pin or `UV_PYTHON` asks for another Python than the venv's) or `--no-default-groups` (when the venv has no dev group) where it would not, so the extra lands in that environment; with `UV_NO_DEV` or `UV_NO_DEFAULT_GROUPS` set it prints no line.
+- `logbook serve --built` (labs): the rebuild after an act renders every page on a site of its own, so
+  it no longer keeps a built page's old bytes again with a second `built hh:mm` in its footer, nor marks
+  pages as asked for. A built page older than the record's head (a CLI act, a sync) is still served,
+  its footer saying when it was built, and starts one rebuild for that head, however many pages are
+  asked for meanwhile.
+- The built pages' `pages.json` is written only under `building.lock`, whole and moved into place: the
+  server no longer loses the 06:00 close's writes, nor the close the server's; a page an act dropped
+  stays dropped until a page that read past the act is written, even when a build begun before the act
+  writes the old one back.
+- Every built page records the tiers it was built at, and is served only to a request read through
+  that same gate; a build through another gate renders every page again.
+- A sealed record without `plaintext_cache` keeps no built page through any write of the lab, and a
+  record sealed while a build runs keeps nothing that build wrote.
+- The rule that no number stands beside a person's name reads the name in any case: `kari 2026`,
+  `KARI 2026` and `2026 kari` are held as `Kari 2026` is, in drafts, the week, the people door, Ask
+  and every check of a page; the owner's own name is held on Ask too. Ask's heading and title, and the
+  search's sentence, no longer say the words back when they set a number beside a name the record
+  knows; the words stay in the field as typed.
+- A page says the tier its gate reads, `read at tier N` (`read at tiers 1 and 3` for a gate with a
+  gap, `tier 3 alone` for one tier), in place of `nothing read above tier N`: in a shelf's heading, the
+  week's, the timeline's, the search's, and Ask's foot (`Read at tier N.`). The old words came from
+  the lines the page read and could understate where a name on it came from. A page that read no
+  lines still says `no lines`.
+- A page read through a tier gate completes the Day's "with…" field with only the names its tiers
+  give. Days lists who you were with last, as Trips does, so no figure of the day stands beside a
+  name, and a search hit sets each field of its excerpt on a line of its own, so a name and a number
+  beside it in the record are never side by side on the page.
+- The Manifest sets each of an org's facts on a line of its own, an introduction says "on" before its
+  date, and an evidence row counts the line ids it leaves out in words ("and 21 more"), so no count or
+  date stands beside a name there either. A review queue's proposals, a model's proposal in the week's
+  intention field, an agent's own summary and a promise's verdict from the reader and the judge are
+  pencil, titled. Gaps keeps its dates and clocks whole on a desktop, a line's JSON scrolls in its box
+  on a phone, and every link that stands alone on a phone is a 44 px target.
+
+### Security
+- A page that reads no notes (a tier-1 page) looks exactly as if the day had no reflection: its Sign form carried a digest of the reflection, or of none, and so told the two apart; it carries the last line the page read now, and Sign refuses a form older than the reflection. A page that reads notes but not the tier a reflection is at reads the newest reflection it can see, as if the other were not there.
+- `digest`'s tomorrow says the title, then its time after a word (`Ola Nordmann's birthday, from 19:30`), never a clock against a title that opens with a name.
+- The ribbon's spoken label says the span, what was lived, then the plan, so no clock stands before `Lived` (whose first letters may be a name, as the demo's Liv); `tasks done` says `“Call Ola Nordmann”, the task of 2026-06-09`, and the rows of `tasks` and `tasks --propose-done` give the due day, the list, the shared words and the ids each after a word.
+- A draft's evidence ids follow a word, `from […6742a9f5]`, in `logbook day`, `show trip` and the Day page, so an id that opens with a digit never stands right after a name; the test guard reads the ids as printed.
+- The week page holds its goals, places, threads, intention and question to the main guard (`figures.adjacent`, every separator, a date in words, the first name too), not a guard of its own with fewer separators.
+- `export share day` holds a day to the crossing's rules: only a day you have signed leaves (an unsigned
+  one is refused in one sentence naming `logbook day sign`), and a mail crosses only when a person is on
+  it; the page's manifest and its crossing line count each, `held_back_unsigned` and `mail_held_back`.
+- `export crossing` and `export share day` refuse a name the policy keeps for its own reader or door
+  (`mcp`, `hermes`, `dream`, `site`, `vault`, `world`, `folder`, `heard`, `chat`, `phone`, `notion`,
+  `letter`, `relationship`, in any case) as a person or destination, in one sentence. A nightly
+  `export crossing --to hermes` now stops: give the person's own name and its own entry in
+  `policy/crossing.json`.
+- docs/export.md says that a folder, the vault, the site and the world are your own copies and take no
+  signed-day gate.
+
+### Added
+- Ask (`/ask?q=…`, RFC 0047 §4.5, v1): the field at the top of every door now answers with moments, not
+  lines. One row a day, each day once and newest first across the pages, with where you spent the night,
+  who was with you (names only, each a link to their page) and the words that matched, your own first,
+  the match marked and its source (message, mail, call, note …) in pencil, each a link to its row on the
+  Day. It searches what `logbook search` searches, held to the page's tier; a hit a later line corrected
+  says so, and `?standing=1` leaves it out. `/search` keeps working as it is.
+  No number, date or clock touches a person's name anywhere on it, the record's own words in its
+  excerpts included.
+- The gear (RFC 0047 §4.6): the icon at the end of the Library's header opens `/gear`, the machinery
+  in its own words, one card per part with one line of state. `/gear/sources` lists each source with the
+  day of its last line, a source quiet for a week marked, and the command that brings it back;
+  `/gear/crossings` lists what left this machine, when, to where, the tiers, the lines and the kinds,
+  under which policy entry, each a link to its crossing line (a member of your circle is never named);
+  `/gear/build` says when the pages were last built, how long it took and the command that builds them
+  again. `/gear/agents`, `/gear/manifest` and `/gear/assets` are the old pages, exactly; `/agents`,
+  `/manifest`, `/assets`, `/gaps` and `/shelves` answer as before, and the gear links every shelf
+  ([serve](docs/serve.md#the-gear)).
+- The Library's Life door, `/life` (RFC 0047 §4.2), which the header's Life door now opens: the chapter you
+  are in and its rules, the year's goals and those for life with their last review, then one timeline of
+  your life at five zooms (Life, Year, Month, Week, Day) or one trip, your ideas as a band on it, the
+  chapters not yet placed, and the Volumes, the years as spines. Every zoom and move is a link
+  (`/life?at=2026-06-15&zoom=week`, `/life?trip=FIRST/LAST`), no script, no number beside a name, held to
+  the page's tier. Its bounds are `life` in `logbook.json`, `{"from", "to"}`, else the record's first day
+  to the end of next year ([settings](docs/settings.md#your-life-life)). Every old address works as it did.
+- The Library's People door (RFC 0047 §4.3) at `/people`: everyone the record names by closeness, the
+  people you live with first, on four rings around you (Home, Family, Friends, Everyone else, a rule's
+  reading set in pencil), each a link that opens their thread beside the orbit (`?sel=ID`); the rest A
+  to Z. A thread is the last contact in words, the moments newest first, the beginning, the promises
+  open both ways and the links on to Life and Places; `/people/ID` is the whole thread, with the days
+  together as marks over the years, the words of what was said when asked (`?said=1`) and what a model
+  drafted about them in pencil. Closeness is only the order: no number stands beside a name anywhere on
+  the door. The review queue stays at the foot, as it was, and `/people?year=` keeps its address.
+- The Library's Places door (RFC 0047 §4.4), at `/places`: the globe of your life, drawn on the page as
+  one inline SVG with home near the centre (the coastlines when `setup map` names the offline map file,
+  the graticule alone without it), your places as dots and your trips as arcs, the lived ones muted and
+  the ones ahead dashed and labelled; a time scrubber over the years of your life (`/places?at=YYYY`);
+  Next, the trips and visits ahead from your calendar and your plan, each linking its span on Life;
+  and Your places, home first, each with what it is in your words or a pencil placeholder. The
+  register of `places.json` and the review queue stay under it, as they were.
+- `/places/ID`: one place, with its days as a strip over the years (each a link to its Day), the people
+  who were there with you, by closeness, and the trips that passed through it. `export site` writes a
+  page per place beside `places.html`.
+- The doors' look on every page of the Library that is not a door's own (RFC 0047): the Day in all four
+  shapes, the week, the timeline, search, the shelves listed, Journeys, Trips, Days, Goals, Ideas,
+  Promises, the Manifest, Agents and Assets (in the gear and at their old addresses), Gaps, a line, the
+  error pages and the world read one stylesheet, the paper and the surface, Instrument Serif for titles
+  and names, Inter for the text, JetBrains Mono for small labels, lists and tables on cards, the page's
+  actions as pills and every control 44 px, in the light face and the dark, no text under the size a
+  phone needs. No page's address changes. A model's text is pencil wherever it shows, lighter, with a
+  dotted rule and the model named on hover; every text keeps 4.5:1 against its ground in both faces.
+
+### Changed
+- Every Library address from before the doors leads to its door (RFC 0047 §9): `/days?from=&to=` opens
+  Life at those days (a whole year of them, Life at that year), `/trips?year=` and `/journeys?year=` Life at
+  that year, `/goals` Life, `/world?from=&to=` Places at that year, `/search?q=` Ask with the same words,
+  and `/agents`, `/manifest`, `/manifest/people`, `/org/ID` and `/assets` their pages in the gear, each with
+  a 302 for this release and a 301 from the next. A value the door would refuse is a 404; a form still posts
+  where it always did, and every other address answers as before. `docs/serve.md` lists them all.
+- The printed edition is called Volumes (RFC 0047 §10, §15): the help of `star` and `--print`, the
+  Day page's photo review and the docs say "a Volume" and "the Volume's pick" where they said "the paper
+  edition" and "the press's pick". The commands and their flags are unchanged.
+
 ## 1.0.0 — 2026-10-29
 
 ### Security
