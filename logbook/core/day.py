@@ -131,6 +131,7 @@ from . import (
     reading,
     share,
     signing,
+    social,
     speakers,
     stars,
     stays,
@@ -435,7 +436,8 @@ def _superseded(lines: Sequence[Line]) -> dict[str, int]:
 
 def what_text(line: Line, names: Mapping[Ref, str]) -> str:
     """One line of what a line was, at most `WHAT_CHARS`: a message `who: text`, a mail its subject
-    and sender, a call who and how, a photo or a keeper the file, a point where; else the payload's
+    and sender, a call who and how, a photo or a keeper the file, a point where, an act on a social
+    network in words (`social.text`); else the payload's
     own text, title, subject, name or url; a sealed line says so. The line itself is a click away."""
     if is_sealed(line):
         return "sealed"
@@ -462,6 +464,8 @@ def what_text(line: Line, names: Mapping[Ref, str]) -> str:
         text = f"{payload['lat']:.5f}, {payload['lon']:.5f}"
     elif kind == drafts.KIND and payload.get("schema") == drafts.SCHEMA:
         text = drafts.row_text(payload)
+    elif kind == social.KIND and payload.get("schema") == social.SCHEMA:
+        text = social.text(payload)
     else:
         found = next(
             (payload[k] for k in ("text", "title", "subject", "name", "file_name", "url") if payload.get(k)),

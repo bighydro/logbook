@@ -1,0 +1,39 @@
+{
+  "participants": [
+    {
+      "name": "Kari Nordmann"
+    },
+    {
+      "name": "Ola Nordmann"
+    },
+    {
+      "name": "Ingrid Berg"
+    }
+  ],
+  "messages": [
+    {
+      "sender_name": "Ola Nordmann",
+      "timestamp_ms": 1778932800000,
+      "videos": [
+        {
+          "uri": "your_instagram_activity/messages/inbox/seilgjengen_1000000000000002/videos/3000000000000001.mp4",
+          "creation_timestamp": 1778932800
+        }
+      ]
+    },
+    {
+      "sender_name": "Kari Nordmann",
+      "timestamp_ms": 1778929260000,
+      "content": "Jeg tar med fendere"
+    },
+    {
+      "sender_name": "Ingrid Berg",
+      "timestamp_ms": 1778929200000,
+      "content": "Hvem tar med fendere?"
+    }
+  ],
+  "title": "Seilgjengen \u00e2\u009a\u0093",
+  "is_still_participant": true,
+  "thread_path": "inbox/seilgjengen_1000000000000002",
+  "magic_words": []
+}

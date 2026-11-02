@@ -90,6 +90,7 @@ SOURCES = {
 }
 EMAIL = re.compile(r"^\S+@\S+$")  # a field of an excerpt that is an address and nothing else
 PHONE = re.compile(r"^\+?[\d\s().-]{6,}$")  # or a phone number and nothing else (a sender's ref)
+SOURCE_REF = re.compile(r"^instagram:\S")  # or a sender as the source keys it (`instagram:Ola Nordmann`)
 MACHINE = re.compile(r"^[a-z][a-z0-9_-]*$")  # or one lowercase word alone: a type, an app (`shazam`)
 EDGE = re.compile(r"^\W+|\W+$")  # what stands outside a field's first and last letter or digit
 STYLE = """
@@ -396,10 +397,11 @@ def _edge(text: str, end: int) -> str:
 
 
 def _machine(field: str, first: bool, last: bool) -> bool:
-    """Whether an excerpt's field is no one's words: an address or a phone number alone; else, when it
-    holds no match, one lowercase word alone or a piece the excerpt cut at its first or last edge."""
+    """Whether an excerpt's field is no one's words: an address, a phone number or a source's own key
+    for a sender (`instagram:Ola Nordmann`) alone; else, when it holds no match, one lowercase word
+    alone or a piece the excerpt cut at its first or last edge."""
     bare = _plain(field).strip(search.ELLIPSIS + " ")
-    if EMAIL.match(bare) is not None or PHONE.match(bare) is not None:
+    if EMAIL.match(bare) is not None or PHONE.match(bare) is not None or SOURCE_REF.match(bare) is not None:
         return True
     if search.MARK[0] in field:
         return False

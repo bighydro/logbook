@@ -1,0 +1,14 @@
+{
+  "impressions_history_ads_seen": [
+    {
+      "string_map_data": {
+        "Author": {
+          "value": "advertiser.example"
+        },
+        "Time": {
+          "timestamp": 1778925600
+        }
+      }
+    }
+  ]
+}

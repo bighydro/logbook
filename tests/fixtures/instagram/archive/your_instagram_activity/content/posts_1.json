@@ -1,0 +1,35 @@
+[
+  {
+    "media": [
+      {
+        "uri": "media/posts/202605/4000000000000001.jpg",
+        "creation_timestamp": 1778927400,
+        "media_metadata": {
+          "photo_metadata": {
+            "exif_data": [
+              {
+                "latitude": 59.9075,
+                "longitude": 10.724,
+                "date_time_original": "2026:05:16 09:40:00"
+              }
+            ]
+          }
+        },
+        "title": "F\u00c3\u00b8rste tur p\u00c3\u00a5 fjorden i \u00c3\u00a5r \u00e2\u009b\u00b5",
+        "cross_post_source": {
+          "source_app": "FB"
+        }
+      },
+      {
+        "uri": "media/posts/202605/4000000000000002.jpg",
+        "creation_timestamp": 1778927400,
+        "title": "",
+        "cross_post_source": {
+          "source_app": "FB"
+        }
+      }
+    ],
+    "title": "F\u00c3\u00b8rste tur p\u00c3\u00a5 fjorden i \u00c3\u00a5r \u00e2\u009b\u00b5",
+    "creation_timestamp": 1778927400
+  }
+]

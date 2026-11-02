@@ -1,0 +1,24 @@
+{
+  "profile_user": [
+    {
+      "media_map_data": {},
+      "string_map_data": {
+        "Username": {
+          "href": "",
+          "value": "kari.n.example",
+          "timestamp": 0
+        },
+        "Name": {
+          "href": "",
+          "value": "Kari Nordmann",
+          "timestamp": 0
+        },
+        "Email": {
+          "href": "",
+          "value": "kari.nordmann@example.org",
+          "timestamp": 0
+        }
+      }
+    }
+  ]
+}
