@@ -1,0 +1,24 @@
+{
+  "participants": [
+    {
+      "name": "Kari Nordmann"
+    },
+    {
+      "name": "Ola Nordmann"
+    },
+    {
+      "name": "Ingrid Berg"
+    }
+  ],
+  "messages": [
+    {
+      "sender_name": "Ingrid Berg",
+      "timestamp_ms": 1778839200000,
+      "content": "F\u00c3\u00b8rste melding i gruppa"
+    }
+  ],
+  "title": "Seilgjengen \u00e2\u009a\u0093",
+  "is_still_participant": true,
+  "thread_path": "inbox/seilgjengen_1000000000000002",
+  "magic_words": []
+}

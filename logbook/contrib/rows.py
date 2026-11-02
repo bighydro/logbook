@@ -24,6 +24,7 @@ from ..core import (
     heard,
     keepers,
     signing,
+    social,
     speakers,
     stars,
     story,
@@ -158,6 +159,8 @@ def _line_text(
         text = keepers.text(line)
     elif line["kind"] == stars.KIND and p.get("schema") == stars.SCHEMA:
         text = stars.text(line)
+    elif line["kind"] == social.KIND and p.get("schema") == social.SCHEMA:
+        text = social.text(p)
     elif line["kind"] == story.KIND and p.get("schema") == story.SCHEMA:
         text = story.text(p, names)
     elif line["kind"] == "highlight" and p.get("schema") == "highlight/v1":

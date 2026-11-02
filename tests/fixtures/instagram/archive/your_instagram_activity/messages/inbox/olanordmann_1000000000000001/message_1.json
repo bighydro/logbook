@@ -1,0 +1,76 @@
+{
+  "participants": [
+    {
+      "name": "Ola Nordmann"
+    },
+    {
+      "name": "Kari Nordmann"
+    }
+  ],
+  "messages": [
+    {
+      "sender_name": "Kari Nordmann",
+      "timestamp_ms": 1000,
+      "content": "no clock",
+      "is_geoblocked_for_viewer": false
+    },
+    {
+      "sender_name": "Ola Nordmann",
+      "timestamp_ms": 1778925960000,
+      "is_geoblocked_for_viewer": false
+    },
+    {
+      "sender_name": "Ola Nordmann",
+      "timestamp_ms": 1778925900000,
+      "content": "Missed video call",
+      "call_duration": 0
+    },
+    {
+      "sender_name": "Kari Nordmann",
+      "timestamp_ms": 1778925840000,
+      "content": "Video chat ended",
+      "call_duration": 125
+    },
+    {
+      "sender_name": "Ola Nordmann",
+      "timestamp_ms": 1778925780000,
+      "content": "Se denne",
+      "share": {
+        "link": "https://www.instagram.com/reel/SYNTHETIC1/",
+        "share_text": "Fin tur p\u00c3\u00a5 fjorden",
+        "original_content_owner": "sailing.example"
+      }
+    },
+    {
+      "sender_name": "Ola Nordmann",
+      "timestamp_ms": 1778925720000,
+      "photos": [
+        {
+          "uri": "your_instagram_activity/messages/inbox/olanordmann_1000000000000001/photos/2000000000000001.jpg",
+          "creation_timestamp": 1778925720
+        }
+      ]
+    },
+    {
+      "sender_name": "Kari Nordmann",
+      "timestamp_ms": 1778925660000,
+      "content": "Takk! Ser deg p\u00c3\u00a5 brygga \u00f0\u009f\u0098\u008a"
+    },
+    {
+      "sender_name": "Ola Nordmann",
+      "timestamp_ms": 1778925600000,
+      "content": "B\u00c3\u00a5ten er klar \u00e2\u009b\u00b5 \u00e2\u0080\u0094 bl\u00c3\u00a5b\u00c3\u00a6r og kaffe",
+      "reactions": [
+        {
+          "reaction": "\u00e2\u009d\u00a4",
+          "actor": "Kari Nordmann",
+          "timestamp": 1778925630
+        }
+      ]
+    }
+  ],
+  "title": "Ola Nordmann",
+  "is_still_participant": true,
+  "thread_path": "inbox/olanordmann_1000000000000001",
+  "magic_words": []
+}

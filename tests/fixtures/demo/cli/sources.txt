@@ -40,6 +40,7 @@ heard                live       enabled
 ics                  file       enabled
 imessage             file+live  enabled
 immich               live       enabled
+instagram            file       enabled
 ios-calendar         file       enabled
 ios-calls            file       enabled
 ios-contacts         file       enabled
@@ -66,4 +67,4 @@ whatsapp             file       enabled
 whatsapp-contacts    file       enabled
 wispr-flow           file       enabled
 withings             file       enabled
-68 adapters, 2 disabled; the list is <root>/policy/import.json
+69 adapters, 2 disabled; the list is <root>/policy/import.json

@@ -1,0 +1,19 @@
+{
+  "ig_stories": [
+    {
+      "uri": "media/stories/202605/5000000000000001.mp4",
+      "creation_timestamp": 1778931000,
+      "title": "Solnedgang",
+      "media_metadata": {
+        "video_metadata": {
+          "exif_data": [
+            {
+              "latitude": 0.0,
+              "longitude": 0.0
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

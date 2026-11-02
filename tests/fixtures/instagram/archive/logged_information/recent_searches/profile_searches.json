@@ -1,0 +1,19 @@
+{
+  "searches_user": [
+    {
+      "media_list_data": [],
+      "string_map_data": {
+        "Search": {
+          "value": "per.example",
+          "href": "https://www.instagram.com/per.example",
+          "timestamp": 0
+        },
+        "Time": {
+          "value": "",
+          "href": "",
+          "timestamp": 1778936400
+        }
+      }
+    }
+  ]
+}

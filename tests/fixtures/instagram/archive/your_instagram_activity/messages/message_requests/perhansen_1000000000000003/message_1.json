@@ -1,0 +1,21 @@
+{
+  "participants": [
+    {
+      "name": "Per Hansen"
+    },
+    {
+      "name": "Kari Nordmann"
+    }
+  ],
+  "messages": [
+    {
+      "sender_name": "Per Hansen",
+      "timestamp_ms": 1779012000000,
+      "content": "Hei, vi m\u00c3\u00b8ttes p\u00c3\u00a5 Aker brygge"
+    }
+  ],
+  "title": "Per Hansen",
+  "is_still_participant": true,
+  "thread_path": "message_requests/perhansen_1000000000000003",
+  "magic_words": []
+}

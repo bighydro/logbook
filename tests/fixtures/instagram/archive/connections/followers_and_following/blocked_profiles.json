@@ -1,0 +1,14 @@
+{
+  "relationships_blocked_users": [
+    {
+      "title": "spam.example",
+      "media_list_data": [],
+      "string_list_data": [
+        {
+          "href": "https://www.instagram.com/_u/spam.example",
+          "timestamp": 1778425600
+        }
+      ]
+    }
+  ]
+}
