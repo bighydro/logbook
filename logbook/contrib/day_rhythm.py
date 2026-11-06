@@ -172,7 +172,7 @@ p.for{margin:14px 0 10px}p.for .ink{font-family:var(--serif);color:var(--ink)}
 .ink,.person,div.reflection p{font-family:var(--serif);color:var(--ink)}
 div.reflection p{font-size:22px;line-height:1.4}
 div.reflection p.mute{font-family:var(--sans);font-size:14px;color:var(--pencil)}
-.mono,div.t,svg.ribbon text,span.ev{font-family:var(--mono)}
+.mono,div.t,dl.rows .t,svg.ribbon text,span.ev{font-family:var(--mono)}
 div.card{background:var(--surface);border:1px solid var(--line);border-radius:20px;padding:28px 32px}
 div.card p{margin:0 0 8px}div.card p:last-child{margin:0}
 ul.rows{list-style:none;padding:0;margin:0}
@@ -180,7 +180,13 @@ ul.rows li{display:flex;gap:.9rem;padding:12px 0;border-bottom:1px solid var(--l
 ul.rows li:last-child{border-bottom:0}
 ul.rows li.back{flex-wrap:wrap;column-gap:.4rem}
 ul.rows div.t{flex:0 0 3.4rem;color:var(--pencil);font-size:14px;padding-top:3px}
-ul.rows span.sub{display:block;color:var(--pencil);font-size:14px}
+ul.rows span.sub,dl.rows span.sub{display:block;color:var(--pencil);font-size:14px}
+dl.rows{display:grid;grid-template-columns:3.4rem minmax(0,1fr);column-gap:.9rem;margin:0}
+dl.rows dt,dl.rows dd{margin:0;padding:12px 0;font-size:15px}
+dl.rows dd{min-width:0;overflow-wrap:anywhere;border-bottom:1px solid var(--line-soft)}
+dl.rows dt{color:var(--pencil);font-size:14px;padding-top:15px}
+dl.rows dd.alone{grid-column:2}
+dl.rows dd:last-child{border-bottom:0}
 svg.ribbon{display:block;width:100%;max-width:36rem;height:auto;margin:8px 0 4px}
 svg.ribbon text{font-size:12px;fill:var(--pencil)}
 svg.ribbon text.lane{letter-spacing:.13em}
@@ -248,6 +254,7 @@ ul.gallery li.starred{outline:2px solid var(--star);border-radius:12px}
 section.review button[value=pass]{background:transparent;color:var(--ink);border-color:var(--line)}
 p.foot{color:var(--pencil);font-size:14px;margin:30px 0 10px}
 @media (max-width:40rem){div.fold{padding-left:12px}ul.rows div.t{flex-basis:2.8rem}
+dl.rows{display:block}dl.rows dt{display:block;padding:12px 0 0}dl.rows dd{padding-top:2px}
 section.record{padding:2px 20px}div.card{padding:20px}div.paper{padding:20px}}
 """
 
@@ -633,12 +640,14 @@ def promise_said(p: promises.Proposal, day: str, person: Callable[[Mapping[str, 
     """The sub-line of a promise: whose, and the day it was said (`you promised on Thursday`)."""
     when = _day_word(p.day, day)
     who = p.counterpart or (p.speaker.label if p.speaker is not None and not p.speaker.owner else None)
-    named = f"{DOT}{person({'name': who, 'person': None})}" if who else ""
+    named = person({"name": who, "person": None}) if who else ""
+    # the person after a word (`by`, `to`): a day said as a date (`on 2026-05-20`, a week back or more)
+    # never stands beside a name (the review of round 164)
     if p.direction == promises.OWED_TO_OWNER:
-        return f"you were promised {when}{named}"
+        return f"you were promised {when}" + (f", by {named}" if named else "")
     if p.role == promises.ASKED:
-        return f"you were asked {when}{named}"
-    return f"you promised {when}{named}"
+        return f"you were asked {when}" + (f", by {named}" if named else "")
+    return f"you promised {when}" + (f", to {named}" if named else "")
 
 
 def today_html(
@@ -650,26 +659,64 @@ def today_html(
     all_day: Sequence[str] = (),
 ) -> str:
     """Today's all-day entries (`all_day`, their titles), then its timed plan in time order, then what
-    is due on it: one row each."""
+    is due on it: one row each, its time in a cell of its own (`row`), the title and the people in the
+    row's text, so a clock never shares a row of text with a name the title holds."""
     rows = [
-        f'<li class="plan"><div class="t">all day</div><span>{escape(title)}'
-        '<span class="sub">from the calendar</span></span></li>\n'
+        row("plan", when(day, "all day"), f'{escape(title)}<span class="sub">from the calendar</span>')
         for title in all_day
     ]
     for p in plan:
         where = f"at {escape(p.where)}{DOT}" if p.where else ""
         rows.append(
-            f'<li class="plan"><div class="t">{p.start.astimezone(zone).strftime("%H:%M")}</div>'
-            f'<span>{escape(p.title)}<span class="sub">{where}from the calendar</span></span></li>\n'
+            row(
+                "plan",
+                clock_cell(p.start, zone),
+                f'{escape(p.title)}<span class="sub">{where}from the calendar</span>',
+            )
         )
     for promise in due:
         rows.append(
-            f'<li class="due"><div class="t">due</div><span>“{escape(promise.match.quote)}”'
-            f'<span class="sub">{promise_said(promise, day, person)}</span></span></li>\n'
+            row(
+                "due",
+                '<span class="t">due</span>',
+                f"“{escape(promise.match.quote)}”"
+                f'<span class="sub">{promise_said(promise, day, person)}</span>',
+            )
         )
     if not rows:
         return '<p class="mute">Nothing timed in the calendar and nothing due.</p>\n'
-    return '<ul class="rows">\n' + "".join(rows) + "</ul>\n"
+    return listing(rows)
+
+
+def when(stamp: str, said: str) -> str:
+    """A `<time>` cell: `said` as the row shows it, `stamp` as a machine reads it."""
+    return f'<time class="t" datetime="{escape(stamp)}">{escape(said)}</time>'
+
+
+def clock_cell(at: datetime, zone: ZoneInfo) -> str:
+    """`<time … datetime="2026-06-10T17:00+02:00">17:00</time>`: a clock in the record's zone."""
+    local = at.astimezone(zone)
+    return when(local.isoformat(timespec="minutes"), local.strftime("%H:%M"))
+
+
+def row(kind: str, cell: str, text: str) -> tuple[str, str, str]:
+    """One row of Today's lists: its time (or the word in its place) in a cell of its own, a `<dt>`,
+    and the row's text, the title and the people, in the `<dd>` beside it (`listing`): a column of its
+    own on a wide screen and a line of its own above the text on a phone (`STYLE`), as the Day's
+    timeline shows a time first. A list item would run the two together as one row of text, a clock
+    beside a title that opens with a name (the desk, round 164)."""
+    return kind, cell, text
+
+
+def listing(rows: Sequence[tuple[str, str, str]]) -> str:
+    """`rows` (`row`) as a `<dl class="rows">`. A row with no time and no word in its place (`and 2
+    more`) is a `<dd>` alone: no empty term before it."""
+    out = ['<dl class="rows">\n']
+    for kind, cell, text in rows:
+        term = f'<dt class="{kind}">{cell}</dt>' if cell else ""
+        out.append(f'{term}<dd class="{kind}{"" if cell else " alone"}">{text}</dd>\n')
+    out.append("</dl>\n")
+    return "".join(out)
 
 
 def decisions(data: Mapping[str, Any]) -> list[tuple[Mapping[str, Any], Mapping[str, Any]]]:
@@ -1086,37 +1133,32 @@ def tasks_html(found: object, zone: ZoneInfo, link: Callable[[str, str], str]) -
     rows = []
     for t in tasks["rows"]:
         at = _task_at(t, zone)
-        clock = "task" if at is None else at.astimezone(zone).strftime("%H:%M")
+        cell = '<span class="t">task</span>' if at is None else clock_cell(at, zone)
         said = [escape(str(t["status"]))] if t.get("status") else []
         if t.get("overdue"):
             said.append("carried from an earlier day")
         said.append(_notion(str(t["url"]), "open in Notion"))
         name = str(t.get("title") or plan_reader.UNTITLED)
         title = link(name, f"/line/{t['line']}") if t.get("line") else escape(name)
-        rows.append(
-            f'<li class="task"><div class="t">{clock}</div><span>{title}'
-            f'<span class="sub">{DOT.join(said)}</span></span></li>\n'
-        )
+        rows.append(row("task", cell, f'{title}<span class="sub">{DOT.join(said)}</span>'))
     if tasks.get("more"):
         sprint = found.sprint
         where = plan_reader._in_sprint(tasks)
         notion = f" — {_notion(str(sprint['url']), 'open in Notion')}" if sprint else ""
-        rows.append(
-            f'<li class="task more"><div class="t"></div><span>and {tasks["more"]} more'
-            f"{escape(where)}{notion}</span></li>\n"
-        )
+        rows.append(row("task more", "", f"and {tasks['more']} more{escape(where)}{notion}"))
     if tasks.get("said"):
-        rows.append(
-            f'<li class="task said"><div class="t"></div>'
-            f'<span class="mute">{escape(tasks["said"])}</span></li>\n'
-        )
+        rows.append(row("task said", "", f'<span class="mute">{escape(tasks["said"])}</span>'))
     trip = found.trip
     if trip is not None:
         title = str(trip.get("title") or plan_reader.UNTITLED)
         named = link(title, "/line/" + str(trip["line"])) if trip.get("line") else escape(title)
         rows.append(
-            f'<li class="trip"><div class="t">trip</div><span>{named} — {in_words(int(trip["days"]))}'
-            f'<span class="sub">{_notion(str(trip["url"]), "open in Notion")}</span></span></li>\n'
+            row(
+                "trip",
+                '<span class="t">trip</span>',
+                f"{named} — {in_words(int(trip['days']))}"
+                f'<span class="sub">{_notion(str(trip["url"]), "open in Notion")}</span>',
+            )
         )
     if not rows:
         return "", ""
@@ -1124,7 +1166,7 @@ def tasks_html(found: object, zone: ZoneInfo, link: Callable[[str, str], str]) -
     summary = _counts([(n, "tasks", "")])
     if trip is not None:
         summary = DOT.join(x for x in (summary, f"the next trip {in_words(int(trip['days']))}") if x)
-    return summary, '<ul class="rows">\n' + "".join(rows) + "</ul>\n"
+    return summary, listing(rows)
 
 
 def _notion(url: str, text: str) -> str:
