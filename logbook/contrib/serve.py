@@ -62,7 +62,7 @@ acts, allowed because the server binds 127.0.0.1 and runs as the record's own us
 answered only when the connection comes from this machine (the client address is loopback) and the
 form was submitted from the server's own pages (the browser's `Origin`, when it sends one, names
 127.0.0.1); a request that came through a proxy (`phone.proxied`: a Host that is not 127.0.0.1 or
-[::1], or a `Tailscale-*` or `X-Forwarded-*` header) is answered only once `logbook setup phone`
+[::1], or any proxy's header, `Forwarded` and `Via` among them) is answered only once `logbook setup phone`
 names the owner's own phone in `logbook.json` and it is the phone's, through Tailscale Serve
 (`phone.allows`: its origin, its Host and its login, all at once); anything else is a 403 and
 nothing is written. Every write is one at a time
@@ -993,15 +993,15 @@ class Site:
         written) unless `client`, the connection's address, is loopback and `origin`, the browser's
         Origin header when it sent one, names 127.0.0.1: this machine, the server's own pages. A
         request that came through a proxy (`phone.proxied`: `asked`, its headers, name a Host that is
-        not 127.0.0.1 or [::1], or carry a `Tailscale-*` or `X-Forwarded-*` header) is answered only
-        when `logbook.json` names the owner's phone (`phone`, off by default) and the headers are the
-        phone's (`phone.allows`: the Origin, the Host and the login the setting names, read with each
-        POST), and never by the Origin's absence. From this machine, a POST its browser says was sent
-        from inside a frame or from another site (`phone.cross`: `Sec-Fetch-Dest` and `Sec-Fetch-Site`)
-        is refused too, with an Origin or without one. A
-        field sent more than once (the Sign form's boxes) arrives as its values joined with commas,
-        as `--accept N,N` takes them; `upload` is the file a form carried, the Day's recording. One
-        write at a time (`_write_lock`)."""
+        not 127.0.0.1 or [::1], or carry any proxy's header, `Forwarded` and `Via` among them) is
+        answered only when `logbook.json` names the owner's phone (`phone`, off by default) and the
+        headers are the phone's (`phone.allows`: the Origin, the Host and the login the setting names,
+        read with each POST), and never by the Origin's absence. From this machine, a POST its browser
+        says was sent from inside a frame or from another site (`phone.cross`: `Sec-Fetch-Dest` and
+        `Sec-Fetch-Site`) is refused too, with an Origin or without one.
+        A field sent more than once (the Sign form's boxes) arrives as its values joined with commas, as
+        `--accept N,N` takes them; `upload` is the file a form carried, the Day's recording. One write at a
+        time (`_write_lock`)."""
         day_act = DAY_ACT.match(path)
         week_act = WEEK_ACT.match(path)
         if path not in WRITE_PATHS and path not in LINE_ACTS and day_act is None and week_act is None:
@@ -5890,6 +5890,7 @@ class Handler(BaseHTTPRequestHandler):
     sys_version = ""
     protocol_version = "HTTP/1.1"
     timeout = IDLE_S  # a connection that sends nothing for this long is closed: no thread waits on it forever
+    party: tuple[bool, tuple[str, ...]] | None = None  # whose this connection is: its first request's
 
     def do_GET(self) -> None:
         self._answer(body=True)
@@ -5906,6 +5907,9 @@ class Handler(BaseHTTPRequestHandler):
         assert isinstance(self.server, Server)
         site = self.server.site
         asked = phone.Asked.of(self.headers)
+        if (refusal := self._another(asked, post=True)) is not None:
+            self._send(refusal, body=True)  # the body is left unread, and the connection closed
+            return
         if (refusal := site.gate(asked, self.server.server_port, post=True)) is not None:
             self.close_connection = True  # the body is left unread
             self._send(refusal, body=True)
@@ -5944,7 +5948,11 @@ class Handler(BaseHTTPRequestHandler):
         or it is refused with nothing read."""
         assert isinstance(self.server, Server)
         server = self.server
-        if (refusal := server.site.gate(phone.Asked.of(self.headers), server.server_port)) is not None:
+        asked = phone.Asked.of(self.headers)
+        if (refusal := self._another(asked)) is not None:
+            self._send(refusal, body)
+            return
+        if (refusal := server.site.gate(asked, server.server_port)) is not None:
             self._send(refusal, body)
             return
         path, _, query = self.path.partition("?")
@@ -5986,6 +5994,27 @@ class Handler(BaseHTTPRequestHandler):
             response = server.site.still_reading(path, query, server.limit_s)
         self._send(response, body)
 
+    def _another(self, asked: phone.Asked, post: bool = False) -> Response | None:
+        """One login at a time: the first request on a connection says whose it is (`phone.party`:
+        through a proxy or not, and the login it names); a later request on it of another party (another
+        login, none, two, or this machine's own on the phone's connection) is refused before anything
+        is read, and the connection closed, so nothing one login was answered is read by another on
+        it. None when the request is the connection's own party's."""
+        found = phone.party(asked)
+        first = self.party
+        if first is None:
+            self.party = found
+            return None
+        if found == first:
+            return None
+        self.close_connection = True
+        written = "; nothing was written" if post else ""
+        return refused(
+            403,
+            "This connection was opened for another login: one login at a time, and each on a"
+            f" connection of its own{written}.",
+        )
+
     def end_headers(self) -> None:
         """Every answer, `http.server`'s own errors among them, says no page may be framed."""
         self.send_header("X-Frame-Options", "DENY")
@@ -6007,6 +6036,8 @@ class Handler(BaseHTTPRequestHandler):
             self.send_response(response.status)
             for name, value in response.headers.items():
                 self.send_header(name, value)
+            if self.close_connection:  # the browser is told, so it sends nothing more on this one
+                self.send_header("Connection", "close")
             self.end_headers()
             if body and response.status not in (204, 304):
                 self.wfile.write(response.body)
