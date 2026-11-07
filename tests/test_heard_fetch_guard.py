@@ -270,3 +270,73 @@ def test_each_checked_address_is_tried_in_turn_and_no_other(
 
     assert status == 0, err
     assert net.connects == [(PUBLIC, 80), (PUBLIC_2, 80)] and len(_heard(lb)) == 1
+
+
+# -- what you heard (#355) listens nowhere: the edges the privacy review of 26 October left -----------------
+
+
+def _no_listening(monkeypatch: pytest.MonkeyPatch) -> list[str]:
+    """`bind` and `listen` on any socket, recorded and refused: `sync heard` is a client only."""
+    tried: list[str] = []
+
+    def bind(self: socket.socket, address: Any) -> None:
+        tried.append(f"bind {address!r}")
+        raise AssertionError(f"sync heard bound {address!r}")
+
+    def listen(self: socket.socket, *args: Any) -> None:
+        tried.append("listen")
+        raise AssertionError("sync heard listened")
+
+    monkeypatch.setattr(socket.socket, "bind", bind)
+    monkeypatch.setattr(socket.socket, "listen", listen)
+    return tried
+
+
+def test_sync_heard_opens_no_port_of_its_own(
+    lb: Logbook, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """There is no heard server: a run that fetches a transcript and follows a redirect binds no
+    address and listens on none, on loopback or anywhere else."""
+    tried = _no_listening(monkeypatch)
+    _listen(lb, "2026-10-14T06:00:00Z", "EP-1", "Moved", "http://havn.example.org/a.vtt")
+    _network(
+        monkeypatch,
+        {
+            (PUBLIC, 80): _response(302, {"Location": "http://cdn.example.org/b.vtt"}),
+            (PUBLIC_2, 80): _response(200, {"Content-Type": "text/vtt"}, VTT),
+        },
+    )
+    monkeypatch.setattr(
+        socket, "getaddrinfo", Rebinding({"havn.example.org": PUBLIC, "cdn.example.org": PUBLIC_2})
+    )
+
+    status, _out, err = _run(capsys, "sync", "heard")
+
+    assert status == 0 and "Traceback" not in err, err
+    assert tried == [] and len(_heard(lb)) == 1
+
+
+@pytest.mark.parametrize(
+    "target",
+    [
+        "http://cdn.example.org:8080/b.vtt",
+        "http://cdn.example.org:22/b",
+        "http://127.0.0.1:8765/day/2026-10-14",
+    ],
+)
+def test_a_redirect_to_another_port_or_to_this_machine_s_library_is_never_followed(
+    target: str, lb: Logbook, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A feed's host that redirects to a port other than 80 and 443, or to the Library on this
+    machine's loopback: refused before any connection there, and nothing written."""
+    _listen(lb, "2026-10-14T06:00:00Z", "EP-1", "Moved", "http://havn.example.org/a.vtt")
+    net = _network(monkeypatch, {(PUBLIC, 80): _response(302, {"Location": target})})
+    monkeypatch.setattr(
+        socket, "getaddrinfo", Rebinding({"havn.example.org": PUBLIC, "cdn.example.org": PUBLIC_2})
+    )
+
+    status, _out, err = _run(capsys, "sync", "heard")
+
+    assert status == 0 and "Traceback" not in err, err
+    assert net.connects == [(PUBLIC, 80)], "the first hop only"
+    assert _heard(lb) == []
