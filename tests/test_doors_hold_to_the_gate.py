@@ -20,7 +20,7 @@ import difflib
 import json
 import re
 import shutil
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -28,6 +28,7 @@ from typing import Any
 import pytest
 from persona import HOME, KARI, KARI_ID, OLA, OLA_ID, TZ, attendee, dwell, event, note, resolution, utc
 
+from logbook.contrib import promises as promise_reader
 from logbook.contrib import serve
 from logbook.core.store import Logbook
 
@@ -96,9 +97,11 @@ def three_lines() -> list[dict[str, Any]]:
     ]
 
 
-def _three(base: Path, ones_of: list[Any], two_of: list[Any], three_of: list[Any]) -> dict[str, Logbook]:
+def _three(
+    base: Path, ones_of: list[Any], two_of: list[Any], three_of: list[Any] | Callable[[Logbook], list[Any]]
+) -> dict[str, Logbook]:
     """`ones`, `below` (a copy of it, the tier-2 lines appended) and `whole` (a copy of that, the
-    tier-3 lines appended), under `base`."""
+    tier-3 lines appended, or those `three_of` makes from `below`), under `base`."""
     ones = Logbook.init(base / "ones", TZ)
     ones.append_many(ones_of)
     places = {"Home": {"lat": HOME[0], "lon": HOME[1], "radius_m": 120, "kind": "home"}}
@@ -109,13 +112,34 @@ def _three(base: Path, ones_of: list[Any], two_of: list[Any], three_of: list[Any
     shutil.copytree(ones.root, base / "below")
     Logbook(base / "below").append_many(two_of)
     shutil.copytree(base / "below", base / "whole")
-    Logbook(base / "whole").append_many(three_of)
+    Logbook(base / "whole").append_many(
+        three_of if isinstance(three_of, list) else three_of(Logbook(base / "below"))
+    )
     return {name: Logbook(base / name) for name in ("ones", "below", "whole")}
+
+
+def _closed_above(below: Logbook) -> list[dict[str, Any]]:
+    """The tier-3 lines, and a tier-3 task line (RFC 0016) that marks the tier-2 note's promise done:
+    through tiers 1 and 2 it is open still, for the line that closed it is above the gate."""
+    report = promise_reader.extract(below)
+    (photos,) = [p for p in report.proposals if "photos" in p.match.quote]
+    at = utc(CLINIC, "21:00")
+    done = {
+        "at": at,
+        "source": "manual",
+        "kind": promise_reader.TASK,
+        "tier": 3,
+        "payload": promise_reader.draft_done(photos, at, report.extractor, None),
+    }
+    return [*three_lines(), done]
 
 
 @pytest.fixture(scope="module")
 def records(tmp_path_factory: pytest.TempPathFactory) -> dict[str, Logbook]:
-    return _three(tmp_path_factory.mktemp("gate"), ones_lines(), two_lines(), three_lines())
+    base = tmp_path_factory.mktemp("gate")
+    with pytest.MonkeyPatch.context() as mp:  # `extract` opens `below`'s index: in a folder of its own
+        mp.setenv("LOGBOOK_CACHE_HOME", str(base / "cache-below"))
+        return _three(base, ones_lines(), two_lines(), _closed_above)
 
 
 def _reader(records: dict[str, Logbook], monkeypatch: pytest.MonkeyPatch, now: datetime = NOW) -> Any:
@@ -177,6 +201,21 @@ def test_the_control_each_page_moves_without_its_gate(at: Any) -> None:
     assert at("whole", (1, 2, 3), "/shelves") != at("below", (1, 2, 3), "/shelves")
     assert THREE_WORD in at("whole", (1, 2, 3), f"/day/{CLINIC}")
     assert "2025" in at("whole", (1, 2, 3), "/search?q=note")
+
+
+# -- 1. Journeys and the promises: a promise, its count and whether it is kept, from the gate's lines ------
+
+
+def test_the_promises_shelf_reads_a_promise_and_whether_it_is_kept_through_the_gate(
+    at: Any, records: dict[str, Logbook]
+) -> None:
+    """The tier-2 note's promise is closed by a tier-3 task line: through tiers 1 and 2 it is open, as
+    if that line were not there; through tier 1 there is no promise at all (`journeys.promises_on`
+    reads through the same gate, #425)."""
+    _same(at, ["/promises", "/goals", "/journeys", "/trips", "/life?zoom=trip"])
+    _absent(records, at("whole", T12, "/promises"), T12)
+    assert "send Kari the photos" in at("whole", T12, "/promises")
+    assert "send Kari the photos" not in at("whole", T1, "/promises")
 
 
 # -- 2. People: closeness, order, the last contact and the days together, from the gate's lines alone ----
