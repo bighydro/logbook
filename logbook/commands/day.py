@@ -52,7 +52,7 @@ from ..core.resolve import Ref, labels
 from ..core.store import RETRACTION, Logbook, retractions
 from .common import Subparsers, _airports, _clock, _csv, _print_target, _under_home
 from .derive import TRANSCRIBE_DEFAULT_MODEL
-from .rows import _day_rows, _line_row, _line_text, by_photo
+from .rows import _day_rows, _line_row, _line_text, by_photo, kept_from_text
 from .timeline import WHAT as TIMELINE
 from .timeline import cmd_timeline, timeline_arguments
 
@@ -335,6 +335,7 @@ def cmd_show(a: argparse.Namespace) -> None:
         signature = signing.signature_of(idx, day, str(lb.meta["owner_id"]))  # RFC 0034: the header
         held = chapter.for_day(idx.by_kind(chapter.KIND), retracted, day)  # RFC 0036: the header too
         goal_texts, replaced = _owner_lines(idx, rows, retracted)
+        kept_from = _kept_from(idx, rows, retracted)
     if not rows:
         print(f"{day}: nothing logged")
         return
@@ -350,11 +351,24 @@ def cmd_show(a: argparse.Namespace) -> None:
     if hero:
         print(f"  {hero}")
     descriptions = by_photo(line for line in rows if line["id"] not in retracted)
-    for text in _day_rows(rows, retracted, tz, names, superseded, descriptions, goal_texts):
+    for text in _day_rows(rows, retracted, tz, names, superseded, descriptions, goal_texts, kept_from):
         print(text)
     note = lb.root / "notes" / day[:4] / f"{day}.md"
     if note.exists():
         print("  — note —\n" + "\n".join("  " + s for s in note.read_text(encoding="utf-8").splitlines()))
+
+
+def _kept_from(idx: Any, rows: Sequence[Line], retracted: Mapping[str, Line]) -> dict[str, str]:
+    """For `show`: by a draft's id, which draft a line the owner kept on the day came from, and whether
+    it was superseded or retracted since (`kept_from_text`); the drafts read by id, wherever they are."""
+    named = set()
+    for line in rows:
+        extra = (line.get("payload") or {}).get("extra")
+        if isinstance(extra, dict) and isinstance(extra.get(drafts.KEPT_FROM), str):
+            named.add(str(extra[drafts.KEPT_FROM]))
+    if not named:
+        return {}
+    return kept_from_text(rows, idx.by_ids(named), idx.superseded(drafts.KIND), retracted)
 
 
 def _owner_lines(
