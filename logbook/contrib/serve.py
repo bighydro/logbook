@@ -2075,8 +2075,12 @@ class Site:
         return footer
 
     def _whole(self) -> tuple[str, str] | None:
-        """The days the owner's track covers, else any line's; None for an empty record."""
-        return reading.record_days(self.lb, "location") or reading.record_days(self.lb)
+        """The days the owner's track covers, else any line's; None for an empty record. Through the
+        page's gate: the days of the lines at its tiers alone, so no window opens on a day only a line
+        above it is on."""
+        return reading.record_days(self.lb, "location", self.tiers) or reading.record_days(
+            self.lb, tiers=self.tiers
+        )
 
     def tier_small(self, facts: str, tier: int | None) -> str:
         """A shelf header's `<small>`: its facts, then what is true of the page's tier — `read at tier
@@ -2102,6 +2106,20 @@ class Site:
             return f"tier {read[0]} alone"
         return "tiers " + ", ".join(map(str, read[:-1])) + f" and {read[-1]}"
 
+    def _size(self) -> int:
+        """How many lines `page_index` says the record holds: the head's seq, else the lines at the
+        page's tiers."""
+        if self.tiers is None:
+            return int(self.current().get("seq") or 0)
+        gate = sorted({int(t) for t in self.tiers})
+        if not gate:
+            return 0
+        with self.lb.index() as idx:
+            (n,) = idx.db.execute(
+                f"SELECT count(*) FROM lines WHERE tier IN ({', '.join('?' * len(gate))})", gate
+            ).fetchone()
+        return int(n)
+
     def _record_days(self) -> tuple[str, str] | None:
         """`_whole`, read once for the record as it stands (`shared`): `/assets` is never kept."""
         return self.shared(("whole",), self._whole)
@@ -2109,9 +2127,11 @@ class Site:
     def _nothing_held(self, day: str) -> str:
         """The one sentence of a Day the record holds nothing for (`/today` on a record that ended long
         ago): the record's first and last day, each a link to its Day. Empty when the day holds lines
-        the server's tier gate leaves out: the record is not empty there, only this reading."""
+        the server's tier gate leaves out: the record is not empty there, only this reading. Through
+        the page's gate, a day only lines above it are on is one the record holds nothing for, as far
+        as the page can tell: the sentence never says there is more."""
         with self.lb.index() as idx:
-            held, _per_source = idx.source_days(day, day)
+            held, _per_source = idx.source_days(day, day, self.tiers)
         if held:
             return ""
         whole = self._record_days()
@@ -2137,9 +2157,11 @@ class Site:
     def page_index(self) -> str:
         """The record's size and days, then the shelves. The size is the head's seq (`current`, the
         count `doctor` prints), the days two steps down the day_local index (`Index.span`), both kept
-        for the record as it stands (`shared`): never a pass over the lines, however many it holds."""
-        total = int(self.current().get("seq") or 0)
-        span = self.shared(("span",), lambda: reading.record_days(self.lb))
+        for the record as it stands (`shared`): never a pass over the lines, however many it holds.
+        Through the page's gate, the lines at its tiers and their days (`_size`): one count over the
+        index, kept the same way, and never the seq, which counts every line above it too."""
+        total = self.shared(("size",), self._size)
+        span = self.shared(("span",), lambda: reading.record_days(self.lb, tiers=self.tiers))
         whole = self._record_days()
         parts = ["<h1>Logbook</h1>\n"]
         if whole is None or span is None:
@@ -3568,7 +3590,7 @@ class Site:
         """The journeys that began in the year (default the record's last), the latest first, each
         a row: its name or dates linking its page, the bounds, the nights away, the places, the
         canonical people, the photos, the draft folded, and the evidence folded."""
-        located = reading.record_days(self.lb, "location")
+        located = reading.record_days(self.lb, "location", self.tiers)
         this = year or (located[1][:4] if located is not None else None)  # the door is its year's page
         shelf = self.shared(
             ("journeys", this), lambda: journeys.shelf(self.lb, this, self.airports, self.tiers)
@@ -4781,6 +4803,7 @@ class Site:
             self._today_of(),
             self.header(),
             doors.ROOT + self.header_style(),
+            self.tiers,
         )
         if found is None:
             return self.document(
@@ -4790,8 +4813,15 @@ class Site:
 
     def _activity(self, first: str, last: str) -> list[dict[str, Any]]:
         """`Index.activity` of the record as it stands, read once per window: the page moves with the
-        clock, what it counts only with the head."""
-
+        clock, what it counts only with the head. Through the page's gate, of the lines at its tiers
+        alone (`gaps.activity_through`): a source, a count, a silence or a missing day never rests on
+        a line above it."""
+        if self.tiers is not None:
+            gate = tuple(sorted({int(t) for t in self.tiers}))
+            return self.shared(
+                ("activity", first, last, *map(str, gate)),
+                lambda: gaps.activity_through(self.lb, first, last, gate),
+            )
         return self.shared(("activity", first, last), lambda: gaps.activity_of(self.lb, first, last))
 
     def page_gaps(self, since: str | None) -> str:
@@ -4843,9 +4873,10 @@ class Site:
             rows,
         )
         span = f"since {data['since']}" if data["since"] else "since each source's first line"
+        read = "" if self.tiers is None else f" at {self.gate_words()}"
         body += (
             f'<p class="mute">{escape(span)}, today {escape(data["today"])} ({escape(data["timezone"])});'
-            " counted through the index, every line, retracted or not</p>\n"
+            f" counted through the index, every line{escape(read)}, retracted or not</p>\n"
         )
         return self.document("gaps", body)
 

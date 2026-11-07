@@ -60,6 +60,7 @@ def ones_lines() -> list[dict[str, Any]]:
         {**resolution(("email", KARI["email"]), KARI_ID, "Kari Nordmann"), "tier": 1},
         *days,
         event(utc(DINNER, "18:00"), utc(DINNER, "21:00"), "Dinner", [attendee(KARI["email"])]),
+        {**note(utc(DINNER, "22:00"), "Dinner at home, a note on the evening"), "tier": 1},
     ]
 
 
@@ -260,15 +261,16 @@ def test_a_day_only_lines_above_the_gate_touch_reads_as_a_day_the_record_has_not
 
 
 def test_the_shelves_count_only_the_lines_at_their_tiers(at: Any, records: dict[str, Logbook]) -> None:
+    """`/shelves` says how many lines the record holds and the days they run over: through a gate, the
+    lines at its tiers and their days, never the seq (which counts every line)."""
     _same(at, ["/shelves"])
-    n = {name: sum(1 for line in lb.lines() if int(line["tier"]) <= 2) for name, lb in records.items()}
-    total = sum(1 for _ in records["whole"].lines())
-    for tiers in (T1, T12):
-        page = at("whole", tiers, "/shelves")
-        assert f"{total:,} lines" not in page, tiers
-        assert OLD_THREE not in page, tiers
-    assert f"{n['below']:,} lines" in at("whole", T12, "/shelves") or n["below"] > 0
-    assert OLD_TWO not in at("whole", T1, "/shelves")
+    size = {name: sum(1 for _ in lb.lines()) for name, lb in records.items()}
+    one, both = at("whole", T1, "/shelves"), at("whole", T12, "/shelves")
+    assert f"{size['ones']:,} lines, 2026-06-01" in one
+    assert f"{size['below']:,} lines, {OLD_TWO}" in both
+    for page in (one, both):
+        assert f"{size['whole']:,} lines" not in page and OLD_THREE not in page
+    assert f"{size['below']:,} lines" not in one and OLD_TWO not in one
 
 
 def test_the_gaps_and_the_gears_sources_count_only_the_lines_at_their_tiers(
@@ -276,8 +278,8 @@ def test_the_gaps_and_the_gears_sources_count_only_the_lines_at_their_tiers(
 ) -> None:
     _same(at, ["/gaps", "/gaps?since=2026-06-01", "/gear/sources", "/gear"])
     page = at("whole", T1, "/gaps")
-    assert "whatsapp" not in page  # its every line is a message: tier 2 or 3
-    assert "manual" not in page  # the notes
+    assert "whatsapp" not in page  # its every line is a message, at tier 2 or 3
+    assert "whatsapp" not in at("whole", T1, "/gear/sources")
 
 
 def test_the_world_reads_and_counts_through_the_gate(at: Any, records: dict[str, Logbook]) -> None:
@@ -327,8 +329,10 @@ def test_search_and_ask_offer_only_the_years_and_hits_at_their_tiers(
     for tiers in (T1, T12):
         for address in addresses:
             _absent(records, at("whole", tiers, address), tiers)
-        assert f"year={OLD_THREE[:4]}" not in at("whole", tiers, "/search?q=note"), tiers
-    assert f"year={OLD_TWO[:4]}" not in at("whole", T1, "/search?q=note")
+    # the filters run over every year from the first day the gate reads to its last: through tier 1 the
+    # record's 2026 alone; through tiers 1 and 2 from the tier-2 note's 2024, whatever is above it
+    one = at("whole", T1, "/search?q=note")
+    assert f"year={OLD_TWO[:4]}" not in one and f"year={OLD_THREE[:4]}" not in one
 
 
 # -- the Day's Sign form, on a page that reads no notes ---------------------------------------------------
@@ -376,11 +380,11 @@ def test_every_index_method_the_library_calls_holds_to_a_tier_one_gate(
     ]
     first, last = "2000-01-01", "2030-12-31"
     since, until = "2000-01-01T00:00:00Z", "2030-12-31T00:00:00Z"
-    expression = search.expression("tomorrow OR note OR clinic OR dinner")
+    expression = search.expression("note")  # in a tier-1 note, a tier-2 and a tier-3 one
     assert expression is not None
 
-    def hits(idx: Any) -> list[str]:
-        return sorted(str(h.id) for h in idx.search(expression, 3, first, last, None, 50))
+    def hits(idx: Any) -> list[int]:
+        return sorted(int(hit[0]) for hit in idx.search(expression, 3, first, last, None, 50))
 
     def tally(idx: Any) -> int:
         counted, edges = idx.window_tally(since, until)
@@ -428,6 +432,10 @@ def test_every_index_method_the_library_calls_holds_to_a_tier_one_gate(
         "attachment_counts": lambda idx: idx.attachment_counts(lambda digest: True),
     }
     try:
+        monkeypatch.setenv("LOGBOOK_CACHE_HOME", str(whole.root.parent / "cache-every"))
+        with Logbook(whole.root).index() as ungated:
+            assert hits(plain) and set(hits(plain)) < set(hits(ungated))  # the words above are there to find
+        monkeypatch.setenv("LOGBOOK_CACHE_HOME", str(ones.root.parent / "cache-ones"))
         moved = [name for name, ask in asked.items() if ask(gated) != ask(plain)]
         assert moved == [], ", ".join(moved)
     finally:

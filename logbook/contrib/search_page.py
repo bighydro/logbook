@@ -115,7 +115,7 @@ def page_search(site: Site, params: Mapping[str, str]) -> str:
     try:
         with site.lb.index() as idx:
             hits, more = _gated(idx, q, site.tiers, PAGE * page)
-            years = _years(idx)
+            years = _years(idx, site.tiers)
             shown = hits[PAGE * (page - 1) : PAGE * page]
             superseded = _superseded(idx, shown, site.tiers)
     except RuntimeError as e:  # a SQLite without FTS5: the index holds no search table
@@ -199,10 +199,15 @@ def _form(text: str) -> str:
 # -- the filters -----------------------------------------------------------------------------------------
 
 
-def _years(idx: Index) -> list[str]:
+def _years(idx: Index, tiers: Sequence[int] | None = None) -> list[str]:
     """The years the record's local days run over, the latest first: the first and the last
     `day_local`, each one lookup in its index (a single min or max; `Index.span`, both in one
-    statement, reads every row, half a second on five million lines)."""
+    statement, reads every row, half a second on five million lines). Through the page's gate
+    `tiers`, the days of the lines at its tiers alone (`reading.days_of`): a year only a line above it
+    is in is no filter, so the page never hints that the record reaches it."""
+    if tiers is not None:
+        span = reading.days_of(idx, None, tiers)
+        return [] if span is None else [str(y) for y in range(int(span[1][:4]), int(span[0][:4]) - 1, -1)]
     first = idx.db.execute("SELECT min(day_local) FROM lines").fetchone()[0]
     last = idx.db.execute("SELECT max(day_local) FROM lines").fetchone()[0]
     if first is None or last is None:
