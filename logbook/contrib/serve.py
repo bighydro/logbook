@@ -663,6 +663,7 @@ class Site:
         self._head: str | None = None  # the head the index was last brought to by `current`
         self._indexed: str | None = None  # the head `_add_indexes` last tried
         self._started = secrets.token_hex(4)  # in every tag: after a restart (a new version), every page anew
+        self._form_key_bytes: bytes | None = None  # `_form_key`, read once
         # what is kept between requests (`_keep`, `shared`), under one lock held only to look and to put
         self._kept_lock = threading.Lock()
         self._kept: dict[str, Response] = {}  # a page by its tag, the latest asked for last
@@ -1418,7 +1419,7 @@ class Site:
         note = "" if r is None or r.note is None else str(r.note["id"])
         if hidden:
             with self.lb.index() as idx:
-                named = _read_through(idx.indexed()[0])
+                named = _read_through(idx.indexed()[0], self._form_key())
         else:
             named = note
         proposals: list[reflect.Proposal] = []
@@ -1443,11 +1444,19 @@ class Site:
             lines, retracted, r, proposals, draft, earlier, kept, digest, pencil, word, hidden, named
         )
 
+    def _form_key(self) -> bytes:
+        """The key `_read_through` seals how far a page read with: this machine's own, beside the index
+        (`FORM_KEY`, made once, readable by the owner alone), never in the record or on a page."""
+        if self._form_key_bytes is None:
+            self._form_key_bytes = _form_key(self.lb.index_path.parent / FORM_KEY)
+        return self._form_key_bytes
+
     def _reflection_since(self, found: Closing, read: str) -> bool:
         """Whether the reflection Sign would sign with is not the one standing when a page that reads no
         notes was read (`read`, `_read_through`): it was written after the page's last line, or a line of
-        the day was retracted after it; a value that is not one is a change."""
-        seq = int(read, 16) if re.fullmatch(r"[0-9a-f]{16}", read) else -1
+        the day was retracted after it; a value that is not one (`_read_back`) is a change."""
+        found_seq = _read_back(read, self._form_key())
+        seq = -1 if found_seq is None else found_seq
         r = found.reflection
         if seq < 0 or r is None or r.note is None or int(r.note["seq"]) > seq:
             return True
@@ -2311,7 +2320,9 @@ class Site:
             said = day_rhythm.birthday_said(this_week[0], day, person)
             pieces["one-person"] = f'<div class="card"><p class="ink">{said}</p></div>\n'
         elif morning and d == today and not self.static:  # one reconnect, the birthday's morning aside
-            drifted = self._day_later(("drift", day), lambda: day_rhythm.drifted(self.lb, day, self.airports))
+            drifted = self._day_later(
+                ("drift", day), lambda: day_rhythm.drifted(self.lb, day, self.airports, self.tiers)
+            )
             pick = None if drifted is None else day_rhythm.reconnect(drifted, day, self.tiers)
             if pick is not None:
                 said = day_rhythm.reconnect_said(pick, day, person)
@@ -5607,11 +5618,60 @@ def _reflect_elsewhere(day: str) -> str:
     )
 
 
-def _read_through(seq: int) -> str:
-    """What the Sign form of a page that reads no notes carries for the reflection it cannot show: the
-    last line the page read, sixteen hex digits, the same whether the day has a reflection or not (the
-    desk, after the tag), so `Site._reflection_since` tells a form older than the reflection apart."""
-    return f"{max(seq, 0):016x}"
+FORM_KEY = "form-key"  # beside the index: the key `_read_through` seals with (`Site._form_key`)
+FORM_KEY_BYTES = 32
+
+
+def _form_key(path: Path) -> bytes:
+    """The key at `path`, made there (random, readable by the owner alone) when there is none or it is
+    not one; a key made at once by another process wins or loses whole (moved into place), and a form
+    sealed with the one that lost reads as a change (`_read_back`), as a form older than the page."""
+    with contextlib.suppress(OSError):
+        found = path.read_bytes()
+        if len(found) == FORM_KEY_BYTES:
+            return found
+    key = secrets.token_bytes(FORM_KEY_BYTES)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, temp = tempfile.mkstemp(dir=path.parent, prefix=".form-key-")
+    try:
+        with os.fdopen(fd, "wb") as f:
+            f.write(key)
+        os.chmod(temp, 0o600)
+        os.replace(temp, path)
+    finally:
+        with contextlib.suppress(OSError):
+            os.unlink(temp)
+    return key
+
+
+def _sealed_part(key: bytes, purpose: bytes, data: bytes) -> bytes:
+    return hashlib.blake2b(data, digest_size=8, key=key, person=b"logbook-" + purpose).digest()
+
+
+def _read_through(seq: int, key: bytes) -> str:
+    """What the Sign form of a page that reads no notes carries for the reflection it cannot show: how
+    far the page read (the record's last seq), the same whether the day has a reflection or not (the
+    desk, after the tag), so `Site._reflection_since` tells a form older than the reflection apart. It
+    is sealed with this machine's key (`_form_key`): forty-eight hex digits a reader of the page
+    cannot count the record's lines by, those above its gate among them (the review of 26 October),
+    the same for the same seq. A nonce of the seq, the seq masked with a stream of the nonce, and a
+    tag of both, each a keyed BLAKE2b (`_read_back` opens it)."""
+    plain = max(seq, 0).to_bytes(8, "big")
+    nonce = _sealed_part(key, b"nonce", plain)
+    body = bytes(a ^ b for a, b in zip(plain, _sealed_part(key, b"mask", nonce), strict=True))
+    return (nonce + body + _sealed_part(key, b"tag", nonce + body)).hex()
+
+
+def _read_back(token: str, key: bytes) -> int | None:
+    """The seq `_read_through` sealed in `token` with `key`; None for a token it did not seal."""
+    if re.fullmatch(r"[0-9a-f]{48}", token) is None:
+        return None
+    raw = bytes.fromhex(token)
+    nonce, body, tag = raw[:8], raw[8:16], raw[16:]
+    if not secrets.compare_digest(tag, _sealed_part(key, b"tag", nonce + body)):
+        return None
+    plain = bytes(a ^ b for a, b in zip(body, _sealed_part(key, b"mask", nonce), strict=True))
+    return int.from_bytes(plain, "big")
 
 
 def _keep_cli_html(day: str) -> str:

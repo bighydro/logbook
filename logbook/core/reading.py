@@ -173,12 +173,40 @@ class OwnerTrack:
     retracted: frozenset[str] = frozenset()  # the ids of the retracted lines of the record
 
 
-def record_days(lb: Logbook, kind: str | None = None) -> tuple[str, str] | None:
+def record_days(
+    lb: Logbook, kind: str | None = None, tiers: Sequence[int] | None = None
+) -> tuple[str, str] | None:
     """The first and last local day the record has a line of `kind` on (any line when None);
     None when it has none. A reader of the owner's track asks for `location`, so that a
-    resolution written before the first point does not open the window on empty days."""
+    resolution written before the first point does not open the window on empty days. Through the
+    gate `tiers` when given: only the lines whose tier is in it count, so a page read through it
+    never opens its window on a day only a line above it is on (`days_of`)."""
     with lb.index() as idx:
+        return days_of(idx, kind, tiers)
+
+
+def days_of(
+    idx: Index, kind: str | None = None, tiers: Sequence[int] | None = None
+) -> tuple[str, str] | None:
+    """`record_days` on an open index: `Index.span` of `kind`, through the gate `tiers` when given (one
+    step down the day_local index each way while the lines at its edges are at those tiers)."""
+    if tiers is None:
         return idx.span(kind)
+    if kind is not None:
+        return _span(idx, kind, tiers)
+    allowed = [int(t) for t in tiers]
+    if not allowed:
+        return None
+    gate = f"tier IN ({','.join('?' * len(allowed))})"
+    edges = []
+    for order in ("ASC", "DESC"):
+        row = idx.db.execute(
+            f"SELECT day_local FROM lines WHERE {gate} ORDER BY day_local {order} LIMIT 1", allowed
+        ).fetchone()
+        if row is None:
+            return None
+        edges.append(str(row[0]))
+    return edges[0], edges[1]
 
 
 # the kinds of line that are about the record, not about a day: a crossing (the line each export appends,

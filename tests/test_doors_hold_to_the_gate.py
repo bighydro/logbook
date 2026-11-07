@@ -22,6 +22,7 @@ import re
 import shutil
 from collections.abc import Iterator
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -94,51 +95,63 @@ def three_lines() -> list[dict[str, Any]]:
     ]
 
 
-@pytest.fixture(scope="module")
-def records(tmp_path_factory: pytest.TempPathFactory) -> dict[str, Logbook]:
+def _three(base: Path, ones_of: list[Any], two_of: list[Any], three_of: list[Any]) -> dict[str, Logbook]:
     """`ones`, `below` (a copy of it, the tier-2 lines appended) and `whole` (a copy of that, the
-    tier-3 lines appended), each with its own index (`cache`)."""
-    base = tmp_path_factory.mktemp("gate")
+    tier-3 lines appended), under `base`."""
     ones = Logbook.init(base / "ones", TZ)
-    ones.append_many(ones_lines())
+    ones.append_many(ones_of)
     places = {"Home": {"lat": HOME[0], "lon": HOME[1], "radius_m": 120, "kind": "home"}}
     (ones.root / "places.json").write_text(json.dumps(places), encoding="utf-8")
     policy = ones.root / "policy" / "crossing.json"
     policy.parent.mkdir(exist_ok=True)
     policy.write_text(json.dumps({"world": {"max_tier": 2}, "site": {"max_tier": 2}}), encoding="utf-8")
     shutil.copytree(ones.root, base / "below")
-    below = Logbook(base / "below")
-    below.append_many(two_lines())
-    shutil.copytree(below.root, base / "whole")
-    whole = Logbook(base / "whole")
-    whole.append_many(three_lines())
-    return {"ones": Logbook(ones.root), "below": Logbook(below.root), "whole": Logbook(whole.root)}
+    Logbook(base / "below").append_many(two_of)
+    shutil.copytree(base / "below", base / "whole")
+    Logbook(base / "whole").append_many(three_of)
+    return {name: Logbook(base / name) for name in ("ones", "below", "whole")}
 
 
-@pytest.fixture
-def at(records: dict[str, Logbook], monkeypatch: pytest.MonkeyPatch) -> Iterator[Any]:
-    """`at(name, tiers, address)`: the page `address` of record `name` through the gate `tiers`, its
+@pytest.fixture(scope="module")
+def records(tmp_path_factory: pytest.TempPathFactory) -> dict[str, Logbook]:
+    return _three(tmp_path_factory.mktemp("gate"), ones_lines(), two_lines(), three_lines())
+
+
+def _reader(records: dict[str, Logbook], monkeypatch: pytest.MonkeyPatch, now: datetime = NOW) -> Any:
+    """`read(name, tiers, address)`: the page `address` of record `name` through the gate `tiers`, its
     index in a folder of its own (the copies share the owner's id, the index's key)."""
 
     def read(name: str, tiers: tuple[int, ...], address: str) -> str:
         lb = records[name]
         monkeypatch.setenv("LOGBOOK_CACHE_HOME", str(lb.root.parent / f"cache-{name}"))
         path, _, query = address.partition("?")
-        response = serve.Site(Logbook(lb.root), now=lambda: NOW, tiers=tiers).respond(path, query)
+        response = serve.Site(Logbook(lb.root), now=lambda: now, tiers=tiers).respond(path, query)
         return f"{response.status}\n{response.body.decode('utf-8')}"
 
-    yield read
+    return read
+
+
+@pytest.fixture
+def at(records: dict[str, Logbook], monkeypatch: pytest.MonkeyPatch) -> Iterator[Any]:
+    yield _reader(records, monkeypatch)
 
 
 HEAD = re.compile(r"head <code>[0-9a-f]+…</code>")  # the chain's head: it moves with any line appended
+# how far a page below the notes read, sealed (`serve._read_through`): it moves with any line appended,
+# as the head does, and says no more (the Sign form's test below)
+SEALED = re.compile(r'(name="reflection" value=")[0-9a-f]{48}(")')
+
+
+def _plain(page: str) -> list[str]:
+    """A page's lines, the head and the sealed seq aside: what moves with any line, whatever its tier."""
+    return SEALED.sub(r"\1…\2", HEAD.sub("head", page)).splitlines()
 
 
 def _same(at: Any, addresses: list[str]) -> None:
     """Each page through tier 1 of `whole` reads as of `ones`, and through tiers 1 and 2 as of `below`."""
     for tiers, lower in ((T1, "ones"), (T12, "below")):
         for address in addresses:
-            got = HEAD.sub("head", at("whole", tiers, address)).splitlines()
-            want = HEAD.sub("head", at(lower, tiers, address)).splitlines()
+            got, want = _plain(at("whole", tiers, address)), _plain(at(lower, tiers, address))
             moved = [line[:300] for line in difflib.unified_diff(want, got, lineterm="", n=0)][2:12]
             assert got == want, (address, tiers, moved)
 
@@ -181,6 +194,46 @@ def test_the_people_door_ranks_and_tells_from_the_lines_at_its_tiers(
         thread = at("whole", tiers, f"/people/{KARI_ID}")
         _absent(records, thread, tiers)
         assert CLINIC not in thread, tiers
+
+
+HANSEN, HANSEN_EMAIL, HANSEN_ID = (
+    "Per Hansen",
+    "per.hansen@example.org",
+    "019cadd3-6bc0-7dcd-9133-000000000004",
+)
+
+
+def test_the_days_reconnect_names_a_silence_the_lines_at_its_tiers_keep(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The Day's morning reconnect (`day_rhythm.drifted`): Per Hansen, named at tier 1, was at home
+    with the owner on twenty days of 2024, on tier-1 calendar entries, and since then only a tier-2
+    message has come from him, and a later tier-3 one. Through tier 1 he has drifted, the last contact
+    a meeting in 2024; through tiers 1 and 2 the message ends the silence; the tier-3 message is no
+    contact and ends no silence on either page."""
+    days = [f"2024-{m:02d}-{d:02d}" for m in (3, 4, 5, 6) for d in (3, 10, 17, 24, 27)]
+    seen = [
+        line
+        for day in days
+        for line in (
+            *dwell(day, "15:00", "20:00", HOME),
+            event(utc(day, "16:00"), utc(day, "18:00"), "Sail", [attendee(HANSEN_EMAIL)]),
+        )
+    ]
+    named = {**resolution(("email", HANSEN_EMAIL), HANSEN_ID, HANSEN), "tier": 1}
+    ones = [*ones_lines(), named, *seen]
+    two = [_message(utc(OLA_WROTE, "09:00"), f"{TWO_WORD}: the boat is in", 2, HANSEN_EMAIL, "Per")]
+    three = [_message(utc(CLINIC, "09:00"), f"{THREE_WORD}: the results are in", 3, HANSEN_EMAIL, "Per")]
+    morning = datetime(2026, 6, 17, 6, 0, tzinfo=UTC)  # with one person drifted, an even day's ordinal
+    read = _reader(_three(tmp_path, ones, two, three), monkeypatch, morning)
+    address = f"/day/{morning.date().isoformat()}?shape=morning"
+    for tiers, lower in ((T1, "ones"), (T12, "below")):
+        got, want = (_plain(read(name, tiers, address)) for name in ("whole", lower))
+        moved = [line[:300] for line in difflib.unified_diff(want, got, lineterm="", n=0)][2:12]
+        assert got == want, (tiers, moved)
+    assert "you saw each other often" in read("whole", T1, address)
+    assert "you saw each other often" not in read("whole", T12, address)
+    assert THREE_WORD not in read("whole", T12, address)
 
 
 # -- 3. The Day page's "with …": who was there, through the gate ------------------------------------------

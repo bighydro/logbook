@@ -77,20 +77,29 @@ class Contact:
         return other is None or (self.day, -ORDER[self.via]) > (other.day, -ORDER[other.via])
 
 
-def real_contacts(lb: Logbook, report: people.Report) -> dict[str, Contact]:
+def real_contacts(
+    lb: Logbook, report: people.Report, admit: Callable[[Line], bool] | None = None
+) -> dict[str, Contact]:
     """The last real contact of every canonical person of `report`, by entity id, over its window:
     its days together, and the standing message, call, event and transcript lines of the window,
     streamed one kind at a time through the index. Writes nothing to the record. Over a window to the
     record's last day (`people.read_whole`'s, `people.read_to_end`'s), the reading is kept between heads
-    (`_kept`), each such window in a file of its own."""
+    (`_kept`), each such window in a file of its own. `admit`, when given, is a page's gate (`report`
+    read through the same one, `people.read(admit=...)`): only the lines it lets through are a contact,
+    so the last one is never a line above it, nor is a person left with none because the latest is;
+    such a reading is not kept."""
+    if admit is not None:
+        return _read(lb, report, admit)
     whole = reading.record_days(lb)
     if whole is not None and report.last == whole[1] and report.first >= whole[0]:
         return _kept(lb, report, KEPT_FILE if report.first == whole[0] else KEPT_SINCE_FILE)
     return _read(lb, report)
 
 
-def _read(lb: Logbook, report: people.Report) -> dict[str, Contact]:
-    """`real_contacts` read from the lines, every one of the window."""
+def _read(
+    lb: Logbook, report: people.Report, admit: Callable[[Line], bool] | None = None
+) -> dict[str, Contact]:
+    """`real_contacts` read from the lines, every one of the window `admit` lets through."""
     fold = _Fold(report)
     fold.together()
     with lb.index() as idx:
@@ -98,7 +107,8 @@ def _read(lb: Logbook, report: people.Report) -> dict[str, Contact]:
         for kind in KINDS:
             superseded = idx.superseded(kind)
             for line in idx.of_kind(kind, report.first, report.last):
-                fold.line(kind, line, retracted, superseded)
+                if admit is None or admit(line):
+                    fold.line(kind, line, retracted, superseded)
     return fold.finish()
 
 
