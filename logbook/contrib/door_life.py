@@ -348,7 +348,9 @@ class Record:
     signed: list[str] = field(default_factory=list)
     starred: list[Starred] = field(default_factory=list)
     named: list[Trip] = field(default_factory=list)
-    draft: tuple[str, str] | None = None  # the chapter's pencil: its first sentence, the model
+    draft: tuple[str, str, tuple[str, ...]] | None = (
+        None  # the chapter's pencil: a sentence, the model, its lines
+    )
     revisits: dict[str, str] = field(default_factory=dict)  # goal line → the day a review asks to look again
     ideas: list[Idea] = field(default_factory=list)  # the named ideas, by their spark
 
@@ -660,9 +662,13 @@ def _named(lines: Sequence[Any], retracted: frozenset[str]) -> list[Trip]:
     return sorted(out, key=lambda t: t.first)
 
 
-def _chapter_draft(site: Site, idx: Index, retracted: Collection[str], line: str) -> tuple[str, str] | None:
-    """The first supported sentence of the chapter's standing draft the `dream` entry allows, and the
-    model that wrote it: the chapter's lines are its subject (`dream_chapter`), any line of its chain."""
+def _chapter_draft(
+    site: Site, idx: Index, retracted: Collection[str], line: str
+) -> tuple[str, str, tuple[str, ...]] | None:
+    """The first supported sentence of the chapter's standing draft the `dream` entry allows, the
+    model that wrote it and the lines it rests on, every one a line the page's gate reads
+    (`drafts.readable`): the chapter's lines are its subject (`dream_chapter`), any line of its chain.
+    A sentence that cites no line, or one above the gate, is passed over (no pencil without evidence)."""
     every = chapters.chapter_lines(reading.crossing(idx.by_kind(chapters.KIND), site.tiers), retracted)
     later = chapters.successors(every)
 
@@ -681,9 +687,12 @@ def _chapter_draft(site: Site, idx: Index, retracted: Collection[str], line: str
     top = drafts.standing(shown)
     if top is None:
         return None
-    for segment in (top.get("payload") or {}).get("segments") or []:
-        if drafts.segment_shape(segment) == "supported":
-            return str(segment["text"]).strip(), drafts.model_of(top.get("source"))
+    segments = [s for s in (top.get("payload") or {}).get("segments") or [] if isinstance(s, dict)]
+    cited = [(s, ids) for s in segments if (ids := drafts.pencil_ids(s)) is not None]
+    found_lines = idx.by_ids({i for _s, ids in cited for i in ids}) if cited else {}
+    for segment, ids in cited:
+        if drafts.readable(found_lines, ids, site.tiers, retracted):
+            return str(segment["text"]).strip(), drafts.model_of(top.get("source")), tuple(ids)
     return None
 
 
@@ -874,13 +883,22 @@ def _chapter_html(site: Site, rec: Record) -> str:
     out.append(f'<h2 class="ink">{escape(c.name)}</h2>\n')
     if c.rules:
         out.append(f'<p class="ink rules"><span class="hidden">Its rules: </span>{escape(c.rules)}</p>\n')
-    if rec.draft is not None:
-        text, model = rec.draft
-        out.append(
-            f'<p class="pencil" title="{escape(f"A draft by {model}, not your words")}">'
-            f'<span class="hidden">A model\'s draft, not yours: </span>{escape(text)}</p>\n'
-        )
+    out.append(chapter_pencil(site, rec.draft))
     return "".join(out) + "</section>\n"
+
+
+def chapter_pencil(site: Site, draft: tuple[str, str, tuple[str, ...]] | None) -> str:
+    """The chapter's sentence a model drafted, in pencil, with the lines it rests on, each linked to
+    its line; nothing without them (no pencil without evidence)."""
+    if draft is None or not draft[2]:
+        return ""
+    text, model, ids = draft
+    links = ", ".join(site.link(escape(drafts.short_id(i)), f"/line/{quote(i, safe='')}") for i in ids)
+    return (
+        f'<p class="pencil" title="{escape(f"A draft by {model}, not your words")}">'
+        f'<span class="hidden">A model\'s draft, not yours: </span>{escape(text)}'
+        f' <small class="ids">{drafts.EVIDENCE} [{links}]</small></p>\n'
+    )
 
 
 def _goals_html(rec: Record) -> str:

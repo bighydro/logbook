@@ -801,11 +801,16 @@ def drafted(site: Site, p: people.Person, names: Sequence[str]) -> Drafted | Non
     )
     guard = beside_guard(names)
     segments = []
+    cited = [s for s in payload.get("segments") or [] if isinstance(s, dict) and drafts.pencil_ids(s)]
+    with site.lb.index() as idx:
+        found_lines = idx.by_ids({e for s in cited for e in drafts.pencil_ids(s) or []}) if cited else {}
     for segment in payload.get("segments") or []:
         if not isinstance(segment, dict) or not isinstance(segment.get("text"), str):
             continue
         text = " ".join(segment["text"].split())
-        evidence = [str(e) for e in segment.get("evidence") or [] if isinstance(e, str)]
+        evidence = drafts.pencil_ids(segment)
+        if evidence is None or not drafts.readable(found_lines, evidence, site.tiers, retracted):
+            continue  # no pencil without evidence, and none on a line above the page's gate
         held = guard.search(dream.CALENDAR.sub(" ", text)) is not None
         segments.append((dream.HELD if held else text, evidence, held))
     if not segments:
@@ -1567,6 +1572,8 @@ def _drafted_html(site: Site, d: Drafted) -> str:
     out = ['<section class="part draft"><h2>Drafted about them</h2>\n']
     out.append(f'<p class="kicker">Pencil{DOT}{escape(d.model)}</p>\n')
     for text, evidence, held in d.segments:
+        if not evidence and not held:  # no pencil without evidence
+            continue
         out.append(f'<p><span class="pencil" title="{escape(said)}">{escape(text)}</span></p>\n')
         if evidence and not held:
             links = "".join(

@@ -21,17 +21,17 @@
     47.3769,8.5417 (Zurich)                     3 nights · 3 stays · 58 h · with Marta Keller
     59.0500,10.0300 aboard Nordlys (Sandefjord) 2 nights · 2 stays · 41 h
     59.8500,10.6000 aboard Nordlys              2 nights · 2 stays · 40 h
-    55.6850,12.5500 (Copenhagen)                2 nights · 2 stays · 33 h · with Freja Lund
+    55.6800,12.5856 (Copenhagen)                2 nights · 2 stays · 33 h · with Freja Lund
     59.4300,10.4800 aboard Nordlys (Sandefjord) 1 night · 1 stay · 18 h
   people        by days together
     Per Hansen                                  last 2026-06-30 · Office
     Liv Berg                                    last 2026-06-29 · Office
     Ola Nordmann                                last 2026-06-15 · Cabin, Marina
     Anders Vik                                  last 2026-06-15 · Marina
-    Jonas Weber                                 last 2026-06-09 · 47.3700,8.5300 (Zurich)
-    Marta Keller                                last 2026-06-09 · 47.3700,8.5300 (Zurich), 47.3769,8.5417 (Zurich)
+    Jonas Weber                                 last 2026-06-09 · 47.3697,8.5389 (Zurich)
+    Marta Keller                                last 2026-06-09 · 47.3697,8.5389 (Zurich), 47.3769,8.5417 (Zurich)
     Sigrid Moen                                 last 2026-06-13 · Marina
-    Freja Lund                                  last 2026-06-26 · 55.6950,12.5700 (Copenhagen), 55.6850,12.5500 (Copenhagen)
+    Freja Lund                                  last 2026-06-26 · 55.6855,12.5795 (Copenhagen), 55.6800,12.5856 (Copenhagen)
   health        by month
     2026-06  sleep 6.8 h (29 nights) · 8,425 steps (30 days) · resting 57 bpm (52–61, 30 days) · hrv —
   keepers       by month

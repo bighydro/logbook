@@ -81,8 +81,8 @@ class Headers(Protocol):
 class Asked(NamedTuple):
     """What a request carried that the gates read beside a POST's Origin, every value of each header as
     sent: `Origin`, `Host`, `Tailscale-User-Login`, `Sec-Fetch-Dest` and `Sec-Fetch-Site`; and
-    `forwarded`, the name of every `Tailscale-*` and `X-Forwarded-*` header it carried, which a proxy
-    adds (`proxied`)."""
+    `forwarded`, the name of every header a proxy adds that it carried (`Tailscale-*`, `X-Forwarded-*`,
+    `Forwarded`, `Via`, `X-Real-IP`, in any case: `proxied`)."""
 
     origin: tuple[str, ...]
     host: tuple[str, ...]
@@ -115,8 +115,9 @@ def proxied(asked: Asked | None) -> bool:
     """Whether a request came through a proxy (Tailscale Serve, or any other) rather than from this
     machine's own browser or programs: its Host is not a loopback literal, `127.0.0.1` or `[::1]` with
     any port or none (a name, `localhost` included, is not one), it carries more than one Host, or it
-    carries a `Tailscale-*` or `X-Forwarded-*` header. A request with no Host at all (an HTTP/1.0
-    client) is this machine's, as is a call with no headers (`asked` None, the server's own callers)."""
+    carries any proxy's header (`Tailscale-*`, `X-Forwarded-*`, `Forwarded`, `Via` or `X-Real-IP`, in
+    any case). A request with no Host at all (an HTTP/1.0 client) is this machine's, as is a call with
+    no headers (`asked` None, the server's own callers)."""
     if asked is None:
         return False
     return (
@@ -127,11 +128,12 @@ def proxied(asked: Asked | None) -> bool:
 
 
 def here(asked: Asked, port: int) -> bool:
-    """Whether a request is this machine's own, to the server on `port`: through no proxy (no
-    `Tailscale-*` or `X-Forwarded-*` header), and no Host (an HTTP/1.0 client) or exactly one, a name
-    this machine reads the Library at (`HERE`, `localhost` among them: only this machine resolves it
-    to itself) with `port`, written or, for port 80, not. A website the owner opens that points its
-    own name at 127.0.0.1 (DNS rebinding) sends its own name as the Host, and is not this machine."""
+    """Whether a request is this machine's own, to the server on `port`: through no proxy (no proxy's header:
+    `Tailscale-*`, `X-Forwarded-*`, `Forwarded`, `Via` or `X-Real-IP`), and no Host (an HTTP/1.0 client)
+    or exactly one, a name this machine reads the Library at (`HERE`, `localhost` among them: only this
+    machine resolves it to itself) with `port`, written or, for port 80, not. A website the owner opens
+    that points its own name at 127.0.0.1 (DNS rebinding) sends its own name as the Host, and is not this
+    machine."""
     if asked.forwarded or len(asked.host) > 1:
         return False
     if not asked.host:
@@ -142,7 +144,7 @@ def here(asked: Asked, port: int) -> bool:
 
 def looks_proxied(asked: Asked) -> bool:
     """Whether a request that is not this machine's (`here`) came, or says it came, through a proxy: a
-    `Tailscale-*` or `X-Forwarded-*` header, more than one Host, or a tailnet name as its Host. A
+    proxy's header (as `proxied` reads them), more than one Host, or a tailnet name as its Host. A
     refusal of it is a 403; of anything else, a Host this server is not (421)."""
     hosts = [h.strip().lower().rpartition(":")[0] or h.strip().lower() for h in asked.host]
     return bool(asked.forwarded) or len(asked.host) > 1 or any(h.endswith(SUFFIX) for h in hosts)
@@ -158,6 +160,17 @@ def cross(asked: Asked | None) -> bool:
     dest = [d.strip().lower() for d in asked.dest]
     site = [s.strip().lower() for s in asked.site]
     return dest not in ([], ["document"]) or site not in ([], ["same-origin"], ["none"])
+
+
+def party(asked: Asked | None) -> tuple[bool, tuple[str, ...]]:
+    """Who is asking, as one connection holds it: whether through a proxy (`proxied`) and every login
+    sent, as sent. tailscaled keeps one connection to the Library open for many requests, so the
+    server takes the first request's party as the connection's and refuses a later request of another
+    (`serve.Handler`): one login at a time, never two on one connection, and never this machine's own
+    request on a connection the phone opened, or the phone's on this machine's."""
+    if asked is None:
+        return (False, ())
+    return (proxied(asked), asked.login)
 
 
 def funnel(asked: Asked) -> bool:
