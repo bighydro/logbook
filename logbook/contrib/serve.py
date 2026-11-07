@@ -5006,10 +5006,17 @@ def _draft_html(draft: Mapping[str, Any], star: Toggle | None = None) -> str:
 
 def _draft_folded(draft: Mapping[str, Any]) -> str:
     """The standing draft of a unit other than the day (a journey), folded under its head: a
-    proposal until the owner confirms it, never shown open as if it were the record."""
+    proposal until the owner confirms it, never shown open as if it were the record. Only its
+    sentences and proposals that rest on their lines, each with its ids: no pencil without evidence
+    (the Day's own Draft block alone sets an unsupported one apart, RFC 0036 rule 6)."""
+    shown = {
+        **draft,
+        "segments": [s for s in draft["segments"] if drafts.pencil_ids(s) is not None],
+        "proposals": [p for p in draft.get("proposals") or [] if p.get("confirmed") or p.get("supported")],
+    }
     return (
         f'<details class="draft"><summary>{escape(drafts.head_text(draft))}</summary>\n<div class="draft">\n'
-        f"{_draft_body(draft)}</div>\n</details>\n"
+        f"{_draft_body(shown)}</div>\n</details>\n"
     )
 
 
@@ -5914,6 +5921,7 @@ class Handler(BaseHTTPRequestHandler):
             self.close_connection = True  # the body is left unread
             self._send(refusal, body=True)
             return
+        self._taken(asked)
         path = self.path.partition("?")[0]
         kind = self.headers.get("Content-Type") or ""
         multipart = kind.strip().lower().startswith("multipart/form-data")
@@ -5953,8 +5961,10 @@ class Handler(BaseHTTPRequestHandler):
             self._send(refusal, body)
             return
         if (refusal := server.site.gate(asked, server.server_port)) is not None:
+            self.close_connection = True  # a refused party never keeps a connection a pool may lend on
             self._send(refusal, body)
             return
+        self._taken(asked)
         path, _, query = self.path.partition("?")
         if (moved := server.site.moved(path, query)) is not None:  # an old address: its door (RFC 0047 §9)
             self._send(moved, body)
@@ -6000,12 +6010,8 @@ class Handler(BaseHTTPRequestHandler):
         login, none, two, or this machine's own on the phone's connection) is refused before anything
         is read, and the connection closed, so nothing one login was answered is read by another on
         it. None when the request is the connection's own party's."""
-        found = phone.party(asked)
         first = self.party
-        if first is None:
-            self.party = found
-            return None
-        if found == first:
+        if first is None or phone.party(asked) == first:
             return None
         self.close_connection = True
         written = "; nothing was written" if post else ""
@@ -6014,6 +6020,13 @@ class Handler(BaseHTTPRequestHandler):
             "This connection was opened for another login: one login at a time, and each on a"
             f" connection of its own{written}.",
         )
+
+    def _taken(self, asked: phone.Asked) -> None:
+        """The connection is the party's whose request the read gate let in first (`_another`): a
+        request the gate refuses closes its connection and takes none, so a refused login, on a
+        connection tailscaled pools, never holds it against the owner's next request."""
+        if self.party is None:
+            self.party = phone.party(asked)
 
     def end_headers(self) -> None:
         """Every answer, `http.server`'s own errors among them, says no page may be framed."""

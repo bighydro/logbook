@@ -755,8 +755,10 @@ def _story(
         held["drafts_without_a_story"] += 1  # a draft that says no part is a story is not one
         return None
     segments = [
-        drafts.segment_json(s, None) for s, part in zip(segments, parts, strict=True) if part in story_parts
-    ]
+        drafts.segment_json(s, None)
+        for s, part in zip(segments, parts, strict=True)
+        if part in story_parts and _below(s, cited or {}, req.tiers, retracted)
+    ]  # a sentence that cites a line above the letter is gone before any count: none hints at it
     drafts.hold_beside(segments, people, payload)
     told = []
     for s in segments:
@@ -884,7 +886,20 @@ def _cited(every_draft: Iterable[Line]) -> set[str]:
         for s in (payload.get("segments") if isinstance(payload, dict) else None) or []:
             if isinstance(s, dict) and isinstance(s.get("evidence"), list):
                 out.update(e for e in s["evidence"] if isinstance(e, str))
+            elif isinstance(s, dict) and isinstance(s.get("evidence"), str):
+                out.add(s["evidence"])  # a bare id, as `drafts.pencil_ids` reads one
     return out
+
+
+def _below(
+    segment: Mapping[str, Any], cited: Mapping[str, Line], tiers: Collection[int], retracted: Collection[str]
+) -> bool:
+    """Whether every line `segment` cites (a bare id among them) is one the letter's tiers read, or it
+    cites none: a sentence that rests on a line above the letter is neither shown nor counted."""
+    evidence = segment.get("evidence")
+    ids = [evidence] if isinstance(evidence, str) else evidence if isinstance(evidence, list) else []
+    ids = [i for i in ids if isinstance(i, str)]
+    return not ids or drafts.readable(cited, ids, tiers, retracted)
 
 
 def _ids_html(ids: Sequence[str]) -> str:

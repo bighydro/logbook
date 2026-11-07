@@ -242,3 +242,94 @@ def test_what_a_model_drafted_about_a_person_is_shown_only_with_its_lines(site: 
     assert WORDS in shown and SHORT in shown
     assert "Kari is a sailor." not in shown, "a sentence with no lines"
     assert json.dumps(shown)  # the page is text
+
+
+# -- the blind review: the gate on the week's evidence, the folded journey draft, the letter's count -----
+
+
+def _week_record(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Logbook, str, str]:
+    """A record with a tier-2 note and a tier-3 workout on the Wednesday of 2026-W24."""
+    lb = Logbook.init(tmp_path / "lb", "Europe/Oslo")
+    monkeypatch.setenv("LOGBOOK_HOME", str(lb.root))
+    note = lb.append(at="2026-06-10T10:00:00Z", source="manual", kind="note", tier=2,
+                     payload={"schema": "note/v1", "text": "Harbour."})  # fmt: skip
+    workout = lb.append(at="2026-06-10T06:00:00Z", source="manual", kind="health", tier=3,
+                        payload={"schema": "health/v1", "type": "workout"})  # fmt: skip
+    return lb, str(note["id"]), str(workout["id"])
+
+
+def test_the_week_s_lines_are_read_through_the_page_s_gate(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A week draft is checked against the week's lines the page reads: a tier-3 line is not one of a
+    tier-2 page's, so a sentence that cites it is unsupported there, and neither it nor the id shows."""
+    lb, note, workout = _week_record(tmp_path, monkeypatch)
+    seen: list[set[str]] = []
+
+    def for_unit(found: Any, on: Any, *args: Any, **kwargs: Any) -> tuple[None, None]:
+        seen.append(set(on))
+        return None, None
+
+    monkeypatch.setattr(drafts, "by_unit", lambda *a, **k: {"2026-W24": [{"id": "x"}]})
+    monkeypatch.setattr(drafts, "for_unit", for_unit)
+    day_rhythm.week_proposal(lb, "2026-06-16", [1, 2])
+    week_page.week_draft(serve.Site(lb, tiers=[1, 2]), "2026-W24")
+    assert len(seen) == 2
+    for on in seen:
+        assert note in on and workout not in on, on
+    seen.clear()
+    day_rhythm.week_proposal(lb, "2026-06-16", None)
+    assert workout in seen[0], "a page that reads every tier reads it"
+
+
+def test_a_goal_s_proposed_verdict_without_its_lines_is_not_shown(site: serve.Site) -> None:
+    segment = {"part": "goals", "text": "Two sails this week.", "supported": True, "evidence": []}
+    assert week_page.verdict_html(site, {"disposition": "abandoned", "segment": 0}, [segment], []) == ""
+    assert week_page.verdict_html(site, {"disposition": "abandoned"}, [], []) == ""
+    shown = week_page.verdict_html(
+        site, {"disposition": "advancing", "segment": 0}, [{**segment, "evidence": [CITED]}], []
+    )
+    assert "Pencil" in shown and SHORT in shown
+
+
+def test_a_folded_draft_shows_no_sentence_without_its_lines(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A journey's or a trip's draft, folded under its head on its page: its supported sentences with
+    their ids, never an unsupported one (the Day's own Draft block alone does, RFC 0036 rule 6)."""
+    monkeypatch.setattr(drafts, "head_text", lambda draft: "draft of journey")
+    draft = {
+        "segments": [
+            {"text": "Three nights by the lake.", "evidence": [CITED], "supported": True, "why": None},
+            {"text": "It rained every day.", "evidence": [], "supported": False, "why": None},
+        ],
+        "proposals": [],
+        "earlier": [],
+    }
+    folded = serve._draft_folded(draft)
+    assert "Three nights by the lake." in folded and SHORT in folded
+    assert "It rained every day." not in folded and "unsupported" not in folded
+
+
+def test_a_letter_counts_nothing_that_rests_above_its_tier(lb: Logbook, tmp_path: Path) -> None:
+    """A sentence on the tier-3 workout that the dream would also hold (a figure beside a name) is
+    neither shown nor counted: no `segments_unsupported` grows for it."""
+    day = "2026-06-16"
+    _letter(lb, tmp_path / "before")
+    before = json.loads((tmp_path / "before" / letter.MANIFEST_FILE).read_text("utf-8"))["held_back"]
+    workout = next(
+        line for line in lb.lines() if line["kind"] == "health" and line["payload"].get("type") == "workout"
+    )
+    plain = _story_evidence(lb, day)
+    payload: dict[str, Any] = {
+        "schema": drafts.SCHEMA, "unit": drafts.UNIT_DAY, "subject": day, "read_head": "0" * 64,
+        "read_count": 1, "language": "en",
+        "segments": [{"text": f"{STORY} {day}.", "evidence": [plain]},
+                     {"text": "Kari Nordmann 3 times on the rower.", "evidence": [str(workout["id"])]},
+                     {"text": "Unsure.", "evidence": [str(workout["id"])], "unsupported": True}],
+        "extra": {"prompt": "test/1", "parts": ["day", "day", "day"], "policy_version": "0" * 64},
+    }  # fmt: skip
+    payload["segments"][2].pop("evidence")
+    lb.append(at=utc(day, "21:45"), source=f"model:{MODEL}", kind=drafts.KIND, tier=2, payload=payload)
+    html, md = _letter(lb, tmp_path / "after")
+    assert "rower" not in html and "rower" not in md
+    after = json.loads((tmp_path / "after" / letter.MANIFEST_FILE).read_text("utf-8"))["held_back"]
+    assert after.get("segments_unsupported", 0) - before.get("segments_unsupported", 0) <= 1, (before, after)

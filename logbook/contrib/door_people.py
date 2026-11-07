@@ -803,7 +803,7 @@ def drafted(site: Site, p: people.Person, names: Sequence[str]) -> Drafted | Non
     segments = []
     cited = [s for s in payload.get("segments") or [] if isinstance(s, dict) and drafts.pencil_ids(s)]
     with site.lb.index() as idx:
-        found_lines = idx.by_ids({str(e) for s in cited for e in s["evidence"]}) if cited else {}
+        found_lines = idx.by_ids({e for s in cited for e in drafts.pencil_ids(s) or []}) if cited else {}
     for segment in payload.get("segments") or []:
         if not isinstance(segment, dict) or not isinstance(segment.get("text"), str):
             continue

@@ -18,8 +18,9 @@ label of the sender's registered domain, else `a sender` (a host with no registe
 address with no domain). The queue names a merchant by its domain (the sender's registered domain)
 and never shows a sender's address: not in its rows, not in its JSON, not as a merchant. A sender's
 address is read as the address it is (`address`: NFKC, then folded), so a fullwidth commercial at
-(U+FF20) is `@` and fullwidth letters are letters, and a person's address written in lookalikes is
-still that person's.
+(U+FF20) is `@` and fullwidth letters are letters, and a person's address written in those
+compatibility forms is still that person's. NFKC folds no homoglyph of another script (a Cyrillic
+a, U+0430): such an address is another address, and is read as one.
 
 **The amount** is read by rules, never by a model (`amounts`): a currency code or symbol (`CODES`,
 `SYMBOLS`) before or after a number in the common forms (`CHF 1'234.50`, `€ 12,90`, `$12.90`, `NOK
@@ -379,7 +380,8 @@ def address(email: str) -> str:
     """An address as it is, whatever forms it was written in: NFKC, so a fullwidth commercial at
     (U+FF20) is `@` and fullwidth letters are letters, then stripped and folded. Every match of a
     sender (the owner, a person the record names, an order address, an org's domain) reads it so,
-    and a lookalike of a person's address is that person's."""
+    and a person's address in compatibility forms is that person's (a homoglyph of another script is
+    not folded: that is another address)."""
     return unicodedata.normalize("NFKC", email).strip().casefold()
 
 

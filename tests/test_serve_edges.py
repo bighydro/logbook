@@ -249,3 +249,20 @@ def test_a_page_one_login_was_given_is_never_another_s(served: Served) -> None:
         assert other.get(f"/day/{WEDNESDAY}", headers).status == 403
     finally:
         other.close()
+
+
+def test_a_refused_first_request_leaves_the_connection_to_whoever_comes_next(
+    served: Served, connection: Connection
+) -> None:
+    """The blind review's finding: tailscaled pools its connections, so a request the gate refuses
+    (another login, a tagged device) must not make the connection that refused party's. A refused
+    request closes its connection, and the owner's phone, on a connection of its own, reads."""
+    reply = connection.get("/people", _phone(OLA))
+    assert reply.status == 403
+    assert (reply.getheader("Connection") or "").lower() == "close"
+    assert connection.answered("/people", _phone()) is None, "the refused connection is closed"
+    fresh = Connection(served)
+    try:
+        assert fresh.get("/people", _phone()).status == 200
+    finally:
+        fresh.close()

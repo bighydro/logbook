@@ -319,7 +319,7 @@ def test_show_prints_a_day_and_the_keepers(lb: Logbook, capsys: pytest.CaptureFi
 # -- the demo's places: the persona's coordinates, or public ones (the privacy review of 26 October) ------
 
 # Every place the demo record visits, by where it is: the persona's own synthetic coordinates
-# (`tests/persona.py`), an airport, open water or a harbour town, or a public landmark named here. A
+# (`tests/persona.py`), an airport, open water or a town's public centre, or a public landmark named here. A
 # place a person lives, works or stays at (a home, a flat, an office, a hotel, a cabin) is never a
 # real address: it is the persona's coordinate or a public landmark of its city.
 PERSONA = {(59.9139, 10.7522), (59.9100, 10.7600), (59.9200, 10.7400), (59.9050, 10.7350), (59.8500, 10.6000),
@@ -327,8 +327,8 @@ PERSONA = {(59.9139, 10.7522), (59.9100, 10.7600), (59.9200, 10.7400), (59.9050,
 PUBLIC = {
     (59.9260, 10.7000): "Frogner Park, Oslo",
     (59.8536, 8.6486): "Gaustatoppen, its summit and its tourist cabin",
-    (59.4300, 10.4800): "the Oslofjord off Horten",
-    (59.0500, 10.0300): "Larvik harbour",
+    (59.4300, 10.4800): "Horten, the town and its waterfront",
+    (59.0500, 10.0300): "Larvik, the town by its harbour",
     (59.0450, 10.0450): "Larvik, the town",
     (47.3703, 8.5481): "Kunsthaus Zürich, Heimplatz",
     (47.3697, 8.5389): "Paradeplatz, Zürich",

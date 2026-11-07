@@ -189,6 +189,7 @@ def week_draft(site: Site, week: str) -> tuple[dict[str, Any] | None, dict[str, 
                 for d in day_range(monday, sunday)
                 for line in idx.day(d)
                 if str(line["id"]) not in retracted
+                and _reads(site.tiers, int(line.get("tier", 0)))  # evidence above the gate is none
             }
             people = drafts.people_of(idx)
         return drafts.for_unit(
@@ -471,7 +472,7 @@ def _goals(
             rows.append('<p class="mute">Not reviewed yet.</p>\n')
         review = proposed.get(g.line)
         if review is not None and site.with_drafts:
-            rows.append(verdict_html(site, review, segments, names))
+            rows.append(verdict_html(site, review, segments, names, day_rhythm.model_of(draft or {})))
         command = f"logbook goal review {g.line} {'|'.join(VERDICTS)} --period week --at {sunday}"
         rows.append(
             f'<p>Your verdict, one of five: <code class="cmd">{escape(command)}</code>, or in the week\'s'
@@ -527,22 +528,26 @@ def prefill(site: Site, draft: Mapping[str, Any] | None, names: Sequence[str]) -
     return said, _lines(site, ids)
 
 
-def verdict_html(site: Site, review: Mapping[str, Any], segments: Sequence[Any], names: Sequence[str]) -> str:
-    """The verdict the week's draft proposes for a goal, in pencil: the verdict, and the sentence it
-    rests on with that sentence's lines when it has them and sets no number beside a name; the verdict
-    alone, with no sentence, otherwise (no pencil without evidence)."""
+def verdict_html(
+    site: Site, review: Mapping[str, Any], segments: Sequence[Any], names: Sequence[str], model: str = ""
+) -> str:
+    """The verdict the week's draft proposes for a goal, in pencil with the model's name: the verdict,
+    the sentence it rests on when that sets no number beside a name, and that sentence's lines; nothing
+    when the sentence cites none, or there is none (no pencil without evidence: the verdict is a
+    model's word too)."""
     index = review.get("segment")
-    why = lines = ""
-    if isinstance(index, int) and not isinstance(index, bool) and 0 <= index < len(segments):
-        segment = segments[index]
-        ids = drafts.pencil_ids(segment) if isinstance(segment, dict) else None
-        said = str(segment.get("text") or "") if ids is not None else ""
-        if ids is not None and not beside(said, names):
-            why = f": {escape(said)}"
-            lines = _lines(site, ids)
+    if not (isinstance(index, int) and not isinstance(index, bool) and 0 <= index < len(segments)):
+        return ""
+    segment = segments[index]
+    ids = drafts.pencil_ids(segment) if isinstance(segment, dict) else None
+    if ids is None:
+        return ""
+    said = str(segment.get("text") or "")
+    why = "" if beside(said, names) else f": {escape(said)}"
+    who = f' <span class="sc">{escape(model)}</span>' if model else ""
     return (
-        '<div class="paper"><p>The week\'s draft proposes'
-        f" {escape(str(review.get('disposition')))}{why}</p>\n{lines}</div>\n"
+        f'<div class="paper"><p class="eyebrow">Pencil{who}</p>\n<p>The week\'s draft proposes'
+        f" {escape(str(review.get('disposition')))}{why}</p>\n{_lines(site, ids)}</div>\n"
     )
 
 
