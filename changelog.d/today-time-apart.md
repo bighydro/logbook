@@ -1,0 +1,3 @@
+### Fixed
+- Today, the morning's plan on the Day page (where `/today` lands), gives a time its own column: each row of the plan, what is due and the day's tasks puts its time in a `<time>` cell of its own (`all day` for an all-day entry, `due`, `task` or `trip` where there is no clock), a column on a wide screen and a line above the row on a phone, and the title and the people are the row's text. A title that opens with a name (`Ola Nordmann's birthday cake` at 17:00) no longer reads as `17:00 · Ola Nordmann…` in one row.
+- A promise said more than a week before the day it is due says the person after a word, `you were promised on 2026-05-20, by Ola Nordmann` (`, to …` for one you made), on Today and in the Day's loose ends, never a date beside a name.

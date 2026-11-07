@@ -388,7 +388,7 @@ def test_the_ribbon_says_why_a_day_has_no_stay(tmp_path: Path, monkeypatch: pyte
 def test_morning_lists_today_s_plan_then_what_is_due(lb: Logbook) -> None:
     today = _part(_page(_site(lb, THURSDAY, "07:00"), THURSDAY), "today")
     assert '<svg class="ribbon"' in today
-    rows = re.findall(r'<li class="(plan|due)">', today)
+    rows = re.findall(r'<dt class="(plan|due)">', today)
     assert "due" in rows, today
     assert "you were promised on Wednesday" in today and "Ola Nordmann" in today
     assert "the photos of the berth" in today

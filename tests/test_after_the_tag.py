@@ -116,7 +116,12 @@ def test_an_all_day_entry_says_all_day_on_the_day_page_today_and_the_week(lb: Lo
     week = _page(lb, f"/week/{WEEK}", clock="12:00")
     said = {
         "day": re.findall(r"<dt>all day</dt><dd>(.*?)</dd>", day, re.S),
-        "today": re.findall(r'<li class="plan"><div class="t">all day</div><span>(.*?)</li>', today, re.S),
+        "today": re.findall(
+            r'<dt class="plan"><time class="t" datetime="[^"]+">all day</time></dt>'
+            r'<dd class="plan">(.*?)</dd>',
+            today,
+            re.S,
+        ),
         "week": re.findall(r'<p class="allday">all day: (.*?)</p>', week, re.S),
     }
     for name, page in (("day", day), ("today", today), ("week", week)):
@@ -128,6 +133,7 @@ def test_an_all_day_entry_says_all_day_on_the_day_page_today_and_the_week(lb: Lo
             "the ribbon draws and says no all-day entry"
         )
     assert '<div class="t">00:00</div>' not in today
+    assert ">00:00</time>" not in today, "no midnight in Today's time column either"
 
 
 def test_an_all_day_entry_says_all_day_in_the_digest(lb: Logbook) -> None:
