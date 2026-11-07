@@ -232,7 +232,7 @@ def _gated(site: Site, tiers: tuple[int, ...]) -> person_page.Everyone | None:
         return int(line.get("tier") or 0) in gate
 
     report = people.read(lb, whole[0], whole[1], site.airports, admit=admit)
-    contacts = people_drift.real_contacts(lb, report)
+    contacts = people_drift.real_contacts(lb, report, admit=admit)
     with lb.index() as idx:
         allowed = {r.id for r in _rows(idx, [c.line for c in contacts.values()], tiers)}
     contacts = {entity: c for entity, c in contacts.items() if c.line in allowed}

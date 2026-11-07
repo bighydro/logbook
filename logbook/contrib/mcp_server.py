@@ -74,7 +74,7 @@ from ..core.chain import Line, is_sealed
 from ..core.drafts import Allowed
 from ..core.export import parse_day
 from ..core.flights import Airports
-from ..core.index import RETRACTED, EvidenceRow, Index, LocationRow, Place
+from ..core.index import RETRACTED, EvidenceRow, Index, LocationRow, Place, SearchRow
 from ..core.resolve import Ref, labels
 from ..core.store import (
     NOT_WAITING,
@@ -509,6 +509,178 @@ class GatedIndex(Index):
             Place(int(seq), str(id_), str(at), str(kind), int(tier), str(file), int(offset))
             for seq, id_, at, kind, tier, file, offset in found
         ]
+
+    # -- what `Index` reads from its own columns, or from the files without `read`: each held to the
+    # ceiling here, so no reader that asks the index for a line, an id or a count gets one above it.
+    # `existing` is the whole record's: `Logbook.append` asks it whether a line is written already, and
+    # a line above the ceiling is, so a write through this index never writes it twice. `holders` and
+    # `lines_of` serve `import trip-bundle` and the adapters' own checks, which never run through a
+    # GatedLogbook (its one writer is `Logbook.append`): through it they are reads like any other.
+    # `superseded` stays whole too: a line a correction above the ceiling replaced stays replaced, as
+    # one the owner raised to a higher tier by writing it again there must not come back below it.
+
+    def _allowed_seqs(self, seqs: Iterable[int]) -> set[int]:
+        """Of `seqs`, those of lines the gate allows (by the index's columns, `_cut`); the rest counted."""
+        wanted = sorted({int(s) for s in seqs})
+        allowed: set[int] = set()
+        for n in range(0, len(wanted), 500):
+            chunk = wanted[n : n + 500]
+            where = f"seq IN ({', '.join('?' * len(chunk))})"
+            self._count_above(where, chunk)
+            allowed.update(
+                int(seq)
+                for (seq,) in self.db.execute(
+                    f"SELECT seq FROM lines WHERE {where} AND {self._cut}", (*chunk, *self.gate.cut)
+                )
+            )
+        return allowed
+
+    def by_seqs(self, seqs: Iterable[int]) -> dict[int, Line]:
+        return {seq: line for seq, line in super().by_seqs(seqs).items() if self.gate.keep(line)}
+
+    def ids(self, seqs: Iterable[int]) -> dict[int, str]:
+        wanted = list(seqs)
+        allowed = self._allowed_seqs(wanted)
+        return {seq: id_ for seq, id_ in super().ids(wanted).items() if seq in allowed}
+
+    def lines_of(self, keys: Iterable[tuple[str, str]]) -> dict[tuple[str, str], Line]:
+        """`Index.lines_of` among the lines the gate allows: the first such line of each key, as the
+        plain index of those lines alone would answer, never the key dropped for a line above it."""
+        places: dict[tuple[str, str], tuple[str, int]] = {}
+        for source, raw_id in dict.fromkeys(keys):
+            found = self.db.execute(
+                f"SELECT file, offset FROM lines WHERE source = ? AND raw_id IN (?, ?) AND {self._cut}"
+                " ORDER BY seq LIMIT 1",
+                (*self._forms(source, raw_id), *self.gate.cut),
+            ).fetchone()
+            if found is not None:
+                places[(source, raw_id)] = (str(found[0]), int(found[1]))
+        lines = Index.read(self, list(places.values()))
+        return {key: line for key, line in zip(places, lines, strict=True) if self.gate.keep(line)}
+
+    def line_id(self, source: str, raw_id: str) -> str | None:
+        found = self.db.execute(
+            f"SELECT id FROM lines WHERE source = ? AND raw_id IN (?, ?) AND {self._cut}"
+            " ORDER BY seq LIMIT 1",
+            (*self._forms(source, raw_id), *self.gate.cut),
+        ).fetchone()
+        return None if found is None else str(found[0])
+
+    def holders(self, raw_ids: Iterable[str]) -> dict[str, set[str]]:
+        wanted = sorted(set(raw_ids))
+        forms = {raw_id: raw_id for raw_id in wanted}
+        forms.update({self._forms("", raw_id)[2]: raw_id for raw_id in wanted})
+        keys = sorted(forms)
+        found: dict[str, set[str]] = {}
+        for n in range(0, len(keys), 500):
+            chunk = keys[n : n + 500]
+            rows = self.db.execute(
+                f"SELECT raw_id, source FROM lines WHERE raw_id IN ({', '.join('?' * len(chunk))})"
+                f" AND {self._cut}",
+                (*chunk, *self.gate.cut),
+            ).fetchall()
+            for stored, source in rows:
+                found.setdefault(forms[str(stored)], set()).add(str(source))
+        return found
+
+    def newest(self, source: str, kind: str) -> str | None:
+        found = self.db.execute(
+            f"SELECT MAX(at) FROM lines WHERE kind = ? AND source = ? AND {self._cut}",
+            (kind, source, *self.gate.cut),
+        ).fetchone()
+        return None if found is None or found[0] is None else str(found[0])
+
+    def kind_names(self) -> list[str]:
+        return [
+            str(kind)
+            for (kind,) in self.db.execute(
+                f"SELECT DISTINCT kind FROM lines WHERE {self._cut} ORDER BY kind", self.gate.cut
+            )
+        ]
+
+    def kinds(self) -> list[dict[str, Any]]:
+        found = self.db.execute(
+            "SELECT kind, count(*), min(day_local), max(day_local), count(DISTINCT source) FROM lines"
+            f" WHERE {self._cut} GROUP BY kind ORDER BY count(*) DESC, kind",
+            self.gate.cut,
+        ).fetchall()
+        return [
+            {"kind": kind, "lines": n, "first": first, "last": last, "sources": sources}
+            for kind, n, first, last, sources in found
+        ]
+
+    def years(self) -> list[dict[str, Any]]:
+        found = self.db.execute(
+            f"SELECT substr(day_local, 1, 4), count(*) FROM lines WHERE {self._cut} GROUP BY 1 ORDER BY 1",
+            self.gate.cut,
+        ).fetchall()
+        return [{"year": year, "lines": n} for year, n in found]
+
+    def totals(self) -> tuple[int, str | None, str | None]:
+        n, first, last = self.db.execute(
+            f"SELECT count(*), min(at), max(at) FROM lines WHERE {self._cut}", self.gate.cut
+        ).fetchone()
+        return int(n), first, last
+
+    def kind_source_days(
+        self, first: str, last: str, kinds: Sequence[str], tiers: Sequence[int] | None = None
+    ) -> tuple[int, dict[tuple[str, str], int]]:
+        where = f"day_local BETWEEN ? AND ? AND kind != 'retraction' AND {self._cut}"
+        args: list[object] = [first, last, *self.gate.cut]
+        if tiers is not None:
+            where += f" AND tier IN ({','.join('?' * len(tiers))})"
+            args += [int(t) for t in tiers]
+        (logged,) = self.db.execute(
+            f"SELECT count(DISTINCT day_local) FROM lines WHERE {where}", args
+        ).fetchone()
+        marks = ",".join("?" * len(kinds))
+        found = self.db.execute(
+            f"SELECT kind, source, count(DISTINCT day_local) FROM lines WHERE {where} AND kind IN ({marks})"
+            " GROUP BY kind, source",
+            (*args, *kinds),
+        ).fetchall()
+        return int(logged), {(str(kind), str(source)): int(n) for kind, source, n in found}
+
+    def media_by_source(self) -> Iterator[tuple[str, str, int]]:
+        for source, sha256, n in self.db.execute(
+            f"SELECT source, media, count(*) FROM lines WHERE media IS NOT NULL AND id NOT IN ({RETRACTED})"
+            f" AND {self._cut} GROUP BY source, media ORDER BY source, media",
+            self.gate.cut,
+        ):
+            yield str(source), str(sha256), int(n)
+
+    def attachment_counts(self, present: Callable[[str], bool]) -> dict[str, int]:
+        lines, referenced, found = 0, 0, 0
+        for sha256, n in self.db.execute(
+            f"SELECT media, count(*) FROM lines WHERE media IS NOT NULL AND {self._cut} GROUP BY media",
+            self.gate.cut,
+        ):
+            lines += int(n)
+            referenced += 1
+            if present(str(sha256)):
+                found += 1
+        return {"referenced": referenced, "lines": lines, "present": found}
+
+    def search(
+        self,
+        expression: str,
+        max_tier: int,
+        first_day: str,
+        last_day: str,
+        kinds: Sequence[str] | None,
+        limit: int,
+    ) -> list[SearchRow]:
+        """`Index.search` at or below the ceiling whatever `max_tier` asks, and a draft only as the
+        gate allows it (its seq); a hit above it counted. A draft held back is asked past, so `limit`
+        hits come back while there are as many the gate allows (a caller reads "more" by the count)."""
+        top, want = min(max_tier, self.gate.max_tier), limit
+        while True:
+            found = super().search(expression, top, first_day, last_day, kinds, want)
+            allowed = self._allowed_seqs(row[0] for row in found)
+            kept = [row for row in found if row[0] in allowed]
+            if len(kept) >= limit or len(found) < want:
+                return kept[:limit]
+            want *= 2
 
 
 def ceiling(root: Path, allow_tier_3: bool = False) -> int:

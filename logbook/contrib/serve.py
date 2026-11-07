@@ -663,6 +663,7 @@ class Site:
         self._head: str | None = None  # the head the index was last brought to by `current`
         self._indexed: str | None = None  # the head `_add_indexes` last tried
         self._started = secrets.token_hex(4)  # in every tag: after a restart (a new version), every page anew
+        self._form_key_bytes: bytes | None = None  # `_form_key`, read once
         # what is kept between requests (`_keep`, `shared`), under one lock held only to look and to put
         self._kept_lock = threading.Lock()
         self._kept: dict[str, Response] = {}  # a page by its tag, the latest asked for last
@@ -1291,7 +1292,7 @@ class Site:
                             " without one); nothing was written"
                         )
                     if found.hidden:
-                        changed = self._reflection_since(found, form.get("reflection") or "")
+                        changed = self._reflection_since(found, form.get("reflection") or "", day)
                     else:
                         changed = form.get("reflection") != found.named
                     if changed or form.get("proposals") != found.digest:
@@ -1418,7 +1419,7 @@ class Site:
         note = "" if r is None or r.note is None else str(r.note["id"])
         if hidden:
             with self.lb.index() as idx:
-                named = _read_through(idx.indexed()[0])
+                named = _read_through(idx.indexed()[0], self._form_key(), day)
         else:
             named = note
         proposals: list[reflect.Proposal] = []
@@ -1443,18 +1444,26 @@ class Site:
             lines, retracted, r, proposals, draft, earlier, kept, digest, pencil, word, hidden, named
         )
 
-    def _reflection_since(self, found: Closing, read: str) -> bool:
+    def _form_key(self) -> bytes:
+        """The key `_read_through` seals how far a page read with: this machine's own, beside the index
+        (`FORM_KEY`, made once, readable by the owner alone), never in the record or on a page."""
+        if self._form_key_bytes is None:
+            self._form_key_bytes = _form_key(self.lb.index_path.parent / FORM_KEY)
+        return self._form_key_bytes
+
+    def _reflection_since(self, found: Closing, read: str, day: str) -> bool:
         """Whether the reflection Sign would sign with is not the one standing when a page that reads no
         notes was read (`read`, `_read_through`): it was written after the page's last line, or a line of
-        the day was retracted after it; a value that is not one is a change."""
-        seq = int(read, 16) if re.fullmatch(r"[0-9a-f]{16}", read) else -1
+        the day was retracted after it; a value that is not one (`_read_back`) is a change."""
+        found_seq = _read_back(read, self._form_key(), day)
+        seq = -1 if found_seq is None else found_seq
         r = found.reflection
         if seq < 0 or r is None or r.note is None or int(r.note["seq"]) > seq:
             return True
-        day = {str(line["id"]) for line in found.lines}
+        on_day = {str(line["id"]) for line in found.lines}
         with self.lb.index() as idx:
             later = [line for line in idx.retractions() if int(line["seq"]) > seq]
-        return any(str((line.get("payload") or {}).get("supersedes")) in day for line in later)
+        return any(str((line.get("payload") or {}).get("supersedes")) in on_day for line in later)
 
     def _star(self, form: Mapping[str, str]) -> Response:
         """The Day page's star: `act` `star` or `unstar` on the `line` of a row of `day`, through
@@ -2066,8 +2075,12 @@ class Site:
         return footer
 
     def _whole(self) -> tuple[str, str] | None:
-        """The days the owner's track covers, else any line's; None for an empty record."""
-        return reading.record_days(self.lb, "location") or reading.record_days(self.lb)
+        """The days the owner's track covers, else any line's; None for an empty record. Through the
+        page's gate: the days of the lines at its tiers alone, so no window opens on a day only a line
+        above it is on."""
+        return reading.record_days(self.lb, "location", self.tiers) or reading.record_days(
+            self.lb, tiers=self.tiers
+        )
 
     def tier_small(self, facts: str, tier: int | None) -> str:
         """A shelf header's `<small>`: its facts, then what is true of the page's tier — `read at tier
@@ -2093,6 +2106,20 @@ class Site:
             return f"tier {read[0]} alone"
         return "tiers " + ", ".join(map(str, read[:-1])) + f" and {read[-1]}"
 
+    def _size(self) -> int:
+        """How many lines `page_index` says the record holds: the head's seq, else the lines at the
+        page's tiers."""
+        if self.tiers is None:
+            return int(self.current().get("seq") or 0)
+        gate = sorted({int(t) for t in self.tiers})
+        if not gate:
+            return 0
+        with self.lb.index() as idx:
+            (n,) = idx.db.execute(
+                f"SELECT count(*) FROM lines WHERE tier IN ({', '.join('?' * len(gate))})", gate
+            ).fetchone()
+        return int(n)
+
     def _record_days(self) -> tuple[str, str] | None:
         """`_whole`, read once for the record as it stands (`shared`): `/assets` is never kept."""
         return self.shared(("whole",), self._whole)
@@ -2100,12 +2127,16 @@ class Site:
     def _nothing_held(self, day: str) -> str:
         """The one sentence of a Day the record holds nothing for (`/today` on a record that ended long
         ago): the record's first and last day, each a link to its Day. Empty when the day holds lines
-        the server's tier gate leaves out: the record is not empty there, only this reading."""
+        the server's tier gate leaves out: the record is not empty there, only this reading (#418,
+        `test_library_first_read`), and its first and last day are the whole record's, gate or none."""
         with self.lb.index() as idx:
             held, _per_source = idx.source_days(day, day)
         if held:
             return ""
-        whole = self._record_days()
+        whole = self.shared(
+            ("whole, every tier",),
+            lambda: reading.record_days(self.lb, "location") or reading.record_days(self.lb),
+        )
         if whole is None:
             return '<p class="mute">The record has no lines yet.</p>\n'
         first, last = whole
@@ -2128,9 +2159,12 @@ class Site:
     def page_index(self) -> str:
         """The record's size and days, then the shelves. The size is the head's seq (`current`, the
         count `doctor` prints), the days two steps down the day_local index (`Index.span`), both kept
-        for the record as it stands (`shared`): never a pass over the lines, however many it holds."""
-        total = int(self.current().get("seq") or 0)
-        span = self.shared(("span",), lambda: reading.record_days(self.lb))
+        for the record as it stands (`shared`): ungated, never a pass over the lines, however many it
+        holds. Through the page's gate, the lines at its tiers and their days (`_size`): one count over
+        the index's rows (no index has the tier), once per head, and never the seq, which counts every
+        line above it too."""
+        total = self.shared(("size",), self._size)
+        span = self.shared(("span",), lambda: reading.record_days(self.lb, tiers=self.tiers))
         whole = self._record_days()
         parts = ["<h1>Logbook</h1>\n"]
         if whole is None or span is None:
@@ -2311,7 +2345,9 @@ class Site:
             said = day_rhythm.birthday_said(this_week[0], day, person)
             pieces["one-person"] = f'<div class="card"><p class="ink">{said}</p></div>\n'
         elif morning and d == today and not self.static:  # one reconnect, the birthday's morning aside
-            drifted = self._day_later(("drift", day), lambda: day_rhythm.drifted(self.lb, day, self.airports))
+            drifted = self._day_later(
+                ("drift", day), lambda: day_rhythm.drifted(self.lb, day, self.airports, self.tiers)
+            )
             pick = None if drifted is None else day_rhythm.reconnect(drifted, day, self.tiers)
             if pick is not None:
                 said = day_rhythm.reconnect_said(pick, day, person)
@@ -3557,7 +3593,7 @@ class Site:
         """The journeys that began in the year (default the record's last), the latest first, each
         a row: its name or dates linking its page, the bounds, the nights away, the places, the
         canonical people, the photos, the draft folded, and the evidence folded."""
-        located = reading.record_days(self.lb, "location")
+        located = reading.record_days(self.lb, "location", self.tiers)
         this = year or (located[1][:4] if located is not None else None)  # the door is its year's page
         shelf = self.shared(
             ("journeys", this), lambda: journeys.shelf(self.lb, this, self.airports, self.tiers)
@@ -4770,6 +4806,7 @@ class Site:
             self._today_of(),
             self.header(),
             doors.ROOT + self.header_style(),
+            self.tiers,
         )
         if found is None:
             return self.document(
@@ -4779,8 +4816,15 @@ class Site:
 
     def _activity(self, first: str, last: str) -> list[dict[str, Any]]:
         """`Index.activity` of the record as it stands, read once per window: the page moves with the
-        clock, what it counts only with the head."""
-
+        clock, what it counts only with the head. Through the page's gate, of the lines at its tiers
+        alone (`gaps.activity_through`): a source, a count, a silence or a missing day never rests on
+        a line above it."""
+        if self.tiers is not None:
+            gate = tuple(sorted({int(t) for t in self.tiers}))
+            return self.shared(
+                ("activity", first, last, *map(str, gate)),
+                lambda: gaps.activity_through(self.lb, first, last, gate),
+            )
         return self.shared(("activity", first, last), lambda: gaps.activity_of(self.lb, first, last))
 
     def page_gaps(self, since: str | None) -> str:
@@ -4832,9 +4876,10 @@ class Site:
             rows,
         )
         span = f"since {data['since']}" if data["since"] else "since each source's first line"
+        read = "" if self.tiers is None else f" at {self.gate_words()}"
         body += (
             f'<p class="mute">{escape(span)}, today {escape(data["today"])} ({escape(data["timezone"])});'
-            " counted through the index, every line, retracted or not</p>\n"
+            f" counted through the index, every line{escape(read)}, retracted or not</p>\n"
         )
         return self.document("gaps", body)
 
@@ -5607,11 +5652,63 @@ def _reflect_elsewhere(day: str) -> str:
     )
 
 
-def _read_through(seq: int) -> str:
-    """What the Sign form of a page that reads no notes carries for the reflection it cannot show: the
-    last line the page read, sixteen hex digits, the same whether the day has a reflection or not (the
-    desk, after the tag), so `Site._reflection_since` tells a form older than the reflection apart."""
-    return f"{max(seq, 0):016x}"
+FORM_KEY = "form-key"  # beside the index: the key `_read_through` seals with (`Site._form_key`)
+FORM_KEY_BYTES = 32
+
+
+def _form_key(path: Path) -> bytes:
+    """The key at `path`, made there (random, readable by the owner alone) when there is none or it is
+    not one; a key made at once by another process wins or loses whole (moved into place), and a form
+    sealed with the one that lost reads as a change (`_read_back`), as a form older than the page."""
+    with contextlib.suppress(OSError):
+        found = path.read_bytes()
+        if len(found) == FORM_KEY_BYTES:
+            return found
+    key = secrets.token_bytes(FORM_KEY_BYTES)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, temp = tempfile.mkstemp(dir=path.parent, prefix=".form-key-")
+    try:
+        with os.fdopen(fd, "wb") as f:
+            f.write(key)
+        os.chmod(temp, 0o600)
+        os.replace(temp, path)
+    finally:
+        with contextlib.suppress(OSError):
+            os.unlink(temp)
+    return key
+
+
+def _sealed_part(key: bytes, purpose: bytes, data: bytes) -> bytes:
+    return hashlib.blake2b(data, digest_size=8, key=key, person=b"logbook-" + purpose).digest()
+
+
+def _read_through(seq: int, key: bytes, day: str) -> str:
+    """What the Sign form of a page that reads no notes carries for the reflection it cannot show: how
+    far the page read (the record's last seq), the same whether the day has a reflection or not (the
+    desk, after the tag), so `Site._reflection_since` tells a form older than the reflection apart. It
+    is sealed with this machine's key (`_form_key`): forty-eight hex digits a reader of the page
+    cannot count the record's lines by, those above its gate among them (the review of 26 October),
+    the same for the same seq and day. A nonce of the day and the seq, the seq masked with a stream of
+    the nonce, and a tag of the day, the nonce and the body, each a keyed BLAKE2b (`_read_back` opens
+    it): a form of one day's page never passes for another day's."""
+    plain = max(seq, 0).to_bytes(8, "big")
+    on = day.encode("utf-8")
+    nonce = _sealed_part(key, b"nonce", on + b"\0" + plain)
+    body = bytes(a ^ b for a, b in zip(plain, _sealed_part(key, b"mask", nonce), strict=True))
+    return (nonce + body + _sealed_part(key, b"tag", on + b"\0" + nonce + body)).hex()
+
+
+def _read_back(token: str, key: bytes, day: str) -> int | None:
+    """The seq `_read_through` sealed in `token` with `key` for `day`; None for a token it did not seal
+    (another key, another day, a form from before the seal, a token changed by hand)."""
+    if re.fullmatch(r"[0-9a-f]{48}", token) is None:
+        return None
+    raw = bytes.fromhex(token)
+    nonce, body, tag = raw[:8], raw[8:16], raw[16:]
+    if not secrets.compare_digest(tag, _sealed_part(key, b"tag", day.encode("utf-8") + b"\0" + nonce + body)):
+        return None
+    plain = bytes(a ^ b for a, b in zip(body, _sealed_part(key, b"mask", nonce), strict=True))
+    return int.from_bytes(plain, "big")
 
 
 def _keep_cli_html(day: str) -> str:
