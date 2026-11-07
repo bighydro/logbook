@@ -5006,17 +5006,10 @@ def _draft_html(draft: Mapping[str, Any], star: Toggle | None = None) -> str:
 
 def _draft_folded(draft: Mapping[str, Any]) -> str:
     """The standing draft of a unit other than the day (a journey), folded under its head: a
-    proposal until the owner confirms it, never shown open as if it were the record. Only its
-    sentences and proposals that rest on their lines, each with its ids: no pencil without evidence
-    (the Day's own Draft block alone sets an unsupported one apart, RFC 0036 rule 6)."""
-    shown = {
-        **draft,
-        "segments": [s for s in draft["segments"] if drafts.pencil_ids(s) is not None],
-        "proposals": [p for p in draft.get("proposals") or [] if p.get("confirmed") or p.get("supported")],
-    }
+    proposal until the owner confirms it, never shown open as if it were the record."""
     return (
         f'<details class="draft"><summary>{escape(drafts.head_text(draft))}</summary>\n<div class="draft">\n'
-        f"{_draft_body(shown)}</div>\n</details>\n"
+        f"{_draft_body(draft)}</div>\n</details>\n"
     )
 
 

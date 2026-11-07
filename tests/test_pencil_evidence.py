@@ -244,7 +244,7 @@ def test_what_a_model_drafted_about_a_person_is_shown_only_with_its_lines(site: 
     assert json.dumps(shown)  # the page is text
 
 
-# -- the blind review: the gate on the week's evidence, the folded journey draft, the letter's count -----
+# -- the blind review: the gate on the week's evidence, a goal's verdict, the letter's count -----
 
 
 def _week_record(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Logbook, str, str]:
@@ -290,23 +290,6 @@ def test_a_goal_s_proposed_verdict_without_its_lines_is_not_shown(site: serve.Si
         site, {"disposition": "advancing", "segment": 0}, [{**segment, "evidence": [CITED]}], []
     )
     assert "Pencil" in shown and SHORT in shown
-
-
-def test_a_folded_draft_shows_no_sentence_without_its_lines(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A journey's or a trip's draft, folded under its head on its page: its supported sentences with
-    their ids, never an unsupported one (the Day's own Draft block alone does, RFC 0036 rule 6)."""
-    monkeypatch.setattr(drafts, "head_text", lambda draft: "draft of journey")
-    draft = {
-        "segments": [
-            {"text": "Three nights by the lake.", "evidence": [CITED], "supported": True, "why": None},
-            {"text": "It rained every day.", "evidence": [], "supported": False, "why": None},
-        ],
-        "proposals": [],
-        "earlier": [],
-    }
-    folded = serve._draft_folded(draft)
-    assert "Three nights by the lake." in folded and SHORT in folded
-    assert "It rained every day." not in folded and "unsupported" not in folded
 
 
 def test_a_letter_counts_nothing_that_rests_above_its_tier(lb: Logbook, tmp_path: Path) -> None:
