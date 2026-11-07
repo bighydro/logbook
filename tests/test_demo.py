@@ -314,3 +314,36 @@ def test_show_prints_a_day_and_the_keepers(lb: Logbook, capsys: pytest.CaptureFi
     keepers = _json(capsys, "show", "keepers")
     assert len(keepers["keepers"]) >= 3
     assert {k["lane"] for k in keepers["keepers"]} == {"memory", "art"}
+
+
+# -- the demo's places: the persona's coordinates, or public ones (the privacy review of 26 October) ------
+
+# Every place the demo record visits, by where it is: the persona's own synthetic coordinates
+# (`tests/persona.py`), an airport, open water or a harbour town, or a public landmark named here. A
+# place a person lives, works or stays at (a home, a flat, an office, a hotel, a cabin) is never a
+# real address: it is the persona's coordinate or a public landmark of its city.
+PERSONA = {(59.9139, 10.7522), (59.9100, 10.7600), (59.9200, 10.7400), (59.9050, 10.7350), (59.8500, 10.6000),
+           (60.1939, 11.1004), (47.4581, 8.5481), (47.3769, 8.5417)}  # fmt: skip
+PUBLIC = {
+    (59.9260, 10.7000): "Frogner Park, Oslo",
+    (59.8536, 8.6486): "Gaustatoppen, its summit and its tourist cabin",
+    (59.4300, 10.4800): "the Oslofjord off Horten",
+    (59.0500, 10.0300): "Larvik harbour",
+    (59.0450, 10.0450): "Larvik, the town",
+    (47.3703, 8.5481): "Kunsthaus Zürich, Heimplatz",
+    (47.3697, 8.5389): "Paradeplatz, Zürich",
+    (55.6180, 12.6508): "Copenhagen Airport",
+    (55.6800, 12.5856): "Kongens Nytorv, Copenhagen",
+    (55.6855, 12.5795): "Kongens Have, Copenhagen",
+}
+
+
+def test_every_place_the_demo_visits_is_the_persona_s_or_public() -> None:
+    spots = {name: value for name, value in vars(demo).items() if isinstance(value, demo.Spot)}
+    assert len(spots) >= 18, "the premise: the demo's places are its module's Spots"
+    for name, spot in spots.items():
+        where = (spot.lat, spot.lon)
+        assert where in PERSONA or where in PUBLIC, (
+            f"{name} {spot.name!r} at {where}: neither the persona's nor public"
+        )
+    assert demo.ZH_MUSEUM[1:3] == (47.3703, 8.5481), "the museum is a museum: the Kunsthaus"

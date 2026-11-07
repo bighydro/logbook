@@ -48,11 +48,11 @@
   18:00–08:55+1  stay  Home · 14 h 55 min
   night          Home · 18:00–08:55+1 · home
 2026-06-06
-  08:55–12:00    move  119 km · 3 h 5 min · car
+  08:55–12:00    move  118 km · 3 h 5 min · car
   12:00–13:55+1  stay  Cabin · 25 h 55 min · 1 event, 1 note, 2 messages, 3 photos
   night          Cabin · 12:00–13:55+1
 2026-06-07
-  13:55–17:00    move  119 km · 3 h 5 min · car
+  13:55–17:00    move  118 km · 3 h 5 min · car
   17:00–04:55+1  stay  Home · 11 h 55 min · 1 note, 1 call
   night          Home · 17:00–04:55+1 · home
 2026-06-08

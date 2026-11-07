@@ -13,7 +13,7 @@
       "nights": 6
     }
   ],
-  "head": "f68cabe0349a425a41f6debb4528f0f4f93457c2f49b64456295c88c59b7aca3",
+  "head": "d32cdf194e465ccadd8b9a5c9b78eb0c024d42ccacd908879658edab5e3b2ef7",
   "window": {
     "since": "2026-06-09",
     "until": "2026-06-23"
