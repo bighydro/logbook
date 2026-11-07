@@ -2127,14 +2127,16 @@ class Site:
     def _nothing_held(self, day: str) -> str:
         """The one sentence of a Day the record holds nothing for (`/today` on a record that ended long
         ago): the record's first and last day, each a link to its Day. Empty when the day holds lines
-        the server's tier gate leaves out: the record is not empty there, only this reading. Through
-        the page's gate, a day only lines above it are on is one the record holds nothing for, as far
-        as the page can tell: the sentence never says there is more."""
+        the server's tier gate leaves out: the record is not empty there, only this reading (#418,
+        `test_library_first_read`), and its first and last day are the whole record's, gate or none."""
         with self.lb.index() as idx:
-            held, _per_source = idx.source_days(day, day, self.tiers)
+            held, _per_source = idx.source_days(day, day)
         if held:
             return ""
-        whole = self._record_days()
+        whole = self.shared(
+            ("whole, every tier",),
+            lambda: reading.record_days(self.lb, "location") or reading.record_days(self.lb),
+        )
         if whole is None:
             return '<p class="mute">The record has no lines yet.</p>\n'
         first, last = whole

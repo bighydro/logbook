@@ -291,15 +291,6 @@ def test_the_day_page_says_who_was_there_from_the_lines_at_its_tiers(
         _absent(records, at("whole", tiers, f"/day/{CLINIC}"), tiers)
 
 
-def test_a_day_only_lines_above_the_gate_touch_reads_as_a_day_the_record_has_not(at: Any) -> None:
-    """The Day of a date only a tier-3 (or tier-2) line is on says the record holds nothing for it,
-    with the days the gate's own lines run over: the sentence is not dropped for a line it cannot read."""
-    _same(at, [f"/day/{OLD_TWO}", f"/day/{OLD_THREE}"])
-    for day in (OLD_TWO, OLD_THREE):
-        assert f"The record holds nothing for {day}" in at("whole", T1, f"/day/{day}")
-    assert f"The record holds nothing for {OLD_THREE}" in at("whole", T12, f"/day/{OLD_THREE}")
-
-
 # -- 4. The pages that count: the shelves, the gaps and the gear's sources, the world, Life's bands -------
 
 

@@ -2,8 +2,8 @@
 - A page read through a gate (`serve --tier`, `export site`) no longer counts, dates or hints at a line
   above it, from the privacy review's LATER list: the People door's last real contact and the Day's
   morning reconnect read the people's contacts through the gate; `/shelves` says the lines at the gate's
-  tiers and their days, not the record's seq; the window every page opens on, the Day's "The record holds
-  nothing for" and the search's year filters run over the days of the lines the gate reads; `/gaps`
+  tiers and their days, not the record's seq; the window every page opens on and the search's year filters
+  run over the days of the lines the gate reads; `/gaps`
   counts its sources, silences and missing days at the gate's tiers; `/world` draws only the tiers the
   gate reads and says it held back only lines the gate reads; a promise closed by a task line above the
   gate is still open through it.
