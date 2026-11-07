@@ -763,10 +763,12 @@ def test_a_page_at_tier_1_shows_and_keeps_nothing_of_a_tier_2_draft(closing: Log
     assert f'value="{KEEP_LEARNED}"' in _form(_page(_site(closing)), "sign"), "the whole record offers it"
 
 
-def test_a_page_at_tier_1_keeps_from_the_tier_1_draft_a_tier_2_one_superseded(closing: Logbook) -> None:
-    """A tier-1 draft that a tier-2 draft superseded is the standing draft through a gate of tier 1:
-    the page offers its sentence, and keeping that number writes the tier-1 draft's words, never the
-    tier-2 draft's sentence of the same number."""
+def test_a_page_at_tier_1_keeps_nothing_of_the_tier_1_draft_a_tier_2_one_superseded(closing: Logbook) -> None:
+    """A tier-1 draft that a tier-2 draft superseded is still the pencil through a gate of tier 1, but it
+    is not the day's current draft: the page shows it in pencil and offers none of its sentences, says a
+    newer draft exists at a tier it does not read, and keeping its number is refused in one sentence
+    that names nothing of the tier-2 draft; neither draft's sentence is written. (Until the fix of
+    `keep and sign take a sentence only from the current draft`, this page kept the tier-1 sentence.)"""
     upper = next(x for x in closing.lines() if x["kind"] == drafts.KIND)
     photo = next(x for x in closing.lines() if x["kind"] == "photo")
     lower = closing.append(
@@ -790,18 +792,27 @@ def test_a_page_at_tier_1_keeps_from_the_tier_1_draft_a_tier_2_one_superseded(cl
     whole = _hidden(_form(_page(_site(closing)), "sign"))
     assert whole["draft"] == again["id"], "the whole record's pencil is the tier-2 draft"
     site = _site(closing, tiers=(1,))
-    sign = _form(_page(site), "sign")
+    shown = _page(site)
+    assert "The light holds late in October." in shown, "the tier-1 draft is still shown, in pencil"
+    sign = _form(shown, "sign")
     assert _hidden(sign)["draft"] == lower["id"]
-    assert "The light holds late in October." in sign
+    assert "The light holds late in October." not in sign, "and none of its sentences is offered"
     for said in _drafted(closing):
         assert html.escape(said, quote=False) not in sign, said
     boxes = re.findall(r'<input type="checkbox" name="keep" value="(\d+)">', sign)
-    assert boxes == ["1"]
+    assert boxes == []
+    assert "newer draft" in _text(sign) and "tier this page does not read" in _text(sign)
+    assert str(again["id"]) not in shown
     seq = _seq(closing)
-    assert _post(site, {**_signing(site), "keep": "1", "act": "sign"}).status == 303
-    kept = [x for x in _after(closing, seq) if x["kind"] == "note"]
-    assert [x["payload"]["text"] for x in kept] == ["The light holds late in October."]
-    assert kept[0]["payload"]["extra"]["from"] == lower["id"]
+    refused = _post(site, {**_signing(site), "keep": "1", "act": "sign"})
+    assert refused.status == 400, refused.body[:400]
+    said = _said(refused)
+    assert f"draft #{lower['seq']}" in said and "superseded" in said, said
+    assert f"#{again['seq']}" not in said and str(again["id"]) not in refused.body.decode("utf-8"), said
+    for words in _drafted(closing):
+        assert html.escape(words, quote=False) not in refused.body.decode("utf-8"), words
+    assert _seq(closing) == seq, "nothing written"
+    assert not [x for x in _after(closing, seq) if x["kind"] == "note"]
 
 
 def test_a_page_at_tier_1_neither_shows_nor_quotes_a_tier_2_word(

@@ -13,6 +13,7 @@ from ..contrib.rows import (
     _line_text,
     by_photo,
     duration_text,
+    kept_from_text,
 )
 
 __all__ = [
@@ -25,4 +26,5 @@ __all__ = [
     "_line_text",
     "by_photo",
     "duration_text",
+    "kept_from_text",
 ]

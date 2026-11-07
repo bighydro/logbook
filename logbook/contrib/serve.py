@@ -1301,10 +1301,7 @@ class Site:
                         )
                     pencil = "" if found.pencil is None else str(found.pencil["line"])
                     if (asking.keep or asking.revisit) and form.get("draft", "") != pencil:
-                        raise Stale(
-                            f"the pencil changed since this page was read (dreamed again, or no longer"
-                            f" shown); /day/{day} is the day as it stands, and nothing was written"
-                        )
+                        raise Stale(self._pencil_since(day, form.get("draft", "")))
                     if answering:
                         plan_now = self._plan_now(day)
                         if form.get("tasks", "") != _tasks_digest(plan_now):
@@ -1320,6 +1317,36 @@ class Site:
             except ValueError as e:  # ReflectError, SignError, NoteError
                 return self._error(400, str(e))
         return Response(303, b"", location=f"/day/{day}#{CLOSE}")
+
+    def _pencil_since(self, day: str, read: str) -> str:
+        """Why a form that keeps from the pencil the page showed (`read`, its draft's id) is refused when
+        that is no longer the pencil: a draft of the day superseded or retracted since says so and names
+        the current draft (`keep.not_current`, through the page's gate); anything else, that the pencil
+        changed. Either way nothing was written."""
+        with self.lb.index() as idx:
+            line = idx.by_id(read) if read else None
+            payload = (line or {}).get("payload") or {}
+            ours = (
+                line is not None
+                and line.get("kind") == drafts.KIND
+                and payload.get("unit") == drafts.UNIT_DAY
+                and payload.get("subject") == day
+                and (self.tiers is None or int(line.get("tier") or 0) in {int(t) for t in self.tiers})
+            )
+            now = keep.current(idx, day) if ours else None
+            retraction = retractions(idx.retractions()).get(read) if ours else None
+        # a retraction above the gate is said by no one here (`_standing_line`); a draft that is still
+        # current was withheld since, not superseded: either is the pencil changed, in those words
+        hidden = retraction is not None and self.tiers is not None
+        hidden = hidden and int((retraction or {}).get("tier") or 0) not in {int(t) for t in self.tiers or ()}
+        still = now is not None and str(now["id"]) == read
+        if line is None or not ours or hidden or still:
+            return (
+                f"the pencil changed since this page was read (dreamed again, or no longer shown); /day/{day}"
+                " is the day as it stands, and nothing was written"
+            )
+        said = keep.not_current(self.lb, day, line, now, self.tiers, retracted=retraction is not None)
+        return f"{said}, and nothing was written"
 
     def _plan_now(self, day: str) -> plan_reader.Plan | None:
         """Today's tasks as `keep` will read them when it answers one, read now under the lock: None
@@ -2847,7 +2874,11 @@ class Site:
         shown = "" if pencil is None else str(pencil["line"])
         out = [f'<input type="hidden" name="draft" value="{escape(shown)}">\n']
         items: list[str] = []
-        if pencil is not None:
+        with self.lb.index() as idx:
+            now = keep.current(idx, day)
+        # the pencil is superseded: nothing kept from it (no pencil at all is no newer draft, and says so)
+        newer = pencil is not None and now is not None and str(now["id"]) != shown
+        if pencil is not None and not newer:
             keepable: list[tuple[int, str, Mapping[str, Any]]] = [
                 (int(segment["keep"]), str(segment["part"]), segment)
                 for segment in pencil["segments"]
@@ -2860,6 +2891,8 @@ class Site:
         out.append('<fieldset class="keep">\n<legend>Keep from the pencil</legend>\n')
         if items:
             out.append('<ol class="keep">\n' + "".join(items) + "</ol>\n")
+        elif newer and now is not None:
+            out.append(self._newer_html(day, now, pencil is not None))
         else:
             nothing = "nothing in it to keep" if pencil is not None else "no pencil on the day to keep from"
             out.append(f'<p class="mute">{nothing}</p>\n')
@@ -2879,6 +2912,31 @@ class Site:
         out.append("</fieldset>\n")
         out.append(self._tasks_html(day))
         return "".join(out)
+
+    def _newer_html(self, day: str, now: Line, shown: bool) -> str:
+        """In place of the keep boxes, when the day's current draft (`now`) is not the pencil the page
+        shows: a newer draft exists, by its number and when it was written, with a link to it as written
+        (`/line/ID`); through the page's gate, one above it is said to exist and never named or linked.
+        Either way the command that keeps from it."""
+        pencil = "the pencil above" if shown else "the pencil"
+        command = f"<code>logbook day sign {escape(day)} --keep N,N</code> keeps from it"
+        if self.tiers is not None and int(now.get("tier") or 0) not in {int(t) for t in self.tiers}:
+            return (
+                f'<p class="mute newer">A newer draft of {escape(day)} exists, at a tier this page does not'
+                f" read, and supersedes {pencil}, so nothing is kept from it here; {command}.</p>\n"
+            )
+        written = escape(keep.written(self.lb, now))
+        said = escape(f"draft #{int(now['seq'])}, written {written}")
+        if drafts.allowed(self.lb.root).allows(now):
+            link = self.link(said, f"/line/{quote(str(now['id']), safe='')}")
+            why = ""
+        else:  # its line's page reads it through the entry too: the link is to the row that says why
+            link = self.link(said, f"/day/{day}#{PENCIL}")
+            why = ", which the dream entry withholds,"
+        return (
+            f'<p class="mute newer">A newer draft of {escape(day)} exists, {link}{why} and supersedes'
+            f" {pencil}, so nothing is kept from it here; {command}.</p>\n"
+        )
 
     def _day_plan(self, day: str, stand_in: bool = True) -> object:
         """The task tool's plan for `day` as `show plan` reads it (tier 1 alone), beside the page on

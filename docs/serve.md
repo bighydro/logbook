@@ -884,10 +884,17 @@ then in ink with the line it became, and no box: a re-sign keeps it and never wr
 answered already says how; the day's word, once kept, stands. Nothing chosen writes nothing: a task
 with no answer is no line, an empty word no word. The tasks are the plan's as `show plan` reads them
 (tier 1 alone), read beside the page on `logbook serve`; until they are read the form says so.
-Through a page's tier gate (a Site that reads fewer tiers than the record holds), the pencil kept from
-is the draft that gate shows, as the rest of the Day reads it: a draft above the gate is neither shown
-nor offered, and a form that names one anyway keeps nothing of it, since `keep.prepared` reads the
-draft through the same gate. So with the day in a word, a note of tier 2: above the gate it is absent
+Only the day's current draft is kept from: the latest not retracted and not superseded, the whole
+record read. When the newer draft is withheld (the `dream` entry no longer allows its tier, or the
+page's gate does not read it), the Day still shows the older draft it superseded, in pencil, but offers
+none of its sentences: the form says a newer draft exists, with a link to it as written (or, when the
+entry withholds it, to the row that says why), and a form that keeps from the older draft anyway is
+refused in one sentence naming the current draft and `logbook day sign DAY --keep N,N`; a draft
+retracted since the page was read is refused the same way. Through a page's tier gate (a Site that
+reads fewer tiers than the record holds), the pencil is the draft that gate shows, as the rest of the
+Day reads it: a draft above the gate is neither shown, offered, named nor linked (a newer one is said
+to exist, at a tier the page does not read), and a form that names one anyway keeps nothing of it,
+since `keep.prepared` reads the draft through the same gate. So with the day in a word, a note of tier 2: above the gate it is absent
 from the page, and the refusal of a second word says the day has one without quoting it.
 
 Every item is checked before the first line is written, by the code `--keep` runs (`keep.prepared`),

@@ -56,6 +56,7 @@ def _day_rows(
     superseded: Mapping[str, int] | None = None,
     descriptions: Mapping[str, Line] | None = None,
     goal_texts: Mapping[str, str] | None = None,
+    kept_from: Mapping[str, str] | None = None,
 ) -> Iterator[str]:
     """One printed row per line, except that a run of location points from one source, unbroken
     by any other row, collapses into one summary, one calendar entry that several sources
@@ -64,7 +65,8 @@ def _day_rows(
     that photo instead of as a row of its own; with no keeper row standing it is a row. `names` is
     the label map; None is the `--raw` path: refs exactly as the sources gave them, no label, no
     fallback. `goal_texts` are the current texts of the goals the day's reviews name, by the id each
-    names (`goals.texts`)."""
+    names (`goals.texts`). `kept_from` says, by a draft's id, which draft a line the owner kept from
+    one came from (`kept_from_text`), so a keep made before its draft was superseded says so."""
     run: list[Line] = []
     rows, folded = events.fold(rows, flights.Airlines.load(), retracted)
     described = descriptions or {}
@@ -90,7 +92,7 @@ def _day_rows(
         else:
             stands_for = folded.get(str(line["id"]))
             sources = f"×{len(stands_for.sources)} sources" if stands_for else None
-            yield _line_row(line, retraction, tz, names, superseded, sources, goal_texts)
+            yield _line_row(line, retraction, tz, names, superseded, sources, goal_texts, kept_from)
             pid = keepers.photo_id_of(line) if line["kind"] == keepers.KIND else None
             if (
                 pid is not None
@@ -113,6 +115,7 @@ def _line_row(
     superseded: Mapping[str, int] | None = None,
     sources: str | None = None,
     goal_texts: Mapping[str, str] | None = None,
+    kept_from: Mapping[str, str] | None = None,
 ) -> str:
     """`sources` stands in for the line's own source on a calendar entry several sources carry
     (`events.fold`): `×2 sources`. A superseded goal or chapter keeps its words, marked; any other
@@ -126,7 +129,39 @@ def _line_row(
     text = _line_text(line, tz, names, goal_texts)
     if by is not None:
         text = f"{text} · superseded by #{by}"
+    extra = (line.get("payload") or {}).get("extra")
+    draft = extra.get(drafts.KEPT_FROM) if isinstance(extra, dict) else None
+    if isinstance(draft, str) and draft in (kept_from or {}):
+        text = f"{text} · {(kept_from or {})[draft]}"
     return f"  {clock}  {line['kind']:<10} {sources or line['source']:<14} {text}"
+
+
+def kept_from_text(
+    lines: Iterable[Line],
+    drafts_by_id: Mapping[str, Line],
+    superseded: Mapping[str, int],
+    retracted: Iterable[str],
+) -> dict[str, str]:
+    """By a draft's id, what a row kept from it says (`extra.from`, RFC 0043 §5): `kept from draft #8`,
+    and `, superseded by #9` or `, retracted` when the draft is no longer the day's current one; for
+    the drafts `drafts_by_id` holds among those `lines` name, an id that is not a draft's left out."""
+    gone = set(retracted)
+    found: dict[str, str] = {}
+    for line in lines:
+        extra = (line.get("payload") or {}).get("extra")
+        named = extra.get(drafts.KEPT_FROM) if isinstance(extra, dict) else None
+        if not isinstance(named, str) or named in found:
+            continue
+        draft = drafts_by_id.get(named)
+        if draft is None or draft.get("kind") != drafts.KIND:
+            continue
+        said = f"kept from draft #{draft['seq']}"
+        if named in gone:
+            said += ", retracted"
+        elif named in superseded:
+            said += f", superseded by #{superseded[named]}"
+        found[named] = said
+    return found
 
 
 def _line_text(

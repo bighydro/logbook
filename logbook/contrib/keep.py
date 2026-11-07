@@ -42,11 +42,13 @@ from __future__ import annotations
 import re
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import date, datetime
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from ..core import day_start, drafts, notes, stars
 from ..core.chain import Line
+from ..core.index import Index
 from ..core.store import Logbook, retractions
 from . import entity_review, plan
 
@@ -215,10 +217,66 @@ def moment(lb: Logbook, day: str, today: str, at: str | None) -> str:
 # -- the draft's sentences, links and photo ----------------------------------------------------------------
 
 
+def current(idx: Index, day: str) -> Line | None:
+    """The day's current draft (`draft/v1` rule 2), the whole record read: the latest draft of `day` not
+    retracted and not named in a later draft's `supersedes`, whatever a reader's gate or the `dream`
+    entry lets it show; None when the day has none. The only draft Keep and sign keeps from."""
+    retracted = retractions(idx.retractions())
+    return drafts.standing(drafts.of_day(idx.by_kind(drafts.KIND), retracted, day))
+
+
+def not_current(
+    lb: Logbook,
+    day: str,
+    kept_from: Line | None,
+    now: Line | None,
+    tiers: Sequence[int] | None = None,
+    retracted: bool = False,
+) -> str:
+    """Why `kept_from`, a draft of `day` that is not its current draft `now`, is kept from by no one, in
+    one sentence: superseded (or `retracted`), then the current draft by its number, its id and when it
+    was written, and how to keep from it; `kept_from` None when no draft is shown at all. Through the
+    gate `tiers`, a current draft above it is said to stand and never named (a reference to a line above
+    the gate leaks), and the command, which reads every tier, keeps from it."""
+    if kept_from is None:
+        head = f"{day} has no draft to keep from"
+    else:
+        state = "retracted" if retracted else "superseded"
+        head = f"draft #{kept_from['seq']} of {day} is {state}"
+    how = f"`logbook day {day}` numbers its sentences and `logbook day sign {day} --keep N,N` keeps from it"
+    if now is None:
+        return f"{head}, and {day} has no current draft; `logbook dream day {day}` dreams one"
+    if tiers is not None and int(now.get("tier") or 0) not in {int(t) for t in tiers}:
+        return f"{head}: the current draft is at a tier this page does not read; {how}"
+    named = (
+        f"the current draft is #{now['seq']} ({drafts.short_id(str(now['id']))}), written {written(lb, now)}"
+    )
+    allowed = drafts.allowed(lb.root)
+    if not allowed.allows(now):
+        why = allowed.why_not(int(now.get("tier") or 0)).split(";")[0]
+        return f"{head}: {named}, and the dream entry withholds it ({why}); once it allows it, {how}"
+    return f"{head}: {named}; {how}"
+
+
+def written(lb: Logbook, line: Line) -> str:
+    """When a line was written (`recorded_at`, else its `at`), in the record's zone, to the minute."""
+    stamp = str(line.get("recorded_at") or line["at"])
+    at = datetime.fromisoformat(stamp.replace("Z", "+00:00"))
+    return at.astimezone(ZoneInfo(str(lb.meta["timezone"]))).strftime("%Y-%m-%d %H:%M")
+
+
 def _sentences(lb: Logbook, day: str, a: Asked, tiers: Sequence[int] | None = None) -> list[Item]:
     with lb.index() as idx:
         draft, withheld = drafts.for_day(idx, day, tiers, allowed=drafts.allowed(lb.root))
         above = drafts.kept_on_day(idx, day) if tiers is not None else {}  # kept by a line above the gate
+        now = current(idx, day)
+        shown = None if draft is None else idx.by_id(str(draft["line"]))
+    # with no draft shown, a page through a gate says only that (below): never of a draft above it
+    no_draft = draft is None and tiers is None
+    if now is not None and (no_draft or (draft is not None and str(draft["line"]) != str(now["id"]))):
+        # the draft a reader shows is not the record's current one: the newer is withheld by the
+        # `dream` entry or above the gate, and keeping from the older would confirm replaced words
+        raise KeepError(not_current(lb, day, shown if draft is not None else None, now, tiers))
     if draft is None:
         why = f"; the standing draft is {drafts.withheld_text(withheld)}" if withheld is not None else ""
         if tiers is not None:
