@@ -282,7 +282,7 @@ class Photo:
 @dataclass
 class Story:
     model: str
-    segments: list[str]
+    segments: list[tuple[str, list[str]]]  # (the sentence, the ids of the lines it rests on)
 
 
 @dataclass
@@ -385,6 +385,7 @@ def build(lb: Logbook, req: Request, airports: Airports | None = None) -> Built:
         retracted = retractions(idx.retractions())
         signed = signing.gate(idx, owner)[0]
         every_draft = idx.by_kind(drafts.KIND)
+        cited = idx.by_ids(_cited(every_draft))  # the lines a story may rest on, read once
         goal_lines = reading.crossing(idx.by_kind(goals.KIND), gate)
         names, resolutions = _names(idx.resolutions(), retracted, gate)
         people = drafts.people_of(idx)  # no figure beside one of them in a story (`drafts.hold_beside`)
@@ -461,7 +462,7 @@ def build(lb: Logbook, req: Request, airports: Airports | None = None) -> Built:
         if not set(u.span) <= set(included):  # a draft of the unit rests on days that do not go in
             held["stories_beyond_the_letter"] += 1
             continue
-        u.story = _story(req, u, every_draft, retracted, allowed, held, crossed, people)
+        u.story = _story(req, u, every_draft, retracted, allowed, held, crossed, people, cited)
     return Built(units, sum(len(u.days) for u in units), held, crossed, above, unsigned, resolutions)
 
 
@@ -723,11 +724,14 @@ def _story(
     held: Counter[str],
     crossed: dict[str, tuple[int, str]],
     people: Collection[str] = (),
+    cited: Mapping[str, Line] | None = None,
 ) -> Story | None:
     """The story of the unit's standing draft, by the Day's rule (`drafts.through`: the gate and the
-    `dream` entry): its story part's segments that name their evidence, never one that sets a figure
-    beside one of `people` (`drafts.hold_beside`, counted unsupported, as the dream holds one); None
-    when the dream wrote none or none may go."""
+    `dream` entry): its story part's segments that name their evidence, each with the ids it cites,
+    and only when every one of them is a line the letter's tiers read (`cited`, the lines by id;
+    `drafts.readable`): no pencil without evidence, and no sentence that rests on a line above the
+    letter. Never one that sets a figure beside one of `people` (`drafts.hold_beside`, counted
+    unsupported, as the dream holds one); None when the dream wrote none or none may go."""
     if req.unit == DAY:
         found = drafts.by_day(every_draft, retracted).get(u.key, [])
     else:
@@ -756,10 +760,13 @@ def _story(
     drafts.hold_beside(segments, people, payload)
     told = []
     for s in segments:
-        if s.get("evidence") and isinstance(s.get("text"), str) and s["text"].strip():
-            told.append(s["text"].strip())
-        else:
+        ids = drafts.pencil_ids(s)
+        if ids is None:
             held["segments_unsupported"] += 1
+        elif not drafts.readable(cited or {}, ids, req.tiers, retracted):
+            continue  # the words and the ids stay home, and uncounted: the manifest travels with the letter
+        else:
+            told.append((str(s["text"]).strip(), ids))
     if not told:
         return None
     crossed[str(latest["id"])] = (int(latest.get("tier", 0)), drafts.KIND)
@@ -869,6 +876,29 @@ def _paragraphs(text: str) -> list[str]:
     return [p.strip("\n") for p in re.split(r"\n\s*\n", text.replace("\r\n", "\n")) if p.strip()]
 
 
+def _cited(every_draft: Iterable[Line]) -> set[str]:
+    """Every id a draft's segment cites, so `build` reads those lines once."""
+    out: set[str] = set()
+    for line in every_draft:
+        payload = line.get("payload")
+        for s in (payload.get("segments") if isinstance(payload, dict) else None) or []:
+            if isinstance(s, dict) and isinstance(s.get("evidence"), list):
+                out.update(e for e in s["evidence"] if isinstance(e, str))
+    return out
+
+
+def _ids_html(ids: Sequence[str]) -> str:
+    """The lines a story's sentence rests on, after it: `from […6742a9f5]`, the whole id on hover."""
+    shown = ", ".join(
+        f'<span class="id" title="line {escape(i)}">{escape(drafts.short_id(i))}</span>' for i in ids
+    )
+    return f'<small class="ids">{drafts.EVIDENCE} [{shown}]</small>'
+
+
+def _ids_md(ids: Sequence[str]) -> str:
+    return f"*{drafts.EVIDENCE} [{', '.join(md(drafts.short_id(i)) for i in ids)}]*"
+
+
 def _unit_html(u: Unit) -> Iterator[str]:
     yield f'<section class="unit" id="{escape(u.key)}">'
     yield f"<h2>{escape(u.heading)}</h2>"
@@ -876,7 +906,7 @@ def _unit_html(u: Unit) -> Iterator[str]:
         yield '<div class="pencil">'
         who = f"pencil{DOT}a model's draft, not the owner's words{DOT}model {escape(u.story.model)}"
         yield f'<span class="who">{who}</span>'
-        yield "".join(f"<p>{escape(s)}</p>" for s in u.story.segments)
+        yield "".join(f"<p>{escape(s)} {_ids_html(ids)}</p>" for s, ids in u.story.segments)
         yield "</div>"
     for r in u.reflections:
         if len(u.days) > 1:
@@ -987,8 +1017,8 @@ def _unit_md(u: Unit) -> Iterator[str]:
     if u.story is not None:
         yield f"*Pencil{DOT}a model's draft, not the owner's words{DOT}model {md(u.story.model)}*"
         yield ""
-        for s in u.story.segments:
-            yield f"> {md(s)}"
+        for s, ids in u.story.segments:
+            yield f"> {md(s)}  {_ids_md(ids)}"
         yield ""
     for r in u.reflections:
         if len(u.days) > 1:

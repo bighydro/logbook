@@ -471,22 +471,7 @@ def _goals(
             rows.append('<p class="mute">Not reviewed yet.</p>\n')
         review = proposed.get(g.line)
         if review is not None and site.with_drafts:
-            index = review.get("segment")
-            why = ""
-            if (
-                isinstance(index, int)
-                and not isinstance(index, bool)
-                and 0 <= index < len(segments)
-                and isinstance(segments[index], dict)
-                and segments[index].get("supported")
-            ):
-                said = str(segments[index].get("text") or "")
-                if not beside(said, names):
-                    why = f": {escape(said)}"
-            rows.append(
-                '<div class="paper"><p>The week\'s draft proposes'
-                f" {escape(str(review.get('disposition')))}{why}</p></div>\n"
-            )
+            rows.append(verdict_html(site, review, segments, names))
         command = f"logbook goal review {g.line} {'|'.join(VERDICTS)} --period week --at {sunday}"
         rows.append(
             f'<p>Your verdict, one of five: <code class="cmd">{escape(command)}</code>, or in the week\'s'
@@ -522,14 +507,43 @@ def proposal_html(site: Site, draft: Mapping[str, Any], names: Sequence[str]) ->
     if beside(text, names):
         written = f' <a href="{escape(href)}">the draft as written</a>' if href is not None else ""
         said = f'<p class="mute">{escape(WITHHELD_BESIDE)}{written}</p>\n'
-    elif segment.get("supported"):
-        said = f"<p>{escape(text)}</p>\n{_lines(site, _ids(segment.get('evidence')))}"
-    else:
-        why = f": {escape(str(segment['why']))}" if segment.get("why") else ""
-        said = (
-            f'<p class="segment unsupported">{escape(text)} <span class="mute">unsupported{why}</span></p>\n'
-        )
+    elif (ids := drafts.pencil_ids(segment)) is not None:
+        said = f"<p>{escape(text)}</p>\n{_lines(site, ids)}"
+    else:  # no pencil without evidence: an unsupported proposal is not shown
+        return ""
     return f'<div class="paper"><p class="eyebrow">Pencil <span class="sc">{model}</span></p>\n{said}</div>\n'
+
+
+def prefill(site: Site, draft: Mapping[str, Any] | None, names: Sequence[str]) -> tuple[str, str]:
+    """The words the intention's field is prefilled with, and the lines they rest on beside it: the
+    week's proposal when it is supported, cites its lines (`drafts.pencil_ids`) and sets no number
+    beside a name; else ("", ""), an empty field (no pencil without evidence)."""
+    segment = next((x for x in (draft or {}).get("segments") or [] if x.get("part") == "next_week"), None)
+    if segment is None or (ids := drafts.pencil_ids(segment)) is None:
+        return "", ""
+    said = str(segment.get("text") or "")
+    if beside(said, names):
+        return "", ""
+    return said, _lines(site, ids)
+
+
+def verdict_html(site: Site, review: Mapping[str, Any], segments: Sequence[Any], names: Sequence[str]) -> str:
+    """The verdict the week's draft proposes for a goal, in pencil: the verdict, and the sentence it
+    rests on with that sentence's lines when it has them and sets no number beside a name; the verdict
+    alone, with no sentence, otherwise (no pencil without evidence)."""
+    index = review.get("segment")
+    why = lines = ""
+    if isinstance(index, int) and not isinstance(index, bool) and 0 <= index < len(segments):
+        segment = segments[index]
+        ids = drafts.pencil_ids(segment) if isinstance(segment, dict) else None
+        said = str(segment.get("text") or "") if ids is not None else ""
+        if ids is not None and not beside(said, names):
+            why = f": {escape(said)}"
+            lines = _lines(site, ids)
+    return (
+        '<div class="paper"><p>The week\'s draft proposes'
+        f" {escape(str(review.get('disposition')))}{why}</p>\n{lines}</div>\n"
+    )
 
 
 def kept_html(site: Site, intention: Mapping[str, Any], sunday: str, names: Sequence[str]) -> str:
@@ -617,25 +631,23 @@ def close_html(
     if rows:
         out.append("<h3>Goals</h3>\n" + "".join(rows))
     out.append("<h3>Next week's intention</h3>\n")
-    prefill = ""
+    words = lines = ""
     if intention is not None:
         out.append(kept_html(site, intention, sunday, names))
         what = "To change it, write other words below and keep them: they take the place of this one."
     else:
-        segment = next((x for x in (draft or {}).get("segments") or [] if x.get("part") == "next_week"), None)
-        said = str((segment or {}).get("text") or "")
-        if site.with_drafts and segment is not None and segment.get("supported") and not beside(said, names):
-            prefill = said
+        words, lines = prefill(site, draft, names) if site.with_drafts else ("", "")
+        if words:
             what = "The week's proposal is in the field, pencil until you keep it; change the words first if"
             what += " they need it."
         else:
             what = "No proposal to keep: say the week ahead in a sentence of your own."
     command = f'logbook day reflect {sunday} --intention "…"'
-    pencil = f' class="pencil" title="{PROPOSAL_PENCIL}"' if prefill else ""  # a model's words, until kept
+    pencil = f' class="pencil" title="{PROPOSAL_PENCIL}"' if words else ""  # a model's words, until kept
     out.append(
-        f'<p class="mute">{escape(what)}</p>\n'
+        f'<p class="mute">{escape(what)}</p>\n{lines}'
         f'<textarea name="intention"{pencil} rows="3" aria-label="next week\'s intention"'
-        f' spellcheck="true">{escape(prefill, quote=False)}</textarea>\n'
+        f' spellcheck="true">{escape(words, quote=False)}</textarea>\n'
         '<label class="keep"><input type="checkbox" name="keep" value="1"> Keep these words as next'
         " week's intention</label>\n"
         f'<p class="ids"><code class="cmd">{escape(command)}</code></p>\n'

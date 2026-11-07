@@ -720,12 +720,19 @@ def listing(rows: Sequence[tuple[str, str, str]]) -> str:
 
 
 def decisions(data: Mapping[str, Any]) -> list[tuple[Mapping[str, Any], Mapping[str, Any]]]:
-    """(synthesis, segment) for each decision the day's call syntheses wrote."""
+    """(synthesis, segment) for each decision the day's call syntheses wrote that rests on its call: a
+    supported segment of a synthesis that names its transcript line. An unsupported one is never
+    shown, nor counted: no pencil without evidence."""
     return [
         (block, segment)
         for block in data.get("syntheses") or []
         for segment in block.get("segments") or []
         if segment.get("part") == "decisions"
+        and segment.get("supported") is True
+        and isinstance(block.get("transcript"), str)
+        and block["transcript"]
+        and isinstance(segment.get("text"), str)
+        and segment["text"].strip()
     ]
 
 
@@ -791,16 +798,14 @@ def loose_ends(
     if decided:
         body.append('<h3>Decisions</h3>\n<ul class="rows">\n')
         for block, segment in decided:
-            mark = ""
-            if segment.get("supported"):
-                where = escape(str(segment.get("where") or "")) if segment.get("where") else ""
-                mark = f' <small title="line {escape(str(block["transcript"]))}">[{where or "call"}]</small>'
-            unsupported = "" if segment.get("supported") else ' <span class="tag">unsupported</span>'
+            where = escape(str(segment.get("where") or "")) if segment.get("where") else ""
+            mark = f' <small title="line {escape(str(block["transcript"]))}">[{where or "call"}]</small>'
             body.append(
                 f'<li class="decision" title="Pencil: drafted by {escape(model_of(block))}">'
                 '<div class="t">pencil</div>'
                 f"<span>{escape(str(segment['text']))}"
-                f'{mark}{unsupported}<span class="sub">from the call{RSQUO}s synthesis{DOT}'
+                f"{mark} {evidence_html([str(block['transcript'])], link)}"
+                f'<span class="sub">from the call{RSQUO}s synthesis{DOT}'
                 f'<span class="sc">{escape(model_of(block))}</span></span>'
                 "</span></li>\n"
             )
@@ -1258,9 +1263,13 @@ def week_proposal(lb: Logbook, day: str, tiers: Sequence[int] | None) -> dict[st
         return None
     for segment in draft["segments"]:
         if segment.get("part") == "next_week" and segment.get("text"):
+            ids = drafts.pencil_ids(segment)
+            if ids is None:  # no pencil without evidence: an unsupported proposal is not shown
+                return None
             return {
                 "text": str(segment["text"]),
-                "supported": bool(segment.get("supported")),
+                "supported": True,
+                "evidence": ids,
                 "model": str(draft.get("model") or ""),
                 "line": str(draft["line"]),
                 "week": week,
@@ -1270,14 +1279,33 @@ def week_proposal(lb: Logbook, day: str, tiers: Sequence[int] | None) -> dict[st
 
 
 def proposal_html(found: Mapping[str, Any], link: Callable[[str, str], str]) -> str:
-    """The week's one proposal, one line in pencil under Today, headed by the model that wrote it."""
-    unsupported = "" if found["supported"] else ' <span class="tag">unsupported</span>'
+    """The week's one proposal, one line in pencil under Today, headed by the model that wrote it, with
+    the lines it rests on (`week_proposal` gives none that cites no line); nothing when it is
+    unsupported (no pencil without evidence)."""
+    if found.get("supported") is not True:
+        return ""
+    ids = found.get("evidence")
+    cited = f" {evidence_html([str(i) for i in ids], link)}" if isinstance(ids, list) and ids else ""
     return (
         f'<p class="proposal" title="Pencil: drafted by {escape(str(found["model"]))}">'
         f'<span class="sc">{escape(str(found["model"]))}</span> '
-        f"{escape(str(found['text']))}{unsupported} "
+        f"{escape(str(found['text']))}{cited} "
         f'<span class="mute">{link(f"the week{RSQUO}s draft", "/line/" + str(found["line"]))}</span></p>\n'
     )
+
+
+def evidence_html(ids: Sequence[str], link: Callable[[str, str], str] | None = None) -> str:
+    """The lines a model's sentence rests on, after it, in pencil: `from […6742a9f5]`, each linked to
+    its line when the page links (`link`, which escapes the text), the whole id on hover."""
+    shown = []
+    for i in ids:
+        short = drafts.short_id(i)
+        shown.append(
+            link(short, f"/line/{i}")
+            if link is not None
+            else f'<span class="id" title="line {escape(i)}">{escape(short)}</span>'
+        )
+    return f'<small class="ids">{drafts.EVIDENCE} [{", ".join(shown)}]</small>'
 
 
 # -- one reconnect (RFC 0043 §4.9) ------------------------------------------------------------------------
