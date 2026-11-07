@@ -641,3 +641,66 @@ def test_a_duplicate_in_one_batch_is_said_in_words(lb: Logbook, capsys: pytest.C
     assert _seq_of(lb) == seq + 1
     assert f"{second}  Fjordkaffe" in out and f"the same payment as {first}" in out and "not written" in out
     assert "1 duplicate refused" in out
+
+
+# -- lookalikes: an address is read as the address it is (NFKC) ------------------------------------------
+
+
+WIDE_AT = chr(0xFF20)  # FULLWIDTH COMMERCIAL AT, which NFKC reads as `@`
+
+
+def _wide(text: str) -> str:
+    """`text` in fullwidth forms (U+FF01 to U+FF5E), `@` as U+FF20: what NFKC reads as `text`."""
+    return "".join(chr(ord(c) + 0xFEE0) if "!" <= c <= "~" else c for c in text)
+
+
+def test_a_person_s_address_written_in_lookalikes_is_still_the_person(
+    lb: Logbook, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Per Hansen works at the sailmaker, whose domain an org of the Manifest binds; his address in
+    fullwidth letters, or with a fullwidth commercial at, is his address, so his mail is never a receipt, and
+    neither is the owner's own in lookalikes."""
+    per = f"per@{SAILMAKER['domain']}"
+    lb.append_many(
+        [
+            _resolution(("email", per), "person", "019cadd3-6bc0-7dcd-9133-000000000113", "Per Hansen"),
+            _mail(_at(19), _wide("per") + "@" + SAILMAKER["domain"], "Per Hansen", "Your order: the sail",
+                  "Total NOK 900"),
+            _mail(_at(20), "per" + WIDE_AT + SAILMAKER["domain"].upper(), "Per Hansen", "Your order: rope",
+                  "Total NOK 300"),
+            _mail(_at(21), _wide(OWNER["email"]), "Ines", "Your order: a note", "Total NOK 120"),
+        ]
+    )  # fmt: skip
+    data = _json(capsys)
+    seen = {p["at"] for p in [*data["proposals"], *data["already"]]}
+    assert seen.isdisjoint({_at(19), _at(20), _at(21)}), "a person, and the owner, in lookalikes"
+
+
+def test_an_order_address_with_a_fullwidth_at_is_read_as_the_address_it_is(
+    lb: Logbook, capsys: pytest.CaptureFixture[str]
+) -> None:
+    lb.append_many(
+        [
+            _mail(
+                _at(22),
+                "orders" + WIDE_AT + "tauverk.example.org",
+                "Tauverk",
+                "Your order #9",
+                "Total NOK 77,00",
+            ),
+            _mail(_at(23), _wide("noreply@ankerkjetting.example.org"), None, "Receipt 12", "Total NOK 88,00"),
+        ]
+    )
+    data = _json(capsys)
+    found = {p["at"]: p for p in data["proposals"]}
+    assert found[_at(22)]["domain"] == "tauverk.example.org" and found[_at(22)]["merchant"] == "Tauverk"
+    assert found[_at(23)]["domain"] == "ankerkjetting.example.org"
+    assert found[_at(23)]["merchant"] == "Ankerkjetting"
+    assert WIDE_AT not in json.dumps(data, ensure_ascii=False)
+
+
+def test_a_display_name_that_is_an_address_in_lookalikes_is_no_name() -> None:
+    sender = {"email": "orders@tauverk.example.org", "name": "orders" + WIDE_AT + "tauverk.example.org"}
+    assert receipts.merchant_of(sender) == "Tauverk"
+    assert receipts.domain_of("orders" + WIDE_AT + "Tauverk.example.org") == "tauverk.example.org"
+    assert receipts.role(_wide("no-reply") + "@example.org")

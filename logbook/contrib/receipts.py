@@ -16,7 +16,10 @@ an org of the Manifest binds (`entities.bindings`); an org there is a plus to th
 name the merchant's. Else the merchant is the display name, the generic words out, else the first
 label of the sender's registered domain, else `a sender` (a host with no registered domain, an
 address with no domain). The queue names a merchant by its domain (the sender's registered domain)
-and never shows a sender's address: not in its rows, not in its JSON, not as a merchant.
+and never shows a sender's address: not in its rows, not in its JSON, not as a merchant. A sender's
+address is read as the address it is (`address`: NFKC, then folded), so a fullwidth commercial at
+(U+FF20) is `@` and fullwidth letters are letters, and a person's address written in lookalikes is
+still that person's.
 
 **The amount** is read by rules, never by a model (`amounts`): a currency code or symbol (`CODES`,
 `SYMBOLS`) before or after a number in the common forms (`CHF 1'234.50`, `€ 12,90`, `$12.90`, `NOK
@@ -55,6 +58,7 @@ queue's output is a tier-3 reader's: a reader whose tiers leave out 3 gets nothi
 from __future__ import annotations
 
 import re
+import unicodedata
 from collections.abc import Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
@@ -371,12 +375,21 @@ def choose(subject: str | None, body: str | None) -> Chosen | None:
     return Chosen(chosen, refund, bool(totals), in_subject, len(named) == 1, marked)
 
 
+def address(email: str) -> str:
+    """An address as it is, whatever forms it was written in: NFKC, so a fullwidth commercial at
+    (U+FF20) is `@` and fullwidth letters are letters, then stripped and folded. Every match of a
+    sender (the owner, a person the record names, an order address, an org's domain) reads it so,
+    and a lookalike of a person's address is that person's."""
+    return unicodedata.normalize("NFKC", email).strip().casefold()
+
+
 def local_part(email: str) -> str:
-    return email.rsplit("@", 1)[0].split("+", 1)[0].casefold()
+    return address(email).rsplit("@", 1)[0].split("+", 1)[0]
 
 
 def domain_of(email: str) -> str:
-    return email.rsplit("@", 1)[1].casefold() if "@" in email else ""
+    found = address(email)
+    return found.rsplit("@", 1)[1] if "@" in found else ""
 
 
 def role(email: str) -> bool:
@@ -395,7 +408,11 @@ def merchant_of(sender: Mapping[str, Any], org: str | None = None, suffixes: Ite
         return org
     name = sender.get("name")
     if isinstance(name, str):
-        kept = [w for w in name.split() if entities.fold(w).strip(".,:;") not in GENERIC and "@" not in w]
+        kept = [
+            w
+            for w in name.split()
+            if entities.fold(w).strip(".,:;") not in GENERIC and "@" not in unicodedata.normalize("NFKC", w)
+        ]
         if kept:
             return " ".join(kept)
     registered = entities.registered_domain(domain_of(str(sender.get("email") or "")), suffixes)
@@ -604,7 +621,7 @@ def _candidate(
     at = stays.instant(line.get("at"))
     if payload.get("direction") == "sent" or not isinstance(sender, dict) or at is None:
         return None
-    email = str(sender.get("email") or "").strip().casefold()
+    email = address(str(sender.get("email") or ""))
     if "@" not in email:
         return None
     ref = ("email", email)
