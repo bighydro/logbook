@@ -8,8 +8,8 @@
   gate reads and says it held back only lines the gate reads; a promise closed by a task line above the
   gate is still open through it.
 - The Sign form of a page that reads no notes carried the record's last seq in hex, a count of every line
-  above the gate: it is sealed with a key kept on this machine beside the index, and Sign reads it back
-  as before.
+  above the gate: it is sealed, for its day, with a key kept on this machine beside the index, and Sign
+  reads it back as before; a page read before the upgrade is read again before it signs.
 - The MCP server's gated index answers every method the Library calls through its ceiling: `by_seqs` and
   `lines_of` returned lines above it, and the ids, kinds, years, totals, attachment counts, newest stamp
   and search it gave counted every tier.

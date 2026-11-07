@@ -512,8 +512,12 @@ class GatedIndex(Index):
 
     # -- what `Index` reads from its own columns, or from the files without `read`: each held to the
     # ceiling here, so no reader that asks the index for a line, an id or a count gets one above it.
-    # `existing` alone is the whole record's: `Logbook.append` asks it whether a line is written already,
-    # and a line above the ceiling is, so a write through this index never writes it twice.
+    # `existing` is the whole record's: `Logbook.append` asks it whether a line is written already, and
+    # a line above the ceiling is, so a write through this index never writes it twice. `holders` and
+    # `lines_of` serve `import trip-bundle` and the adapters' own checks, which never run through a
+    # GatedLogbook (its one writer is `Logbook.append`): through it they are reads like any other.
+    # `superseded` stays whole too: a line a correction above the ceiling replaced stays replaced, as
+    # one the owner raised to a higher tier by writing it again there must not come back below it.
 
     def _allowed_seqs(self, seqs: Iterable[int]) -> set[int]:
         """Of `seqs`, those of lines the gate allows (by the index's columns, `_cut`); the rest counted."""
@@ -540,7 +544,19 @@ class GatedIndex(Index):
         return {seq: id_ for seq, id_ in super().ids(wanted).items() if seq in allowed}
 
     def lines_of(self, keys: Iterable[tuple[str, str]]) -> dict[tuple[str, str], Line]:
-        return {key: line for key, line in super().lines_of(keys).items() if self.gate.keep(line)}
+        """`Index.lines_of` among the lines the gate allows: the first such line of each key, as the
+        plain index of those lines alone would answer, never the key dropped for a line above it."""
+        places: dict[tuple[str, str], tuple[str, int]] = {}
+        for source, raw_id in dict.fromkeys(keys):
+            found = self.db.execute(
+                f"SELECT file, offset FROM lines WHERE source = ? AND raw_id IN (?, ?) AND {self._cut}"
+                " ORDER BY seq LIMIT 1",
+                (*self._forms(source, raw_id), *self.gate.cut),
+            ).fetchone()
+            if found is not None:
+                places[(source, raw_id)] = (str(found[0]), int(found[1]))
+        lines = Index.read(self, list(places.values()))
+        return {key: line for key, line in zip(places, lines, strict=True) if self.gate.keep(line)}
 
     def line_id(self, source: str, raw_id: str) -> str | None:
         found = self.db.execute(
@@ -655,12 +671,16 @@ class GatedIndex(Index):
         limit: int,
     ) -> list[SearchRow]:
         """`Index.search` at or below the ceiling whatever `max_tier` asks, and a draft only as the
-        gate allows it (its seq); a hit above it counted."""
-        found = super().search(
-            expression, min(max_tier, self.gate.max_tier), first_day, last_day, kinds, limit
-        )
-        allowed = self._allowed_seqs(row[0] for row in found)
-        return [row for row in found if row[0] in allowed]
+        gate allows it (its seq); a hit above it counted. A draft held back is asked past, so `limit`
+        hits come back while there are as many the gate allows (a caller reads "more" by the count)."""
+        top, want = min(max_tier, self.gate.max_tier), limit
+        while True:
+            found = super().search(expression, top, first_day, last_day, kinds, want)
+            allowed = self._allowed_seqs(row[0] for row in found)
+            kept = [row for row in found if row[0] in allowed]
+            if len(kept) >= limit or len(found) < want:
+                return kept[:limit]
+            want *= 2
 
 
 def ceiling(root: Path, allow_tier_3: bool = False) -> int:

@@ -216,6 +216,10 @@ def test_the_promises_shelf_reads_a_promise_and_whether_it_is_kept_through_the_g
     _absent(records, at("whole", T12, "/promises"), T12)
     assert "send Kari the photos" in at("whole", T12, "/promises")
     assert "send Kari the photos" not in at("whole", T1, "/promises")
+    # the Day's loose ends (`day_rhythm.promises_near`, `promises.extract(admit=...)`): still due
+    _same(at, [f"/day/{CLINIC}"])
+    loose = re.search(r"<h2>Loose ends</h2>.*?</details>", at("whole", T12, f"/day/{CLINIC}"), re.S)
+    assert loose is not None and "send Kari the photos" in loose.group(0)
 
 
 # -- 2. People: closeness, order, the last contact and the days together, from the gate's lines alone ----
@@ -391,6 +395,21 @@ def test_the_sign_form_of_a_page_below_the_notes_does_not_count_the_record(
     assert token not in (f"{seq:016x}", f"{seq:x}", str(seq))
     assert f"{seq:x}" not in token and f"{seq:,}" not in page
     assert at("whole", T1, f"/day/{CLINIC}") == page  # the same page read again, the same form
+
+
+def test_the_sealed_seq_reads_back_for_its_day_alone() -> None:
+    """`_read_back` opens what `_read_through` sealed, with the same key and day; another key, another
+    day, a digit changed or the plain hex of before is no reading (Sign then reads the form as stale)."""
+    key, other = b"k" * serve.FORM_KEY_BYTES, b"o" * serve.FORM_KEY_BYTES
+    token = serve._read_through(1452, key, CLINIC)
+    assert serve._read_back(token, key, CLINIC) == 1452
+    assert serve._read_through(1452, key, CLINIC) == token  # the same seq, the same form
+    assert serve._read_through(1453, key, CLINIC)[:16] != token[:16]
+    flipped = token[:20] + ("0" if token[20] != "0" else "1") + token[21:]
+    for wrong in (serve._read_back(token, other, CLINIC), serve._read_back(token, key, DINNER)):
+        assert wrong is None
+    assert serve._read_back(flipped, key, CLINIC) is None
+    assert serve._read_back(f"{1452:016x}", key, CLINIC) is None
 
 
 # -- 6. GatedIndex: every index method the Library calls, through a tier-1 gate ----------------------------

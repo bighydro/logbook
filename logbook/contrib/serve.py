@@ -1292,7 +1292,7 @@ class Site:
                             " without one); nothing was written"
                         )
                     if found.hidden:
-                        changed = self._reflection_since(found, form.get("reflection") or "")
+                        changed = self._reflection_since(found, form.get("reflection") or "", day)
                     else:
                         changed = form.get("reflection") != found.named
                     if changed or form.get("proposals") != found.digest:
@@ -1419,7 +1419,7 @@ class Site:
         note = "" if r is None or r.note is None else str(r.note["id"])
         if hidden:
             with self.lb.index() as idx:
-                named = _read_through(idx.indexed()[0], self._form_key())
+                named = _read_through(idx.indexed()[0], self._form_key(), day)
         else:
             named = note
         proposals: list[reflect.Proposal] = []
@@ -1451,19 +1451,19 @@ class Site:
             self._form_key_bytes = _form_key(self.lb.index_path.parent / FORM_KEY)
         return self._form_key_bytes
 
-    def _reflection_since(self, found: Closing, read: str) -> bool:
+    def _reflection_since(self, found: Closing, read: str, day: str) -> bool:
         """Whether the reflection Sign would sign with is not the one standing when a page that reads no
         notes was read (`read`, `_read_through`): it was written after the page's last line, or a line of
         the day was retracted after it; a value that is not one (`_read_back`) is a change."""
-        found_seq = _read_back(read, self._form_key())
+        found_seq = _read_back(read, self._form_key(), day)
         seq = -1 if found_seq is None else found_seq
         r = found.reflection
         if seq < 0 or r is None or r.note is None or int(r.note["seq"]) > seq:
             return True
-        day = {str(line["id"]) for line in found.lines}
+        on_day = {str(line["id"]) for line in found.lines}
         with self.lb.index() as idx:
             later = [line for line in idx.retractions() if int(line["seq"]) > seq]
-        return any(str((line.get("payload") or {}).get("supersedes")) in day for line in later)
+        return any(str((line.get("payload") or {}).get("supersedes")) in on_day for line in later)
 
     def _star(self, form: Mapping[str, str]) -> Response:
         """The Day page's star: `act` `star` or `unstar` on the `line` of a row of `day`, through
@@ -2157,9 +2157,10 @@ class Site:
     def page_index(self) -> str:
         """The record's size and days, then the shelves. The size is the head's seq (`current`, the
         count `doctor` prints), the days two steps down the day_local index (`Index.span`), both kept
-        for the record as it stands (`shared`): never a pass over the lines, however many it holds.
-        Through the page's gate, the lines at its tiers and their days (`_size`): one count over the
-        index, kept the same way, and never the seq, which counts every line above it too."""
+        for the record as it stands (`shared`): ungated, never a pass over the lines, however many it
+        holds. Through the page's gate, the lines at its tiers and their days (`_size`): one count over
+        the index's rows (no index has the tier), once per head, and never the seq, which counts every
+        line above it too."""
         total = self.shared(("size",), self._size)
         span = self.shared(("span",), lambda: reading.record_days(self.lb, tiers=self.tiers))
         whole = self._record_days()
@@ -5679,27 +5680,30 @@ def _sealed_part(key: bytes, purpose: bytes, data: bytes) -> bytes:
     return hashlib.blake2b(data, digest_size=8, key=key, person=b"logbook-" + purpose).digest()
 
 
-def _read_through(seq: int, key: bytes) -> str:
+def _read_through(seq: int, key: bytes, day: str) -> str:
     """What the Sign form of a page that reads no notes carries for the reflection it cannot show: how
     far the page read (the record's last seq), the same whether the day has a reflection or not (the
     desk, after the tag), so `Site._reflection_since` tells a form older than the reflection apart. It
     is sealed with this machine's key (`_form_key`): forty-eight hex digits a reader of the page
     cannot count the record's lines by, those above its gate among them (the review of 26 October),
-    the same for the same seq. A nonce of the seq, the seq masked with a stream of the nonce, and a
-    tag of both, each a keyed BLAKE2b (`_read_back` opens it)."""
+    the same for the same seq and day. A nonce of the day and the seq, the seq masked with a stream of
+    the nonce, and a tag of the day, the nonce and the body, each a keyed BLAKE2b (`_read_back` opens
+    it): a form of one day's page never passes for another day's."""
     plain = max(seq, 0).to_bytes(8, "big")
-    nonce = _sealed_part(key, b"nonce", plain)
+    on = day.encode("utf-8")
+    nonce = _sealed_part(key, b"nonce", on + b"\0" + plain)
     body = bytes(a ^ b for a, b in zip(plain, _sealed_part(key, b"mask", nonce), strict=True))
-    return (nonce + body + _sealed_part(key, b"tag", nonce + body)).hex()
+    return (nonce + body + _sealed_part(key, b"tag", on + b"\0" + nonce + body)).hex()
 
 
-def _read_back(token: str, key: bytes) -> int | None:
-    """The seq `_read_through` sealed in `token` with `key`; None for a token it did not seal."""
+def _read_back(token: str, key: bytes, day: str) -> int | None:
+    """The seq `_read_through` sealed in `token` with `key` for `day`; None for a token it did not seal
+    (another key, another day, a form from before the seal, a token changed by hand)."""
     if re.fullmatch(r"[0-9a-f]{48}", token) is None:
         return None
     raw = bytes.fromhex(token)
     nonce, body, tag = raw[:8], raw[8:16], raw[16:]
-    if not secrets.compare_digest(tag, _sealed_part(key, b"tag", nonce + body)):
+    if not secrets.compare_digest(tag, _sealed_part(key, b"tag", day.encode("utf-8") + b"\0" + nonce + body)):
         return None
     plain = bytes(a ^ b for a, b in zip(body, _sealed_part(key, b"mask", nonce), strict=True))
     return int.from_bytes(plain, "big")
