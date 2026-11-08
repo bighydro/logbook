@@ -59,7 +59,7 @@ import math
 from bisect import bisect_left, bisect_right
 from collections import Counter
 from collections.abc import Iterable, Iterator, Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from functools import cache
@@ -142,6 +142,9 @@ class Request:
     tiers: tuple[int, ...]
     max_tier: int
     journey: Journey | None = None
+    # the gate the page is read through (the Library's, `library_page`): a line of a tier outside it is
+    # neither drawn nor counted, held back or not; None for the export, which counts every line it holds back
+    seen: frozenset[int] | None = None
 
     @property
     def chunks(self) -> list[tuple[str, str]]:
@@ -720,8 +723,9 @@ class _Builder:
         """Every line of the window, crossing or held back, from the index's columns."""
         with self.lb.index() as idx:
             counted, found = idx.window_tally(stays.instant_text(self.start), stays.instant_text(self.end))
+        seen = self.req.seen
         for tier, kind, n in counted:  # plainly inside the window
-            if kind == RETRACTION:
+            if kind == RETRACTION or (seen is not None and tier not in seen):
                 continue
             self.logged += n
             if tier in self.req.tiers:
@@ -733,6 +737,8 @@ class _Builder:
         for place in found:  # at its edges, or stamped with an offset: by the exact instant
             at = stays.instant(place.at)
             if place.kind == RETRACTION or at is None or not self.start <= at < self.end:
+                continue
+            if seen is not None and place.tier not in seen:
                 continue
             self.logged += 1
             if place.tier in self.req.tiers:
@@ -1592,12 +1598,28 @@ def library_page(
     today: str | None = None,
     shell: str = "",
     style: str = "",
+    gate: Sequence[int] | None = None,
 ) -> str | None:
     """The Library's `/world`: the page the export writes by default (the same request, the same
     JSON), with the Library's header (`shell` and its `style`, or a navigation, `nav`) and the
-    policy left to the header; None for a record with no day."""
-    req = request(lb, first, last, today=today)
+    policy left to the header; None for a record with no day. Through the Library's `gate` when given:
+    the tiers the export would draw that the gate reads, and only lines at the gate's tiers counted,
+    so what it says it held back is a line the gate reads that the world may not show, never one above
+    it; a `WorldError` when the gate reads none of the tiers the world may show."""
+    tiers = None
+    if gate is not None:
+        allowed = {int(t) for t in gate}
+        try:
+            ceiling = policy.world_ceiling(lb.root)
+        except policy.PolicyError as e:
+            raise WorldError(str(e)) from e
+        tiers = tuple(t for t in DEFAULT_TIERS if t <= ceiling and t in allowed)
+        if not tiers:
+            raise WorldError("this page's gate reads none of the tiers the world may show: nothing to draw")
+    req = request(lb, first, last, tiers=tiers, today=today)
     if req is None:
         return None
+    if gate is not None:
+        req = replace(req, seen=frozenset(int(t) for t in gate))
     built = build(lb, req, airports)
     return page(built.json, nav=nav, standalone=False, shell=shell, style=style)
