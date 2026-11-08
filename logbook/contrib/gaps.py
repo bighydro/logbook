@@ -309,6 +309,53 @@ def _forward(idx: Index, held: dict[str, Any], last: str, seq: int) -> dict[str,
     return sources
 
 
+def activity_through(lb: Logbook, first: str, last: str, tiers: Sequence[int]) -> list[dict[str, Any]]:
+    """`Index.activity` of `[first, last]` (every day to `last` with `first` empty) through the gate
+    `tiers`: the same three SELECTs, each held to the lines of those tiers, so a source whose every line
+    is above it is not listed, and none counts, starts, ends or goes quiet on a line above it. Read
+    each time (the Library keeps it per head, `Site._activity`); never the kept activity, which counts
+    every tier."""
+    gate = sorted({int(t) for t in tiers})
+    if not gate:
+        return []
+    where = f"day_local BETWEEN ? AND ? AND tier IN ({', '.join('?' * len(gate))})"
+    cut = (first, last, *gate)
+    with lb.index() as idx:
+        totals = idx.db.execute(
+            f"SELECT source, count(*), min(at), max(at) FROM lines WHERE {where}"
+            " GROUP BY source ORDER BY count(*) DESC, source",
+            cut,
+        ).fetchall()
+        days: dict[str, list[str]] = {}
+        for source, day in idx.db.execute(
+            f"SELECT source, day_local FROM lines WHERE {where}"
+            " GROUP BY source, day_local ORDER BY source, day_local",
+            cut,
+        ):
+            days.setdefault(str(source), []).append(str(day))
+        stretches = {
+            str(source): (str(start), str(end))
+            for source, start, end in idx.db.execute(
+                "SELECT source, prev, at FROM (SELECT source, prev, at, row_number() OVER"
+                f" (PARTITION BY source ORDER BY {GAP_MS} DESC, at) AS n FROM ("
+                " SELECT source, at, lag(at) OVER (PARTITION BY source ORDER BY at) AS prev"
+                f" FROM lines WHERE {where}) WHERE prev IS NOT NULL) WHERE n = 1",
+                cut,
+            )
+        }
+    return [
+        {
+            "source": str(source),
+            "lines": int(n),
+            "first": str(at_first),
+            "last": str(at_last),
+            "days": days.get(str(source), []),
+            "stretch": stretches.get(str(source)),
+        }
+        for source, n, at_first, at_last in totals
+    ]
+
+
 def _gap_ms(idx: Index, prev: str, at: str) -> int | None:
     """The stretch from `prev` to `at` in milliseconds, as `Index.activity` ranks it (`GAP_MS`)."""
     (found,) = idx.db.execute(f"SELECT {GAP_MS} FROM (SELECT ? AS prev, ? AS at)", (prev, at)).fetchone()

@@ -204,7 +204,7 @@ def test_a_page_that_reads_no_notes_looks_the_same_with_a_reflection_or_without(
         page = _page(_site(Logbook(root), tiers=(1,)))
         found = re.search(r'<section class="close">.*?</section>', page, re.S)
         assert found is not None
-        return re.sub(r'value="[0-9a-f]{16}"', 'value="…"', found.group(0))
+        return re.sub(r'value="[0-9a-f]{48}"', 'value="…"', found.group(0))  # sealed: `serve._read_through`
 
     before = section(lb.root)
     page_keep._cli(monkeypatch, lb.root, "day", "reflect", DAY, "--text", REFLECTION)

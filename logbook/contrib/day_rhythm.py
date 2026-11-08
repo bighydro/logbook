@@ -1295,19 +1295,33 @@ class Drifted:
     contact: people_drift.Contact | None
 
 
-def drifted(lb: Logbook, day: str, airports: Airports | None = None) -> tuple[Drifted, ...]:
+def drifted(
+    lb: Logbook, day: str, airports: Airports | None = None, tiers: Sequence[int] | None = None
+) -> tuple[Drifted, ...]:
     """The people the drift rule names (`people_drift`, its defaults) with a silence counted to `day`,
     in the order of their ids so a day's pick is stable; the open promises the CLI adds are not read.
     It reads the whole record (`people.read_whole`, kept beside the index, and `real_contacts`, kept
-    too): the page reads it once a day, off the request."""
-    whole = reading.record_days(lb)
+    too): the page reads it once a day, off the request. Through the gate `tiers` when given, the
+    people, their days together and their last real contact are read from the lines at its tiers
+    alone (`people.read(admit=...)`, not kept), so a line above it neither ends a silence nor makes
+    one, nor is the contact a reconnect names."""
+    whole = reading.record_days(lb, tiers=tiers)
     if whole is None:
         return ()
-    report = people.read_whole(lb, airports)
+    admit = None
+    if tiers is None:
+        report = people.read_whole(lb, airports)
+    else:
+        gate = {int(t) for t in tiers}
+
+        def admit(line: Mapping[str, Any]) -> bool:
+            return int(line.get("tier") or 0) in gate
+
+        report = people.read(lb, whole[0], whole[1], airports, admit=admit)
     if report is None:
         return ()
     until = min(whole[1], day)
-    contacts = people_drift.real_contacts(lb, report)
+    contacts = people_drift.real_contacts(lb, report, admit=admit)
     found = []
     for p in report.people:
         v = people_drift.verdict(p, contacts.get(p.entity), until)

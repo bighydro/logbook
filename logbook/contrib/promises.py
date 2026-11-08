@@ -727,7 +727,9 @@ def _extract(
         resolutions = [line for line in idx.resolutions() if admit is None or admit(line)]
         identities = identities_from([*marks, *resolutions])
         superseded = {i for kind in kinds for i in idx.superseded(kind)}
-        closed = closes(idx.by_kind(TASK), retracted)
+        # a task line closes a promise only through the gate that reads it: one above it leaves the
+        # promise open, as the page reads it, never kept on the word of a line it cannot show
+        closed = closes([t for t in idx.by_kind(TASK) if admit is None or admit(t)], retracted)
         disposed = signing.disposed_lines(idx, str(lb.meta.get("owner_id") or "") or None)
     owner = present.owner_of(
         str(lb.meta.get("owner_id") or ""),
