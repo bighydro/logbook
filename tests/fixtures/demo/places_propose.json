@@ -50,9 +50,9 @@
       "last": "2026-06-11T12:55:00Z",
       "aboard": null,
       "nearest": {
-        "name": "Marina",
-        "kind": "asset-berth",
-        "metres": 1400349
+        "name": "Cabin",
+        "kind": "other",
+        "metres": 1387363
       },
       "timeline": [],
       "suggested": "",
@@ -116,13 +116,13 @@
       }
     },
     {
-      "id": "stay:owner:20260625T1630Z@55.6850,12.5500",
-      "lat": 55.684994,
-      "lon": 12.549995,
+      "id": "stay:owner:20260625T1630Z@55.6800,12.5856",
+      "lat": 55.679994,
+      "lon": 12.585595,
       "hours": 33.08,
       "stays": [
-        "stay:owner:20260625T1630Z@55.6850,12.5500",
-        "stay:owner:20260626T1430Z@55.6850,12.5500"
+        "stay:owner:20260625T1630Z@55.6800,12.5856",
+        "stay:owner:20260626T1430Z@55.6800,12.5856"
       ],
       "first": "2026-06-25T16:30:00Z",
       "last": "2026-06-27T07:55:00Z",
@@ -130,7 +130,7 @@
       "nearest": {
         "name": "Marina",
         "kind": "asset-berth",
-        "metres": 481365
+        "metres": 482382
       },
       "timeline": [],
       "suggested": "",
@@ -167,21 +167,21 @@
       }
     },
     {
-      "id": "stay:owner:20260609T0650Z@47.3700,8.5300",
-      "lat": 47.369997,
-      "lon": 8.530011,
+      "id": "stay:owner:20260609T0650Z@47.3697,8.5389",
+      "lat": 47.369697,
+      "lon": 8.538911,
       "hours": 15.11,
       "stays": [
-        "stay:owner:20260609T0650Z@47.3700,8.5300",
-        "stay:owner:20260610T0720Z@47.3700,8.5300"
+        "stay:owner:20260609T0650Z@47.3697,8.5389",
+        "stay:owner:20260610T0720Z@47.3697,8.5389"
       ],
       "first": "2026-06-09T06:50:00Z",
       "last": "2026-06-10T14:10:00Z",
       "aboard": null,
       "nearest": {
-        "name": "Marina",
-        "kind": "asset-berth",
-        "metres": 1401191
+        "name": "Cabin",
+        "kind": "other",
+        "metres": 1388165
       },
       "timeline": [],
       "suggested": "",
@@ -193,12 +193,12 @@
       }
     },
     {
-      "id": "stay:owner:20260626T0830Z@55.6950,12.5700",
-      "lat": 55.69501,
-      "lon": 12.570012,
+      "id": "stay:owner:20260626T0830Z@55.6855,12.5795",
+      "lat": 55.68551,
+      "lon": 12.579512,
       "hours": 5.67,
       "stays": [
-        "stay:owner:20260626T0830Z@55.6950,12.5700"
+        "stay:owner:20260626T0830Z@55.6855,12.5795"
       ],
       "first": "2026-06-26T08:30:00Z",
       "last": "2026-06-26T14:10:00Z",
@@ -206,7 +206,7 @@
       "nearest": {
         "name": "Marina",
         "kind": "asset-berth",
-        "metres": 480543
+        "metres": 481702
       },
       "timeline": [],
       "suggested": "",
@@ -312,9 +312,9 @@
       "last": "2026-06-11T14:55:00Z",
       "aboard": null,
       "nearest": {
-        "name": "Marina",
-        "kind": "asset-berth",
-        "metres": 1391309
+        "name": "Cabin",
+        "kind": "other",
+        "metres": 1378329
       },
       "timeline": [],
       "suggested": "",
@@ -403,20 +403,20 @@
       }
     },
     {
-      "id": "stay:owner:20260610T1430Z@47.3660,8.5481",
-      "lat": 47.366001,
-      "lon": 8.548054,
+      "id": "stay:owner:20260610T1430Z@47.3703,8.5482",
+      "lat": 47.370301,
+      "lon": 8.548154,
       "hours": 1.61,
       "stays": [
-        "stay:owner:20260610T1430Z@47.3660,8.5481"
+        "stay:owner:20260610T1430Z@47.3703,8.5482"
       ],
       "first": "2026-06-10T14:30:00Z",
       "last": "2026-06-10T16:06:40Z",
       "aboard": null,
       "nearest": {
-        "name": "Marina",
-        "kind": "asset-berth",
-        "metres": 1401514
+        "name": "Cabin",
+        "kind": "other",
+        "metres": 1388095
       },
       "timeline": [],
       "suggested": "",

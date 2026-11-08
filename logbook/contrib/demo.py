@@ -97,6 +97,9 @@ SCHEMAS = frozenset(
 )
 
 
+# Every place below is the persona's own synthetic coordinate (`tests/persona.py`), an airport, open
+# water or a harbour town, or a public landmark of its city: a home, a flat, an office, a hotel or a
+# cabin never points at a real address (the privacy review of 26 October; `tests/test_demo.py`).
 class Spot(NamedTuple):
     name: str
     lat: float
@@ -109,7 +112,7 @@ OFFICE = Spot("Office", 59.9100, 10.7600, OSLO)
 CAFE = Spot("the cafe", 59.9200, 10.7400, OSLO)
 PARK = Spot("the park", 59.9260, 10.7000, OSLO)
 MARINA = Spot("Marina", 59.9050, 10.7350, OSLO)
-CABIN = Spot("Cabin", 60.6000, 9.1000, OSLO)
+CABIN = Spot("Cabin", 59.8536, 8.6486, OSLO)  # Gaustatoppen: the summit and its tourist cabin
 BAY_A = Spot("the bay", 59.8500, 10.6000, OSLO)
 BAY_B = Spot("the southern bay", 59.4300, 10.4800, OSLO)
 HARBOUR = Spot("the harbour", 59.0500, 10.0300, OSLO)
@@ -117,11 +120,11 @@ TOWN = Spot("the harbour town", 59.0450, 10.0450, OSLO)
 OSL = Spot("OSL", 60.1939, 11.1004, OSLO)
 ZRH = Spot("ZRH", 47.4581, 8.5481, ZURICH)
 ZH_HOTEL = Spot("the Zürich hotel", 47.3769, 8.5417, ZURICH)
-ZH_CLIENT = Spot("the client's office", 47.3700, 8.5300, ZURICH)
-ZH_MUSEUM = Spot("the museum", 47.3660, 8.5480, ZURICH)
+ZH_CLIENT = Spot("the client's office", 47.3697, 8.5389, ZURICH)  # Paradeplatz, a public square
+ZH_MUSEUM = Spot("the museum", 47.3703, 8.5481, ZURICH)  # Kunsthaus Zürich, Heimplatz
 CPH = Spot("CPH", 55.6180, 12.6508, COPENHAGEN)
-CPH_HOTEL = Spot("the Copenhagen hotel", 55.6850, 12.5500, COPENHAGEN)
-CPH_FRIEND = Spot("Freja's flat", 55.6950, 12.5700, COPENHAGEN)
+CPH_HOTEL = Spot("the Copenhagen hotel", 55.6800, 12.5856, COPENHAGEN)  # Kongens Nytorv
+CPH_FRIEND = Spot("Freja's flat", 55.6855, 12.5795, COPENHAGEN)  # Kongens Have, a public park
 
 PLACES: dict[Spot, dict[str, Any]] = {
     HOME: {"radius_m": 120, "kind": "home", "country": "NO"},

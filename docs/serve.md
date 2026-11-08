@@ -255,6 +255,10 @@ the server looks at who asked:
   names, one `Tailscale-User-Login`, your login, and no `Tailscale-Funnel-Request`. Read, at every
   tier this machine reads. The login is a tailnet user, not a device: every device signed in as
   you reads too, so keep your login to your own devices.
+- *One login at a time*: tailscaled keeps one connection open for many requests, so the first
+  request on a connection says whose it is. A later request on it that names another login, or
+  none, or is this machine's own, is a `403` and the connection is closed; nothing is kept between
+  requests, so no page or `ETag` one login was given is ever another's.
 - *Anything else through a proxy* (another login or none, another tailnet name, two `Host`
   headers, a Funnel request, any proxy at all while no phone is set): a `403`, nothing read.
 - *Any other `Host`*: a `421`, nothing read. This is the website you happen to have open that
@@ -710,7 +714,7 @@ the refusal says what would allow them.
 A program on the tailnet is refused too. Behind Tailscale Serve every request arrives from
 loopback, so the server tells this machine's own requests from a proxy's by what the proxy adds: a
 request is *proxied* when its `Host` is not `127.0.0.1` or `[::1]` (any port; `localhost` is a
-name, not one of them) or when it carries any `Tailscale-*` or `X-Forwarded-*` header. A proxied
+name, not one of them) or when it carries any proxy's header (`Tailscale-*`, `X-Forwarded-*`, `Forwarded`, `Via` or `X-Real-IP`, in any case). A proxied
 POST is answered only as the phone's, through the checks above, and never because it carries no
 `Origin`: `curl` from any device on the tailnet, with no Origin or a login it typed, is a `403` with
 nothing written, the setting on or off. Requests to `http://127.0.0.1:8765` or
@@ -767,8 +771,8 @@ binds 127.0.0.1 and runs as the record's own user: whoever can reach the form ca
 the connection comes from this machine (the client address is loopback, `127.0.0.0/8` or `::1`) and,
 when the browser sends an `Origin` header, it names `127.0.0.1` or `[::1]` (the server's own pages,
 as reached from here; not `localhost`, a name, and not another scheme or host). A request that came
-through a proxy (its `Host` not `127.0.0.1` or `[::1]`, or a `Tailscale-*` or `X-Forwarded-*`
-header) is answered only as the owner's phone (*From your phone*). Anything else is a `403` and
+through a proxy (its `Host` not `127.0.0.1` or `[::1]`, or any proxy's header:
+`Tailscale-*`, `X-Forwarded-*`, `Forwarded`, `Via` or `X-Real-IP`) is answered only as the owner's phone (*From your phone*). Anything else is a `403` and
 nothing is written. Every page is sent with `Referrer-Policy: same-origin`, so the browser
 names the page a form came from (`Origin: http://127.0.0.1:<port>`) and sends nothing to other sites
 (under `no-referrer` it would send `Origin: null`, and every form would be refused). Through an SSH

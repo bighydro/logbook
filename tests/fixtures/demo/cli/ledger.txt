@@ -15,11 +15,11 @@ ledger 2026-06-03 – 2026-06-30: 10 transactions · CHF -94.50 · DKK -240.00 �
   2026-06-24  Wednesday · NOK -119.00
     09:55  NOK -119.00  Havnekiosken · at Office · groceries · copilot
   2026-06-26  Friday · DKK -240.00
-    14:10  DKK -240.00  Café Havnen · at 55.6950,12.5700 (Copenhagen) · restaurants · copilot · trip 2026-06-25 – 2026-06-26
+    14:10  DKK -240.00  Café Havnen · at 55.6855,12.5795 (Copenhagen) · restaurants · copilot · trip 2026-06-25 – 2026-06-26
   2026-06-30  Tuesday · NOK -119.00
     08:02  NOK -119.00  Havnekiosken · at Office · groceries · copilot
   trips
     2026-06-06 – 2026-06-06  Cabin · 2 transactions · NOK -438.00
     2026-06-08 – 2026-06-10  47.3769,8.5417 (Zurich) · 1 transaction · CHF -94.50
     2026-06-15 – 2026-06-20  aboard Nordlys · 1 transaction · NOK -119.00
-    2026-06-25 – 2026-06-26  55.6850,12.5500 (Copenhagen) · 1 transaction · DKK -240.00
+    2026-06-25 – 2026-06-26  55.6800,12.5856 (Copenhagen) · 1 transaction · DKK -240.00

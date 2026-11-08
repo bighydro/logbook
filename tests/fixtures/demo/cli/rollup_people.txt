@@ -4,7 +4,7 @@ people 2026-06-01 – 2026-06-30
         Liv Berg                 last 2026-06-29 · Office
         Ola Nordmann             last 2026-06-15 · Cabin, Marina
         Anders Vik               last 2026-06-15 · Marina
-        Jonas Weber              last 2026-06-09 · 47.3700,8.5300 (Zurich)
-        Marta Keller             last 2026-06-09 · 47.3700,8.5300 (Zurich), 47.3769,8.5417 (Zurich)
+        Jonas Weber              last 2026-06-09 · 47.3697,8.5389 (Zurich)
+        Marta Keller             last 2026-06-09 · 47.3697,8.5389 (Zurich), 47.3769,8.5417 (Zurich)
         Sigrid Moen              last 2026-06-13 · Marina
-        Freja Lund               last 2026-06-26 · 55.6950,12.5700 (Copenhagen), 55.6850,12.5500 (Copenhagen)
+        Freja Lund               last 2026-06-26 · 55.6855,12.5795 (Copenhagen), 55.6800,12.5856 (Copenhagen)

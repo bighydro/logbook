@@ -61,6 +61,9 @@ A mail is a **receipt candidate** when all of these hold:
 2. **Its sender is a merchant.** That means three things:
    - The sender is not a person the record names: an address a `resolution/v1` line resolves to a
      person is never a merchant, and neither is any of your own addresses.
+     An address is read as the address it is, whatever characters it was written in: a
+     fullwidth `＠` is `@` and fullwidth letters are letters (Unicode NFKC), so a person's
+     address in lookalikes is still that person's.
    - The address is an order or no-reply address (`orders@`, `orders.eu@`, `ordre@`, `no-reply@`,
      `no_reply@`, `auto-confirm@`, `receipts@`, `kvittering@`, `billing@` …), or its domain is bound
      to an org in the Manifest.
