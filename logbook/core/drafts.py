@@ -1643,6 +1643,48 @@ def proposal_text(p: Mapping[str, Any]) -> str:
     return DOT.join(parts)
 
 
+def pencil_ids(segment: Mapping[str, Any]) -> list[str] | None:
+    """The ids a model's sentence is shown with, wherever a draft lands outside the Day's Draft block (the
+    letter, the week's proposal, the intention it prefills, a goal's proposed verdict, a call's decisions,
+    the chapter on Life, a person's page): its evidence when it has words, cites at least one line, every
+    id a string (one bare string read as one id, on a verdict that says supported), and is supported (a
+    `segment_json` verdict, or the line's own shape); None for every other segment, which such a page
+    never shows: no pencil without evidence."""
+    text = segment.get("text")
+    evidence = segment.get("evidence")
+    if isinstance(evidence, str) and segment.get("supported") is True:
+        evidence = [evidence]  # a reader reads what it can (SPEC §5): one id, written bare
+    if not isinstance(text, str) or not text.strip() or not isinstance(evidence, list) or not evidence:
+        return None
+    if not all(isinstance(e, str) and e for e in evidence):
+        return None
+    if "supported" in segment and segment["supported"] is not True:
+        return None
+    if "supported" not in segment and segment_shape(segment) != SUPPORTED:
+        return None
+    return list(evidence)
+
+
+def readable(
+    lines: Mapping[str, Mapping[str, Any]],
+    ids: Sequence[str],
+    tiers: Collection[int] | None,
+    retracted: Collection[str],
+) -> bool:
+    """Whether every id is a standing line (`lines`, by id) a gate of `tiers` reads (None: every tier):
+    a sentence that cites a line above the gate, one the record does not hold, or a retracted one, is
+    one such a page never shows, so neither its words nor its ids hint at the line."""
+    if not ids:
+        return False
+    for line_id in ids:
+        line = lines.get(line_id)
+        if line is None or line_id in retracted:
+            return False
+        if tiers is not None and int(line.get("tier", 0)) not in tiers:
+            return False
+    return True
+
+
 def short_id(line_id: str) -> str:
     return f"…{line_id[-ID_SHORT:]}" if len(line_id) > ID_SHORT else line_id
 

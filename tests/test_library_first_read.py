@@ -209,7 +209,7 @@ def test_the_journeys_and_a_journey_name_the_city(record: Logbook) -> None:
     site = _site(record)
     said = _said(_page(site, "/journeys", "year=2026"))
     assert "home 2026-06-11 · Zurich ·" in said and "home 2026-06-27 · Copenhagen ·" in said, said[:800]
-    assert "47.3769,8.5417" not in said and "55.6850,12.5500" not in said
+    assert "47.3769,8.5417" not in said and "55.6800,12.5856" not in said
     journey = _said(_page(site, "/journeys/2026-06-08/2026-06-10"))
     assert "Zurich" in journey
 
@@ -219,7 +219,7 @@ def test_the_json_keeps_the_label_the_spec_gives(home: Logbook, capsys: pytest.C
     stay §3.2.6's, coordinates and all; only the text a reader prints names the place."""
     cli.main(["show", "trips", "--json"])
     routes = [t["route"] for t in json.loads(capsys.readouterr().out)["trips"]]
-    assert ["47.3769,8.5417 (Zurich)"] in routes and ["55.6850,12.5500 (Copenhagen)"] in routes, routes
+    assert ["47.3769,8.5417 (Zurich)"] in routes and ["55.6800,12.5856 (Copenhagen)"] in routes, routes
     cli.main(["rollup", "places", "--json"])
     labels = [u["label"] for y in json.loads(capsys.readouterr().out)["years"] for u in y["unnamed"]]
     assert "59.0500,10.0300 aboard nordlys (Sandefjord)" in labels, labels

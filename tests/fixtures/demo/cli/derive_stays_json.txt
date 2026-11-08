@@ -895,12 +895,12 @@
         "last": "019e9c60-0900-7197-966e-729cf34cec5d",
         "points": 23
       },
-      "distance_m": 118845,
+      "distance_m": 117552,
       "mode": "car",
       "airports": []
     },
     {
-      "id": "stay:owner:20260606T1000Z@60.6000,9.1000",
+      "id": "stay:owner:20260606T1000Z@59.8536,8.6486",
       "kind": "stay",
       "subject": null,
       "start": "2026-06-06T10:00:00Z",
@@ -915,8 +915,8 @@
         "last": "019ea1ef-ae20-7499-9a75-a0e70650c615",
         "points": 312
       },
-      "lat": 60.599988,
-      "lon": 9.10001,
+      "lat": 59.853588,
+      "lon": 8.64861,
       "place": "Cabin",
       "attached": {
         "event": 1,
@@ -942,7 +942,7 @@
         "last": "019ea299-0d80-7e32-98f0-f25c4339ca4e",
         "points": 23
       },
-      "distance_m": 118857,
+      "distance_m": 117568,
       "mode": "car",
       "airports": []
     },
@@ -1209,7 +1209,7 @@
     {
       "day": "2026-06-06",
       "stay": {
-        "id": "stay:owner:20260606T1000Z@60.6000,9.1000",
+        "id": "stay:owner:20260606T1000Z@59.8536,8.6486",
         "kind": "stay",
         "subject": null,
         "start": "2026-06-06T10:00:00Z",
@@ -1224,8 +1224,8 @@
           "last": "019ea1ef-ae20-7499-9a75-a0e70650c615",
           "points": 312
         },
-        "lat": 60.599988,
-        "lon": 9.10001,
+        "lat": 59.853588,
+        "lon": 8.64861,
         "place": "Cabin",
         "attached": {
           "event": 1,
@@ -1240,8 +1240,8 @@
       "aboard": null,
       "inside": null,
       "position": {
-        "lat": 60.599988,
-        "lon": 9.10001
+        "lat": 59.853588,
+        "lon": 8.64861
       }
     },
     {
