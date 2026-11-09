@@ -111,7 +111,7 @@ LINES = {  # with LOGBOOK_DIAL_PREFIX=47 (the `lb` fixture): two numbers without
     "ios-contacts": 7,
     "whatsapp-contacts": 4,
     "whatsapp": 14,
-    "imessage": 13,
+    "imessage": 17,
     "ios-calendar": 7,
     "ios-notes": 4,
     "apple-wallet": WALLET_LINES,

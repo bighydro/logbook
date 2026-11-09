@@ -38,7 +38,12 @@ after `Attachments` is looked up under `<db folder>/Attachments/`, with pathlib 
 inside that folder. When the file exists its SHA-256 and size are recorded under `extra.media` so
 the attach pass (`logbook attach import-backup --only imessage`, `logbook/contrib/attach.py`) finds the bytes
 in the backup by the path and puts them in the §1.1 store under the digest, checked against it;
-when it does not, `extra.media_missing` is true.
+when it does not, `extra.media_missing` is true. Every attachment row the join walks for a kept
+message is accounted for (#80): a file found in the backup, or one `skipped_attachment_<reason>`
+count beside the line, which stays — `no_row` (the join names no `attachment` row), `no_filename`
+(the row names no file), `unsupported_kind` (no known kind and no file to hash), `missing_file` (a
+known kind whose file is not in the backup; its path stays under `extra.media`, with no digest). A
+file that is there is hashed whatever its kind.
 `payload.media` is never set. A message with several attachments puts the first under `extra.media`
 (and its kind in `media_kind`) and the rest under `extra.more_media`. `LOGBOOK_IMESSAGE_HASH_MEDIA=0`
 skips the hashing and records only the stored path.
@@ -96,7 +101,7 @@ SELECT m.ROWID, m.guid, m.text, m.attributedBody, m.date, m.is_from_me, m.servic
        m.associated_message_type, m.reply_to_guid, m.item_type,
        h.id,
        c.ROWID, c.chat_identifier, c.display_name, c.style,
-       a.ROWID, a.filename, a.mime_type,
+       a.ROWID, a.filename, a.mime_type, ma.attachment_id,
        {handle_name}
 FROM message AS m
 LEFT JOIN handle AS h ON h.ROWID = m.handle_id
@@ -198,8 +203,10 @@ def run(
     `since` is RFC3339 UTC; rows with `at` before it are not yielded. `counts` tallies what was
     left out — `skipped_reaction` (tapbacks), `skipped_system_event` (group renames, joins),
     `skipped_bad_date` (no date, or one before 2010), `skipped_no_chat` (no chat_message_join row),
-    `skipped_no_body` (no text and no attachment) — and what was noted: `no_guid` (keyed by row id
-    instead), `media_hashed`, `media_missing`."""
+    `skipped_no_body` (no text and no attachment), one `skipped_attachment_<reason>` per attachment
+    row of a kept message whose file is not in the backup (`no_row`, `no_filename`,
+    `unsupported_kind`, `missing_file`: the message's line stays) — and what was noted: `no_guid`
+    (keyed by row id instead), `media_hashed`, `media_missing`."""
     counts = counts if counts is not None else {}
     path = Path(path)
     media_root = path.resolve().parent / MEDIA_FOLDER
@@ -272,8 +279,16 @@ def _draft(
     body = _body(text, attributed_body)
     attachments: list[tuple[Any, ...]] = []
     seen: set[int] = set()
+    dangling: set[object] = set()
     for row in rows:
-        if row[15] is not None and row[15] not in seen and row[11] == chat_pk:
+        if row[11] != chat_pk:  # the same attachments join once per chat; the first chat wins
+            continue
+        if row[15] is None:
+            if row[18] is not None and row[18] not in dangling:  # a join naming no attachment row
+                dangling.add(row[18])
+                _count(counts, "skipped_attachment_no_row")
+            continue
+        if row[15] not in seen:
             seen.add(row[15])
             attachments.append(row[15:18])
     if body is None and not attachments:
@@ -290,7 +305,7 @@ def _draft(
     payload: dict[str, Any] = {"schema": SCHEMA, "raw_id": raw_id, "chat": chat, "from_me": bool(from_me)}
     if not from_me and isinstance(handle, str) and handle.strip():
         payload["sender"] = _ref(handle)
-        handle_name = rows[0][18]
+        handle_name = rows[0][19]
         if isinstance(handle_name, str) and handle_name.strip():
             payload["sender"]["name"] = handle_name.strip()
     if body is not None:
@@ -378,11 +393,15 @@ def _media(
     The stored path is looked up by the part after its `Attachments` folder, resolved with pathlib
     parts under `<db folder>/Attachments/`; it must stay inside (no `..`), else it counts as
     missing. A row with no filename names no file at all: it is only missing, and `media` is not
-    written (its kind still comes from the mime type)."""
+    written (its kind still comes from the mime type). Each missing one is also counted under its
+    reason (#80): `skipped_attachment_no_filename`, `skipped_attachment_missing_file` for a known
+    kind, `skipped_attachment_unsupported_kind` for none. A file that is there is hashed whatever
+    its kind."""
     item: dict[str, Any] = {"media_kind": _media_kind(mime_type)}
     if not (isinstance(filename, str) and filename):
         item["media_missing"] = True
         _count(counts, "media_missing")
+        _count(counts, "skipped_attachment_no_filename")
         return item
     media: dict[str, Any] = {"local_path": filename}
     if isinstance(mime_type, str) and mime_type:
@@ -391,6 +410,8 @@ def _media(
     if file is None or not file.is_file():
         item["media_missing"] = True
         _count(counts, "media_missing")
+        known = item["media_kind"] != "other"
+        _count(counts, "skipped_attachment_missing_file" if known else "skipped_attachment_unsupported_kind")
     elif hash_media:
         digest, size = _sha256(file)
         media["sha256"] = digest

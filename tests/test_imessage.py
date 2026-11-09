@@ -145,9 +145,15 @@ MESSAGES = [
     (18, "G-18", None, None, 1, _ns(T0, 1020), 0, "SMS", 0, None, 0, 1),  # two attachments
     (19, "G-19", "  ", b"\x04\x0bstreamtyped nothing to see", 1, _ns(T0, 1080), 0, "SMS", 0, None, 0, 0),
     (20, None, "no guid on this one", None, 1, _ns(T0, 1140), 0, "SMS", 0, None, 0, 0),
+    # one row per skipped attachment reason (#80); dated before the `since` cut in the tests below
+    (31, "G-31", "fender inventory", None, 1, _ns(T0, 30), 0, "SMS", 0, None, 0, 1),
+    (32, "G-32", "photos from the yard", None, 1, _ns(T0, 150), 0, "SMS", 0, None, 0, 1),
+    (33, "G-33", "game invite, ignore it", None, 1, _ns(T0, 270), 0, "SMS", 0, None, 0, 1),
+    (34, "G-34", "harbour map", None, 1, _ns(T0, 210), 0, "SMS", 0, None, 0, 1),
 ]
 CHAT_MESSAGES = [(1, 1), (1, 2), (2, 3), (2, 4), (3, 5), (3, 6), (1, 7), (1, 9), (2, 10), (3, 11), (3, 12)]
 CHAT_MESSAGES += [(3, 13), (3, 14), (1, 15), (3, 16), (4, 17), (1, 18), (1, 19), (1, 20)]
+CHAT_MESSAGES += [(1, 31), (1, 32), (1, 33), (1, 34)]
 
 IMAGE_BYTES = b"\xff\xd8not really a jpeg\xff\xd9"
 VOICE_BYTES = b"caff\x00\x01not really a voice note"
@@ -158,6 +164,8 @@ VOICE_PATH = (
     "/var/mobile/Library/SMS/Attachments/ef/56/AT-103/note.caf"  # absolute, as macOS Messages stores it
 )
 CARD_PATH = "~/Library/SMS/Attachments/ef/56/AT-104/ola.vcf"
+BLOB_PATH = "~/Library/SMS/Attachments/gh/78/AT-106/blob"
+CHART_PATH = "~/Library/SMS/Attachments/ij/90/AT-107/chart.png"
 # (ROWID, guid, filename, mime_type, total_bytes)
 ATTACHMENTS = [
     (100, "AT-100", IMAGE_PATH, "image/jpeg", len(IMAGE_BYTES)),
@@ -165,8 +173,12 @@ ATTACHMENTS = [
     (102, "AT-102", ESCAPE_PATH, "application/pdf", 10),
     (103, "AT-103", VOICE_PATH, "audio/x-caf", len(VOICE_BYTES)),
     (104, "AT-104", CARD_PATH, "text/vcard", 300),
+    (105, "AT-105", None, "image/jpeg", 800),  # no filename at all
+    (106, "AT-106", BLOB_PATH, None, 0),  # no kind, no file
+    (107, "AT-107", CHART_PATH, "image/png", 9000),  # a known kind, not in the backup
 ]
 MESSAGE_ATTACHMENTS = [(9, 100), (10, 101), (11, 102), (18, 103), (18, 104)]
+MESSAGE_ATTACHMENTS += [(31, 999), (32, 105), (33, 106), (34, 107)]  # 999 names no attachment row
 
 
 def _store(tmp_path: Path, name: str = "sms.db", with_media_files: bool = True) -> Path:
@@ -289,7 +301,7 @@ def test_sniff_and_run_never_touch_the_source(tmp_path, hash_media):
 
 def test_run_yields_message_lines_with_the_source_timestamp(tmp_path, hash_media):
     lines = list(imessage.run(_store(tmp_path)))
-    assert len(lines) == 13
+    assert len(lines) == 17
     for line in lines:
         assert set(line) == ENVELOPE
         assert line["end"] is None and line["tz"] is None
@@ -300,7 +312,7 @@ def test_run_yields_message_lines_with_the_source_timestamp(tmp_path, hash_media
 
 def test_run_streams_in_row_order(tmp_path, hash_media):
     lines = list(imessage.run(_store(tmp_path)))
-    assert list(_by_rowid(lines)) == [1, 2, 3, 6, 9, 10, 11, 12, 13, 16, 17, 18, 20]
+    assert list(_by_rowid(lines)) == [1, 2, 3, 6, 9, 10, 11, 12, 13, 16, 17, 18, 20, 31, 32, 33, 34]
 
 
 def test_run_honours_since(tmp_path, hash_media):
@@ -481,7 +493,13 @@ def test_run_media_file_that_is_missing_is_flagged(tmp_path, hash_media):
     p = _by_rowid(list(imessage.run(_store(tmp_path), counts=counts)))[10]["payload"]
     assert p["extra"]["media_missing"] is True
     assert p["extra"]["media"] == {"local_path": VIDEO_PATH, "media_type": "video/quicktime"}
-    assert counts["media_missing"] == 3  # rows 10, 11 and the second file on 18
+    assert counts["media_missing"] == 6  # rows 10, 11, 32, 33, 34 and the second file on 18
+    # each is counted once more under its reason (#80): every missing file is accounted for
+    assert counts["skipped_attachment_missing_file"] == 4  # rows 10, 11, 34 and the second file on 18
+    assert counts["skipped_attachment_no_filename"] == 1  # row 32
+    assert counts["skipped_attachment_unsupported_kind"] == 1  # row 33
+    reasons = ("missing_file", "no_filename", "unsupported_kind")
+    assert sum(counts[f"skipped_attachment_{reason}"] for reason in reasons) == counts["media_missing"]
 
 
 def test_run_media_row_without_a_filename_is_missing_and_has_no_media_extra(tmp_path, hash_media):
@@ -497,7 +515,9 @@ def test_run_media_row_without_a_filename_is_missing_and_has_no_media_extra(tmp_
     assert payload["media_kind"] == "video"  # the kind still comes from the mime type
     assert payload["extra"]["media_missing"] is True
     assert "media" not in payload["extra"]  # a mime type alone names no file under Attachments/
-    assert counts["media_missing"] == 3
+    assert counts["media_missing"] == 6
+    assert counts["skipped_attachment_no_filename"] == 2  # rows 10 and 32
+    assert counts["skipped_attachment_missing_file"] == 3  # rows 11, 34 and the second file on 18
 
 
 def test_run_hashing_can_be_switched_off(tmp_path, monkeypatch):
@@ -506,7 +526,8 @@ def test_run_hashing_can_be_switched_off(tmp_path, monkeypatch):
     lines = _by_rowid(list(imessage.run(_store(tmp_path), counts=counts)))
     assert lines[9]["payload"]["extra"]["media"] == {"local_path": IMAGE_PATH, "media_type": "image/jpeg"}
     assert lines[10]["payload"]["extra"]["media_missing"] is True  # existence is still checked
-    assert "media_hashed" not in counts and counts["media_missing"] == 3
+    assert "media_hashed" not in counts and counts["media_missing"] == 6
+    assert counts["skipped_attachment_missing_file"] == 4  # a file that is there is never counted
 
 
 def test_run_media_path_never_escapes_the_attachments_folder(tmp_path, hash_media):
@@ -517,6 +538,7 @@ def test_run_media_path_never_escapes_the_attachments_folder(tmp_path, hash_medi
     assert p["media_kind"] == "document" and p["text"] == "read this"
     assert p["extra"]["media_missing"] is True and "sha256" not in p["extra"]["media"]
     assert p["extra"]["media"]["local_path"] == ESCAPE_PATH
+    assert counts["skipped_attachment_missing_file"] == 4  # row 11 among them
 
 
 def test_run_media_path_outside_any_attachments_folder_is_missing(tmp_path, hash_media):
@@ -528,8 +550,27 @@ def test_run_media_path_outside_any_attachments_folder_is_missing(tmp_path, hash
     finally:
         con.close()
     (tmp_path / "secret.txt").write_text("not for the log", encoding="utf-8")
-    line = _by_rowid(list(imessage.run(p)))[9]["payload"]
+    counts: dict[str, int] = {}
+    line = _by_rowid(list(imessage.run(p, counts=counts)))[9]["payload"]
     assert line["extra"]["media_missing"] is True and "sha256" not in line["extra"]["media"]
+    assert counts["skipped_attachment_missing_file"] == 5  # rows 9, 10, 11, 34 and the second file on 18
+
+
+def test_run_media_file_that_exists_is_hashed_whatever_its_kind(tmp_path, hash_media):
+    p = _store(tmp_path)
+    blob = tmp_path / "Attachments" / "gh" / "78" / "AT-106" / "blob"
+    blob.parent.mkdir(parents=True)
+    blob.write_bytes(b"no kind anyone knows")
+    counts: dict[str, int] = {}
+    line = _by_rowid(list(imessage.run(p, counts=counts)))[33]["payload"]
+    assert line["media_kind"] == "other"
+    assert line["extra"]["media"] == {
+        "local_path": BLOB_PATH,
+        "sha256": hashlib.sha256(b"no kind anyone knows").hexdigest(),
+        "bytes": len(b"no kind anyone knows"),
+    }
+    assert "media_missing" not in line["extra"]
+    assert counts["media_hashed"] == 3 and "skipped_attachment_unsupported_kind" not in counts
 
 
 def test_run_second_and_later_attachments_go_under_more_media(tmp_path, hash_media):
@@ -564,10 +605,81 @@ def test_run_skips_and_counts_what_is_not_a_message(tmp_path, hash_media):
         "skipped_bad_date": 1,
         "skipped_no_chat": 1,
         "skipped_no_body": 2,
+        "skipped_attachment_no_row": 1,
+        "skipped_attachment_no_filename": 1,
+        "skipped_attachment_unsupported_kind": 1,
+        "skipped_attachment_missing_file": 4,
         "media_hashed": 2,
-        "media_missing": 3,
+        "media_missing": 6,
         "no_guid": 1,
     }
+
+
+def test_run_skipped_attachments_still_leave_their_message_lines(tmp_path, hash_media):
+    """A message that was sent stays a line when its attachment cannot be referenced: the line says
+    something was sent, the count says why its file is not there (#80)."""
+    lines = _by_rowid(list(imessage.run(_store(tmp_path))))
+    p31 = lines[31]["payload"]  # the join names no attachment row: nothing to reference
+    assert p31["text"] == "fender inventory" and "media_kind" not in p31
+    assert p31["extra"] == {"service": "SMS"}
+    p32 = lines[32]["payload"]  # no filename: the kind from the mime type, no file named
+    assert p32["text"] == "photos from the yard" and p32["media_kind"] == "image"
+    assert p32["extra"] == {"service": "SMS", "media_missing": True}
+    p33 = lines[33]["payload"]  # no known kind and no file: the path stays, missing
+    assert p33["text"] == "game invite, ignore it" and p33["media_kind"] == "other"
+    assert p33["extra"] == {"service": "SMS", "media": {"local_path": BLOB_PATH}, "media_missing": True}
+    p34 = lines[34]["payload"]  # a known kind not in the backup: the path stays, no digest
+    assert p34["text"] == "harbour map" and p34["media_kind"] == "image"
+    assert p34["extra"] == {
+        "service": "SMS",
+        "media": {"local_path": CHART_PATH, "media_type": "image/png"},
+        "media_missing": True,
+    }
+
+
+def test_run_message_with_only_an_unreferenceable_attachment_is_still_a_line(tmp_path, hash_media):
+    p = _store(tmp_path)
+    con = sqlite3.connect(p)
+    try:
+        con.execute("UPDATE message SET text = NULL WHERE ROWID IN (32, 33)")
+        con.commit()
+    finally:
+        con.close()
+    counts: dict[str, int] = {}
+    lines = _by_rowid(list(imessage.run(p, counts=counts)))
+    assert lines[32]["payload"]["media_kind"] == "image" and "text" not in lines[32]["payload"]
+    assert lines[33]["payload"]["media_kind"] == "other" and "text" not in lines[33]["payload"]
+    assert counts["skipped_no_body"] == 2  # rows 15 and 19, as before
+    assert counts["skipped_attachment_no_filename"] == 1
+    assert counts["skipped_attachment_unsupported_kind"] == 1
+
+
+def test_run_dangling_join_without_text_is_no_body(tmp_path, hash_media):
+    p = _store(tmp_path)
+    con = sqlite3.connect(p)
+    try:
+        con.execute("UPDATE message SET text = NULL WHERE ROWID = 31")
+        con.commit()
+    finally:
+        con.close()
+    counts: dict[str, int] = {}
+    assert 31 not in _by_rowid(list(imessage.run(p, counts=counts)))
+    assert counts["skipped_no_body"] == 3  # nothing was sent that the store can name
+    assert counts["skipped_attachment_no_row"] == 1
+
+
+def test_run_attachment_counts_only_the_first_chat(tmp_path, hash_media):
+    p = _store(tmp_path)
+    con = sqlite3.connect(p)
+    try:
+        con.execute("INSERT INTO chat_message_join VALUES (2, 34)")  # row 34 in a second chat too
+        con.execute("INSERT INTO chat_message_join VALUES (2, 31)")
+        con.commit()
+    finally:
+        con.close()
+    counts: dict[str, int] = {}
+    list(imessage.run(p, counts=counts))
+    assert counts["skipped_attachment_missing_file"] == 4 and counts["skipped_attachment_no_row"] == 1
 
 
 @pytest.mark.parametrize("code", [2000, 2005, 3000, 3005])
@@ -602,10 +714,10 @@ def test_run_other_associated_types_are_kept_and_noted(tmp_path, hash_media):
 def test_run_lines_append_and_re_running_appends_nothing(tmp_path, hash_media):
     p = _store(tmp_path)
     lb = Logbook.init(tmp_path / "lb", "Europe/Oslo")
-    assert lb.append_many(imessage.run(p)) == 13
+    assert lb.append_many(imessage.run(p)) == 17
     assert lb.append_many(imessage.run(p)) == 0
     seq, _head, errors = lb.verify()
-    assert errors == [] and seq == 13
+    assert errors == [] and seq == 17
     validator = Draft202012Validator(SCHEMA)
     for line in lb.lines():
         validator.validate(line)
@@ -633,12 +745,15 @@ def test_cli_add_reports_lines_skips_and_media(tmp_path):
     run("init", str(tmp_path / "lb"), "--timezone", "Europe/Oslo")
     p = _store(tmp_path)
     out = run("add", str(p)).stdout
-    assert "added 13 lines from imessage" in out
+    assert "added 17 lines from imessage" in out
     skipped = "skipped 2 reactions, 1 group system events, 1 with an unusable date, 1 without a chat"
-    assert f"{skipped}, 2 without a body" in out
-    assert "also 2 with media hashed, 3 with media missing, 1 without a guid, keyed by row id" in out
+    skipped += ", 4 attachments whose file is not in the backup, 2 without a body"
+    skipped += ", 1 attachments whose join finds no attachment row, 1 attachments with no filename"
+    skipped += ", 1 attachments of an unsupported kind\n"
+    assert skipped in out
+    assert "also 2 with media hashed, 6 with media missing, 1 without a guid, keyed by row id" in out
     assert "added 0 lines from imessage" in run("add", str(p)).stdout
-    assert "valid — 13 lines" in run("verify").stdout
+    assert "valid — 17 lines" in run("verify").stdout
 
 
 # -- property: every emitted line is a valid message/v1 observation -------------------
@@ -881,8 +996,21 @@ def test_any_message_store_yields_only_valid_lines(tmp_path_factory, store):
         lines = list(imessage.run(p, counts=counts))
     for line in lines:
         _rfc_rules(line)
-    skipped = sum(n for key, n in counts.items() if key.startswith("skipped_"))
+    # every message is a line or one skip; the attachment skips count attachments, not messages
+    skipped = sum(
+        n
+        for key, n in counts.items()
+        if key.startswith("skipped_") and not key.startswith("skipped_attachment_")
+    )
     assert len(lines) + skipped == len(messages)
+    # every attachment a line marks missing is counted under exactly one reason (#80)
+    items = [line["payload"]["extra"] for line in lines if "media_kind" in line["payload"]]
+    items += [item for line in lines for item in line["payload"]["extra"].get("more_media", [])]
+    missing = sum(1 for item in items if item.get("media_missing") is True)
+    reasons = ("no_filename", "unsupported_kind", "missing_file")
+    assert sum(counts.get(f"skipped_attachment_{reason}", 0) for reason in reasons) == missing
+    assert counts.get("media_missing", 0) == missing
+    assert counts.get("media_hashed", 0) == sum(1 for item in items if "sha256" in item.get("media", {}))
     lb = Logbook.init(tmp_path_factory.mktemp("lb"), "UTC")
     appended = lb.append_many(lines)
     raw_ids = {line["payload"]["raw_id"] for line in lines}
