@@ -665,7 +665,7 @@ def test_run_dangling_join_without_text_is_no_body(tmp_path, hash_media):
     counts: dict[str, int] = {}
     assert 31 not in _by_rowid(list(imessage.run(p, counts=counts)))
     assert counts["skipped_no_body"] == 3  # nothing was sent that the store can name
-    assert counts["skipped_attachment_no_row"] == 1
+    assert "skipped_attachment_no_row" not in counts  # one message, one skip: never counted twice
 
 
 def test_run_attachment_counts_only_the_first_chat(tmp_path, hash_media):
@@ -747,7 +747,7 @@ def test_cli_add_reports_lines_skips_and_media(tmp_path):
     out = run("add", str(p)).stdout
     assert "added 17 lines from imessage" in out
     skipped = "skipped 2 reactions, 1 group system events, 1 with an unusable date, 1 without a chat"
-    skipped += ", 4 attachments whose file is not in the backup, 2 without a body"
+    skipped += ", 4 attachments whose file is not there, 2 without a body"
     skipped += ", 1 attachments whose join finds no attachment row, 1 attachments with no filename"
     skipped += ", 1 attachments of an unsupported kind\n"
     assert skipped in out
@@ -933,6 +933,22 @@ _store_strategy = st.tuples(
         [(None, None, None, None, 300153600, None, None, None, None, None, 0, [0, 1])],
     )
 )
+@example(  # #80: no body and a join naming no attachment row: skipped_no_body only, no attachment count
+    (
+        [],
+        [("0", None, None)],
+        [],
+        [(None, None, None, None, 300153600, None, None, None, None, None, 0, [0])],
+    )
+)
+@example(  # #80: text and a join naming no attachment row: the line, and one no_row count
+    (
+        [],
+        [("0", None, None)],
+        [],
+        [(None, "hi", None, None, 300153600, None, None, None, None, None, 0, [0, 1])],
+    )
+)
 @example(  # a handle with a display name in a store that has the column: sender.name
     (
         [("+4790000001", "SMS", "Ola")],
@@ -1011,6 +1027,16 @@ def test_any_message_store_yields_only_valid_lines(tmp_path_factory, store):
     assert sum(counts.get(f"skipped_attachment_{reason}", 0) for reason in reasons) == missing
     assert counts.get("media_missing", 0) == missing
     assert counts.get("media_hashed", 0) == sum(1 for item in items if "sha256" in item.get("media", {}))
+    # a join naming no attachment row is counted once per kept message, never for a skipped one
+    owners: dict[str, list[int]] = {}
+    for rowid, m in enumerate(messages, start=1):
+        owners.setdefault(m[0] if m[0] not in (None, "") else f"row{rowid}", []).append(rowid)
+    kept = [owners[line["payload"]["raw_id"]] for line in lines]
+    if all(len(rowids) == 1 for rowids in kept) and len(set(owners)) == len(messages):
+        dangling = sum(
+            len({item for item in messages[rowids[0] - 1][11] if item >= len(attachments)}) for rowids in kept
+        )
+        assert counts.get("skipped_attachment_no_row", 0) == dangling
     lb = Logbook.init(tmp_path_factory.mktemp("lb"), "UTC")
     appended = lb.append_many(lines)
     raw_ids = {line["payload"]["raw_id"] for line in lines}

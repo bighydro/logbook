@@ -39,10 +39,10 @@ inside that folder. When the file exists its SHA-256 and size are recorded under
 the attach pass (`logbook attach import-backup --only imessage`, `logbook/contrib/attach.py`) finds the bytes
 in the backup by the path and puts them in the §1.1 store under the digest, checked against it;
 when it does not, `extra.media_missing` is true. Every attachment row the join walks for a kept
-message is accounted for (#80): a file found in the backup, or one `skipped_attachment_<reason>`
+message is accounted for (#80): a file found beside the store, or one `skipped_attachment_<reason>`
 count beside the line, which stays — `no_row` (the join names no `attachment` row), `no_filename`
 (the row names no file), `unsupported_kind` (no known kind and no file to hash), `missing_file` (a
-known kind whose file is not in the backup; its path stays under `extra.media`, with no digest). A
+known kind whose file is not there; its path stays under `extra.media`, with no digest). A
 file that is there is hashed whatever its kind.
 `payload.media` is never set. A message with several attachments puts the first under `extra.media`
 (and its kind in `media_kind`) and the rest under `extra.more_media`. `LOGBOOK_IMESSAGE_HASH_MEDIA=0`
@@ -204,8 +204,9 @@ def run(
     left out — `skipped_reaction` (tapbacks), `skipped_system_event` (group renames, joins),
     `skipped_bad_date` (no date, or one before 2010), `skipped_no_chat` (no chat_message_join row),
     `skipped_no_body` (no text and no attachment), one `skipped_attachment_<reason>` per attachment
-    row of a kept message whose file is not in the backup (`no_row`, `no_filename`,
-    `unsupported_kind`, `missing_file`: the message's line stays) — and what was noted: `no_guid`
+    row of a kept message that names no file found beside the store (`no_row`: no attachment row,
+    `no_filename`, `unsupported_kind`, `missing_file`; the message's line stays) — and what was
+    noted: `no_guid`
     (keyed by row id instead), `media_hashed`, `media_missing`."""
     counts = counts if counts is not None else {}
     path = Path(path)
@@ -284,16 +285,17 @@ def _draft(
         if row[11] != chat_pk:  # the same attachments join once per chat; the first chat wins
             continue
         if row[15] is None:
-            if row[18] is not None and row[18] not in dangling:  # a join naming no attachment row
+            if row[18] is not None:  # a join naming no attachment row, counted once the line is kept
                 dangling.add(row[18])
-                _count(counts, "skipped_attachment_no_row")
             continue
         if row[15] not in seen:
             seen.add(row[15])
             attachments.append(row[15:18])
     if body is None and not attachments:
-        _count(counts, "skipped_no_body")
+        _count(counts, "skipped_no_body")  # one message, one skip: its dangling joins are not counted
         return None
+    for _id in dangling:
+        _count(counts, "skipped_attachment_no_row")
     chat: dict[str, Any] = {"id": chat_id, "type": "group" if style == GROUP_STYLE else "direct"}
     if isinstance(chat_name, str) and chat_name.strip():
         chat["name"] = chat_name

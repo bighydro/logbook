@@ -253,7 +253,7 @@ def test_sync_appends_every_message_and_stores_the_newest_message_time(lb, capsy
     assert "skipped 2 reactions, 1 group system events, 1 with an unusable date, 1 without a chat" in out
     skipped = next(row for row in out.splitlines() if row.strip().startswith("skipped "))
     for phrase in (
-        "4 attachments whose file is not in the backup",
+        "4 attachments whose file is not there",
         "1 attachments whose join finds no attachment row",
         "1 attachments with no filename",
         "1 attachments of an unsupported kind",

@@ -118,7 +118,7 @@ SKIP_PHRASES = {
     "skipped_attachment_no_row": "attachments whose join finds no attachment row",
     "skipped_attachment_no_filename": "attachments with no filename",
     "skipped_attachment_unsupported_kind": "attachments of an unsupported kind",
-    "skipped_attachment_missing_file": "attachments whose file is not in the backup",
+    "skipped_attachment_missing_file": "attachments whose file is not there",
 }
 
 
