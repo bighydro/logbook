@@ -55,9 +55,11 @@ def cmd_infer(a: argparse.Namespace) -> None:
         found = list(drafts)
         with lb.index() as idx:  # what append_many would skip: the observations the record already holds
             already = len(idx.existing({key for d in found if (key := dedupe_key(d)) is not None}))
-        n = len(found) - already
+        # A reconciled draft carries an existing flight forward rather than introducing another
+        # flight. Keep the dry-run's "would be written" count aligned with new flights after merges.
+        n = max(0, len(found) - already - counts.get("merged", 0))
     else:
-        n = lb.append_many(drafts, skipped=skipped)
+        n = max(0, lb.append_many(drafts, skipped=skipped) - counts.get("merged", 0))
     entries_text = _plural(counts.pop("calendar_flights", 0), "calendar entry", "calendar entries")
     already_text = f" ({already} already in the record)" if already else ""
     if a.dry_run:

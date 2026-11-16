@@ -303,8 +303,13 @@ def test_cli_infer_counts_one_flight_however_many_entries_name_it(lb: Logbook):
 def test_cli_infer_after_flighty_attaches_to_the_tracked_flight(lb: Logbook):
     _flight_day(lb)
     lb.append_many(flighty.run(FLIGHTY))
+    dry = _cli(lb, "derive", "flights", "--dry-run")
+    assert dry.returncode == 0, dry.stderr
+    assert dry.stdout.startswith("dry run: 0 flights from 1 calendar entry would be written")
+    assert "1 merged into a flight already in the record" in dry.stdout
     r = _cli(lb, "derive", "flights")
     assert r.returncode == 0, r.stderr
+    assert r.stdout.startswith("inferred 0 new flights from 1 calendar entry")
     assert "1 merged into a flight already in the record" in r.stdout
     with lb.index() as idx:
         last = flights.standing(idx.by_kind("flight"))
