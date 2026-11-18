@@ -1,7 +1,8 @@
 """The crossing gate of `logbook export notion`, probed where a fact could rest on a line the gate
 refuses: a promise's attribution to a person, a promise outside the window the crossing line
-declares, and the money filter on the owner's quoted words. The record is `test_export_notion`'s
-synthetic one (Ines Nordmann of Oslo, who does not exist), with a few lines added per test."""
+declares, the money filter on the owner's quoted words, and a birthday read off a resolution line.
+The record is `test_export_notion`'s synthetic one (Ines Nordmann of Oslo, who does not exist), with
+a few lines added per test."""
 
 from __future__ import annotations
 
@@ -16,6 +17,7 @@ from test_export_notion import (
     OLA,
     SIGRID,
     _all_bytes,
+    _birthday,
     _entry,
     _line,
     _mail,
@@ -39,6 +41,8 @@ T3_THEIRS = "I'll bring the SENTINEL-T3-THEIRS drawings on Monday."
 T3_MINE = "I will send you the SENTINEL-T3-MINE file tomorrow."
 EARLY_PROMISE = "I'll send the SENTINEL-EARLY hull drawings by Friday."
 MNOK_PROMISE = "I'll wire the 2 MNOK for the SENTINEL-MNOK stand on Monday."
+BIRTHDAY = "1911-11-11"  # a sentinel: no other date of the record is this one
+CARD_DAY = "2026-09-28"  # the day a contact card was read in: unsigned until a test signs it
 
 
 @pytest.fixture
@@ -149,6 +153,53 @@ def test_a_promise_naming_money_in_a_prefixed_unit_is_left_out(lb: Logbook, tmp_
     out = tmp_path / "out"
     _run(out, "--since", "2026-09-01")
     assert "MNOK" not in _all_bytes(out) and "SENTINEL-MNOK" not in _all_bytes(out)
+
+
+# -- a birthday read off a line the gate refuses -------------------------------------------------------
+
+
+@pytest.mark.parametrize("ref", [("phone", OLA_OTHER_PHONE), ("email", OLA["email"])])
+def test_a_birthday_on_a_tier_3_resolution_line_does_not_leave(
+    lb: Logbook, tmp_path: Path, ref: tuple[str, str]
+):
+    """A tier-3 resolution line on a signed day gives Ola a birthday, through a second number of his or
+    by binding his email again. Under a ceiling of 2 the line binds nothing and tells nothing: Ola
+    leaves, by the tier-2 lines that bind him, and his birthday stays home."""
+    _append(lb, _birthday(ref, OLA, BIRTHDAY, SIGNED_DAY, tier=3))
+    _sign_again(lb, SIGNED_DAY)
+    out = tmp_path / "out"
+    _run(out, "--since", "2026-09-01")
+    ola = _person(out, OLA["id"])
+    assert ola is not None and {"kind": "email", "value": OLA["email"]} in ola["identities"]
+    assert ola["facts"]["birthday"] is None, "a birthday read off a tier-3 line"
+    assert BIRTHDAY not in _all_bytes(out)
+
+
+def test_a_birthday_read_on_an_unsigned_day_leaves_only_once_the_gate_lets_it(lb: Logbook, tmp_path: Path):
+    """The line that binds Ola's email binds it from any day, as the overlay does; the birthday it
+    carries is a fact and binds nothing, so it leaves only from a signed day, or with the gate lifted
+    by the entry and the flag both. Held back, it is counted as a line on an unsigned day."""
+    out = tmp_path / "out"
+    _run(out, "--since", "2026-09-01")
+    held = _read(out, "manifest.json")["held_back"]["unsigned"]
+    _append(lb, _birthday(("email", OLA["email"]), OLA, BIRTHDAY, CARD_DAY))
+    _run(out, "--since", "2026-09-01")
+    ola = _person(out, OLA["id"])
+    assert ola is not None and {"kind": "email", "value": OLA["email"]} in ola["identities"], "it binds"
+    assert ola["facts"]["birthday"] is None, "a birthday read on an unsigned day"
+    assert BIRTHDAY not in _all_bytes(out)
+    assert _read(out, "manifest.json")["held_back"]["unsigned"] == held + 1
+
+    _entry(lb, include_unsigned=True)
+    _run(out, "--since", "2026-09-01", "--include-unsigned")
+    ola = _person(out, OLA["id"])
+    assert ola is not None and ola["facts"]["birthday"] == BIRTHDAY, "the gate lifted"
+
+    _entry(lb)
+    _sign_again(lb, CARD_DAY)
+    _run(out, "--since", "2026-09-01")
+    ola = _person(out, OLA["id"])
+    assert ola is not None and ola["facts"]["birthday"] == BIRTHDAY, "the day signed"
 
 
 # -- the record itself is never the target ----------------------------------------------------------

@@ -16,7 +16,9 @@ record's first day, to the read time) that pass the gate; an idea's current stat
 from every status line the gate lets through, whatever its day, and a person's days together are a
 total, read over the whole record to the read time through the same gate. The lines that bind a name to a ref,
 `resolution/v1` and `entity/v1`, are the crossing's overlay (RFC 0005): from any day, held to the
-ceiling, not to the signature, as `export crossing` ships them. A day together rests on its evidence
+ceiling, not to the signature, as `export crossing` ships them. A person's birthday is read off such a
+line (`extra.birthday`) and binds nothing: it is a fact, a state read whatever its day, and the line
+must pass the gate as a fact's line does, the signed day included. A day together rests on its evidence
 line, and a promise's speaker and counterpart are resolved through the same gate
 (`promises.extract(admit=...)`).
 
@@ -29,14 +31,16 @@ the other files. Three sections, one file each, each matched on the Notion side 
   message, a call, a mail, a calendar entry, a recording, a tagged face or a day together), by the
   record's person id, with the `identities` the resolution lines hold (email, phone, handle) and the
   `facts`: the last contact (its date and kind), the days together over the whole record
-  (`days_together`, `first_together`, `last_together`), and the promises open both ways said in the
+  (`days_together`, `first_together`, `last_together`), the birthday as the people reader holds it
+  (`birthday`: `YYYY-MM-DD`, or `--MM-DD` without the year; null when the record knows none or the
+  gate holds its line back), and the promises open both ways said in the
   window and in the 365 days before the read time, in a conversation the person is a direct party to
   (`Proposal.parties`), the owner's own or the person's own and never a request (`PROMISE_ROLES`), one
   whole sentence and never a quoted line, a pasted chat line or a whole chat message
   (`whole_sentence`), newest first, ten a side (`promises`: the sentence as it quotes it, its date,
   the line it was read in), the rest counted (`promises_more`). No message, mail or transcript text
-  but that one sentence. The person's `page` is the facts as German lines, emitted whole: the writer
-  replaces the page, never merges it.
+  but that one sentence. The person's `page` is the facts, the birthday aside, as German lines,
+  emitted whole: the writer replaces the page, never merges it.
 - `ideas.json`: every idea whose entity has a Notion page ref (`page`, `notion:<id>`), with its
   current status (tier 2), the reason note for it when there is one, and a dated entry in German per
   status line written in the window, superseded or not, the owner's own words quoted as written.
@@ -71,7 +75,7 @@ from pathlib import Path
 from typing import Any
 
 from .. import __version__
-from ..core import crossing, day_start, people, policy, present, reading, signing, stays
+from ..core import crossing, day_start, people, policy, present, reading, resolve, signing, stays
 from ..core.chain import Line
 from ..core.day_start import DayStart
 from ..core.export import parse_day
@@ -433,7 +437,8 @@ def _persons(
     left: dict[str, int],
 ) -> list[dict[str, Any]]:
     """Everyone heard in the window who has a key, with the facts of their page: the last contact in
-    the window, the days together over the whole record, and the open promises said in the window and
+    the window, the days together over the whole record, the birthday when the gate lets its line
+    through (`_birthday`), and the open promises said in the window and
     in the `PROMISE_DAYS` before the read time, in a conversation the person is a direct party to
     (`Proposal.parties`: a direct chat, a mail both are on and no list sent, a call they spoke in; a
     mail's quoted part is never read), the owner's own or the person's own in one whole sentence
@@ -442,6 +447,7 @@ def _persons(
     cutoff = datetime.fromisoformat(req.as_of.replace("Z", "+00:00")) - timedelta(days=PROMISE_DAYS)
     since = max(req.since, g.days.day(cutoff).isoformat())
     owed = people_drift.promises_with(lb, heard, admit=g.admit, since=since, until=req.until)
+    birthdays = _birthday_lines(lb, g, report)
     sides = (promise_reader.OWED_BY_OWNER, promise_reader.OWED_TO_OWNER)
     out = []
     for person in sorted(heard, key=lambda p: p.entity):
@@ -473,6 +479,7 @@ def _persons(
             "days_together": len(days),
             "first_together": days[0] if days else None,
             "last_together": days[-1] if days else None,
+            "birthday": _birthday(person, birthdays.get(person.entity, []), g),
             "promises": {side: newest[side][:PROMISES_SHOWN] for side in sides},
             "promises_more": {side: max(0, len(newest[side]) - PROMISES_SHOWN) for side in sides},
         }
@@ -509,6 +516,40 @@ def _last_contact(person: people.Person) -> dict[str, str] | None:
     last = max(day for day, _kind in found)
     kinds = {kind for day, kind in found if day == last}
     return {"date": last, "kind": next(kind for kind in CONTACT_ORDER if kind in kinds)}
+
+
+def _birthday_lines(lb: Logbook, g: Gate, report: people.Report) -> dict[str, list[Line]]:
+    """By person, the resolution lines standing for one of their refs that carry a birthday: read as
+    the people reader read them (the lines the gate binds names through, `admit`), so the birthday it
+    gave a person (`people.Person.birthday`) is on one of these."""
+    with lb.index() as idx:
+        marks = idx.retractions()
+        bound = [line for line in idx.resolutions() if g.admit(line)]
+    out: dict[str, list[Line]] = {}
+    for ref, line in resolve.standing([*marks, *bound]).items():
+        who = report.identities.get(ref)
+        if who is not None and who.entity and _birthday_of(line) is not None:
+            out.setdefault(who.entity, []).append(line)
+    return out
+
+
+def _birthday(person: people.Person, lines: list[Line], g: Gate) -> str | None:
+    """The person's birthday as the people reader holds it (`YYYY-MM-DD`, or `--MM-DD` without the
+    year), when a line that carries it passes the gate as a fact's line does. The overlay lets a
+    resolution line bind a name from any day; a birthday binds nothing, so its line must be on a signed
+    day as well (unless the gate is lifted), at the entry's tiers and before the read time. None
+    otherwise, and when the record knows none."""
+    if person.birthday is None:
+        return None
+    if any(_birthday_of(line) == person.birthday and g.fact(line) for line in lines):
+        return person.birthday
+    return None
+
+
+def _birthday_of(line: Line) -> object:
+    """A resolution line's `extra.birthday`, as it is written; `people` holds it to `people.BIRTHDAY`."""
+    extra = (line.get("payload") or {}).get("extra")
+    return extra.get("birthday") if isinstance(extra, dict) else None
 
 
 def _person_page(req: Request, facts: Mapping[str, Any]) -> Iterator[str]:

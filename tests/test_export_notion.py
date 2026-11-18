@@ -89,6 +89,18 @@ def _resolution(
     }  # fmt: skip
 
 
+def _birthday(
+    ref: tuple[str, str], who: dict[str, str], birthday: str, day: str, tier: int = 2
+) -> dict[str, Any]:
+    """A resolution line written on `day` that carries the person's birthday, as a contacts adapter
+    writes it (`payload.extra.birthday`)."""
+    line = _resolution(ref, who, tier=tier)
+    line["at"] = _at(day, "08:00")
+    line["source"] = "ios-contacts"
+    line["payload"]["extra"] = {"birthday": birthday}
+    return line
+
+
 def _entity(kind: str, entity: str, label: str, refs: list[tuple[str, str]]) -> dict[str, Any]:
     return {
         "at": "2026-08-01T09:00:00Z", "source": "manual", "kind": "entity", "tier": 2,
@@ -339,9 +351,11 @@ def test_the_body_shape(lb: Logbook, tmp_path: Path):
         "days_together",
         "first_together",
         "last_together",
+        "birthday",
         "promises",
         "promises_more",
     }
+    assert facts["birthday"] is None, "no resolution line of Ola's carries one"
     assert facts["last_contact"] == {"date": "2026-09-12", "kind": "message"}
     assert facts["days_together"] == 1
     assert facts["first_together"] == facts["last_together"] == "2026-09-10"
@@ -387,6 +401,28 @@ def test_the_body_shape(lb: Logbook, tmp_path: Path):
     assert left["ideas_without_page"] == 1, "the tide clock: no Notion page"
     assert left["orgs_without_domain"] == 1, "the board: no domain"
     assert left["sentences_with_money"] == 1
+
+
+@pytest.mark.parametrize(
+    ("written", "read"),
+    [("1985-03-12", "1985-03-12"), ("--03-12", "--03-12"), ("12.03.1985", None)],
+)
+def test_a_birthday_is_a_fact_as_the_record_holds_it(
+    lb: Logbook, tmp_path: Path, written: str, read: str | None
+):
+    """Ola's contact card carries his birthday, a later resolution line of his email written on a
+    signed day: `facts.birthday` is the string as the people reader holds it, a whole date or
+    `--MM-DD` without the year, and null for anything else. The page has no line for it."""
+    out = tmp_path / "out"
+    _run(out, "--since", "2026-09-01")
+    before = _person(out, OLA["id"])
+    lb.append(**_line(_birthday(("email", OLA["email"]), OLA, written, "2026-09-10")))
+    _run(out, "--since", "2026-09-01")
+    ola = _person(out, OLA["id"])
+    assert before is not None and ola is not None
+    assert ola["facts"]["birthday"] == read
+    assert ola["identities"] == before["identities"], "the same email, bound again"
+    assert ola["page"] == before["page"], "the page stays as it was"
 
 
 def test_signed_days_only_by_default(lb: Logbook, tmp_path: Path):

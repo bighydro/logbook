@@ -69,7 +69,9 @@ week still says how many days you have spent together and since when. The lines 
 bind a name to an address or a page, `resolution/v1` and `entity/v1`, come from any day and are held to
 the ceiling and not to the signature, as a crossing package ships its resolution lines: Ola's email is
 his whenever the record learned it. A line the record holds at tier 3 binds nothing here, and an earlier
-line it replaced at a lower tier stands again for this export.
+line it replaced at a lower tier stands again for this export. A birthday read off such a line binds
+nothing: it is a fact, read whatever its day, from a line that passes the gate in full, the signed day
+included.
 
 ## What leaves
 
@@ -99,6 +101,11 @@ the resolution lines hold them) and `facts`:
   there are none. "Days together" counts days the person was confirmed with the owner at one of the
   owner's stays; a person known only from messages and mail has none, and their page carries no such
   line;
+- `birthday`: the person's birthday as the record holds it ([people](people.md)), `YYYY-MM-DD`, or
+  `--MM-DD` when the year is unknown, from the `extra.birthday` of a standing resolution line of one of
+  their refs, as a contacts import writes it; null when the record knows none. A birthday binds nothing,
+  so its line is held to the gate as a fact's is: one read on a day you have not signed stays home until
+  you sign that day. The page has no line for it;
 - `promises`, open both ways ([promises](promises.md)): `owed_by_owner` and `owed_to_owner`, each
   `{sentence, date, line}`: the sentence as `logbook promises` quotes it (one sentence, its case kept,
   its whitespace collapsed), the day it was said, the line it was read in. Only a promise: what
@@ -116,8 +123,8 @@ the resolution lines hold them) and `facts`:
   come first, at most ten a side; `promises_more` counts the rest of each side. The person's speaker and
   counterpart are resolved through the same gate.
 
-And `page`: those facts as the lines of a page, in German, whole. The program that writes Notion replaces
-a person's page with it and never merges:
+And `page`: those facts, the birthday aside, as the lines of a page, in German, whole. The program that
+writes Notion replaces a person's page with it and never merges:
 
 ```
 Stand: 15.10.2026, aus dem Logbuch
