@@ -203,7 +203,7 @@ logbook derive flights
 ```
 
 ```
-inferred 3 new flights from 4 calendar entries (1 already in the record)
+inferred 0 new flights from 4 calendar entries (1 already in the record)
   also 3 merged into a flight already in the record
 ```
 

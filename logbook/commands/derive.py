@@ -55,13 +55,26 @@ def cmd_infer(a: argparse.Namespace) -> None:
         found = list(drafts)
         with lb.index() as idx:  # what append_many would skip: the observations the record already holds
             already = len(idx.existing({key for d in found if (key := dedupe_key(d)) is not None}))
-        n = len(found) - already
+        written = len(found) - already
     else:
-        n = lb.append_many(drafts, skipped=skipped)
+        written = lb.append_many(drafts, skipped=skipped)
+    # A merged draft is written too, as the line that supersedes the flight it merged into: a line
+    # the record gains but no new flight. The merges are told on a line of their own (`_report_skipped`).
+    merges = counts.get("merged", 0) + counts.get("merged_in_run", 0)
+    n = written - merges
+    # every merge is a written line (`flights.reconcile`): fewer lines than merges is a counting bug,
+    # told as one, never clamped into a count that looks right
+    if n < 0:
+        lines, merged = _plural(written, "line"), _plural(merges, "merge")
+        print(
+            f"derive flights: {lines} written but {merged} counted, a counting bug; the record is as written",
+            file=sys.stderr,
+        )
+        sys.exit(1)
     entries_text = _plural(counts.pop("calendar_flights", 0), "calendar entry", "calendar entries")
     already_text = f" ({already} already in the record)" if already else ""
     if a.dry_run:
-        would = f"{_plural(n, 'flight')} from {entries_text} would be written"
+        would = f"{_plural(n, 'new flight')} from {entries_text} would be written"
         print(f"dry run: {would}{already_text}; nothing written")
     else:
         print(f"inferred {_plural(n, 'new flight')} from {entries_text}{already_text}")

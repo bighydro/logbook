@@ -239,7 +239,8 @@ def test_derive_stays_finds_the_nights(lb: Logbook, capsys: pytest.CaptureFixtur
 def test_infer_flights_finds_the_calendar_flights(lb: Logbook, capsys: pytest.CaptureFixture[str]) -> None:
     out = _run(capsys, "derive", "flights", "--dry-run")
     assert "from 4 calendar entries" in out and "1 already in the record" in out, out
-    assert "3 flights" in out
+    assert out.startswith("dry run: 0 new flights from 4 calendar entries would be written"), out
+    assert "  also 3 merged into a flight already in the record\n" in out, out
 
 
 def test_trips_are_the_cabin_zurich_the_boat_and_copenhagen(

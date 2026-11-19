@@ -149,6 +149,7 @@ NOTE_PHRASES = {  # counts that are not skips: the line was written, with someth
     "no_summary": "without a summary",
     "no_recording": "without a recording (summary only)",
     "merged": "merged into a flight already in the record",
+    "merged_in_run": "merged into a flight found earlier in the same run",
     "corrected": "corrected: a later export changed a sample, the line in the record is superseded",
     "no_airport_zone": "with an airport the table does not know",
     "arrival_before_departure": "arriving before departing, kept as given",

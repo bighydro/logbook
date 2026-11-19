@@ -381,6 +381,30 @@ def test_merge_of_a_codeshare_keeps_the_number_first_seen_unless_the_other_is_th
     assert flights.merge(marketing, operating)["payload"]["number"] == "123"
 
 
+def test_reconcile_a_codeshare_of_a_flight_the_record_holds_is_merged_into_the_record_in_any_order(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    """The record holds XY 123; one stream brings a newer observation of it and then the same leg
+    under XY 9123. The second merges into the first's line, written in this run, but the flight was
+    in the record before the run: both are merges into a flight already in the record."""
+    from logbook.core.store import Logbook
+
+    lb = Logbook.init(tmp_path / "lb", "Europe/Oslo")
+    monkeypatch.setenv("LOGBOOK_HOME", str(lb.root))
+    assert lb.append_many(flights.reconcile(lb, [_tracked(number="123")])) == 1
+    counts: dict[str, int] = {}
+    drafts = [
+        _tracked(number="123", raw_id="fx-2@abc"),
+        _tracked(number="9123", raw_id="fx-3@abc", scheduled_departure="2026-09-27T05:10:00Z"),
+    ]
+    assert lb.append_many(flights.reconcile(lb, drafts, counts)) == 2
+    assert counts == {"merged": 2}
+    with lb.index() as idx:
+        standing = flights.standing(idx.by_kind("flight"))
+    [(k, line)] = standing.items()
+    assert k == ("2026-09-27", "XY", "123") and len(line["payload"]["observations"]) == 3
+
+
 def test_reconcile_merges_a_codeshare_pair_into_one_standing_flight(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ):
@@ -394,7 +418,7 @@ def test_reconcile_merges_a_codeshare_pair_into_one_standing_flight(
         _tracked(number="9123", raw_id="fx-2@abc", scheduled_departure="2026-09-27T05:10:00Z"),
     ]
     assert lb.append_many(flights.reconcile(lb, drafts, counts)) == 2
-    assert counts == {"merged": 1}
+    assert counts == {"merged_in_run": 1}  # the pair met in one stream: no flight in the record was there
     with lb.index() as idx:
         standing = flights.standing(idx.by_kind("flight"))
     [(k, line)] = standing.items()
@@ -403,7 +427,7 @@ def test_reconcile_merges_a_codeshare_pair_into_one_standing_flight(
     # a third observation under the marketing number finds the merged flight too
     third = _tracked(number="9123", raw_id="fx-3@abc", scheduled_departure="2026-09-27T05:10:00Z")
     assert lb.append_many(flights.reconcile(lb, [third], counts)) == 1
-    assert counts == {"merged": 2}
+    assert counts == {"merged_in_run": 1, "merged": 1}
     with lb.index() as idx:
         standing = flights.standing(idx.by_kind("flight"))
     [(k, line)] = standing.items()
