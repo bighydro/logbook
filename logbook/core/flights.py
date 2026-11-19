@@ -731,7 +731,11 @@ def reconcile(
 ) -> Iterator[dict[str, Any]]:
     """Pass drafts through; a flight draft whose key already stands in the record (or earlier in
     this stream) becomes the merged line that supersedes it. Every draft gets an id here so a later
-    one in the same stream can name it. `counts["merged"]` tallies the merges. A draft that repeats
+    one in the same stream can name it. `counts["merged"]` tallies the merges into a flight the record
+    already held (directly, or through a line this stream merged into it); `counts["merged_in_run"]`
+    the merges into a flight the record did not hold that an earlier draft of this same stream
+    brought (a codeshare pair met in one run). Every merge is a line `append_many` writes (it
+    supersedes, it is never deduped). A draft that repeats
     an observation already in the stream (the same source and raw_id: four calendar entries for one
     flight give four identical inferences) is dropped, so what comes out is what `append_many`
     would write; one that repeats an observation already in the record is passed through for
@@ -741,6 +745,7 @@ def reconcile(
     last: dict[Key, Line] | None = None
     seen: set[tuple[str, str]] = set()
     passed: set[tuple[str, str]] = set()
+    fresh: set[str] = set()  # the ids of this stream's drafts for a flight the record did not hold
     for draft in drafts:
         if draft.get("kind") != KIND:
             yield draft
@@ -763,9 +768,15 @@ def reconcile(
             current = codeshare_of(draft["payload"], last)
         if current is not None:
             draft = merge(current, draft, airports)
-            counts["merged"] = counts.get("merged", 0) + 1
+            new_flight = str(current["id"]) in fresh
+            tally = "merged_in_run" if new_flight else "merged"
+            counts[tally] = counts.get(tally, 0) + 1
             last.pop(key(current["payload"]), None)
+        else:
+            new_flight = True
         draft.setdefault("id", _uuid7())
+        if new_flight:
+            fresh.add(str(draft["id"]))
         last[key(draft["payload"])] = {**draft, "seq": 0}
         yield draft
 

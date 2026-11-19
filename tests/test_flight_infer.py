@@ -4,6 +4,7 @@ a leg in the location points from the last point at one airport to the first at 
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 import sys
 from datetime import UTC, datetime, timedelta
@@ -257,7 +258,7 @@ def test_cli_infer_flights_writes_once_and_reports(lb: Logbook):
     _flight_day(lb)
     r = _cli(lb, "derive", "flights", "--dry-run")
     assert r.returncode == 0, r.stderr
-    assert "1 flight" in r.stdout and "dry run" in r.stdout and lb.meta["seq"] == 16
+    assert "dry run: 1 new flight" in r.stdout and lb.meta["seq"] == 16
     r = _cli(lb, "derive", "flights")
     assert r.returncode == 0, r.stderr
     assert "inferred 1 new flight from 1 calendar entry" in r.stdout
@@ -288,13 +289,13 @@ def test_cli_infer_counts_one_flight_however_many_entries_name_it(lb: Logbook):
     )
     r = _cli(lb, "derive", "flights", "--dry-run")
     assert r.returncode == 0, r.stderr
-    assert r.stdout.startswith("dry run: 1 flight from 4 calendar entries would be written")
+    assert r.stdout.startswith("dry run: 1 new flight from 4 calendar entries would be written")
     assert "merged" not in r.stdout
     r = _cli(lb, "derive", "flights")
     assert r.stdout.startswith("inferred 1 new flight from 4 calendar entries\n")
     r = _cli(lb, "derive", "flights", "--dry-run")
     assert r.stdout.startswith(
-        "dry run: 0 flights from 4 calendar entries would be written (1 already in the record)"
+        "dry run: 0 new flights from 4 calendar entries would be written (1 already in the record)"
     )
     r = _cli(lb, "derive", "flights")
     assert r.stdout.startswith("inferred 0 new flights from 4 calendar entries (1 already in the record)")
@@ -303,15 +304,105 @@ def test_cli_infer_counts_one_flight_however_many_entries_name_it(lb: Logbook):
 def test_cli_infer_after_flighty_attaches_to_the_tracked_flight(lb: Logbook):
     _flight_day(lb)
     lb.append_many(flighty.run(FLIGHTY))
+    dry = _cli(lb, "derive", "flights", "--dry-run")
+    assert dry.returncode == 0, dry.stderr
+    assert dry.stdout.startswith(
+        "dry run: 0 new flights from 1 calendar entry would be written; nothing written\n"
+    )
+    assert "  also 1 merged into a flight already in the record\n" in dry.stdout
+    before = lb.meta["seq"]
     r = _cli(lb, "derive", "flights")
     assert r.returncode == 0, r.stderr
-    assert "1 merged into a flight already in the record" in r.stdout
+    assert r.stdout.startswith("inferred 0 new flights from 1 calendar entry\n")
+    assert "  also 1 merged into a flight already in the record\n" in r.stdout
+    assert lb.meta["seq"] == before + 1  # the merged line is written, and the report says so
     with lb.index() as idx:
         last = flights.standing(idx.by_kind("flight"))
     p = last[("2026-09-27", "XY", "561")]["payload"]
     assert p["evidence"] == "tracked" and p["actual_departure"] == "2026-09-27T05:10:00Z"
     assert [o["evidence"] for o in p["observations"]] == ["tracked", "inferred"]
     assert "supersedes" in p
+
+
+_NEW = re.compile(r"^(?:dry run: |inferred )(\d+) new flights? from ", re.MULTILINE)
+_MERGED = re.compile(r"(\d+) merged into a flight already in the record")
+_IN_RUN = re.compile(r"(\d+) merged into a flight found earlier in the same run")
+
+
+def _told(out: str) -> tuple[int, int, int]:
+    """(new flights, merged into the record, merged into a flight of the same run) as a report says them."""
+    found = _NEW.search(out)
+    assert found, out
+    merged, in_run = _MERGED.search(out), _IN_RUN.search(out)
+    return int(found[1]), int(merged[1]) if merged else 0, int(in_run[1]) if in_run else 0
+
+
+def _codeshare_day(lb: Logbook) -> None:
+    """Two calendar entries for one leg under two numbers (rule 1): the second is the first's codeshare."""
+    _flight_day(lb)
+    codeshare = "Flight to Zurich (ZZ 9561), codeshare"
+    lb.append_many([_event("2026-09-27T05:05:00Z", "2026-09-27T07:20:00Z", codeshare)])
+
+
+def _flighty_day(lb: Logbook) -> None:
+    _flight_day(lb)
+    lb.append_many(flighty.run(FLIGHTY))
+
+
+def _run_twice(lb: Logbook) -> None:
+    _flight_day(lb)
+    assert _cli(lb, "derive", "flights").returncode == 0
+
+
+@pytest.mark.parametrize("day", [_flight_day, _flighty_day, _codeshare_day, _run_twice])
+def test_cli_infer_dry_run_and_real_run_tell_every_line_the_record_gains(lb: Logbook, day: Any):
+    """The dry run tells the counts the real run then tells; neither is ever negative; and new flights
+    plus merges are exactly the lines the record gains, so no written line goes unreported."""
+    day(lb)
+    dry = _cli(lb, "derive", "flights", "--dry-run")
+    assert dry.returncode == 0, dry.stderr
+    before = lb.meta["seq"]
+    r = _cli(lb, "derive", "flights")
+    assert r.returncode == 0, r.stderr
+    told = _told(r.stdout)
+    assert _told(dry.stdout) == told, (dry.stdout, r.stdout)
+    assert min(told) >= 0
+    assert sum(told) == lb.meta["seq"] - before, r.stdout
+
+
+def test_cli_infer_a_codeshare_in_one_run_is_one_new_flight_not_a_merge_into_the_record(lb: Logbook):
+    _codeshare_day(lb)
+    r = _cli(lb, "derive", "flights")
+    assert r.returncode == 0, r.stderr
+    assert r.stdout.startswith("inferred 1 new flight from 2 calendar entries\n"), r.stdout
+    assert "merged into a flight already in the record" not in r.stdout
+    assert "  also 1 merged into a flight found earlier in the same run\n" in r.stdout
+    with lb.index() as idx:
+        assert len(flights.standing(idx.by_kind("flight"))) == 1
+
+
+def test_cli_infer_more_merges_than_lines_written_is_a_counting_bug_told_plainly(
+    lb: Logbook, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+):
+    """Every merge is a written line; if the store ever wrote fewer lines than reconcile merged, the
+    count would go negative. It is never clamped to a smaller lie: one sentence on stderr, exit 1."""
+    from logbook import cli
+
+    _flighty_day(lb)
+    real = Logbook.append_many
+
+    def drops_the_merge(self: Logbook, drafts: Any, *args: Any, **kwargs: Any) -> int:
+        return real(self, [d for d in drafts if "supersedes" not in d["payload"]], *args, **kwargs)
+
+    monkeypatch.setattr(Logbook, "append_many", drops_the_merge)
+    with pytest.raises(SystemExit) as exit_:
+        cli.main(["derive", "flights"])
+    assert exit_.value.code == 1
+    err = capsys.readouterr().err
+    assert (
+        err
+        == "derive flights: 0 lines written but 1 merge counted, a counting bug; the record is as written\n"
+    )
 
 
 def test_cli_infer_rejects_anything_but_flights(lb: Logbook):
