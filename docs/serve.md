@@ -74,8 +74,8 @@ silence's is `logbook/contrib/gaps.py`'s. A number here points at the lines it c
 ### Old addresses
 
 Every address the Library answered before the doors still works ([RFC 0047 §9](../rfcs/0047-the-librarys-doors.md#9-every-page-today-and-its-new-home)).
-A page that moved answers with a redirect to its door, carrying the moment it named: a 302 in 1.1, a 301
-from 1.2 ([§15](../rfcs/0047-the-librarys-doors.md#the-captains-answers-25-october-2026), answer 8). A
+A page that moved answers with a redirect to its door, carrying the moment it named: a 301 Moved Permanently
+(it was a 302 in 1.1; [§15](../rfcs/0047-the-librarys-doors.md#the-captains-answers-25-october-2026), answer 8). A
 value the door would refuse (a day that is not one, a window that runs backwards or longer than Life's) is a
 404, and a parameter the door does not take is left behind. An address that named no moment opens its door
 at the door's own: `/days` alone is the fortnight to this Sunday, `/trips` and `/journeys` alone this
