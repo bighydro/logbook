@@ -25,7 +25,7 @@ falls back to the system's face). The server answers `/font/NAME` from that fold
 its rule of one file a page and nothing beside it says.
 
 Every address the Library answered before the doors is a row of `MOVED`, RFC 0047 §9's table in its
-order: a row with a home is answered with `REDIRECT_STATUS` (302 for 1.1, 301 from 1.2, §15) to it, the
+order: a row with a home is answered with `REDIRECT_STATUS` (301 from 1.2; 302 in 1.1, §15) to it, the
 moment it named carried (`moved`); a row without one, and every POST, as it always was."""
 
 from __future__ import annotations
@@ -47,7 +47,7 @@ TODAY, LIFE, PEOPLE, PLACES = "Today", "Life", "People", "Places"
 # the four doors and where each opens until its own page is on main (RFC 0047 §4, §5); the fifth,
 # Holdings, goes between Places and Ask when it is built, and its place stays empty until then (§11)
 DOORS = ((TODAY, "/"), (LIFE, "/life"), (PEOPLE, "/people"), (PLACES, "/places"))
-REDIRECT_STATUS = 302  # RFC 0047 §15 (8): 302 for one release, 1.1; 301 from 1.2, this line alone
+REDIRECT_STATUS = 301  # RFC 0047 §15 (8): 301 from 1.2 (it was 302 for one release, 1.1)
 
 
 @dataclass(frozen=True)
@@ -80,7 +80,7 @@ PAGE_VALUE, FLAG = "page", "flag"  # a page number from 1; a flag, carried only 
 # is named in the row's comment and dropped, never passed on.
 MOVED = (
     Moved("/"),  # Today
-    Moved("/today"),  # already a 302 to today's Day, which Today is: left as it is (tests pin it)
+    Moved("/today"),  # a 302 to today's Day, which Today is: §9 keeps a 302, the day changes (tests pin it)
     Moved("/day/{DAY}"),
     Moved("/day/{DAY}/reflect", post=True),
     Moved("/day/{DAY}/sign", post=True),

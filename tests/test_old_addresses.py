@@ -1,5 +1,5 @@
 """Every Library address from before the doors leads to its door (RFC 0047 §9): a page that moved
-answers with a redirect (`doors.REDIRECT_STATUS`, 302 for 1.1 and 301 from 1.2, §15) to its new home,
+answers with a redirect (`doors.REDIRECT_STATUS`: 301 from 1.2, after the 302 of 1.1, §15) to its new home,
 carrying the moment it named, the query translated; an address that stays answers as it did, and a
 POST is never redirected. The table is `doors.MOVED`, §9's rows in order; the server reads it after the
 read gate (`Site.gate`), so a request the gate refuses is refused as the new home would refuse it, and
@@ -165,7 +165,7 @@ def test_an_old_address_leads_to_its_door_with_its_moment(
     assert reply.status == doors.REDIRECT_STATUS, (old, reply.status)
     assert reply.getheader("Location") == location, old
     assert reply.getheader("X-Frame-Options") == "DENY"
-    assert reply.getheader("Cache-Control") == "no-store", "a redirect of 1.1 is not kept"
+    assert reply.getheader("Cache-Control") == "no-store", "a redirect is not kept, as in 1.1"
 
 
 @pytest.mark.parametrize(("old", "location"), MOVES.values(), ids=MOVES.keys())
@@ -179,7 +179,7 @@ def test_the_new_home_answers_the_moment_it_was_given(served: Served, old: str, 
 
 def test_every_row_that_moves_answers_with_the_one_status() -> None:
     """The 301 switch of 1.2 is one line: `REDIRECT_STATUS`, which every row answers with."""
-    assert doors.REDIRECT_STATUS == 302, "RFC 0047 §15: 302 for one release, 1.1; 301 from 1.2"
+    assert doors.REDIRECT_STATUS == 301, "RFC 0047 §15 (8): 302 for one release, 1.1; 301 from 1.2"
     site = serve.Site.__new__(serve.Site)  # `moved` reads nothing of the record
     for row in doors.MOVED:
         if row.home is None or row.post or row.waits:
@@ -187,6 +187,73 @@ def test_every_row_that_moves_answers_with_the_one_status() -> None:
         example = _example(row.old)
         response = site.moved(example, "")
         assert response is not None and response.status == doors.REDIRECT_STATUS, row.old
+
+
+# Every row of `doors.MOVED`, in its order, as RFC 0047 §9's table answers it from 1.2: (an address of the
+# row's shape, the status, the Location); None for a row answered as on main, never redirected. The
+# status is §9's column with §15 (8) applied: 301 for every row that moves, `/today` alone a 302, since the
+# day it leads to changes. The Location is the row's home as built: where it departs from §9's column
+# the row's comment in `doors.MOVED` says why (Life has no `zoom=trip`; Places takes `at=`, no window; a
+# row whose home does not yet hold the old page stays, §15 answers 4 and 6).
+SECTION_9 = (
+    ("/", None),
+    ("/today", (302, "/day/{TODAY}")),
+    (f"/day/{WEDNESDAY}", None),
+    (f"/day/{WEDNESDAY}/reflect", None),
+    (f"/day/{WEDNESDAY}/sign", None),
+    ("/star", None),
+    ("/with", None),
+    ("/days?from=2026-06-08&to=2026-06-14", (301, "/life?from=2026-06-08&to=2026-06-14&zoom=day")),
+    ("/trips?year=2026", (301, "/life?year=2026&zoom=year")),
+    ("/journeys?year=2026", (301, "/life?year=2026&zoom=year")),
+    ("/journeys/2026-06-12/2026-06-14", None),  # waits: Life's trip view
+    ("/journeys/name", None),
+    ("/goals", (301, "/life")),
+    ("/goals/0a1b", None),
+    ("/ideas", None),
+    ("/idea/0a1b", None),
+    ("/ideas/review", None),
+    ("/ideas/status", None),
+    ("/gaps", None),
+    ("/promises", None),
+    ("/promises/0a1b", None),
+    ("/people", None),
+    ("/people/0a1b", None),
+    ("/people/review", None),
+    ("/places", None),
+    ("/places/review", None),
+    ("/world?from=2026-06-08&to=2026-06-21", (301, "/places?at=2026")),
+    ("/assets", (301, "/gear/assets")),
+    ("/manifest?page=1&portfolio=Fund+I", (301, "/gear/manifest?page=1&portfolio=Fund+I")),
+    ("/manifest/people", (301, "/gear/manifest/people")),
+    ("/org/0a1b?money=1", (301, "/gear/org/0a1b?money=1")),
+    ("/manifest/review", None),
+    ("/manifest/status", None),
+    ("/agents?page=2&day=2026-06-17", (301, "/gear/agents?page=2&day=2026-06-17")),
+    ("/line/0a1b", None),
+    ("/photo/0a1b", None),
+    ("/search?q=Kari+Nordmann", (301, "/ask?q=Kari+Nordmann")),
+)
+
+
+def test_section_9_s_table_is_walked_row_by_row(served: Served) -> None:
+    """Each row of `doors.MOVED`, asked as §9 lists it: a row that moves is a 301 to its home with its
+    moment, `/today` a 302 to today's Day, and every other row answered as on main, never a redirect."""
+    assert len(SECTION_9) == len(doors.MOVED)
+    today = served.site.respond("/today", "").location
+    assert today is not None and re.fullmatch(r"/day/[0-9]{4}-[0-9]{2}-[0-9]{2}", today), today
+    for row, (asked, expected) in zip(doors.MOVED, SECTION_9, strict=True):
+        path, _, query = asked.partition("?")
+        assert doors.pattern(row.old).fullmatch(path), (row.old, asked)
+        reply = served.get(asked, _here(served))
+        if expected is None:
+            assert served.site.moved(path, query) is None, row.old
+            assert reply.status not in (301, 302, 303, 307, 308), (row.old, reply.status)
+            assert reply.getheader("Location") is None, row.old
+            continue
+        status, location = expected
+        location = location.replace("{TODAY}", today.removeprefix("/day/"))
+        assert (reply.status, reply.getheader("Location")) == (status, location), row.old
 
 
 def test_the_location_is_the_table_s_and_never_the_host_s(served: Served) -> None:
@@ -247,7 +314,7 @@ def test_without_the_phone_s_setting_the_phone_is_refused_at_an_old_address(serv
 @pytest.mark.parametrize("path", STAYS)
 def test_an_address_that_stays_answers_as_on_main(served: Served, path: str) -> None:
     reply = served.get(path, _here(served))
-    assert reply.status != doors.REDIRECT_STATUS or path == "/today", (path, reply.status)
+    assert reply.status not in (301, 302, 303, 307, 308) or path == "/today", (path, reply.status)
     assert served.site.moved(path, "") is None, path
     expected = served.site.respond(path, "")
     assert reply.status == expected.status, (path, reply.status, expected.status)
