@@ -34,7 +34,7 @@ from pathlib import Path
 from typing import Any, NamedTuple
 from zoneinfo import ZoneInfo
 
-from . import attachments, crossing, day_start, drafts, heard, policy, sealing, stars
+from . import attachments, crossing, day_start, drafts, heard, peoples_mail, policy, sealing, stars
 from .chain import ENVELOPE_FIELDS, Line, canonical_json, compute_hash, is_sealed, parse_line
 from .export import SCHEMA as PACKAGE_SCHEMA
 from .export import entry, parse_day
@@ -314,6 +314,7 @@ def select(lb: Logbook, day: str, max_tier: int, to: str | None = None) -> Selec
         retracted = retractions(marks)
         gate = crossing.signed_gate(lb, idx)
         resolutions = idx.resolutions()
+        fates = peoples_mail.fates(lb, idx, marks)
     sealed_seqs = {int(line["seq"]) for line in stored if is_sealed(line)}  # by seq: an id may repeat
     rows = [lb.opened(line) for line in stored]
     rows = [line for line in rows if str(line["id"]) not in retracted]
@@ -333,7 +334,7 @@ def select(lb: Logbook, day: str, max_tier: int, to: str | None = None) -> Selec
     gated = len(lines)
     lines = [line for line in lines if gate.passes(str(line["id"]), str(line["kind"]), str(line["at"]))]
     unsigned = gated - len(lines)
-    lines, mail_held = crossing.peoples_mail_only(lb, marks, resolutions, lines)
+    lines, mail_held = crossing.peoples_mail_only(lb, marks, resolutions, lines, fates)
     texts = heard.crosses(lb.root, to)
     kept = [line for line in lines if not heard.held(line, texts)]
     if len(kept) != gated:

@@ -50,7 +50,7 @@ from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
 
-from ..core import assets, notes, places, resolve
+from ..core import assets, notes, places, resolve, sender_fates
 from ..core.chain import Line
 from ..core.store import RETRACTION, retractions
 
@@ -319,7 +319,12 @@ def validate_entity_review(payload: Mapping[str, Any]) -> list[str]:
 def validate_status(payload: Mapping[str, Any]) -> list[str]:
     """Every way `payload` is not a `status/v1` (RFC 0037 §9.2; decisions 5, 10 and 11), in words;
     empty when it is one. `note` is checked when present and never required: a line with a reason
-    written before the writer put the note first has none, and stays valid (§10.5)."""
+    written before the writer put the note first has none, and stays valid (§10.5). A line on a Hold
+    item (`type` `item`, a sender's `keep` or `let-go`, RFC 0037 §10 as amended 20 November 2026) is
+    held to its own rules (`sender_fates.problems`)."""
+    item = payload.get("entity")
+    if isinstance(item, dict) and item.get("type") == sender_fates.ITEM:  # a Hold item (RFC 0042 §4)
+        return sender_fates.problems(payload)
     problems: list[str] = []
     if payload.get("schema") != STATUS_SCHEMA:
         problems.append(f"schema is {payload.get('schema')!r}, not {STATUS_SCHEMA!r}")
