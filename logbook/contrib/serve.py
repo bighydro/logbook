@@ -232,6 +232,11 @@ LIMIT_S = 15.0  # a page read longer than this is stopped and said so (`serve --
 RENDERS = 2  # pages read at once; the rest wait their turn, within their limit
 WATCH_S = 0.25  # how often a waiting request looks at its reading and its browser
 IDLE_S = 60.0  # a kept-alive connection idle this long is closed
+# a request answered before its body is read (a refusal, a form too large) is closed gracefully: after
+# the answer, at most this much of the body is read and dropped, for at most this long, so the socket
+# closes with nothing unread (a reset otherwise, which on Windows can reach the client before the answer)
+DRAIN_BYTES = 64 * 1024
+DRAIN_S = 1.0
 WATCH_EVERY_S = 30.0  # the server asks itself for its icon this often (`Watchdog`)
 SILENT_S = 5.0  # an answer slower than this is no answer
 STUCK_AFTER = 2  # this many in a row, and the server leaves for its service manager to start again
@@ -5988,6 +5993,7 @@ class Handler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
     timeout = IDLE_S  # a connection that sends nothing for this long is closed: no thread waits on it forever
     party: tuple[bool, tuple[str, ...]] | None = None  # whose this connection is: its first request's
+    unread = 0  # the bytes of this request's body not yet read, as its Content-Length says
 
     def do_GET(self) -> None:
         self._answer(body=True)
@@ -6005,11 +6011,10 @@ class Handler(BaseHTTPRequestHandler):
         site = self.server.site
         asked = phone.Asked.of(self.headers)
         if (refusal := self._another(asked, post=True)) is not None:
-            self._send(refusal, body=True)  # the body is left unread, and the connection closed
+            self._refuse(refusal, body=True)
             return
         if (refusal := site.gate(asked, self.server.server_port, post=True)) is not None:
-            self.close_connection = True  # the body is left unread
-            self._send(refusal, body=True)
+            self._refuse(refusal, body=True)
             return
         self._taken(asked)
         path = self.path.partition("?")[0]
@@ -6017,12 +6022,12 @@ class Handler(BaseHTTPRequestHandler):
         multipart = kind.strip().lower().startswith("multipart/form-data")
         limit = AUDIO_BYTES if multipart and DAY_ACT.match(path) is not None else FORM_BYTES
         length = self.headers.get("Content-Length") or "0"
-        size = int(length) if length.isdigit() else 0
+        size = int(length) if length.isascii() and length.isdigit() else 0
         if size > limit:
-            self.close_connection = True  # the body is left unread
-            self._send(site._error(413, f"a form is at most {limit:,} bytes"), body=True)
+            self._refuse(site._error(413, f"a form is at most {limit:,} bytes"), body=True)
             return
         raw = self.rfile.read(size) if size > 0 else b""
+        self.unread = 0
         upload: Upload | None = None
         if multipart:
             try:
@@ -6048,11 +6053,10 @@ class Handler(BaseHTTPRequestHandler):
         server = self.server
         asked = phone.Asked.of(self.headers)
         if (refusal := self._another(asked)) is not None:
-            self._send(refusal, body)
+            self._refuse(refusal, body)
             return
         if (refusal := server.site.gate(asked, server.server_port)) is not None:
-            self.close_connection = True  # a refused party never keeps a connection a pool may lend on
-            self._send(refusal, body)
+            self._refuse(refusal, body)  # a refused party never keeps a connection a pool may lend on
             return
         self._taken(asked)
         path, _, query = self.path.partition("?")
@@ -6117,6 +6121,57 @@ class Handler(BaseHTTPRequestHandler):
         connection tailscaled pools, never holds it against the owner's next request."""
         if self.party is None:
             self.party = phone.party(asked)
+
+    def parse_request(self) -> bool:
+        """`http.server`'s reading of the request line and headers, and how much body the request says
+        it carries (`unread`): a Content-Length of digits, else none (chunked, or not a number)."""
+        self.unread = 0
+        parsed = super().parse_request()
+        if parsed:
+            length = (self.headers.get("Content-Length") or "").strip()
+            self.unread = int(length) if length.isascii() and length.isdigit() else 0  # never "²"
+        return parsed
+
+    def _refuse(self, response: Response, body: bool) -> None:
+        """A request answered before its body is read, for any decision: the answer sent, then the
+        connection closed gracefully (`_drain`). Every refusal of a request comes through here."""
+        self.close_connection = True
+        self._send(response, body)
+        self._drain()
+
+    def _drain(self) -> None:
+        """Close gracefully a connection whose request's body was left unread: once the answer is
+        written and flushed, read and drop at most `DRAIN_BYTES` of that body, as its Content-Length
+        says, for at most `DRAIN_S` (never parsed, never kept, never logged), then shut the socket for
+        writing; `socketserver` closes it. A socket closed with received bytes unread sends a reset
+        instead of a close, and on Windows the reset can reach the client before it has read the
+        answer. A body over the cap is read to the cap and the connection closed all the same: the
+        client may then see a reset, which a refused request that large may. Once per request."""
+        unread, self.unread = min(self.unread, DRAIN_BYTES), 0
+        if unread <= 0:
+            return
+        try:
+            self.wfile.flush()
+            deadline = time.monotonic() + DRAIN_S
+            while unread > 0:
+                left = deadline - time.monotonic()
+                if left <= 0:
+                    break
+                self.connection.settimeout(left)
+                dropped = len(self.rfile.read1(min(unread, 16 * 1024)))
+                if dropped == 0:  # the client closed: nothing more is coming
+                    break
+                unread -= dropped
+            self.connection.shutdown(socket.SHUT_WR)
+        except (OSError, ValueError):  # a timeout, a reset, a closed file: the connection closes as it is
+            pass
+
+    def finish(self) -> None:
+        """A connection that ends with a request's body unread (`http.server`'s own errors, a 501 for
+        a method it does not serve, close one so) is closed gracefully as a refusal is (`_drain`)."""
+        if self.close_connection:
+            self._drain()
+        super().finish()
 
     def end_headers(self) -> None:
         """Every answer, `http.server`'s own errors among them, says no page may be framed."""
