@@ -27,7 +27,7 @@ endings on every platform.
   days/2026/2026-06-13.md         the Day, as `logbook day` reads it
   places/Home.md                  one per place in places.json: its days, the people met there, its trips
   people/Kari Nordmann.md         one per person confirmed present by a line that crosses
-  trips/Trip 2026-06-15 to 2026-06-17.md   one per trip, as `logbook trips` derives them
+  trips/Trip 2026-06-15 to 2026-06-17.md   one per trip, as `logbook show trips` derives them
 ```
 
 A page's file stem is its link text, so the stems are one namespace for the whole vault and every

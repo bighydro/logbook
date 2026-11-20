@@ -88,7 +88,7 @@ A phone that runs Fit and a wrist that runs Apple Health count the same quarter 
 record keeps both: an `apple-health` bucket and a `google-takeout` bucket with the same `at`, each
 naming its device (rule 5). Nothing here dedupes across sources, and `raw_id`s are keyed per source,
 so re-adding either export appends nothing and adding both appends both. A reader that wants one
-number takes, per bucket, the larger device, as `logbook stats --health` does; a day-long Fit span
+number takes, per bucket, the larger device, as `logbook show stats --health` does; a day-long Fit span
 beside a day of Apple Health buckets is one more "device" at that day's first bucket, and the
 reader's rule takes the larger. Choosing between the two for the same quarter hour is a reader's
 decision the record does not make yet.

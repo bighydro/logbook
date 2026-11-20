@@ -7,7 +7,7 @@ be positioned. Nothing is guessed: the log's words stay the log's words, and a p
 from a route the bridge planned, a place the captain named, or a published port position.
 
 ```bash
-logbook assets add nordlys --kind yacht --name Nordlys --mmsi 970123456     # once
+logbook setup assets add nordlys --kind yacht --name Nordlys --mmsi 970123456     # once
 logbook add passages deck-log.csv --asset nordlys --routes ~/ECDIS/routes --dry-run
 logbook add passages deck-log.csv --asset nordlys --routes ~/ECDIS/routes
 ```
@@ -44,7 +44,7 @@ local day for a departure and its end for an arrival, and the leg says so under 
    Mediterranean, the US East Coast and the Bahamas, each with aliases (`Genova`, `St Tropez`), a
    published position to about a kilometre, and the country. Nothing in it is invented; a place it
    positions reads `gazetteer` under `extra.positions`.
-4. **Nothing.** The place keeps its name and no coordinates, and the run prints `places unresolved:
+4. **Nothing.** The place keeps its name and no coordinates, and the run prints `setup places unresolved:
    Cala Nordlys`. Name it in `places.json` and add the log again: the leg is already in the record
    (same `raw_id`), so the fix is a retraction and a re-import, or simply a better position next time.
 
@@ -88,7 +88,7 @@ added 16 lines from passages
 ## What the readers make of it
 
 The position lines are the vessel's own track, so every reader that derives an asset's movement
-sees the declared legs the way it sees AIS fixes: `assets status` names the last declared position;
+sees the declared legs the way it sees AIS fixes: `setup assets status` names the last declared position;
 `derive stays`, `day`, `days` and `trips` cluster an arrival and the next departure into a stay at
 the port and the span between two stays into a move by boat, with its distance. Two things are
 beyond the engine's grammar today and wait for the stay-aboard container (the open pull request

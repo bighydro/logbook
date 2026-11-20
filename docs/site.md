@@ -32,11 +32,11 @@ One of her days is the way in, at the same path on every build since the seed is
 ```
 <folder>/
   index.html                    the root: the years with their days, trips, nights away and people
-  years/2026.html               the Year, as `logbook year 2026 --html` writes it, with the site's navigation
+  years/2026.html               the Year, as `logbook show year 2026 --html` writes it, with the site's navigation
   days/2026.html                the Days index: `serve`'s /days table over the year's days the record covers
   days/2026-06-13.html          a Day the Year picks, as `serve`'s /day/2026-06-13 renders it
   trips.html                    every trip of the record, one row each, linked to its page
-  trips/trip-2026-06-15-2026-06-17.html   the Trip, as `logbook trip --html` writes it, the map inside
+  trips/trip-2026-06-15-2026-06-17.html   the Trip, as `logbook show trip --html` writes it, the map inside
   places.html                   `serve`'s /places table
   people.html                   everyone confirmed present by a line that crosses, by days together
   people/kari-nordmann.html     one per person: the years together, the trips
@@ -55,7 +55,7 @@ not a link.
 
 ## The pages
 
-**The Year** is the page `logbook year --html` writes ([year.md](year.md)): days per country, nights,
+**The Year** is the page `logbook show year --html` writes ([year.md](year.md)): days per country, nights,
 the trips (each linked to its page), the flights, the places by nights, the people by days together
 (each linked to their page), health and keepers by month, and twelve picks, one day a month, the Day
 rendered in full. Above it, the site's navigation: the root, the trips, the places, the people, the
@@ -69,7 +69,7 @@ Days index; the days either side link their rows, and *the fortnight around* lin
 fortnight's first day. Like the root and the tables, it needs no sideways scroll on a phone; a table wider
 than the column scrolls inside itself.
 
-**The Trip** is the page `logbook trip --html` writes ([trips-shared.md](trips-shared.md) for what it
+**The Trip** is the page `logbook show trip --html` writes ([trips-shared.md](trips-shared.md) for what it
 holds): the route as an inline SVG map, the stays with their nights, the legs, the days from the leaving
 day to the return day, the flights in and out, the people confirmed (linked) and proposed, the nights
 aboard, the keepers, health and spend. A trip across New Year is one page, found whole from its first

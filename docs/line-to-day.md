@@ -157,7 +157,7 @@ bad printout, not a bad line. Human input goes the other way: when the captain n
 confirms who was there or names a trip, that is a `note/v1` line written through `logbook add`, in
 the captain's words, and the next reading reads it.
 
-Between the two sits inference. `infer flights` and `infer keepers` read the record like a reader
+Between the two sits inference. `derive flights` and `derive keepers` read the record like a reader
 and then append like an adapter, with a `source` of their own (`flight-inference`,
 `keeper-inference`) and a `raw_id` built from the evidence, so a re-run appends nothing. An
 inference is written down because it is an observation about the world, a flight the owner was

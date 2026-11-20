@@ -1,6 +1,6 @@
 # The ledger
 
-`logbook ledger [--month YYYY-MM | --trip ID] [--json]` reads the record's money back in context.
+`logbook rollup ledger [--month YYYY-MM | --trip ID] [--json]` reads the record's money back in context.
 A `transaction/v1` line (RFC 0021) is one movement of money as the app recorded it: an amount in a
 currency, the merchant, the app's own category. It is tier 3, and it never crosses: no export, no
 page and no MCP tool carries one past the crossing ceiling (RFC 0005, ADR 0016). What the line does
@@ -8,10 +8,10 @@ not say is where you were. The ledger says it. It is a reader (ADR 0013): a func
 at its head, derived every time and never written.
 
 ```bash
-logbook ledger                          # every day with a transaction, in context
-logbook ledger --month 2026-06          # one calendar month
-logbook ledger --trip trip:2026-06-15:2026-06-17   # one trip's days, by the id `trips --json` prints
-logbook ledger --month 2026-06 --json   # the same, one JSON object, every entry with its line id
+logbook rollup ledger                          # every day with a transaction, in context
+logbook rollup ledger --month 2026-06          # one calendar month
+logbook rollup ledger --trip trip:2026-06-15:2026-06-17   # one trip's days, by the id `show trips --json` prints
+logbook rollup ledger --month 2026-06 --json   # the same, one JSON object, every entry with its line id
 logbook rollup money --year 2026        # the year by month, by country, by category
 ```
 
@@ -49,7 +49,7 @@ does not cover is `nowhere`, and says so.
 
 **Trips.** A transaction is in a trip when its day is one of the trip's, the first day to the
 return day ([trips](rollups.md)); the trips of the window are listed with their spend. `--trip`
-takes the id `trips --json` prints, `trip:<first day>:<last night>`, reads only those days, and
+takes the id `show trips --json` prints, `trip:<first day>:<last night>`, reads only those days, and
 refuses an id that is no trip.
 
 **Shares.** A shared expense (Splitwise, `extra.members`) shows each member's share: the member's

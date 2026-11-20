@@ -1,23 +1,23 @@
 # Tasks
 
-`logbook tasks [--open] [--propose-done] [--json]` reads the record's tasks back: every `task/v1`
+`logbook promises tasks [--open] [--propose-done] [--json]` reads the record's tasks back: every `task/v1`
 line (RFC 0016) a task app's export or `logbook sync gtasks` left, as the task it describes, in the
 state it was last seen.
 `--propose-done` asks the record whether an open task was done without anyone ticking it off: a
 booking confirmation in the mail for "book flights to Zürich", a calendar entry for "call Ola", a
 card payment at the marina for "pay the berth fee at Marina Solvind". It finds them by rules, in
 English and German, with no model and no network, and prints each as a **proposal** with the id of
-the line that is the evidence, never as a fact. `tasks done <id> --evidence <line>` is the one thing
+the line that is the evidence, never as a fact. `promises tasks done <id> --evidence <line>` is the one thing
 the command writes: a `task/v1` line that marks the task done, carrying the evidence, and nothing
 else.
 
 ```bash
-logbook tasks                              # every task as it stands, oldest first
-logbook tasks --open                       # the open ones
-logbook tasks --propose-done               # for each open task, the evidence it was done, with line ids
-logbook tasks --json                       # the report as one JSON object
-logbook tasks done 0dd9108fb6d5d715 --evidence 01a0fda3-99b0-7af6-a986-0a377117a94b
-logbook tasks done ba26f9651977a75b        # done, with no line to show for it
+logbook promises tasks                        # every task as it stands, oldest first
+logbook promises tasks --open                 # the open ones
+logbook promises tasks --propose-done         # for each open task, the evidence it was done, with line ids
+logbook promises tasks --json                 # the report as one JSON object
+logbook promises tasks done 0dd9108fb6d5d715 --evidence 01a0fda3-99b0-7af6-a986-0a377117a94b
+logbook promises tasks done ba26f9651977a75b  # done, with no line to show for it
 ```
 
 ## What a task is
@@ -44,7 +44,7 @@ its suffix its `modified_at`) and calls that the task. A retracted line is out; 
   `list`, when it has them) and **the id**: a title may open or end with a name, and a date or an id
   never touches one.
 - **The id** is a digest of the source id, sixteen hex characters: the same for every snapshot of
-  one task, however often it is exported, and the handle `tasks done` takes.
+  one task, however often it is exported, and the handle `promises tasks done` takes.
 
 Under `--json` the report is one object: `open_only`, `propose_done`, `window_days` (14),
 `matcher` (which matcher read the evidence, or null when none did), `tasks` and `proposals`. Each
@@ -114,7 +114,7 @@ The rules will miss evidence phrased another way and propose a line that is none
 with a receipt in its subject, a transaction at a shop whose name is a word of the task — which is
 why nothing here is a fact until you close the task.
 
-## Closing one: `tasks done <id> [--evidence <line>]`
+## Closing one: `promises tasks done <id> [--evidence <line>]`
 
 `done` appends one `task/v1` line and nothing else: `source` `manual`, `kind` `task`, tier 2 (RFC
 0016: MUST), `at` now. Its payload is the newest snapshot of the task: `raw_id` `<source id>@<now>`

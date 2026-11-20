@@ -1,18 +1,18 @@
 # Voice memos and their transcripts
 
-Two steps, two lines. `logbook add voice-memos` (or `import-backup --only voice-memos`) writes one
+Two steps, two lines. `logbook add voice-memos` (or `import backup --only voice-memos`) writes one
 `voice-memo/v1` line per recording Apple's Voice Memos app holds (RFC 0023): when it started, how
-long it ran, what you called it, and the audio by digest. `logbook transcribe voice-memos` then
+long it ran, what you called it, and the audio by digest. `logbook derive transcripts voice-memos` then
 writes one `transcript/v1` line per memo (RFC 0004) with the words, heard by a model running on this
 machine. The memo line never changes; the transcript sits beside it and points back.
 
 ```bash
 logbook add voice-memos ~/backup/voice-memos/CloudRecordings.db --attachments   # the audio into attachments/
-logbook transcribe voice-memos --dry-run        # which memos would be transcribed; nothing written, no engine needed
-logbook transcribe voice-memos --fetch-model    # the first time: download the model, then transcribe
-logbook transcribe voice-memos                  # every standing memo with its audio in the store and no transcript yet
-logbook transcribe voice-memos --since 2026-03-01 --model medium
-logbook transcribe voice-memos --no-speakers    # transcribe only, even with the speaker models here
+logbook derive transcripts voice-memos --dry-run        # which memos would be transcribed; nothing written, no engine needed
+logbook derive transcripts voice-memos --fetch-model    # the first time: download the model, then transcribe
+logbook derive transcripts voice-memos                  # every standing memo with its audio in the store and no transcript yet
+logbook derive transcripts voice-memos --since 2026-03-01 --model medium
+logbook derive transcripts voice-memos --no-speakers    # transcribe only, even with the speaker models here
 logbook derive speakers --dry-run               # transcripts heard before the voices were separated
 ```
 
@@ -34,7 +34,7 @@ Transcription needs the bytes: a memo whose audio is not in the store is skipped
 
 ## The words: `transcript/v1`
 
-`logbook transcribe voice-memos` reads the record through its index, finds every `voice-memo` line
+`logbook derive transcripts voice-memos` reads the record through its index, finds every `voice-memo` line
 that stands (not retracted, not superseded by a later line), whose audio is in the store, and for
 which no transcript line exists yet, and transcribes them in time order. Each memo becomes one line:
 

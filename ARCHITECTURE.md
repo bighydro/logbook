@@ -42,8 +42,8 @@ confirmation or a visibility decision — that stays with the human, enforced in
 | 1 | the format (SPEC.md); `logbook add/show/verify/export` | `logbook/core/`, `logbook/commands/` |
 | 2 | `run(input_path, since) -> iterator[Observation]`; fixture-tested; no network by default | `logbook/contrib/adapters/`, one module per source (ADR 0012); a third-party adapter is a package that registers the `logbook.adapters` entry point |
 | 3 | a reader: `read(logbook, window) -> derived rows`, idempotent, stable derived IDs, never a line (ADR 0013, ADR 0019) | `logbook/core/` (frozen by SPEC §3.2), `logbook/contrib/` (a reader's own) |
-| 4 | reads derived rows + notes; writes only notes and confirmations (as tier-2 lines) | `logbook serve`, `year --html`, `--print`, `export vault`, `export world`, the shared page and trip bundle |
-| 5 | MCP server exposing the record's readers over stdio | `logbook mcp` (`logbook/contrib/mcp_server.py`) |
+| 4 | reads derived rows + notes; writes only notes and confirmations (as tier-2 lines) | `logbook serve`, `show year --html`, `--print`, `export vault`, `export world`, the shared page and trip bundle |
+| 5 | MCP server exposing the record's readers over stdio | `logbook serve mcp` (`logbook/contrib/mcp_server.py`) |
 
 Every layer ships in this one package. The second implementation, [logbook-ts](https://github.com/bighydro/logbook-ts), is a separate repository built from SPEC.md alone (CONTRIBUTING, the clean-room rule).
 
@@ -53,7 +53,7 @@ Days, trips, people and places are computed from the log and can be thrown away.
 
 ## The circle (layer 4/5, transport to be defined)
 
-A shared page is a signed bundle: one day's lines the owner's policy lets cross, the attachments they point at, the day-package summary, and the owner's Ed25519 signature over the manifest — `shared-page/v1`, RFC 0025 (`docs/rfcs/rfc-0025-shared-page-bundle.md`), written by `logbook share day` and verified by `logbook receive`, which keeps the page beside the record and never in its chain. Transport is undecided (peer-to-peer over a relay vs. a small server); the bundle format came first, so that two implementations can exchange pages by any means, including a USB stick.
+A shared page is a signed bundle: one day's lines the owner's policy lets cross, the attachments they point at, the day-package summary, and the owner's Ed25519 signature over the manifest — `shared-page/v1`, RFC 0025 (`docs/rfcs/rfc-0025-shared-page-bundle.md`), written by `logbook export share day` and verified by `logbook import page`, which keeps the page beside the record and never in its chain. Transport is undecided (peer-to-peer over a relay vs. a small server); the bundle format came first, so that two implementations can exchange pages by any means, including a USB stick.
 
 ## Reference stack
 

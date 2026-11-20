@@ -34,9 +34,9 @@ with module, most days first. Then **aboard**, the same per asset in `assets.jso
 is one run of your stays and moves aboard it, whatever the asset did inside it ([docs/day.md](day.md),
 *Aboard an asset*), its hours the run's whole span, its nights the nights whose overnight stay was
 aboard. Then the **unnamed** places: your stays at no named place — the berths and anchorages
-inside a stay aboard among them, each marked `aboard <asset>` — grouped as `places propose` groups
+inside a stay aboard among them, each marked `aboard <asset>` — grouped as `setup places propose` groups
 them (within 300 m of a group's first stay) and ranked by hours, the top five of the year, each
-under the stay id `places name` takes, so a hotel you keep returning to is one line and one command
+under the stay id `setup places name` takes, so a hotel you keep returning to is one line and one command
 away from a name. A night aboard counts at the anchorage the asset lay at.
 
 ```
@@ -177,7 +177,7 @@ numbers came from, so each one can be read back with `show`.
   calendar entry at the stay, no transcript, no note that says `with <name>`, no message. The
   rollup counts contacts the record holds, not contact.
 - A channel the record stopped importing goes quiet for everyone on it. A source that was not
-  brought up to date reads as silence; `sources --gaps` says which.
+  brought up to date reads as silence; `doctor sources --gaps` says which.
 - A record that began inside the earlier window undercounts it, and one that began inside the
   recent window has nothing to compare; the rollup prints a warning in both cases. A `--window`
   longer than half the record cannot say anything.
@@ -262,7 +262,7 @@ or `week`) and `periods`, one entry per period in order — `period` (`2026-06` 
 `lines` are the ids of the health lines each number came from: the asleep stages of the nights, the
 winning quarter hours, the readings.
 
-The same day rows feed `stats --health` and the health line of the [Day](day.md), so the three
+The same day rows feed `show stats --health` and the health line of the [Day](day.md), so the three
 agree on every day.
 
 ## Listening

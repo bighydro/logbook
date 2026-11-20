@@ -11,10 +11,10 @@ names, a sealed one with the identity ([When verify fails](recovery.md#the-files
 Three commands tend it. None of them appends a line.
 
 ```bash
-logbook attach import-backup <backup> --only whatsapp,imessage,photos            # fill it from the phone
-logbook attach import-backup <backup> --only photos --since 2026-01-01 --dry-run  # what it would store
-logbook attach status                                                           # referenced, present, missing
-logbook attach verify                                                           # every file against its name
+logbook import attachments import-backup <backup> --only whatsapp,imessage,photos            # fill it from the phone
+logbook import attachments import-backup <backup> --only photos --since 2026-01-01 --dry-run  # what it would store
+logbook import attachments status                                                           # referenced, present, missing
+logbook import attachments verify                                                           # every file against its name
 ```
 
 ## Where the references come from
@@ -84,9 +84,9 @@ fireflies: 30 lines whose file the store lacks
 71 lines name a file the store lacks: granola 41, fireflies 30. Adding the export that holds them again stores them (…); nothing was changed
 ```
 
-## `attach import-backup`
+## `import attachments import-backup`
 
-`logbook attach import-backup <backup> --only <sources> [--since YYYY-MM-DD] [--dry-run]` reads, through
+`logbook import attachments import-backup <backup> --only <sources> [--since YYYY-MM-DD] [--dry-run]` reads, through
 the index, every standing line of the sources named — `whatsapp`, `imessage`, `photos` (or
 `apple-photos`); not a retracted line; from the local day `--since` on when given — and for every
 digest they name:
@@ -95,7 +95,7 @@ digest they name:
   what makes a run resumable — stop it anywhere, run it again, and it carries on with what is left;
 - a file the backup's `Manifest.db` lists at the line's path, with its bytes there, is **stored**:
   streamed from the backup a chunk at a time — decrypted on the way when the backup is, with the
-  password from `LOGBOOK_BACKUP_PASSWORD` exactly as `import-backup` takes it, never a flag — into a
+  password from `LOGBOOK_BACKUP_PASSWORD` exactly as `import backup` takes it, never a flag — into a
   temporary file beside the store, hashed as it goes, and renamed into place under the digest only
   when the bytes hash to it. A file is never held whole, and a crash leaves no half file under a
   digest;
@@ -122,7 +122,7 @@ apple-photos: 1 file referenced by 1 line: 1 stored, 0 present, 0 not in the bac
 
 A progress line every 500 files, on stderr, so stdout stays the summary. The backup is only ever read.
 
-## `attach status`
+## `import attachments status`
 
 Per source whose standing lines point at an attachment — the one a line points at, as `stats`
 counts it: `payload.media`, else `payload.content`, else `extra.media` — the distinct digests
@@ -140,7 +140,7 @@ as one object.
 attachments/: 3 files, 56 bytes (56 B)
 ```
 
-## `attach verify`
+## `import attachments verify`
 
 Every file under `attachments/` whose name is a digest is streamed through SHA-256 and compared with
 its name. A file whose bytes hash to something else is listed and the command exits 1 (SPEC §1.1: a

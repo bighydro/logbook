@@ -85,7 +85,7 @@ it; back up to a plain local disk or a drive you plug in. A folder that is a fil
 exist yet or is empty, verifies the result and prints its head. It never writes over anything, the record
 included: to replace a damaged record, move it aside first. A target under a sync client's folder is refused
 as above, and a code checkout is never empty, so that rule covers it. The restored record has no
-`index.sqlite`; the next reader builds it, or run `logbook index`. Point `LOGBOOK_HOME` at it.
+`index.sqlite`; the next reader builds it, or run `logbook repair index`. Point `LOGBOOK_HOME` at it.
 
 A snapshot is an ordinary record: `logbook verify --root SNAPSHOT` checks it where it lies, and
 `LOGBOOK_HOME=SNAPSHOT logbook day 2026-06-02` reads one day from the backup disk without restoring

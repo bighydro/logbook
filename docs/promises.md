@@ -230,8 +230,7 @@ entry, or the file, to have a candidate judged afresh.
 
 **The engine** is `mlx-lm`, Apple's MLX runner for language models, with
 `mlx-community/Qwen2.5-7B-Instruct-4bit` by default (`judge.DEFAULT_MODEL`); `--model` names any
-instruct model the hub serves in MLX format. It needs the extra: `uv pip install
-'openlogbook[judge]'`, Apple silicon only; without it `--judge` stops with the message that says
+instruct model the hub serves in MLX format. It needs the `judge` extra ([Optional extras](install.md#optional-extras)), Apple silicon only; without it `--judge` stops with the message that says
 so, and everything else works. It is imported only when `--judge` runs, and while it runs the hub
 is told it is offline (`HF_HUB_OFFLINE`), so no socket is opened for any reason. A model not yet on
 the machine stops the command naming the one flag that fetches it, `--fetch-model`, which

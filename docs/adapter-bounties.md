@@ -31,7 +31,7 @@ Spotify, Pocket and Mac Screen Time are not on this list: Pocket is in the packa
 
 ## Signal
 
-**Export.** Signal has no export. Signal Desktop keeps `sql/db.sqlite`, encrypted with SQLCipher, the key in `config.json` beside it (on recent versions wrapped by the OS keychain). Signal Android writes `signal-<date>.backup`, encrypted with a 30-digit passphrase the owner typed once; the iPhone keeps nothing a backup carries in clear. Reading either needs an extra (`sqlcipher3`, or a port of the Android backup framing), so this is an `openlogbook[signal]` adapter, and the passphrase comes from one environment variable, never a flag, as `import-backup` does for an encrypted iPhone backup.
+**Export.** Signal has no export. Signal Desktop keeps `sql/db.sqlite`, encrypted with SQLCipher, the key in `config.json` beside it (on recent versions wrapped by the OS keychain). Signal Android writes `signal-<date>.backup`, encrypted with a 30-digit passphrase the owner typed once; the iPhone keeps nothing a backup carries in clear. Reading either needs an extra (`sqlcipher3`, or a port of the Android backup framing), so this is an `openlogbook[signal]` adapter, and the passphrase comes from one environment variable, never a flag, as `import backup` does for an encrypted iPhone backup.
 
 **Target.** `message/v1`: one line per row of `messages` (Desktop) or `sms` and `mms` (Android); `chat` from the conversation, `direct` or `group`; `raw_id` the message's own id; `sender` `{kind: phone}` or `{kind: handle}` for an ACI-only contact, never resolved; media by digest. Disappearing messages that the store still holds are lines; those it has already dropped are not, and nothing is reconstructed.
 

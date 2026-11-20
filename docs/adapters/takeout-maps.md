@@ -1,4 +1,4 @@
-# Takeout: Maps (your places) → candidates for `places propose`, reviews as `highlight/v1`
+# Takeout: Maps (your places) → candidates for `setup places propose`, reviews as `highlight/v1`
 
 `Takeout/Maps (your places)/` holds two GeoJSON files, one Feature per place with the point in
 `geometry.coordinates`: `Saved Places.json`, the starred and saved places (`Title`, the day they were
@@ -8,18 +8,18 @@ owner's reviews (the rating, the words, the date and the place). The adapter is 
 
 ```bash
 logbook add ~/Takeout/"Maps (your places)"                       # the reviews become lines; the saved places are counted
-logbook places propose --takeout ~/Takeout                        # the saved places as candidates for the unnamed stays
-logbook places propose --takeout ~/Takeout --write                # Enter takes the saved place's name
-logbook places import-takeout ~/Takeout --write                   # or every saved place into places.json at once
+logbook setup places propose --takeout ~/Takeout                        # the saved places as candidates for the unnamed stays
+logbook setup places propose --takeout ~/Takeout --write                # Enter takes the saved place's name
+logbook setup places import-takeout ~/Takeout --write                   # or every saved place into places.json at once
 ```
 
 ## A saved place is a name, not a line
 
 Nothing happened at an instant when a place was starred, so a saved place is never a line: it is a
-name for coordinates, which is what `places.json` holds (`logbook places`). `add` counts them
+name for coordinates, which is what `places.json` holds (`logbook setup places`). `add` counts them
 (`saved places left to places propose`) and writes nothing for them. They reach the record two ways:
 
-- **`places propose --takeout PATH`** feeds them as candidates. `PATH` is the `Takeout/` root, the
+- **`setup places propose --takeout PATH`** feeds them as candidates. `PATH` is the `Takeout/` root, the
   `Maps (your places)/` folder, the `Saved/` folder of list CSVs, or one file. Under each unnamed stay
   the saved places within 300 m are listed, nearest first, with the list they were saved to (`Saved
   Places`, `Want to go`, `Starred places`, the owner's own lists) and the day they were saved:
@@ -35,10 +35,10 @@ name for coordinates, which is what `places.json` holds (`logbook places`). `add
   The nearest saved place is the suggested name, ahead of a Timeline visit's semantic type (a name
   beats *Restaurant*); with `--write`, Enter adopts it and the naming goes in the record as a
   `note/v1` line, as any naming does. The saved places near no unnamed stay, and not already a named
-  place, are listed after the proposals for `places add --lat --lon`. Under `--json` each proposal
+  place, are listed after the proposals for `setup places add --lat --lon`. Under `--json` each proposal
   carries `saved` and the object `saved_elsewhere`, each candidate `{name, lat, lon, list, saved_at,
   address?, metres?}`.
-- **`places import-takeout PATH [--write]`** proposes every saved place as an entry of `places.json`
+- **`setup places import-takeout PATH [--write]`** proposes every saved place as an entry of `places.json`
   in bulk, never changing an entry already there.
 
 A saved place without coordinates (a list CSV whose url names a place id, the `(0, 0)` Google gives a

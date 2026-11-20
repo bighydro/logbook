@@ -1,6 +1,6 @@
 # Describing keepers
 
-`logbook describe keepers [--since YYYY-MM-DD] [--limit N] [--photos DIR ...] [--model NAME] [--fetch-model]
+`logbook derive descriptions keepers [--since YYYY-MM-DD] [--limit N] [--photos DIR ...] [--model NAME] [--fetch-model]
 [--dry-run] [--json]` has a local vision model look at each photo you marked a keeper (RFC 0024) and write
 down what is in it: one factual sentence and a short list of the visible things. The words go into the
 record as a derived note (RFC 0010), on the photo's day, beside the keeper. A photo is described once,
@@ -11,13 +11,13 @@ or where it was taken, is told not to guess either, and an answer that names a f
 refused.
 
 ```bash
-logbook describe keepers                                      # every keeper whose photo file is reachable, oldest first
-logbook describe keepers --since 2026-06-01 --limit 20        # twenty this run; the next run carries on
-logbook describe keepers --photos ~/Pictures/Photos\ Library.photoslibrary   # where the originals are
-logbook describe keepers --photos ~/Pictures/Photos\ Library.photoslibrary --photos /Volumes/Archive/2026
-logbook describe keepers --dry-run                            # what would be described; no engine needed, nothing written
-logbook describe keepers --fetch-model                        # download the model first; the only time the command uses the network
-logbook describe keepers --model mlx-community/Qwen2-VL-7B-Instruct-4bit   # a larger model
+logbook derive descriptions keepers                                      # every keeper whose photo file is reachable, oldest first
+logbook derive descriptions keepers --since 2026-06-01 --limit 20        # twenty this run; the next run carries on
+logbook derive descriptions keepers --photos ~/Pictures/Photos\ Library.photoslibrary   # where the originals are
+logbook derive descriptions keepers --photos ~/Pictures/Photos\ Library.photoslibrary --photos /Volumes/Archive/2026
+logbook derive descriptions keepers --dry-run                            # what would be described; no engine needed, nothing written
+logbook derive descriptions keepers --fetch-model                        # download the model first; the only time the command uses the network
+logbook derive descriptions keepers --model mlx-community/Qwen2-VL-7B-Instruct-4bit   # a larger model
 logbook show 2026-06-10                                       # the description under its keeper
 ```
 
@@ -76,7 +76,7 @@ name, no date, no location, no face, no caption. It is asked for one JSON object
 factual sentence, "things": [short lowercase noun phrases]}`, and told two things it must never do:
 
 - **Never name or identify a person.** Faces are the photo library's job: the names it gave them are on
-  the photo line (`extra.faces`) and `keepers --people` reads them, proposed and never confirmed. The model
+  the photo line (`extra.faces`) and `show keepers --people` reads them, proposed and never confirmed. The model
   writes "a person", "two people", "a child". An answer that carries any word of a face's name the library
   put on that photo is refused: counted (`N answers could not be read`), never written, tried again on the
   next run.

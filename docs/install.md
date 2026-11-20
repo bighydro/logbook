@@ -6,7 +6,10 @@ per platform, and tells you what the screen will show at each step so you know i
 Nothing here needs you to have used a terminal before. If you have, the whole page is the three
 lines at the top of the README; the rest is for everyone else.
 
-Installing takes a couple of minutes. It puts one command, `logbook`, on your computer. It does not
+Installing takes a couple of minutes. It puts one command, `logbook`, on your computer: the newest
+release, whichever line you use, so no line here names a version. Where this page shows what the
+screen prints, `X.Y.Z` stands for that release's number; [PyPI](https://pypi.org/project/openlogbook/)
+lists it, and your screen shows the real one. It does not
 create your record, read anything of yours or send anything anywhere; that starts only when you run
 `logbook setup` afterwards ([The first hour](first-hour.md)), and even then it stays in a folder on
 this machine.
@@ -91,13 +94,13 @@ The first time, Homebrew fetches the *tap* (the small repository that holds the 
 then
 
     ==> Fetching bighydro/logbook/logbook
-    ==> Downloading https://files.pythonhosted.org/packages/.../openlogbook-0.7.0.tar.gz
+    ==> Downloading https://files.pythonhosted.org/packages/.../openlogbook-X.Y.Z.tar.gz
     ==> Installing logbook from bighydro/logbook
 
 and a minute or two of lines about Python and a package called `ijson`, which it builds for your
 machine. The last line is the beer glass:
 
-    🍺  /opt/homebrew/Cellar/logbook/0.7.0: 180 files, 2.1MB, built in 45 seconds
+    🍺  /opt/homebrew/Cellar/logbook/X.Y.Z: 180 files, 2.1MB, built in 45 seconds
 
 The numbers differ; the glass is what matters.
 
@@ -194,7 +197,7 @@ pipx install openlogbook
 
 It takes half a minute and prints
 
-      installed package openlogbook 0.7.0, installed using Python 3.13.2
+      installed package openlogbook X.Y.Z, installed using Python 3.13.2
       These apps are now globally available
         - logbook.exe
     done! ✨ 🌟 ✨
@@ -253,7 +256,7 @@ with `pipx` from your distribution: `sudo apt install pipx` on Debian and Ubuntu
 pipx` on Fedora, `sudo pacman -S python-pipx` on Arch. Then `pipx ensurepath` once, a new terminal,
 and the line above, which ends with
 
-      installed package openlogbook 0.7.0, installed using Python 3.12.3
+      installed package openlogbook X.Y.Z, installed using Python 3.12.3
       These apps are now globally available
         - logbook
     done! ✨ 🌟 ✨
@@ -297,9 +300,9 @@ In a terminal, type
 logbook --version
 ```
 
-and press Enter. It prints one short line, the version:
+and press Enter. It prints one short line, the version, such as
 
-    0.7.0
+    X.Y.Z
 
 That is the whole check. From here, [The first hour](first-hour.md) sets up your own record one
 question at a time, and [Try it](try-it.md) gives you a month of someone who does not exist to
@@ -354,16 +357,19 @@ Logbook tells you when a command needs one; `logbook doctor` lists five of them 
 `sealed`, `speakers`, `transcribe`) with a `pass` or `warn` each ([the doctor](doctor.md#the-extras)).
 You add one by installing the package with the extra's name in brackets, into the Logbook you have.
 `logbook doctor` prints that line for your install when it can prove it keeps everything else as it
-is; when it prints none, it is one of these, with the version `logbook --version` prints:
+is; when it prints none, it is one of these, which pin the version `logbook --version` prints so
+that adding an extra never upgrades Logbook as well (`$(logbook --version)` works as written in the
+Mac and Linux terminals and in PowerShell):
 
 ```bash
-pipx inject openlogbook "openlogbook[crypto]==0.7.0"
-uv tool install --force "openlogbook[crypto,mcp]==0.7.0"
+pipx inject --force openlogbook "openlogbook[crypto]==$(logbook --version)"
+uv tool install --force "openlogbook[crypto,mcp]==$(logbook --version)"
 uv sync --extra crypto                            # in a clone
 ```
 
-`pipx inject` adds the extra to the environment pipx made, on its Python, and writes it into pipx's
-own record of the install, so `pipx reinstall` keeps it. `uv tool install --force` makes the tool again
+`pipx inject --force` adds the extra to the environment pipx made, on its Python, and writes it into
+pipx's own record of the install, so `pipx reinstall` keeps it. Without `--force`, pipx sees that
+`openlogbook` is already there, says so, and installs nothing. `uv tool install --force` makes the tool again
 with exactly the extras it names, so name every one you already have. In a clone, `uv sync` does the
 same, so doctor's line names every extra the clone has beside the new one and removes none of them,
 nor the `dev` group; a package you added by hand with `uv pip install` is not in the lock, and `uv sync`

@@ -8,7 +8,7 @@ read, `pass.json`; the barcode, the back of the pass, the images and the Passes 
 never read, so the booking reference and the passenger's name cannot reach a line.
 
 ```bash
-logbook import-backup <backup> --only wallet     # the passes of an iPhone backup, copied out and read
+logbook import backup <backup> --only wallet     # the passes of an iPhone backup, copied out and read
 logbook add wallet ~/copies/apple-wallet/         # a folder of passes: unpacked .pkpass folders, .pkpass zips, or both
 logbook add wallet boarding.pkpass                # one pass, zipped as the airline sent it
 logbook add ~/copies/apple-wallet/                # the same, sniffed by content
@@ -20,7 +20,7 @@ An iPhone keeps every pass in Wallet under `Library/Passes/Cards/<id>.pkpass/` i
 each as a folder holding the pass unpacked: `pass.json`, `manifest.json`, a signature and the
 images (`icon.png`, `logo.png`, `strip.png`, …). Beside them the Passes app keeps its own database
 (`nav.db`, `passes23.sqlite`): Wallet's cache of the same passes, the order of the cards, the
-notifications it showed. `import-backup --only wallet` copies the `pass.json` files alone, below
+notifications it showed. `import backup --only wallet` copies the `pass.json` files alone, below
 `inbox/ios-backup-<udid>/apple-wallet/<id>.pkpass/`, with the folder names the phone gave them, and
 runs the adapter on that folder. The database is not copied and not read: it holds nothing a pass
 does not say.

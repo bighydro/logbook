@@ -1,5 +1,6 @@
 ### Security
-- A page read through a gate (`serve --tier`, `export site`) no longer counts, dates or hints at a line
+- A page read through a gate (`export site --tier`, or `serve mcp` under the `mcp` ceiling of
+  `policy/crossing.json`; `serve` itself reads every tier) no longer counts, dates or hints at a line
   above it, from the privacy review's LATER list: the People door's last real contact and the Day's
   morning reconnect read the people's contacts through the gate; `/shelves` says the lines at the gate's
   tiers and their days, not the record's seq; the window every page opens on and the search's year filters
