@@ -252,12 +252,12 @@ def test_import_backup_decrypts_copies_byte_for_byte_and_runs_the_adapters(lb, t
     assert (
         photo.read_bytes() == built.plain[("MediaDomain", "Library/SMS/Attachments/ab/12/AT-100/stern.jpg")]
     )
-    assert "added 13 lines from imessage" in out
+    assert "added 17 lines from imessage" in out
     # the call log, which only an encrypted backup carries, runs through its own adapter
     store = inbox / "ios-calls" / "CallHistory.storedata"
     assert store.read_bytes() == built.plain[("HomeDomain", "Library/CallHistoryDB/CallHistory.storedata")]
     assert f"added {CALL_LINES} lines from ios-calls" in out
-    assert f"valid — {13 + CALL_LINES + HEALTH_LINES + SAFARI_LINES} lines" in out
+    assert f"valid — {17 + CALL_LINES + HEALTH_LINES + SAFARI_LINES} lines" in out
     # Health: the companion is copied first, then the store, and the adapter runs on the store with
     # the companion beside it, so the lines carry the source names
     health = inbox / "health" / "healthdb_secure.sqlite"
@@ -318,7 +318,7 @@ def test_import_backup_warns_when_the_manifest_size_is_stale_and_the_blob_decryp
     assert len(warnings) == 1
     assert "Library/Safari/History.db" in warnings[0]
     assert f"{real:,}" in warnings[0] and "35,745,792" in warnings[0]
-    assert f"valid — {13 + CALL_LINES + HEALTH_LINES + SAFARI_LINES} lines" in captured.out
+    assert f"valid — {17 + CALL_LINES + HEALTH_LINES + SAFARI_LINES} lines" in captured.out
     assert captured.err == ""
     copies = json.loads((inbox / "copies.json").read_text(encoding="utf-8"))
     by_path = {(c["domain"], c["path"]): c for c in copies["files"]}
@@ -359,7 +359,7 @@ def test_import_backup_encrypted_again_adds_nothing(lb, tmp_path, monkeypatch, c
     out = capsys.readouterr().out
     assert "added 0 lines from imessage" in out and "added 0 lines from ios-calls" in out
     assert "added 0 lines from apple-health" in out
-    assert f"valid — {13 + CALL_LINES + HEALTH_LINES + SAFARI_LINES} lines" in out
+    assert f"valid — {17 + CALL_LINES + HEALTH_LINES + SAFARI_LINES} lines" in out
 
 
 def test_import_backup_encrypted_dry_run_decrypts_only_the_manifest(lb, tmp_path, monkeypatch, capsys):
@@ -380,7 +380,7 @@ def test_import_backup_reads_a_keybag_from_before_ios_10_2(lb, tmp_path, monkeyp
     monkeypatch.setenv("LOGBOOK_BACKUP_PASSWORD", PASSWORD)
     _run(str(built.folder))
     out = capsys.readouterr().out
-    assert "added 13 lines from imessage" in out
+    assert "added 17 lines from imessage" in out
 
 
 # -- refusals ---------------------------------------------------------------------------------------
