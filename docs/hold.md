@@ -5,8 +5,9 @@ your mailbox, your Drive, later your boxes and the objects in them. Each thing g
 shelve it, archive it, let it go), the attention it costs falls, and one number says how much is
 left. The whole design is a draft, [RFC 0042](https://github.com/bighydro/logbook/blob/main/rfcs/0042-hold.md).
 
-**Hold v0 only counts.** It is three censuses in the lab, each a report you read. No line is
-written; nothing is moved, renamed or deleted, ever.
+**Hold v0 counts, and keeps or lets go of a sender.** It is three censuses in the lab, each a report
+you read and no line, and one decision you write: a sender's fate ([below](#sender-fates)). Nothing
+is moved, renamed or deleted, ever.
 
 ```bash
 logbook lab hold census files ~/Documents ~/Desktop   # what is in these folders
@@ -117,6 +118,40 @@ any road that wrote them (a Takeout, `sync mail`, `sync gmail`). No connection i
   and `sync gmail`; never by `sync mail`, since IMAP does not say the tab). In the report as a section
   and in the JSON as `list_unsubscribe` and `tabs` on each sender, with the totals under
   `lists_and_tabs`; the summary on the terminal says the totals only, never an address.
+
+## Sender fates
+
+A census only counts. What you decide about a sender is a line: `keep` or `let-go`, on the sender as a
+Hold item, an address or a domain ([RFC 0042 §4](https://github.com/bighydro/logbook/blob/main/rfcs/0042-hold.md)).
+
+```bash
+logbook hold sender news.example.org --keep                                   # a domain you want
+logbook hold sender rsvp@invitations.example.org --let-go --reason "parties I never go to"
+```
+
+- **One line each.** A `status/v1` line ([RFC 0037 §10](https://github.com/bighydro/logbook/blob/main/rfcs/0037-entities.md)),
+  `source` `manual`, tier 2, its entity `{type: "item", id: "sender:domain:news.example.org"}`. The
+  address or domain is written folded: `Letters@News.Example.ORG` is `letters@news.example.org`.
+- **A let-go says why.** `--let-go` without `--reason` is refused and nothing is written. The reason is
+  written twice under one hold of the writer lock: first as a tier-2 note (label `status`), so it is on
+  the day and in `search`, then on the status line, which names the note. A keep may carry a reason too.
+- **A later fate replaces the earlier one.** The new line names the one it replaces (`supersedes`); the
+  old one stays in the record. Retracting the new line puts the old one back. The same fate twice is
+  refused: the record says each decision once.
+- **Everything is written under the writer lock**, the head read again before the first line. While
+  another command writes, the fate waits; with `--no-wait` it is refused, exit 2, nothing written.
+
+What the fates do, today:
+
+- **A sender let go is never a person's mail** ([people's mail](mail-people.md)), whatever its address
+  resolves to, so its mail stays home from a crossing and from a shared day, counted with the other mail
+  held back.
+- **The narrower fate decides.** An address kept on a domain let go is kept: let `example.org` go and
+  keep `kari@example.org`, and Kari's mail is hers again.
+- **The senders kept** are read with them, for the crossing's mode that sends all mail but junk, where
+  a kept sender is the exception. Until that mode lands, a keep only stands against a wider let-go.
+
+`logbook people mail` counts the mail let go and how many senders you let go, never naming one.
 
 ## Drive
 

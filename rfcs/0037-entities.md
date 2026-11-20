@@ -1,6 +1,6 @@
 # RFC 0037 — Entities: orgs, ideas, places and assets reviewed like people
 
-Status: draft · 2026-10-13 · comment period closed 2026-10-14: the owner decided its twelve questions, and each decision is in the body (§16, [Decided](#16-decided)) · amended 2026-10-14: an org's status reason stays on its tier-3 line, never a `note/v1` (§8, §10.2, §10.5) · amended 2026-10-15: an org's portfolio is an optional field of its tier-3 status line, never an `entity/v1` line (§8, §9, §10.2, §11) · amended 2026-10-16: a database row is its own root, and is proposed as an idea only when its `Type` says `Idea` (§4.3, §4.6) · amends RFC 0035 (its amendment 1) and ADR 0018 rule 4
+Status: draft · 2026-10-13 · comment period closed 2026-10-14: the owner decided its twelve questions, and each decision is in the body (§16, [Decided](#16-decided)) · amended 2026-10-14: an org's status reason stays on its tier-3 line, never a `note/v1` (§8, §10.2, §10.5) · amended 2026-10-15: an org's portfolio is an optional field of its tier-3 status line, never an `entity/v1` line (§8, §9, §10.2, §11) · amended 2026-10-16: a database row is its own root, and is proposed as an idea only when its `Type` says `Idea` (§4.3, §4.6) · amended 2026-11-20: a fifth type, `item`, takes a status for the one sort Hold writes today, a sender of mail: `keep` or `let-go` (§8, §10.2, §10.3, §10.7; RFC 0042 §3, §4) · amends RFC 0035 (its amendment 1) and ADR 0018 rule 4
 
 The record knows five kinds of thing that recur across its lines and that the owner wants a page for: a **person**, an **org** (a company invested in or passed on, a club, a brand), a **place**, an **asset** (a boat, an aircraft, a car) and an **idea** (a thread that starts as a repository README, continues in Notion, is spoken of in transcripts, and is built or killed). People review (RFC 0035, `docs/people.md#review`) settled the mechanism for one of them: observed references resolve to a canonical entity under the owner's control; an unresolved proposal is not an identity; nothing is promoted on its own. This RFC generalises that mechanism to the other four, so that one review sitting (`review KIND`) and one page pattern serve all five, and adds the one thing the other four need that a person does not: a **status**, as lines, proposed by the dream and disposed by the owner. A person has no status. A goal is not an entity and has its own verdict, RFC 0036's `review/v1`; a promise has RFC 0034's dispositions (§12).
 
@@ -312,6 +312,7 @@ SPEC §4: derived data inherits the highest tier of its evidence, and a profile 
 | `entity-review/v1` | the highest tier of its evidence: 2 in practice, 1 for a place's (stays), 3 when it cites a tier-3 line | the owner's no MAY cite the transactions a merchant proposal rested on, so the record keeps why it was asked; a no is read by the review alone, so its tier hides nothing a shelf needs |
 | `status/v1`, kind `org` | 3, MUST | `hold`, `add`, `sell` and `exited` describe a position in money; `passed` and `let-go` are decisions (2). The envelope's `tier` is plain (SPEC §4), so a line at 2 among lines at 3 would say, without a key, which companies the owner passed on and which they hold. One tier for all six statuses gives that away to nobody; the cost is that the anti-portfolio seals with age like the portfolio, which is right. Which portfolio holds the company (`portfolio`, §10.2) is a position in money too and rides on this line, at 3, never on the org's `entity/v1` line (amended 2026-10-15) |
 | `status/v1`, kind `idea` | 2, MUST | a decision about one's own work; the reason is the owner's words |
+| `status/v1`, kind `item` (a sender) | 2, MUST | the owner's word on a sender of mail, an address or a domain (§10.7, amended 2026-11-20). An address is as personal as the mail lines it reads from, which are 2; the line names the sender and never a person |
 | `status/v1`, kind `place` or `asset` | 2, MUST | a decision about one's own place or one's own boat. **No money on the line**: no price, no amount, and no `transaction/v1` line cited; a sale's payment, when the record has one, is a tier-3 line of its own that the page may show beside the status within the ceiling |
 | `note/v1`, label `status` | 2, MUST (RFC 0010) | the owner's words on why, written with an idea's, a place's or an asset's status line that has a reason (§10.5), and never with an org's. SPEC §4 lets a producer write a higher tier only where the profile's default is a SHOULD, so the note cannot follow an org's line to 3, and at 2 it would carry an org's reason, which can name money, wherever tier 2 crosses: an org's reason stays in the `reason` of its tier-3 status line and nowhere else. No `note/v1` line is written above 2. The note carries the words and the entity, never the disposition; the words are readable at 2, as every note is |
 
@@ -352,7 +353,7 @@ The `--json` of every reader carries the key beside the id.
 | Field | Type | Req | Meaning |
 |---|---|---|---|
 | `schema` | `"status/v1"` | MUST | |
-| `entity` | object | MUST | `{ type, id, registry }`, `type` `org`, `idea`, `place` or `asset`. Never `person`: a person has no status. Never a goal: a goal's verdict is RFC 0036's `review/v1` (§12) |
+| `entity` | object | MUST | `{ type, id, registry }`, `type` `org`, `idea`, `place`, `asset` or `item` (a sender, §10.7, amended 2026-11-20). Never `person`: a person has no status. Never a goal: a goal's verdict is RFC 0036's `review/v1` (§12) |
 | `label` | string | SHOULD | the entity's label at the time, for reading the log without any table |
 | `status` | string | MUST | one of the kind's dispositions (§10.3); any other value makes the line invalid for its kind |
 | `reason` | string | SHOULD; MUST for `passed`, `let-go` and `killed` | the owner's words on why. The anti-portfolio is this field: a passed company keeps its thread and its reason |
@@ -412,6 +413,13 @@ For an **asset**, two:
 
 There is no state machine: for an org or an idea any status may follow any, because a record keeps what the owner decided and not what a diagram allows (`passed` then `hold` is a company the owner came back to, and the two lines say so). The current status is the last standing line's; a retracted status line counts for nothing and the one before it stands; an entity with no status line has none and its shelf row says `—`.
 
+For an **item** of sort `sender` (amended 2026-11-20, §10.7), two:
+
+| Status | Meaning |
+|---|---|
+| `keep` | the owner wants the sender's mail |
+| `let-go` | the owner does not; a sender let go is never a person's mail (RFC 0045 §4). `reason` MUST say |
+
 ### 10.4 Proposed by the dream, disposed by the owner
 
 The pattern is the signed day's (RFC 0034) and the goal review's (RFC 0036): the engine proposes, the owner's answer is the line, and nothing is a line until the owner answers. The dream proposes a status when the record's own facts move, by these rules, evaluated against the head on the dream's normal cadence (each morning, with `logbook dream`'s run, `docs/dream.md`) and by `review` whenever it runs, so the two always agree. A proposal is not a line and not a draft segment: no `draft/v1` line carries it, and RFC 0036's rule that no reader derives a fact from a draft holds unchanged.
@@ -444,6 +452,27 @@ The note is the owner's words in the place every reader already looks for them: 
 A disposition the owner set long ago, on an entity the record has not touched since, is **stale**, by a reader's rule and never by a line: the standing status is a key of `stale_after_days` (§4.6), and neither a touch nor a status line for the entity falls within that many days of today. By default a `hold` is stale after three years (1095 days) and an `exploring` after two (730); the owner sets other statuses or other numbers in the file, and a status the setting does not name is never stale. The shelf and the page mark a stale row (`stale: no touch since 2023-06-01`), and `--json` carries `stale` and `stale_since`.
 
 Staleness proposes nothing and does not make the dream propose more often: the rules of §10.4 run on their normal cadence. A stale entity becomes **one question in the weekly dream**, the dream's draft of a week (RFC 0036 `draft/v1`, unit `week`): asked once, about its standing status and its last touch ("Havn Data AS: still hold? Nothing since June 2023."), never a proposal and never a line of its own. The owner's answer is a `status/v1` line, which restarts the clock, or nothing, and the shelf keeps the mark. The week's draft has no writer yet; until it has one, the stale entities are listed in `review org` and `review idea` under their own heading, and nothing asks. How the week's draft cites a status line older than the week is for its writer to settle under RFC 0036 (`draft/v1` rule 6 holds a segment's evidence to the lines the unit read).
+
+### 10.7 A sender's fate (amended 2026-11-20)
+
+RFC 0042 §3 proposes a fifth type, `item`, for what the owner holds, and §4 its fates. This amendment
+adopts the one sort Hold writes today, the sender of mail, and nothing else of `item`: the other sorts,
+the item's `entity/v1` line and its other fates wait for RFC 0042.
+
+A sender is no canonical entity: no `entity/v1` line names it, and none is needed, because the address or
+the domain is its own strongest identifier (RFC 0042 §3). The line's `entity` is `{ type: "item", id:
+"sender:<kind>:<value>", registry: "logbook" }`, `kind` `email` or `domain`, `value` folded (lower case;
+a host's trailing dot dropped); `label` is the value. The line is tier 2 (§8), `source` `manual`,
+`proposed_by` `owner`; it carries no `since`, `until`, `portfolio`, `proposal` or money. A reason is
+written as §10.5 says for an idea: first the `note/v1`, then the line naming it.
+
+The fate is the owner's word on the address, never on a person: a person still has no status, and the
+address of someone the record names as a person may be kept or let go like any other. The current fate
+of a sender is its last standing line in chain order; a retracted line counts for nothing, and the one
+before it stands again. Each line names the one it replaces in `supersedes`. **The narrower fate
+decides**: an address's own fate stands against its domain's. The writer is `logbook hold sender
+ADDRESS_OR_DOMAIN --keep | --let-go --reason TEXT`, under the writer lock; it refuses the fate that
+already stands. No reader of an org, an idea, a place or an asset reads an `item` line.
 
 ## 11. The two shelves
 

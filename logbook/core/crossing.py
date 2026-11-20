@@ -32,7 +32,18 @@ from pathlib import Path, PurePosixPath
 from typing import Any
 
 from .. import __version__
-from . import attachments, day_start, drafts, heard, peoples_mail, policy, sealing, signing, stars
+from . import (
+    attachments,
+    day_start,
+    drafts,
+    heard,
+    peoples_mail,
+    policy,
+    sealing,
+    sender_fates,
+    signing,
+    stars,
+)
 from .chain import Line, is_sealed
 from .index import Index
 from .resolve import Ref, standing, walk
@@ -281,6 +292,7 @@ def select(lb: Logbook, req: Request) -> Selection:
             wanted = kept
         raw = idx.read(((p.file, p.offset) for p in wanted), opened=False)
         raw_resolutions = idx.resolutions(opened=False)
+        fates = peoples_mail.fates(lb, idx, retraction_lines)
     sealed = {str(line["id"]): line for line in [*raw, *raw_resolutions] if is_sealed(line)}
     if sealed:
         if not lb.identities:
@@ -299,7 +311,7 @@ def select(lb: Logbook, req: Request) -> Selection:
     # count is written whenever the rule read a mail, so a package with none is what it was
     mail_held: int | None = None
     if not req.all_mail:
-        lines, mail_held = peoples_mail_only(lb, retraction_lines, resolution_lines, lines)
+        lines, mail_held = peoples_mail_only(lb, retraction_lines, resolution_lines, lines, fates)
     # a draft follows the entry it was written under, not the head (RFC 0036 amendment 1): once its
     # entry (the `relationship` entry's for a person, the `dream` entry's for every other unit) no
     # longer allows its tier it stays home, whatever this ceiling
@@ -350,16 +362,21 @@ def signed_gate(lb: Logbook, idx: Index) -> SignedGate:
 
 
 def peoples_mail_only(
-    lb: Logbook, marks: Iterable[Line], resolutions: Iterable[Line], lines: list[Line]
+    lb: Logbook,
+    marks: Iterable[Line],
+    resolutions: Iterable[Line],
+    lines: list[Line],
+    fates: sender_fates.Fates,
 ) -> tuple[list[Line], int | None]:
     """RFC 0045's rule, the one `select` and `share day` both apply: `lines` (opened) with every mail
-    no person is on left out (`peoples_mail.Rule`), and how many were; None when there was no mail to
-    read, so a package with none is what it was. `CrossingError` names `policy/owner.json` when that
-    file is not what it should be."""
+    no person is on left out (`peoples_mail.Rule`), a sender the owner let go in Hold among them
+    (`fates`, `peoples_mail.fates`), and how many were; None when there was no mail to read, so a
+    package with none is what it was. `CrossingError` names `policy/owner.json` when that file is not
+    what it should be."""
     if not any(line.get("kind") == peoples_mail.KIND for line in lines):
         return lines, None
     try:
-        rule = peoples_mail.Rule.of(lb, marks, resolutions)
+        rule = peoples_mail.Rule.of(lb, marks, resolutions, fates.let_go, fates.kept)
     except policy.PolicyError as e:
         raise CrossingError(str(e)) from e
     persons = [line for line in lines if line.get("kind") != peoples_mail.KIND or rule.classify(line).person]

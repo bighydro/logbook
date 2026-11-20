@@ -27,7 +27,7 @@ mail is **other mail**, and the reader says why:
 | `no_person` | nobody the record names as a person is where the rule looks: a stranger, a company's address, a person only in cc of a mail you received |
 | `no_reply` | the sender is a no-reply address (`no-reply@`, `noreply@`, `do-not-reply@`, `mailer-daemon@`, `notifications@` and the like), whatever resolves |
 | `agent` | an agent wrote it, or the sender resolves to an agent; no mail source marks one today |
-| `let_go` | you let the sender go in Hold; Hold writes no fates yet, so this removes nothing today |
+| `let_go` | you let the sender (its address, or its domain) go in Hold: `logbook hold sender … --let-go --reason "…"` ([sender fates](hold.md#sender-fates)); an address you kept stands against its domain let go |
 | `sealed` | a sealed mail this machine has no key to open: listed and said, never guessed |
 
 A company is never a person: an address you named as an org's or a company's stays other mail. A
@@ -41,13 +41,13 @@ never the headers themselves.
 ```
 mail 2026-03-01 – 2026-03-31: 412 lines
   people's mail: 37 (21 received, 16 sent), from or to 9 people
-  other mail: 375 (290 no person on it, 85 a no-reply sender, 0 an agent's)
-  let go in Hold: nothing yet; Hold writes no fates
+  other mail: 375 (278 no person on it, 85 a no-reply sender, 0 an agent's)
+  let go in Hold: 12 mails; 2 senders let go in all
 ```
 
 Counts only: never an address, never a name, no number beside anyone. `--json` adds each mail line's
 id, time, day, direction, class, and the ids of the people that make it a person's (or the reason it is
-not), and never an address.
+not), and never an address; `fates` counts the senders you let go and kept in Hold, never naming one.
 
 ## The crossing
 

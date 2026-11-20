@@ -673,3 +673,56 @@ def cmd_status(a: argparse.Namespace) -> None:
         return
     for text in entity_status.written_rows(written):
         print(text)
+
+
+# -- hold ------------------------------------------------------------------------------------------------
+
+
+def hold_arguments(sub: Subparsers) -> None:
+    """`logbook hold sender ADDRESS_OR_DOMAIN --keep | --let-go --reason TEXT` (RFC 0042 §4)."""
+    h = sub.add_parser(
+        "hold",
+        help="keep a sender of mail, or let one go, with your reason",
+        description="Hold's fates (RFC 0042 §4): one status/v1 line, tier 2, on a sender of mail, an"
+        " address or a domain. --keep: you want its mail; --let-go: you do not, and say why (your words"
+        " also as a tier-2 note beside it). A sender let go is never a person's mail and stays home from"
+        " a crossing (RFC 0045); an address kept stands against its domain let go. A later fate replaces"
+        " the earlier one; nothing is deleted. The censuses are `logbook lab hold`.",
+    )
+    verbs = h.add_subparsers(dest="hold_verb", required=True)
+    s = verbs.add_parser(
+        "sender",
+        help="keep a sender, or let it go with --reason",
+        description="One fate for one sender: an address (letters@news.example.org) or a domain"
+        " (news.example.org), written folded.",
+    )
+    s.add_argument("sender", metavar="ADDRESS_OR_DOMAIN", help="the sender: an address or a domain")
+    fate = s.add_mutually_exclusive_group(required=True)
+    fate.add_argument("--keep", action="store_true", help="keep it: its mail is wanted")
+    fate.add_argument("--let-go", action="store_true", help="let it go; --reason is required")
+    s.add_argument("--reason", metavar="TEXT", help="why, in your words; required with --let-go")
+    s.add_argument("--json", action="store_true", help="the line written, as one JSON object")
+    s.set_defaults(fn=cmd_hold)
+
+
+def cmd_hold(a: argparse.Namespace) -> None:
+    """`hold sender ADDRESS_OR_DOMAIN --keep | --let-go --reason TEXT [--json]`: one fate through the
+    writer (`logbook.core.sender_fates.write`), under the writer lock. A refusal is one sentence on
+    stderr, exit 2, nothing written."""
+    from ..core import sender_fates
+
+    lb = Logbook.find()
+    fate = sender_fates.KEEP if a.keep else sender_fates.LET_GO
+    try:
+        written = sender_fates.write(lb, a.sender, fate, a.reason)
+    except sender_fates.FateError as e:
+        _refuse("hold sender", str(e))
+    if a.json:
+        print(json.dumps(written.to_json(), indent=2, ensure_ascii=False))
+        return
+    said = "kept" if written.fate == sender_fates.KEEP else "let go"
+    print(f"{written.ref[1]}: {said} (line {written.line['id']})")
+    if written.reason is not None and written.note is not None:
+        print(f"  because: {written.reason} (note {written.note['id']})")
+    if written.supersedes is not None:
+        print(f"  replaces line {written.supersedes}; nothing is deleted")

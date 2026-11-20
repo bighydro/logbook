@@ -11,8 +11,9 @@ What is not a person, and the reason a mail is other mail, in the order the read
 - `agent`: the machine mark (`logbook.core.machine`), `extra.machine` or an agent `extra.counterpart`,
   or a sender resolved to an entity of type `agent`; no mail writer sets either mark today;
 - `no_reply`: a received mail whose sender matches `NO_REPLY_ADDRESS`, whatever a resolution says;
-- `let_go`: a sender, by address or domain, in `Rule.let_go`, the senders Hold let go (RFC 0042 §4).
-  Hold writes no fate yet, so the set is empty and removes nothing;
+- `let_go`: a sender, by address or domain, in `Rule.let_go`, the senders the owner let go in Hold
+  (RFC 0042 §4, `logbook hold sender … --let-go`, read by `sender_fates`); an address kept on a domain
+  let go is kept, as the narrower fate decides (`Rule.fate`);
 - `no_person`: nobody the record names as a person where the rule looks (a company, a stranger, a
   person in cc of a mail received);
 - `sealed`: a sealed mail this machine cannot open (`Logbook.opened`): never guessed to be anyone's.
@@ -30,7 +31,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
-from . import day_start, machine, policy, present, reading, resolve, stays
+from . import day_start, machine, policy, present, reading, resolve, sender_fates, stays
 from .chain import Line, is_sealed
 from .export import parse_day
 from .index import Index
@@ -96,12 +97,15 @@ class Classed:
 
 @dataclass(frozen=True)
 class Rule:
-    """The rule over one record's resolutions: who is a person, who is the owner, and who Hold let go
-    (`let_go`, `email` or `domain` refs; empty until Hold writes fates, RFC 0045 §4)."""
+    """The rule over one record's resolutions: who is a person, who is the owner, and the senders the
+    owner decided about in Hold (RFC 0045 §4): `let_go` and `kept`, `email` or `domain` refs, the
+    standing fates (`sender_fates`). `kept` is the exception the crossing's all-except-junk mode reads;
+    this rule itself only lets it stand against a wider `let_go`."""
 
     identities: Mapping[Ref, Identity]
     owner: present.Owner
     let_go: frozenset[Ref] = frozenset()
+    kept: frozenset[Ref] = frozenset()
 
     @classmethod
     def of(
@@ -110,9 +114,11 @@ class Rule:
         marks: Iterable[Line],
         resolutions: Iterable[Line],
         let_go: frozenset[Ref] = frozenset(),
+        kept: frozenset[Ref] = frozenset(),
     ) -> Rule:
         """From the retraction and resolution lines (opened), `logbook.json` and `policy/owner.json`
-        (`policy.PolicyError` when that file is not what it should be)."""
+        (`policy.PolicyError` when that file is not what it should be); the fates as given, which a
+        reader takes from `sender_fates.of` (`fates`)."""
         identities = resolve.identities_from([*marks, *resolutions])
         owner = present.owner_of(
             str(lb.meta.get("owner_id") or ""),
@@ -120,7 +126,11 @@ class Rule:
             policy.owner_aliases(lb.root),
             identities,
         )
-        return cls(identities, owner, let_go)
+        return cls(identities, owner, let_go, kept)
+
+    def fate(self, address: str) -> str | None:
+        """The fate that decides for a sender's address: `keep`, `let-go` or None (`sender_fates.fate_of`)."""
+        return sender_fates.fate_of(address, self.kept, self.let_go)
 
     def identity(self, ref: Ref) -> Identity | None:
         """What a ref resolves to; an address both ways the record spells one (`crossing._named`)."""
@@ -171,8 +181,7 @@ class Rule:
             return NO_PERSON, ()
         if no_reply(sender):
             return NO_REPLY, ()
-        domain = sender.rpartition("@")[2].casefold()
-        if self.let_go & {("email", sender.lower()), ("email", sender.casefold()), ("domain", domain)}:
+        if self.fate(sender) == sender_fates.LET_GO:
             return LET_GO, ()
         who = self.identity(("email", sender))
         if who is not None and who.type == machine.AGENT:
@@ -218,6 +227,11 @@ class Report:
     first: str
     last: str
     mails: list[Classed]
+    fates: sender_fates.Fates = field(default_factory=sender_fates.Fates)
+
+    def senders_let_go(self) -> int:
+        """How many senders the standing fates let go, counted, never named."""
+        return len(self.fates.let_go)
 
     def counts(self) -> dict[str, Any]:
         mine = [c for c in self.mails if c.person]
@@ -236,21 +250,28 @@ class Report:
         return {
             "window": {"first": self.first, "last": self.last},
             "counts": self.counts(),
-            "let_go": "none yet: Hold writes no fates",
+            "fates": {"let_go": len(self.fates.let_go), "kept": len(self.fates.kept)},
             "mails": [c.to_json() for c in self.mails],
         }
 
 
 def read(lb: Logbook, first: str, last: str) -> Report:
     """Every mail line of the local days `[first, last]` that stands, in file order, classed; the
-    resolutions read once, the window's mail through the (kind, day_local) index."""
+    resolutions and the standing sender fates read once, the window's mail through the (kind, day_local)
+    index."""
     days = day_start.of(lb.meta)
     with lb.index() as idx:
         marks = idx.retractions()
-        rule = Rule.of(lb, marks, idx.resolutions())
+        found = fates(lb, idx, marks)
+        rule = Rule.of(lb, marks, idx.resolutions(), found.let_go, found.kept)
         retracted = frozenset(retractions(marks))
         mails = [rule.classify(line, day) for line, day in _standing(idx, KIND, first, last, retracted, days)]
-    return Report(first, last, mails)
+    return Report(first, last, mails, found)
+
+
+def fates(lb: Logbook, idx: Index, marks: Iterable[Line]) -> sender_fates.Fates:
+    """The standing sender fates (RFC 0045 §4), read through the open index with its retractions."""
+    return sender_fates.of(lb, [*marks, *idx.by_kind(sender_fates.KIND)])
 
 
 def window(today: date, since: str | None, until: str | None) -> tuple[str, str]:
@@ -317,7 +338,8 @@ def replies_owed(lb: Logbook, day: str, tiers: Sequence[int] | None = None) -> l
 
     with lb.index() as idx:
         marks = idx.retractions()
-        rule = Rule.of(lb, marks, reading.crossing(idx.resolutions(), tiers))
+        found = fates(lb, idx, marks)
+        rule = Rule.of(lb, marks, reading.crossing(idx.resolutions(), tiers), found.let_go, found.kept)
         retracted = frozenset(retractions(marks))
         _messages(rule, gated(_standing(idx, "message", first, day, retracted, days)), words)
         for line, _day in gated(_standing(idx, KIND, first, day, retracted, days)):
