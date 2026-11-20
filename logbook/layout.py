@@ -71,6 +71,7 @@ TIERS: dict[str, tuple[str, ...]] = {
         "rollup",
         "sealing",
         "search",
+        "sender_fates",
         "share",
         "signing",
         "social",
