@@ -19,6 +19,7 @@ from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any
 
+import page_text
 import pytest
 from persona import persona_record, utc
 
@@ -182,7 +183,11 @@ def test_without_the_setting_life_runs_from_the_first_day_to_the_end_of_next_yea
     )
     text = _page(_site(Logbook(lb.root)), "zoom=life")
     assert "Your life, 2026 to 2027" in text
-    assert "2055" not in _read(text)[0]
+    # as a whole word of what a reader sees: the head in the footer is random hex (`3c4aea205561`, once)
+    assert not page_text.says(text, "2055"), page_text.seen(text)
+    luck, said = text + "<p>head <code>3c4aea205561…</code></p>", text + "<p>until 2055</p>"
+    assert "2055" in _read(luck)[0] and not page_text.says(luck, "2055"), "an id's luck is no year"
+    assert page_text.says(said, "2055"), "the year said on this page is found"
 
 
 def test_the_setting_sets_the_bounds_and_a_wrong_one_is_said_not_raised(

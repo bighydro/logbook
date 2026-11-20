@@ -356,7 +356,10 @@ def test_a_page_at_tier_one_shows_no_tier_two_line_name_or_count(
         assert "2 people" not in text, target
     door = _get(gated, "/people")
     assert "1 person in your record" in door and "Kari Nordmann" in door
-    assert "year=2025" in every and "2025" not in page_text.seen(_door(door)), "a year only tier 2 gives"
+    assert "year=2025" in every and not page_text.says(_door(door), "2025"), "a year only tier 2 gives"
+    luck, said = _door(door) + "<p>head <code>3c4aea202561…</code></p>", _door(door) + "<p>MAR 2025</p>"
+    assert "2025" in page_text.seen(luck) and not page_text.says(luck, "2025"), "an id's luck is no year"
+    assert page_text.says(said, "2025"), "the year said in the door is found"
     assert "ferry" not in door and "MAR 2025" not in door
     assert 'id="review"' in every and 'id="review"' not in door, "the queue reads every tier: not here"
     assert gated.respond("/people/a6f3c2d1-0000-4000-8000-0000000000a2").status == 404, "Per is tier 2"

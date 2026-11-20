@@ -18,6 +18,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+import page_text
 import pytest
 from world_record import (
     ASSETS,
@@ -543,4 +544,9 @@ def test_a_line_far_in_the_future_does_not_stretch_the_slider_past_today(lb: Log
     assert asked is not None and asked.last == "2055-03-01"
     site = serve.Site(lb, now=lambda: datetime.fromisoformat(f"{whole.last}T12:00:00+00:00"))
     page = site.respond("/world", "").body.decode("utf-8")
-    assert "2055" not in page
+    # anywhere in the source, as a value of its own: the line ids and the head on the page are random hex
+    assert not page_text.holds(page, "2055"), page_text.seen(page)
+    luck = page + '<a href="/line/019cadd3-2055-7dcd-95ae-3c4aea205561">a line</a>'
+    assert "2055" in luck and not page_text.holds(luck, "2055"), "an id's luck is no year"
+    for said in (page + "<p>until 2055</p>", page + '<a href="/world?last=2055-03-01">on</a>'):
+        assert page_text.holds(said, "2055"), "the year on this page is found, in its text or a link"

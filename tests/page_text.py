@@ -4,7 +4,8 @@ value, a textarea's words, an empty field's placeholder); never a tag, an attrib
 a `title`), a hidden field's value, the stylesheet or the script. A block, a cell or a field is a
 word apart from the next; the inline elements of a line run on, as a browser shows them.
 
-A check that a page never says a number reads this, as a word (`says`), and not the page's source:
+A check that a page never says a number reads this, as a word (`says`), and not the page's source
+(or, for a value the page must not carry anywhere, the source as whole values, `holds`):
 the line ids in a kept form's hidden fields and in the evidence rows' `title`s, the tail of one a row
 shows (`…aa2025cc`), and the record's head in the footer are random hex, and hold any three digits now
 and then. The busy test of #315 failed a right page that way, on "503" in a hidden field's id."""
@@ -61,7 +62,34 @@ def seen(page: str) -> str:
     return "".join(reader.parts)
 
 
+# a line id (uuid7, or a fixture's uuid4), whole or cut short after its version group, set aside before
+# a word is looked for: its groups of four stand between hyphens, as a year does in a date, and are random
+# (`019cadd3-2055-7dcd-…` says no year). Only that shape, standing alone: eight digits and four
+# (`22334455-1234`, `20260615-0930`) are a phone number or a time, and are read.
+LINE_ID = re.compile(
+    r"(?<![0-9A-Za-z])[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[47][0-9A-Fa-f]{3}"
+    r"(?:-[0-9A-Fa-f]{4}(?:-[0-9A-Fa-f]{1,12})?)?(?![0-9A-Za-z])"
+)
+
+
+def whole(text: str, word: str) -> bool:
+    """Whether `text` holds `word` as a value of its own: not inside a longer run of letters and digits
+    (a hash, a digest, a token, an id's tail: `3c4aea205561` holds no 2055) nor inside a line id. Any
+    other mark beside it is an edge: a space, a hyphen, a slash, an underscore, a quote, `=`, `(`. A
+    compact stamp counts too: `20550301T0900Z` (a stay's or a crossing's id) holds 2055."""
+    rest = LINE_ID.sub(" ", text)
+    found = rf"(?<![0-9A-Za-z]){re.escape(word)}(?:(?![0-9A-Za-z])|(?=\d{{4}}T\d{{4}}))"
+    return re.search(found, rest) is not None
+
+
 def says(page: str, word: str) -> bool:
-    """Whether a reader sees `word` on the page as a word of its own: not inside a longer run of
-    letters and digits, as three digits are in a line id's tail or the head's hash."""
-    return re.search(rf"(?<!\w){re.escape(word)}(?!\w)", seen(page)) is not None
+    """Whether a reader sees `word` on the page as a word of its own (`whole`, over `seen`): not inside
+    a longer run of letters and digits, as three digits are in a line id's tail or the head's hash."""
+    return whole(seen(page), word)
+
+
+def holds(page: str, word: str) -> bool:
+    """Whether the page's source holds `word` as a value of its own (`whole`) anywhere: its text, a
+    link's target, an attribute, a field, the script. The check for a value the page must not carry at
+    all, read or not, without the luck of a random id that happens to spell it."""
+    return whole(page, word)

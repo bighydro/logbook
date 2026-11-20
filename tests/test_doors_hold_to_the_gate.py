@@ -25,6 +25,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+import page_text
 import pytest
 from persona import HOME, KARI, KARI_ID, OLA, OLA_ID, TZ, attendee, dwell, event, note, resolution, utc
 
@@ -200,7 +201,9 @@ def test_the_control_each_page_moves_without_its_gate(at: Any) -> None:
     """The records do differ where the tests below look: read every tier, the lines above are there."""
     assert at("whole", (1, 2, 3), "/shelves") != at("below", (1, 2, 3), "/shelves")
     assert THREE_WORD in at("whole", (1, 2, 3), f"/day/{CLINIC}")
-    assert "2025" in at("whole", (1, 2, 3), "/search?q=note")
+    assert page_text.holds(at("whole", (1, 2, 3), "/search?q=note"), "2025")  # a year, not hex luck
+    luck = '<footer>head <code>3c4aea202561…</code></footer><a href="/line/019cadd3-2025-7dcd-95ae-05ae">'
+    assert "2025" in luck and not page_text.holds(luck, "2025"), "the old control passed on luck like this"
 
 
 # -- 1. Journeys and the promises: a promise, its count and whether it is kept, from the gate's lines ------
