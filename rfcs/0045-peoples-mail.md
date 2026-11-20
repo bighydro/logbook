@@ -89,6 +89,13 @@ writes reports under `state/hold/` and no line; no reader may take a report for 
 lands (its own profile, under RFC 0042), the reader fills the set from the standing fates and this RFC
 gains a dated line naming it.
 
+*2026-11-20:* the fate line has landed: a `status/v1` line on an `item` of sort `sender` (RFC 0037
+§10.7, RFC 0042 §4), `keep` or `let-go`, written by `logbook hold sender`. The reader fills `Rule.let_go`
+from the standing `let-go` lines and `Rule.kept` from the standing `keep` lines (`sender_fates`), at
+every tier, for `people mail`, the crossing, a shared day and the replies owed alike. The narrower
+fate decides: an address kept stands against its domain let go. `Rule.kept` is the exception the
+crossing's all-except-junk mode reads; this rule itself only lets it stand against a wider `let-go`.
+
 ## 5. The reader
 
 `logbook.core.peoples_mail` (`docs/mail-people.md`):
@@ -158,7 +165,7 @@ to a person; `harbour@example.org` resolves to a `company`.
 mail 2026-03-01 – 2026-03-01: 3 lines
   people's mail: 1 (1 received, 0 sent), from or to 1 person
   other mail: 2 (1 no person on it, 1 a no-reply sender, 0 an agent's)
-  let go in Hold: nothing yet; Hold writes no fates
+  let go in Hold: no sender (`logbook hold sender ... --let-go`)
 ```
 
 A crossing of that day with `--tier 1,2 --kinds mail` carries the first mail, `counts.mail_held_back: 2`.
