@@ -43,4 +43,8 @@ def cmd_people_mail(a: argparse.Namespace) -> None:
     if reasons[peoples_mail.SEALED]:
         said.append(f"{reasons[peoples_mail.SEALED]} sealed, not opened on this machine")
     print(f"  other mail: {c['other']} ({', '.join(said)})")
-    print("  let go in Hold: nothing yet; Hold writes no fates")
+    let_go, senders = reasons[peoples_mail.LET_GO], report.senders_let_go()
+    if senders:
+        print(f"  let go in Hold: {_plural(let_go, 'mail')}; {_plural(senders, 'sender')} let go in all")
+    else:
+        print("  let go in Hold: no sender (`logbook hold sender ... --let-go`)")
