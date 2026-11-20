@@ -374,18 +374,81 @@ def test_search_and_ask_offer_only_the_years_and_hits_at_their_tiers(
 READ_THROUGH = re.compile(r'<input type="hidden" name="reflection" value="([^"]*)">')
 
 
+LINE_ID = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
+
+
+def _counted(page: str, token: str, seq: int) -> list[str]:
+    """The ways `page` shows the count `seq` where a reader could find it: the token is one of its plain
+    forms or holds one eight digits wide or wider (as the plain sixteen-digit hex before the seal), or
+    the rest of the page has it as a whole value: in decimal, with a thousands comma, in hex, zero-padded.
+    The values that are random on every run are set aside first, the token, the line ids (uuid7: a group
+    is the clock's millisecond) and the chain's head: a short run of the count's digits inside one of
+    them is luck, not a count. Decimal is whole between digits (`1454lines` counts, a list's `[1453,1454]`
+    too); hex between digits and letters, as a hex value is read."""
+    decimal = [str(seq), f"{seq:,}", *(f"{seq:0{w}d}" for w in (8, 12, 16))]
+    hexed = [f"{seq:x}", f"{seq:X}", f"{seq:#x}", *(f"{seq:0{w}x}" for w in (8, 12, 16))]
+    found = [f"the token is {form}" for form in (*decimal, *hexed) if token == form]
+    found += [f"the token holds {form}" for form in (*decimal, *hexed) if len(form) >= 8 and form in token]
+    rest = LINE_ID.sub(" ", HEAD.sub(" ", page.replace(token, " ")))
+    for forms, edge in ((decimal, "[0-9]"), (hexed, "[0-9A-Za-z]")):
+        for form in forms:
+            if re.search(rf"(?<!{edge}){re.escape(form)}(?!{edge})", rest):
+                found.append(form)
+    return list(dict.fromkeys(found))
+
+
 def test_the_sign_form_of_a_page_below_the_notes_does_not_count_the_record(
     at: Any, records: dict[str, Logbook]
 ) -> None:
     """What the Sign form carries for the reflection a tier-1 page cannot show (`_read_through`, #436)
     is how far the page read, for Sign to tell a form older than the reflection apart: never that as a
-    number a reader of the page can count the record's lines by, those above its gate among them."""
+    number a reader of the page can count the record's lines by, those above its gate among them. The
+    count is looked for on the page outside the token, as a whole value (`_counted`): the token is 48
+    random-looking hex digits, and the count's few hex digits turn up inside it by chance (#453)."""
     seq = int(records["whole"].meta["seq"])
     page = at("whole", T1, f"/day/{CLINIC}")
     (token,) = READ_THROUGH.findall(page)
-    assert token not in (f"{seq:016x}", f"{seq:x}", str(seq))
-    assert f"{seq:x}" not in token and f"{seq:,}" not in page
+    assert re.fullmatch(r"[0-9a-f]{48}", token), token  # sealed, not a plain number
+    assert _counted(page, token, seq) == []
     assert at("whole", T1, f"/day/{CLINIC}") == page  # the same page read again, the same form
+
+
+def test_the_count_check_finds_a_count_outside_the_token_and_not_one_inside_it() -> None:
+    """The guard of the test above: a count planted where a reader would see it (the page's text, an
+    attribute, a list in a script, the token itself in a plain form) is found; the same digits by chance
+    inside the random token, a line id or the chain's head are not."""
+    seq = 1454  # hex 5ae
+
+    def page_of(token: str) -> str:
+        form = f'<input type="hidden" name="reflection" value="{token}">'
+        line = "<a href=/line/019cadd3-1454-7dcd-95ae-05ae5ae1454f>a line</a>"  # a group of it is the count
+        return f"<p>a day, head <code>c1454d5ae0…</code></p>{form}{line}"
+
+    by_chance = "c" * 20 + "5ae" + "d" * 25, "c" * 20 + "1454" + "d" * 24  # whole only as the token is cut
+    for token in by_chance:
+        assert _counted(page_of(token), token, seq) == [], token  # luck, not a count
+    token = by_chance[1]
+    page = page_of(token)
+    planted = [
+        "<p>1454 lines</p>",
+        "<p>1454lines</p>",
+        "<p>read 1,454 lines</p>",
+        '<span data-read="1454"></span>',
+        "<script>var read=[1453,1454]</script>",
+        '<span data-read="5ae"></span>',
+        '<span data-read="5AE"></span>',
+        "<p>at 0x5ae</p>",
+        f'<span title="{seq:016x}"></span>',
+        f'<span title="{seq:08d}"></span>',
+    ]
+    for leak in planted:
+        assert _counted(page + leak, token, seq) != [], leak
+        assert _counted(leak + page, token, seq) != [], leak
+    for plain in (str(seq), f"{seq:x}", f"{seq:016x}"):
+        assert _counted(page.replace(token, plain), plain, seq) != [], plain
+    for width in ("016x", "08x", "08d"):  # the plain count inside a token of the sealed length
+        held = f"{seq:{width}}".rjust(48, "e")
+        assert _counted(page.replace(token, held), held, seq) != [], width
 
 
 def test_the_sealed_seq_reads_back_for_its_day_alone() -> None:
