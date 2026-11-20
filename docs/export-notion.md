@@ -69,7 +69,9 @@ week still says how many days you have spent together and since when. The lines 
 bind a name to an address or a page, `resolution/v1` and `entity/v1`, come from any day and are held to
 the ceiling and not to the signature, as a crossing package ships its resolution lines: Ola's email is
 his whenever the record learned it. A line the record holds at tier 3 binds nothing here, and an earlier
-line it replaced at a lower tier stands again for this export.
+line it replaced at a lower tier stands again for this export. A birthday read off such a line binds
+nothing: it is a fact, read whatever its day, from a line that passes the gate in full, the signed day
+included.
 
 ## What leaves
 
@@ -84,8 +86,9 @@ FOLDER/
 **The envelope**, `manifest.json`: `export_id` (new each run), `as_of` (when the record was read),
 `read_head` (the record's head when it was read), `policy` (the entry's name, `notion`, and its version:
 the SHA-256 of its `max_tier`, `until` and `model`, as a dream draft records it), `signed_only` (true
-unless `--include-unsigned`), the window of local days, the tiers, the counts per section, what was left
-out and held back, and `files`: every other file with its SHA-256 and length.
+unless `--include-unsigned`), the window of local days, the tiers, the counts per section (and
+`birthdays`, how many persons leave with one), what was left out and held back, and `files`: every
+other file with its SHA-256 and length.
 
 **Persons.** Everyone the record names who had any contact with you in the window — a message, a call, a
 mail, a calendar entry, a recording, a tagged photo or a day together ([people](people.md)) — never you.
@@ -99,6 +102,16 @@ the resolution lines hold them) and `facts`:
   there are none. "Days together" counts days the person was confirmed with the owner at one of the
   owner's stays; a person known only from messages and mail has none, and their page carries no such
   line;
+- `birthday`: the person's birthday as the record holds it ([people](people.md)), `YYYY-MM-DD`, or
+  `--MM-DD` when the year is unknown, from the `extra.birthday` of a standing resolution line of one of
+  their refs, as a contacts import writes it; null when the record knows none, and null for anything
+  else the line holds there (another format, another script's digits, a day no calendar has): nothing
+  of it is passed through. When two cards of the person's that pass the gate carry two birthdays, the
+  record does not know it, and it is null. A birthday travels only when the line it is read off is at
+  the entry's tiers (a contacts import writes tier 2, so an entry of `max_tier` 2), on a day you have
+  signed (or the gate is lifted by the entry and `--include-unsigned` both), not retracted and before
+  the read time; otherwise it stays home and its line is counted as held back, never beside a name.
+  Your own birthday never leaves: you are never a person here. The page has no line for it;
 - `promises`, open both ways ([promises](promises.md)): `owed_by_owner` and `owed_to_owner`, each
   `{sentence, date, line}`: the sentence as `logbook promises` quotes it (one sentence, its case kept,
   its whitespace collapsed), the day it was said, the line it was read in. Only a promise: what
@@ -116,8 +129,8 @@ the resolution lines hold them) and `facts`:
   come first, at most ten a side; `promises_more` counts the rest of each side. The person's speaker and
   counterpart are resolved through the same gate.
 
-And `page`: those facts as the lines of a page, in German, whole. The program that writes Notion replaces
-a person's page with it and never merges:
+And `page`: those facts, the birthday aside, as the lines of a page, in German, whole. The program that
+writes Notion replaces a person's page with it and never merges:
 
 ```
 Stand: 15.10.2026, aus dem Logbuch
@@ -188,13 +201,17 @@ destination `notion`: the window, the tiers, the entry in force (`max_tier`, `si
 version), the head the facts were read at, the SHA-256 of `manifest.json`, which names every other file's,
 and `counts` in the shape every crossing line has: the lines read through the gate (`logged`), those it
 let through (`crossed`, by tier and kind), those it held back, and the resolution and entity lines it
-bound names through (`resolutions`). The folder carries facts read off those lines, never the lines; the
+bound names through (`resolutions`). A resolution line a birthday is read off plays both parts and is
+counted in both: as the overlay that binds the name, and as the line a fact rests on (or is held back
+for); only the lines of the persons the folder lists are read for a birthday.
+The folder carries facts read off those lines, never the lines; the
 sections' own counts and what was left out are under `extra.notion`. It is the only thing the command writes to the record, and the run holds the writer lock from
 the read to the append, so the line follows the head the folder reflects. A dry run appends nothing.
 
 ## The dry run
 
-`--dry-run` reads the record through the same gate and prints the counts per section, what was left out
+`--dry-run` reads the record through the same gate and prints the counts per section (beside the
+persons, how many would leave with a birthday: `persons: 12 (3 birthdays)`), what was left out
 for want of a key or for naming money, how wide the pages' two long sections are, and how many lines the
 gate held back above the tier or on unsigned days. It writes nothing: no folder, no line. The width is
 one line of totals, never a name:
