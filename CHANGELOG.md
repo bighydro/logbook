@@ -1,5 +1,97 @@
 # Changelog
 
+## 1.2.0 — 2026-11-21
+
+### Documentation
+- The install page names no version: every line installs the newest release, a screen it shows writes
+  `X.Y.Z` for the number, and the extras lines pin through `$(logbook --version)`. `pipx inject` gains the
+  `--force` without which pipx sees `openlogbook` installed and changes nothing.
+- The home server installs the release with `uv tool`; installing from the repository is an aside for
+  developers, from the `stable` tag.
+- The docs use today's command names (`logbook show year`, `logbook serve mcp`, `logbook import backup`,
+  ...) where they used the old ones, which still run; a page about a renamed command says the old name
+  once. A test holds every command, subcommand, flag and repository path the README, the docs and the
+  changelog fragments name to the parser.
+
+### Fixed
+- `imessage` counts every attachment of a kept message that names no file found beside the store under its reason, `skipped_attachment_<reason>` (no attachment row, no filename, an unsupported kind, a file that is not there), so `logbook add` and `logbook sync imessage` say where the gap to the attachment table went. The message's line stays as before, `extra.media_missing` and all (#80).
+- `derive flights` counts a draft merged into a flight already in the record as a merge, not as a new
+  flight, so its dry run and its real run tell the same counts (`0 new flights … also 3 merged` for the
+  demo, which said `3 new flights`). Two numbers for one leg met in the same run are one new flight and
+  one merge into it, no longer a merge "into a flight already in the record" (#109, #458).
+- Keep and sign take a sentence only from the day's current draft. When the day was dreamed again and the
+  newer draft is withheld (the `dream` entry no longer allows its tier, or the Day page's gate does not
+  read it), the older draft it superseded is still shown, but `logbook day sign DAY --keep N` and the Day
+  page now refuse to keep from it, in one sentence that names the current draft (its number, its id and
+  when it was written) and how to keep from it; a retracted draft is refused the same way. On the Day page
+  a superseded draft's keep boxes are gone and the form says a newer draft exists, with a link to it as
+  written (a draft above the page's gate is said to exist and never named). A keep made before its draft
+  was superseded stays as it was written, and `logbook show DAY` says which draft it was kept from
+  (`kept from draft #8, superseded by #9`).
+- `review receipts` reads a sender's address as the address it is (Unicode NFKC): a fullwidth `＠` or
+  fullwidth letters no longer hide a person, or you, behind a lookalike, and an order address written so
+  is read.
+- The demo record's places are the persona's own coordinates or public landmarks: the museum is the
+  Kunsthaus, and no hotel, flat, office or cabin points at a real address.
+- A request the Library refuses before reading its body (a proxy's POST, another host's, a form over
+  the size it may carry) is now closed gracefully: after the answer, at most 64 KiB of the unread body
+  are read and dropped, never parsed, for at most a second, so the client always reads the refusal.
+  On Windows the client could see the connection reset (WinError 10053) before the answer arrived.
+- Today, the morning's plan on the Day page (where `/today` lands), gives a time its own column: each row of the plan, what is due and the day's tasks puts its time in a `<time>` cell of its own (`all day` for an all-day entry, `due`, `task` or `trip` where there is no clock), a column on a wide screen and a line above the row on a phone, and the title and the people are the row's text. A title that opens with a name (`Ola Nordmann's birthday cake` at 17:00) no longer reads as `17:00 · Ola Nordmann…` in one row.
+- A promise said more than a week before the day it is due says the person after a word, `you were promised on 2026-05-20, by Ola Nordmann` (`, to …` for one you made), on Today and in the Day's loose ends, never a date beside a name.
+
+### Adapters
+- `logbook add instagram <zip|folder>` reads Instagram's "Export your information" archive (JSON, the
+  older and the newer folder layout alike): direct messages from the inbox, message requests and archived
+  chats as messages, calls as calls, the images and videos of your posts, stories and reels as photos with
+  their caption and place, and follows, close friends, blocks, restrictions, follow requests, unfollows,
+  likes, comments, story likes and profile searches as `social/v1` lines (RFC 0048, a draft). Meta's
+  garbled text (`Ã¥` for `å`) is read back as written. Adding the same export again writes nothing; a newer
+  one adds only what is new. An HTML export is refused with how to ask for JSON. Instagram senders are
+  proposed against the people you know by name in `people review`, never merged on their own.
+  See docs/adapters/instagram.md.
+- The Day and `show` say a `social/v1` line in words (`followed by @ola.example`, `liked a post by
+  @sailing.example`); a handle is an account, never a person: no door lists one among your people.
+
+### Security
+- A page read through a gate (`export site --tier`, or `serve mcp` under the `mcp` ceiling of
+  `policy/crossing.json`; `serve` itself reads every tier) no longer counts, dates or hints at a line
+  above it, from the privacy review's LATER list: the People door's last real contact and the Day's
+  morning reconnect read the people's contacts through the gate; `/shelves` says the lines at the gate's
+  tiers and their days, not the record's seq; the window every page opens on and the search's year filters
+  run over the days of the lines the gate reads; `/gaps`
+  counts its sources, silences and missing days at the gate's tiers; `/world` draws only the tiers the
+  gate reads and says it held back only lines the gate reads; a promise closed by a task line above the
+  gate is still open through it.
+- The Sign form of a page that reads no notes carried the record's last seq in hex, a count of every line
+  above the gate: it is sealed, for its day, with a key kept on this machine beside the index, and Sign
+  reads it back as before; a page read before the upgrade is read again before it signs.
+- The MCP server's gated index answers every method the Library calls through its ceiling: `by_seqs` and
+  `lines_of` returned lines above it, and the ids, kinds, years, totals, attachment counts, newest stamp
+  and search it gave counted every tier.
+- The Library is one login at a time: tailscaled keeps a connection open for many requests, and a
+  request on it that names another login, none, or is this machine's own is now a 403 and the
+  connection is closed. Every proxy header (`Forwarded`, `Via`, `X-Real-IP` as well as `Tailscale-*`
+  and `X-Forwarded-*`) is a proxy's on a form's POST too, and the docs say so.
+- No pencil without evidence: outside the Day's own Draft, a model's sentence (the letter's story, the
+  week's proposal under Today and on the week page, the intention it prefills, a goal's proposed verdict,
+  a call's decisions, the chapter on Life, what was drafted about a person) is shown with the ids of the
+  lines it cites, and only when every one is a line the page reads; one with none, or one that rests on
+  a line above the page's tier, is not shown. A letter no longer carries a story sentence that rested on
+  a tier-3 line.
+
+### Added
+- `export notion` gives each person's `birthday` in the facts, read off a resolution line
+  (`YYYY-MM-DD`, or `--MM-DD` without the year), or null, also when two cards disagree; nothing else
+  the line holds there is passed through, and the page has no line for it. A birthday binds nothing,
+  so its line passes the gate as a fact's does: at the entry's tiers, on a day you have signed unless
+  the entry and `--include-unsigned` lift the gate, not retracted. Held back, it is counted with the
+  other lines held back, never beside a name; the dry run says how many persons would leave with one
+  ([export for Notion](docs/export-notion.md); from #459 by localboy21).
+
+### Changed
+- The Library's old addresses answer 301 Moved Permanently (they answered 302 in 1.1); `/today` stays 302.
+
 ## 1.1.0 — 2026-11-02
 
 ### Fixed
