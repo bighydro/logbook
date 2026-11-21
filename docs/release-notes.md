@@ -1,6 +1,6 @@
 # Release notes
 
-What each version changed for you, in five bullets. [CHANGELOG.md](CHANGELOG.md) has every change in full; [Upgrading](tour.md#upgrading) has the two migrations a record may need.
+What each version changed for you, in five bullets. [CHANGELOG.md](CHANGELOG.md) has every change in full; [Upgrading](tour.md#upgrading) has the two migrations a record may need. This page stops at 0.7.0; for 0.7.1 and later, the changelog is the record of what changed.
 
 ## 0.7.0, 18 October 2026
 

@@ -31,7 +31,7 @@ same way. An export in several zips is several `add`s, one per zip.
 
 Adding the same export again writes nothing; adding a newer export later writes only what is new
 (`N already in the record (same source and raw_id), nothing written twice`). Once added, the zip can
-go: `logbook inbox list` says it is in the record, and `logbook inbox clean` moves or deletes it.
+go: `logbook import inbox list` says it is in the record, and `logbook import inbox clean` moves or deletes it.
 
 An HTML export is refused with one sentence and nothing is read: ask again, with **Format: JSON**.
 

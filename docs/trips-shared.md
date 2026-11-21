@@ -2,13 +2,13 @@
 
 Two people on one trip keep two records of it. `logbook export trip-bundle` hands one of them to the
 other as a folder; `logbook import trip-bundle` takes it in as *received* lines that never mix with
-your own; `logbook trip` then shows the trip as both records saw it — who was there according to
+your own; `logbook show trip` then shows the trip as both records saw it — who was there according to
 each, the places they agree on, and what one of them saw alone. The format is RFC 0030, a crossing
 package (RFC 0005) cut to one trip, under the same ceiling as every crossing (ADR 0016).
 
 ```bash
 # Ola's record: the cabin weekend, for Ines, names included (tier 2)
-logbook trips                                              # find the trip's id
+logbook show trips                                         # find the trip's id
 logbook export trip-bundle trip:2026-06-12:2026-06-13 --to ines --tier 1,2
 logbook export trip-bundle 2026-06-13 --to ines --dry-run  # any day inside the trip; count, write nothing
 logbook export trip-bundle trip:2026-06-12:2026-06-13 --to ines --tier 1,2 --attachments --out ~/for-ines
@@ -16,8 +16,8 @@ logbook export trip-bundle trip:2026-06-12:2026-06-13 --to ines --tier 1,2 --att
 # Ines's record: take it in, then read the trip
 logbook import trip-bundle ~/from-ola --dry-run
 logbook import trip-bundle ~/from-ola
-logbook trip trip:2026-06-12:2026-06-13
-logbook trip trip:2026-06-12:2026-06-13 --html ~/cabin.html
+logbook show trip trip:2026-06-12:2026-06-13
+logbook show trip trip:2026-06-12:2026-06-13 --html ~/cabin.html
 ```
 
 ## What crosses
@@ -66,7 +66,7 @@ Ola Nordmann: trip:2026-06-12:2026-06-13 2026-06-12 – 2026-06-13 · bundle 01a
 
 ## The merged page
 
-`logbook trip <id>` finds every received page whose trip touches yours and adds a `shared with`
+`logbook show trip <id>` finds every received page whose trip touches yours and adds a `shared with`
 block per sender:
 
 ```

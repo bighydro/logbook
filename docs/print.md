@@ -1,14 +1,16 @@
 # On paper
 
-`logbook year YYYY --html PATH --print` and `logbook trip ID --html PATH --print` write a Year or a
+`logbook show year YYYY --html PATH --print` and `logbook show trip ID --html PATH --print` write a Year or a
 Trip as a Volume: one HTML document designed for A4 and US Letter, laid out with CSS
 paged media, that a browser turns into a PDF or sends to a printer. It is a reader (ADR 0013): a
-function of the record at its head, derived every time, never written back.
+function of the record at its head, derived every time, never written back. (Before 0.6 the two
+commands were `logbook year` and `logbook trip`; those names still run them, after one line on stderr
+naming the new one.)
 
 ```bash
-logbook year 2026 --html ~/2026.html --print                        # the year: a cover, contents, a spread a month
-logbook trip trip:2026-06-15:2026-06-20 --html ~/week.html --print  # one trip: a spread a day; the id as `trips --json` gives it
-logbook trip 2026-06-17 --html ~/week.html --print                  # the same trip, named by a day inside it
+logbook show year 2026 --html ~/2026.html --print                        # the year: a cover, contents, a spread a month
+logbook show trip trip:2026-06-15:2026-06-20 --html ~/week.html --print  # one trip: a spread a day; the id as `show trips --json` gives it
+logbook show trip 2026-06-17 --html ~/week.html --print                  # the same trip, named by a day inside it
 ```
 
 Without `--print`, `--html` writes the screen page the Year and the Trip already had: every table,
@@ -106,7 +108,7 @@ never a length.
 
 ## The poster
 
-`logbook year YYYY --poster [--sheet A2|A3] [--html PATH]` writes the year on one sheet: twelve
+`logbook show year YYYY --poster [--sheet A2|A3] [--html PATH]` writes the year on one sheet: twelve
 columns of thirty-one squares, a month a column and a day a row, each square in the ink of where
 the night was. Four inks, the four night tokens of `print_layout.py` — **home** (the quiet one:
 most nights), **away**, **aboard** an asset, **in transit** (no stay reached the minimum) — and a
@@ -115,8 +117,8 @@ year with their days, as `rollup countries` counts them. Nothing else is on the 
 a person, a place or an asset, no photo, no map, nothing fetched.
 
 ```bash
-logbook year 2026 --poster --html ~/2026-poster.html              # A2, the default
-logbook year 2026 --poster --sheet A3 > ~/2026-poster.html        # A3; without --html the document goes to stdout
+logbook show year 2026 --poster --html ~/2026-poster.html         # A2, the default
+logbook show year 2026 --poster --sheet A3 > ~/2026-poster.html   # A3; without --html the document goes to stdout
 ```
 
 The sheet is one inline SVG drawn in millimetres of A2 and scaled by the stylesheet to the sheet

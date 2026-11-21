@@ -7,7 +7,7 @@ Every line is tier 3 (`logbook add --tier` lowers it). Interpretation is a reade
 stats --health`, `rollup health` and the Day sum the lines up.
 
 ```bash
-logbook import-backup ~/backup --only health,withings,myfitnesspal   # the apps' own stores, from an iPhone backup
+logbook import backup ~/backup --only health,withings,myfitnesspal   # the apps' own stores, from an iPhone backup
 logbook add withings ~/Downloads/data_KN_1718000000             # the Withings data export, the folder as unzipped
 logbook add withings ~/Downloads/data_KN_1718000000/weight.csv  # or one of its files
 logbook add myfitnesspal ~/Downloads/Nutrition-Summary-2026-06-08-to-2026-06-14.csv
@@ -89,7 +89,7 @@ record's standing line for each key (one batched lookup through the index per ro
 line), and a draft whose sample differs from what stands — `value`, `end`, `stage`, `device`, `unit`
 or `extra` — is written as a correction: `raw_id` suffixed `:v2` (`:v3` … when corrected before) and
 `supersedes` the id of the line it replaces. The old line stays, as every line does; a reader that
-follows `supersedes` (`health.standing`: `stats --health`, `rollup health`, the Day) sees the
+follows `supersedes` (`health.standing`: `show stats --health`, `rollup health`, the Day) sees the
 correction only, the latest when there are several. `add` says `1 corrected` beside what it added.
 A draft equal to what stands appends nothing; adding the first export again after a correction
 writes it as the next version, since the record's latest number is not the one it carries.

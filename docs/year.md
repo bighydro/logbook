@@ -1,6 +1,6 @@
 # The Year
 
-`logbook year YYYY [--html PATH] [--json]` reads one calendar year back from the record: the days
+`logbook show year YYYY [--html PATH] [--json]` reads one calendar year back from the record: the days
 per country, the nights home, away and aboard each asset, the trips in order with their nights and
 companions, the flights and their kilometres, the places by nights, the people by days together,
 the health lines by month, the weather of the year when the record has it (`adapters/weather.md`),
@@ -10,9 +10,9 @@ function of the record at its head, composed from the readers that already exist
 `trips`, `day` — over one reading of the year's days, derived every time and never written.
 
 ```bash
-logbook year 2026                      # the year as text
-logbook year 2026 --html ~/2026.html   # one self-contained page: inline CSS, no script, no asset; prints
-logbook year 2026 --json               # the same Year as one JSON object, the picks' Days inside
+logbook show year 2026                     # the year as text
+logbook show year 2026 --html ~/2026.html  # one self-contained page: inline CSS, no script, no asset; prints
+logbook show year 2026 --json              # the same Year as one JSON object, the picks' Days inside
 ```
 
 ## What a Year is
@@ -52,7 +52,7 @@ The evidence of a day is counted from its Day: the **attachments** across its ro
 transcripts, notes, mail threads, calls, messages, photos and keepers, as the Day counts them —
 plus the **people confirmed** present (never a proposal), plus **one** when the day has a flight
 or a new place. A new place is a named place not stayed at earlier in the year, or an unnamed
-stay further than 300 m (the distance `places propose` groups by) from every earlier unnamed stay
+stay further than 300 m (the distance `setup places propose` groups by) from every earlier unnamed stay
 of the year; home is never new, and a stay counts on the day it began.
 
 ```
@@ -152,12 +152,12 @@ month) and `--poster` one sheet, A2 or A3, a square a day in the ink of its nigh
 record has no day in); `head`, the chain head the Year was read at; `warnings` (the trips reader's,
 when `places.json` names no home); `countries` (`countries` as `{country, days}`, `in_transit`,
 `unknown`); `nights` (`home`, `away`, `in_transit`, `aboard` as `{asset, name, nights}`); `trips`,
-each as `trips --json` gives it with `people` as names, without its `flights` and `lines` keys, and
+each as `show trips --json` gives it with `people` as names, without its `flights` and `lines` keys, and
 with one key more, `asset_name`, the name of the asset the trip was aboard (`Nordlys`; `asset` stays
 its id, `nordlys`), `null` for a trip on land; `flights`
 (`count`, `km`, `long_haul`, `unmeasured`, `by_evidence`, `flights`); `places` (`places`, `assets`,
 `unnamed`, each entry with `nights`, `stays`, `hours`, `first`, `last` and `people` as names; an
-unnamed cluster with its `id`, the stay id `places name` takes, `label`, `lat`, `lon`, `aboard`
+unnamed cluster with its `id`, the stay id `setup places name` takes, `label`, `lat`, `lon`, `aboard`
 and `city`); `people` (`id`, `name`, `days`, `nights`, `stays`, `last_contact`, `places`,
 `confirmed`); `health`, one entry per month with the rollup's `sleep`, `steps`, `resting_hr` and
 `hrv`, their line ids inside; `keepers`, one entry per month with `count`, `memory` and `art`;
@@ -167,7 +167,7 @@ the evidence of every day of the window. Nothing is written.
 
 ## One trip
 
-`logbook trip <id-or-date> [--html PATH] [--json]` reads one trip back the same way: one of the
+`logbook show trip <id-or-date> [--html PATH] [--json]` reads one trip back the same way: one of the
 runs of nights away that `trips` lists, named by its derived id (`trip:2026-06-15:2026-06-20`, the
 last part of every `trips` row) or by any day inside it, the return day included. It is a reader
 too (ADR 0013, ADR 0019): composed from `trips`, `days`, `rollup health`, the keepers and the
@@ -176,10 +176,10 @@ while the run of nights away touches the window's edge, so a week is read from a
 from a year — derived every time and never written.
 
 ```bash
-logbook trips --year 2026                            # every trip of the year, its id last on the row
-logbook trip trip:2026-06-15:2026-06-20              # the yacht week as text
-logbook trip 2026-06-17 --html ~/yacht-week.html     # the same trip, named by a day inside it, as one page
-logbook trip 2026-06-17 --json                       # the Trip as one JSON object
+logbook show trips --year 2026                         # every trip of the year, its id last on the row
+logbook show trip trip:2026-06-15:2026-06-20           # the yacht week as text
+logbook show trip 2026-06-17 --html ~/yacht-week.html  # the same trip, named by a day inside it, as one page
+logbook show trip 2026-06-17 --json                    # the Trip as one JSON object
 ```
 
 The sections, in order:
@@ -198,7 +198,7 @@ The sections, in order:
    another.
 4. **Nights aboard** — per asset, when any night was spent on one; an asset trip says so in the
    header (`6 nights aboard Nordlys`).
-5. **Days** — from the leaving day to the return day, one line each exactly as `logbook days`
+5. **Days** — from the leaving day to the return day, one line each exactly as `logbook show days`
    prints it: the night, the kilometres moved, the flights, the stays and what attached, the
    people, the health triple, the gaps.
 6. **Keepers** — per day of the span, by lane, with the photos' names (RFC 0024).
@@ -260,7 +260,7 @@ still a map, drawn at a twentieth of a degree across. Everything the record says
 (`{asset, name, nights}`); `head`, the chain head it was read at; `window`, the reading's days;
 `warnings`; `route`, one entry per stay with `n`, `first`, `last`, `nights`, `label`, `place`,
 `lat`, `lon`, `aboard`, `asset`, `stay` (the stay id) and `in_transit`; `legs` (`from`, `to`, `km`,
-`through_transit`); `places`; `days`, one object per day as `days --json` gives it; `flights_in`,
+`through_transit`); `places`; `days`, one object per day as `show days --json` gives it; `flights_in`,
 `flights_out` and `flights`; `people` (`confirmed` and `proposed`, each `id`, `name`, `status`,
 `confidence`, `sources`, `lines`); `keepers` (`count`, `memory`, `art`, and `days` with each day's
 counts and `photos`); `health` (`sleep`, `steps`, `resting_hr`, `hrv`, the rollup's shape with

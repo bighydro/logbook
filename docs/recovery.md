@@ -147,14 +147,14 @@ correctly, and `append_many` skips the ones the record already has by `raw_id`. 
 The chain covers lines, not bytes, but a line names its files by digest ([SPEC §1.1](SPEC.md#11-attachments)),
 so after the lines `verify` looks for every file of the attachment store a line names: a reference whose
 `path` is `attachments/<sha256>`, or an adapter's pre-attach hash (`extra.media` with a `local_path`, the
-file `logbook attach import-backup` fills in), in a sealed line when the identity opens it. A digest alone
+file `logbook import attachments import-backup` fills in), in a sealed line when the identity opens it. A digest alone
 names no file of the store and is not looked for: a mail attachment counted and not kept, a body hashed and
 never kept, a signed day's page. Each file is looked at once, the first line that names it standing for
 the rest, and every line counts, a retracted one too:
 
 - **missing**: listed under `attachments:` with that line, and not an error: `verify` stays valid and exits
-  0, as SPEC §1.1 requires. `logbook attach status` counts them by source; a phone source's media is
-  missing until `attach import-backup` has run.
+  0, as SPEC §1.1 requires. `logbook import attachments status` counts them by source; a phone source's media is
+  missing until `import attachments import-backup` has run.
 - **present and plain**: hashed against its name; bytes that hash to anything else are an error naming the
   line (the table above). `--no-attachment-digests` leaves present plain files unhashed, for a
   store too large to read on every run, and counts them `not hashed`; a missing file is still listed.
@@ -171,7 +171,7 @@ valid — 1204 lines, head 4dc18fde900da55538fbd134e48652282d044bc2ec8c28ac0573f
 
 Twenty missing files are listed by name, the rest counted. `doctor` looks for the same files and counts the
 missing ones in its `record` line, which still passes; it does not hash them, since it runs four times a
-day ([The doctor](doctor.md)). `logbook attach verify` is the other walk: every file in the store, named by
+day ([The doctor](doctor.md)). `logbook import attachments verify` is the other walk: every file in the store, named by
 a line or not, against its name ([The attachment store](attachments.md)).
 
 ## Timestamps

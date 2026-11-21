@@ -526,4 +526,4 @@ Build 3 stands on two more:
   and the far end of a call out of company; §3.2.10 rule 3, a sentence's speaker from its voice): the
   readers do it, as [Who they are](#who-they-are) says, and the SPEC text follows when the RFC is
   adopted; the demo record has no voices, so every reader compared under §6.1 compares as before;
-- `people review --speakers`, the RFC's stand-in until `review` existed: `review speakers` is it.
+- the RFC's stand-in, a `--speakers` flag on `people review`, until `review` existed: `review speakers` is it.

@@ -114,7 +114,7 @@ are as they always were.
    and arrival it then names. A car or train move whose ends lie near an airport — a 1.6 km drive
    from the car park to the terminal — names none. A move with no points that lasts a silence or more
    (`merge_gap_s`) and is not a flight is a **gap**: the tracker did not see it, so it places
-   nothing. Flights come from the `flight/v1` lines standing — the merged set `infer flights`
+   nothing. Flights come from the `flight/v1` lines standing — the merged set `derive flights`
    maintains, one line per flight — with their evidence: `tracked`, `inferred` or `declared`; the
    move a flight covers names it under `--json`.
    Under each row: its attachments, named for events (with their time; an entry several calendars
@@ -164,7 +164,7 @@ are as they always were.
 6. **Sources** — every source with a line on the day, how many, and its newest line's time, so a
    tracker that fell silent in the afternoon is seen to have.
 6. **From the circle** — one `from <name>` section per page someone shared for this day and
-   `logbook receive` verified (RFC 0025, `<root>/circle/<name>/<date>/`): how many lines by kind,
+   `logbook import page` verified (RFC 0025, `<root>/circle/<name>/<date>/`): how many lines by kind,
    the tier it was shared at and the day it was shared, then the titles of its events, transcripts,
    notes, mail and calls, one per row. The page is read from the folder it was kept in, never from
    the chain; under `--json` it is `received`, each named line with its id. A day nobody shared
@@ -486,7 +486,7 @@ confirms Kari at none.
 ## Aboard an asset
 
 A stay aboard an asset is a **container**. `derive stays` finds it and `day` shows it; the rule is
-the stays engine's (`logbook/core/stays.py`), and `trips`, `days` and the rollups read what it finds.
+the stays engine's (`logbook/core/stays.py`), and `show trips`, `show days` and the rollups read what it finds.
 
 - **Boarding is twenty minutes.** You are aboard an asset when its own location lines (`subject` =
   the asset's id, from `sync ais`, `sync adsb` or a saved stream) lie within the stay radius
@@ -569,7 +569,7 @@ every other day ([the acts](acts.md)).
 
 ## A window of days
 
-`logbook days --from YYYY-MM-DD --to YYYY-MM-DD [--json]` reads a window back one line per day,
+`logbook show days --from YYYY-MM-DD --to YYYY-MM-DD [--json]` reads a window back one line per day,
 composed from the Day of each: the date and weekday; where the night was spent (the night after,
 as the Day's header has it: a named place, `aboard <asset>`, the home place a night within 400 m
 of it lies by — the night rule, whatever the place's radius — or the coordinates with `near
@@ -583,9 +583,9 @@ rows; the people confirmed present (`with 2`; a proposed face is not counted); t
 when the day has one; and a gap marker. Both bounds default to the days the owner's track covers.
 
 ```bash
-logbook days --from 2026-06-08 --to 2026-06-21          # the persona's fortnight, as text
-logbook days --from 2026-01-01 --to 2026-12-31 --json   # a year, one JSON object per line
-logbook days                                            # the whole record
+logbook show days --from 2026-06-08 --to 2026-06-21         # the persona's fortnight, as text
+logbook show days --from 2026-01-01 --to 2026-12-31 --json  # a year, one JSON object per line
+logbook show days                                           # the whole record
 ```
 
 The fortnight of the test persona, who does not exist:

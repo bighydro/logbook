@@ -5,7 +5,7 @@ reads of it in the evening, not the Day itself. Its shape in three lines, the fl
 promises due within the week, the usual sources that had nothing to say, what the calendar holds
 for tomorrow, and one closing question the owner can answer in a word, drawn from the record's
 own question bank. It is composed from the readers that already exist — the Day, the promises,
-`sources --gaps` — and derives nothing of its own; it writes nothing to the record (the question
+`doctor sources --gaps` — and derives nothing of its own; it writes nothing to the record (the question
 bank's defaults and a note of what it asked are files beside it, never lines) and it sends nothing.
 The command only says what the message would be; [the schedule delivers two lines of it](#delivery).
 
@@ -40,7 +40,7 @@ logbook digest 2026-06-10 --json     # the whole sets behind the lines, every ro
    is there, only those count. The rules do not judge, so today every open proposal counts.
 6. **gaps** — the usual sources with no line on the day, one line: `dawarich: usual, no line`. A
    source is usual when it has a line on four in five of the logged days of the fortnight ending
-   on the day (the `days` rule, `days.usual_sources`); it is missing when `sources --gaps`, asked
+   on the day (the `days` rule, `days.usual_sources`); it is missing when `doctor sources --gaps`, asked
    from the day with those sources expected, counts the day among its missing days or holds no line
    of it at all. A note written once in the fortnight is not usual, so it is never missed.
 7. **tomorrow** — the timed calendar entries of the next local day, from the `event/v1` lines
@@ -75,13 +75,13 @@ logbook digest 2026-06-10 --json     # the whole sets behind the lines, every ro
 
    The content of the bank — which questions, with what research behind them (`source`) — is
    left to a future author (RFC 0027, *The question bank — to be written*); these defaults cite
-   nothing. `logbook questions list|add|disable` manages the file:
+   nothing. `logbook setup questions list|add|disable` manages the file:
 
    ```bash
-   logbook questions list                                   # id, kind, weight, when, text
-   logbook questions add sea-air --text "What did the sea smell of?" --kind savouring \
+   logbook setup questions list                                   # id, kind, weight, when, text
+   logbook setup questions add sea-air --text "What did the sea smell of?" --kind savouring \
        --when aboard --when '!night_in_transit' --weight 2 --source "a placeholder citation"
-   logbook questions disable sea-air                        # kept in the file, never asked
+   logbook setup questions disable sea-air                        # kept in the file, never asked
    ```
 
    The answer is the owner's to write — a note, a `promises done`, a confirmation — and the digest
@@ -171,7 +171,7 @@ channel and keeps to one message a day is the next decision, not this command. I
 which question it asked on which day (`state/questions.json`, the last seven), so as never to ask
 the same one two days running; it does not remember the text, nor any answer.
 It does not read a day that has not come: a day after today in the record's zone is refused. It does
-not derive anything the Day, the promises reader and `sources --gaps` do not already derive, so a
+not derive anything the Day, the promises reader and `doctor sources --gaps` do not already derive, so a
 change in their rules is a change here; the one setting of its own is the question bank, which is
 the owner's file and not the code's.
 

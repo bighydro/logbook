@@ -210,7 +210,7 @@ silences (`/gaps`).
   is one destination's. The Library's own destinations, the names `policy/crossing.json` keeps for its
   readers and doors and never lets a person or a package take (`site`, `vault`, `world`, `folder`,
   `letter`, `notion`, `mcp`, `dream`, `heard` and the rest), are named; a day or a package shared with a member of your circle
-  (`share day`, `export crossing --to`) says *a member of your circle*, never their name, and
+  (`export share day`, `export crossing --to`) says *a member of your circle*, never their name, and
   `?to=circle` lists those.
 - **Agents**, **the Manifest** and **Assets**: `/agents`, `/manifest` (with `/manifest/people` and
   `/org/ID`) and `/assets` at `/gear/agents`, `/gear/manifest`, `/gear/manifest/people`, `/gear/org/ID`

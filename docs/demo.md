@@ -72,14 +72,14 @@ The month alone is 12,800 lines; a year of the month's story (`--days 365`) 155,
 ## What to try
 
 ```bash
-logbook trips --year 2001          # Easter and July at the family cabin, the first year with a phone
-logbook trips --year 2008          # the Barcelona term, 131 nights, and the summer flights home
-logbook trips --year 2025          # cabin weekends, Zürich twice, the cruise aboard Nordlys, Copenhagen
+logbook show trips --year 2001          # Easter and July at the family cabin, the first year with a phone
+logbook show trips --year 2008          # the Barcelona term, 131 nights, and the summer flights home
+logbook show trips --year 2025          # cabin weekends, Zürich twice, the cruise aboard Nordlys, Copenhagen
 logbook rollup flights             # declared until 2016, tracked and inferred after
 logbook rollup countries --year 2007   # a Copenhagen year: DK 353 days, NO 12
 logbook day 1989-07-01             # a third birthday: one entry, one scanned photo, no track
 logbook day 2022-07-23             # a day of the first cruise, aboard, with the night at anchor
-logbook stats --health             # from 1 July 2020, the day the watch appears
+logbook show stats --health             # from 1 July 2020, the day the watch appears
 logbook people --year 1998         # Mia and Jens, every Wednesday
 ```
 

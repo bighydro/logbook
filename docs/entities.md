@@ -9,7 +9,7 @@ through a review or a command; no adapter writes one.
 | Profile | Says | Written by | Tier |
 |---|---|---|---|
 | `entity/v1` | this is an org, an idea, an asset or a place, and these refs are it | `review KIND --accept` / `--name` | 2 |
-| `entity-review/v1` | this observed thing is not that entity (the owner's no) | `review KIND --reject`, `people review --reject`, `places review --reject` | the highest of its evidence, at least 2 |
+| `entity-review/v1` | this observed thing is not that entity (the owner's no) | `review KIND --reject`, `people review --reject`, `setup places review --reject` | the highest of its evidence, at least 2 |
 | `status/v1` | what the owner decided about an org, an idea, a place or an asset | `logbook status KIND ENTITY DISPOSITION` | 2 |
 
 The profiles are new and in draft with RFC 0037; they become frozen only by RFC 0031's process. The
@@ -73,7 +73,7 @@ One profile for every no (RFC 0035's shape, every kind). `kind` `entity-review`,
 Its tier is the highest tier of the evidence it cites and never under 2, a decision (SPEC §4); it
 may cite a `transaction/v1` line, and is then tier 3. People review writes it for a person from now
 on; a `people-review/v1` line is read as an `entity-review/v1` of type person, forever. A place's no
-is a line too: `places review --reject` writes one, and `state/places-review.json` is a cache rebuilt
+is a line too: `setup places review --reject` writes one, and `state/places-review.json` is a cache rebuilt
 from the lines; `--migrate-rejects` writes the pairs the file held from before 0.7 as lines, once.
 
 | Field | Type | Req | Meaning |

@@ -214,7 +214,7 @@ line, never written as an event line, and becomes one only when you accept it.
 **What the model gives.** A sixth key of its answer, `events`, each `{title, start, end, place, people,
 evidence}`: `start` and `end` as the material writes times, `place` the `place` of the stay it happened
 at (a named place of `places.json` by its name, or an observed place by its id, `place:<lat>,<lon>`, as
-`places review` names a cluster) or null, `people` ids from the material's `people`, `evidence` the
+`setup places review` names a cluster) or null, `people` ids from the material's `people`, `evidence` the
 references it rests on.
 
 **The check.** A proposal has no unsupported form, so where a segment would be marked a proposal is

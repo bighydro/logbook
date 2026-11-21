@@ -28,9 +28,8 @@ checkout on the laptop. The phone reaches the pages, never the files.
 - **An administrator account** on it, `owner`, that can `sudo` and that you reach by `ssh` from the
   laptop.
 - **The laptop**, with an `ssh` key (`~/.ssh/id_ed25519.pub`).
-- **A Logbook with the dream and the system daemons**: the release after 0.6.1. `logbook --help`
-  lists `dream` under *derive*, and `logbook sync --help` lists `--system`. Until that release is out,
-  install from `main` (step 2 says how).
+- **The current release of Logbook**, installed in step 2 from PyPI. It has the dream and the system
+  daemons: `logbook --help` lists `dream` under *derive*, and `logbook sync --help` lists `--system`.
 
 Each block of commands starts with a comment saying who runs it and where; a block without one is
 what a command printed.
@@ -98,10 +97,12 @@ exit                 # then log in as records again, so ~/.local/bin is on the p
 ```bash
 # as records, on server.example
 uv tool install "openlogbook[ais,crypto,sealed,speakers,transcribe]"
-# until the release after 0.6.1:
-# uv tool install "openlogbook[ais,crypto,sealed,speakers,transcribe] @ git+https://github.com/bighydro/logbook"
 logbook --version
 ```
+
+That is the newest release from PyPI, with its extras; `logbook --version` prints its number. `uv tool`
+rather than Homebrew, even on a Mac, because the Homebrew formula installs the base package only and
+the server needs the five extras ([install](install.md#optional-extras)).
 
 The five extras are the ones `doctor` checks (`extra:ais`, `extra:crypto`, `extra:sealed`,
 `extra:speakers`, `extra:transcribe`); one missing is a standing warn, which makes no scheduled run clean
@@ -113,6 +114,11 @@ is `faster-whisper` and `speakers` is pyannote.audio on the CPU (it brings torch
 The server runs a released package, installed for `records`, not a checkout of the repository. The
 development checkout lives on the laptop and never points at the record: the tests pin `LOGBOOK_HOME`
 and the home directory to a temporary folder, and `init` refuses a code checkout as a record folder.
+
+> **For developers only.** To run something that is not released yet, install from the repository's
+> `stable` tag, never `main` ([Following stable](install.md#following-stable)):
+> `uv tool install --force "openlogbook[ais,crypto,sealed,speakers,transcribe] @ git+https://github.com/bighydro/logbook@stable"`.
+> `uv tool install --force "openlogbook[ais,crypto,sealed,speakers,transcribe]"` goes back to the release.
 
 ## 3. Where the record lives (5 minutes; a move adds the copy)
 

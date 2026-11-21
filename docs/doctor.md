@@ -14,7 +14,7 @@ The `record` line is `verify` on the files, and looks for every attachment a lin
 are not a warn, since SPEC §1.1 allows them:
 
 ```
-pass  record  1,204 lines, head 4dc18fde900d…, verified; 3 attachments missing (SPEC §1.1 allows it; `logbook attach status`); /Users/ines/Logbook
+pass  record  1,204 lines, head 4dc18fde900d…, verified; 3 attachments missing (SPEC §1.1 allows it; `logbook import attachments status`); /Users/ines/Logbook
 ```
 
 Their bytes are not hashed here, nor a sealed one opened: the doctor runs four times a day, and a store of
@@ -165,14 +165,16 @@ the line id, the source, the kind, the timestamp and the range it missed, then t
 
 One `extra:` line per optional extra the doctor knows, `ais`, `crypto`, `sealed`, `speakers` and
 `transcribe`, in that order after `dates`: a pass naming the package that makes it, or a **warn** with
-its install line ([optional extras](install.md#optional-extras)). They are this machine's, so a
-`doctor` that finds no record prints them too, after its failed `record` line.
+its install line ([optional extras](install.md#optional-extras)), `X.Y.Z` there being the version
+installed. They are this machine's, so a `doctor` that finds no record prints them too, after its
+failed `record` line. A `pipx inject` line needs `--force` after `inject` to do anything: without it
+pipx sees `openlogbook` already installed, says so, and changes nothing.
 
 ```
 pass  extra:ais         websockets is installed
 pass  extra:crypto      cryptography is installed
 pass  extra:sealed      pyrage is installed
-warn  extra:speakers    pyannote.audio not installed: pipx inject openlogbook "openlogbook[speakers]==0.7.0"
+warn  extra:speakers    pyannote.audio not installed: pipx inject openlogbook "openlogbook[speakers]==X.Y.Z"
 pass  extra:transcribe  faster-whisper is installed
 ```
 

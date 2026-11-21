@@ -12,7 +12,7 @@ logbook add spotify ~/Downloads/"Spotify Extended Streaming History"/Streaming_H
 logbook add apple-music ~/Downloads/"Apple Music Activity"/"Apple Music Play Activity.csv"
 logbook add apple-music ~/Downloads/"Apple Music Activity"/"Apple Music Library Tracks.csv"
 logbook add spotify ~/Downloads/"Spotify Extended Streaming History" --dry-run  # what would be added; nothing written
-logbook import-backup ~/Library/Application\ Support/MobileSync/Backup/<udid> --only podcasts  # the phone's Podcasts library
+logbook import backup ~/Library/Application\ Support/MobileSync/Backup/<udid> --only podcasts  # the phone's Podcasts library
 logbook sync apple-podcasts                                                    # this Mac's own Podcasts library, nightly
 logbook rollup listen --year 2026                                              # listens, hours, skips, top artists, podcasts, by month
 ```
@@ -31,7 +31,7 @@ array each, one object per stream, with `ts` (when the stream **stopped**, UTC),
 track's name, album artist and album, its `spotify:track:` URI, or an episode's name, show and
 `spotify:episode:` URI, or an audiobook chapter, and the flags `skipped`, `shuffle`, `offline`,
 `reason_start`, `reason_end`, the `platform` and the connecting country and IP address. The adapter
-reads the folder (every history file in it) or one file, streamed through `ijson` (the `stream` extra: `pip install "openlogbook[stream]"`) so a decade of
+reads the folder (every history file in it) or one file, streamed through `ijson` (the `stream` extra, [added](../install.md#optional-extras) with the line for your installer) so a decade of
 history never sits in memory at once. The shorter *Account data* export (`StreamingHistory0.json`,
 end time to the minute, no URI) is not this format and is not read.
 
@@ -97,7 +97,7 @@ history only when neither is there. A re-add of the same file appends nothing.
 Apple Podcasts keeps its library in one Core Data store, `MTLibrary.sqlite`: on the Mac under
 `~/Library/Group Containers/243LU875E5.groups.com.apple.podcasts/Documents/`, on the phone under
 the app group `group.com.apple.podcasts` at `Documents/MTLibrary.sqlite`, which an iPhone backup
-carries. `import-backup --only podcasts` copies it out of the backup into
+carries. `import backup --only podcasts` copies it out of the backup into
 `inbox/ios-backup-<udid>/apple-podcasts/` with its `-wal`/`-shm` and runs the adapter on the copy;
 `logbook sync apple-podcasts` reads the Mac's own store, nightly (`LOGBOOK_PODCASTS_DB` names
 another); `logbook add apple-podcasts <copy>` reads any copy. One mapping for all three, so the

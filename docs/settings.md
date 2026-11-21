@@ -97,6 +97,6 @@ to a bounded future. The bounds are yours: two local days in `logbook.json`,
 `from` is where the line begins (your birth, say), `to` where it ends; nothing is drawn past `to`, and
 `from` on or before `to`. Without it the line runs from the record's first day to the last day of next
 year, and never to the last line the record holds: a calendar entry in 2055 is not a reason to draw thirty
-years of nothing. There is no command that writes it yet: edit the file (a later `logbook setup life` may).
+years of nothing. There is no command that writes it yet: edit the file.
 A value that is not that shape is said on the page, in one sentence naming the key, and the line runs as
 without it. Changing it rewrites nothing and rebuilds no index.

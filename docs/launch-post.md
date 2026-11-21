@@ -32,7 +32,7 @@ logbook day 2026-06-17
   health        sleep 6.7 h · 6,602 steps · resting 56 bpm
 ```
 
-Then `logbook trips`, `logbook rollup countries`, `logbook year 2026 --html` and `logbook verify`. Five minutes of that is in [Try it](try-it.md). Your own record starts with `logbook init` and `logbook add ~/Downloads/takeout.zip`.
+Then `logbook show trips`, `logbook rollup countries`, `logbook show year 2026 --html` and `logbook verify`. Five minutes of that is in [Try it](try-it.md). Your own record starts with `logbook init` and `logbook add ~/Downloads/takeout.zip`.
 
 ## The file is the format
 
@@ -48,7 +48,7 @@ Everything above the record is derived and disposable: stays, moves, trips, who 
 
 **No cloud.** There is no server in this project and none is planned. The record lives in a local folder, and the README tells you not to put it in one that iCloud or Dropbox syncs. `logbook serve` binds `127.0.0.1` and refuses any other host. Live sources, a Dawarich or Immich instance you run, a calendar feed, are pulled by you, with keys kept in your shell and never printed.
 
-**No model by default.** Every reader is rules, and the rules are in the repository. Two commands can ask a language model, and both run a local one, offline, only when you ask: `transcribe` for voice memos and `promises --judge` for the sentences that read as commitments. No cloud model, ever.
+**No model by default.** Every reader is rules, and the rules are in the repository. Two commands can ask a language model, and both run a local one, offline, only when you ask: `derive transcripts` for voice memos and `promises --judge` for the sentences that read as commitments. No cloud model, ever.
 
 **Tiers.** Every line carries a tier. Tier 1 is location, photo metadata, calendar, public activity. Tier 2 is notes, messages, mail, browsing: other people's words and your own. Tier 3 is money and health, and an import option cannot lower it. Nothing leaves without a named recipient and the ceiling you set for them in `policy/crossing.json`; tier 3 crosses only when the file allows it and you type it out. Every export appends a line to the chain saying what left and to whom.
 

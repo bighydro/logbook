@@ -1,19 +1,22 @@
 # The MCP server
 
-`logbook mcp` serves your record to an agent on this machine over the [Model Context
-Protocol](https://modelcontextprotocol.io): the host (an editor, a chat client, an agent runner) starts
-`logbook mcp` as a child process and calls its tools over that process's own stdin and stdout. That is the
+`logbook serve mcp` serves your record to an agent on this machine over the [Model Context
+Protocol](https://modelcontextprotocol.io). (It was `logbook mcp` before 0.6; that name still runs it, after
+one line on stderr naming the new one.) The host (an editor, a chat client, an agent runner) starts
+`logbook serve mcp` as a child process and calls its tools over that process's own stdin and stdout. That is the
 only transport. Nothing listens on a port, no socket opens, and the record stays where it is. The agent asks;
 the readers answer; what it may write goes through `Logbook.append` like everything else, and two of those
 writes only when you allow them by name ([below](#write-tools)).
 
 ```bash
-pip install "openlogbook[mcp]"      # the official Python MCP SDK, the one optional dependency
-logbook mcp --inspect               # the tool table and one sample request; needs no record and no SDK
-logbook mcp                         # serve the record `logbook` finds (LOGBOOK_HOME, the folder above, ~/Logbook)
-logbook mcp --root ~/Logbook        # or this one
-logbook mcp --allow-tier-3          # let tier 3 cross when policy/crossing.json allows it for mcp (below)
+logbook serve mcp --inspect         # the tool table and one sample request; needs no record and no SDK
+logbook serve mcp                   # serve the record `logbook` finds (LOGBOOK_HOME, the folder above, ~/Logbook)
+logbook serve mcp --root ~/Logbook  # or this one
+logbook serve mcp --allow-tier-3    # let tier 3 cross when policy/crossing.json allows it for mcp (below)
 ```
+
+Serving needs the `mcp` extra, the official Python MCP SDK and the one optional dependency; the line that
+adds it to the Logbook you installed, with pipx, uv or in a clone, is in [Optional extras](install.md#optional-extras).
 
 ## Pointing a host at it
 
@@ -25,7 +28,7 @@ generic host that keeps its servers in a JSON file:
   "mcpServers": {
     "logbook": {
       "command": "logbook",
-      "args": ["mcp"],
+      "args": ["serve", "mcp"],
       "env": { "LOGBOOK_HOME": "/Users/you/Logbook" }
     }
   }
@@ -34,7 +37,7 @@ generic host that keeps its servers in a JSON file:
 
 `LOGBOOK_HOME` names the record, as it does for every other command; `--root` in `args` does the same.
 A host that cannot find `logbook` on its own path gets the full path from `which logbook`, or runs it through
-`uv`: `"command": "uv", "args": ["run", "logbook", "mcp"]` with `"cwd"` set to the checkout. Give the host
+`uv`: `"command": "uv", "args": ["run", "logbook", "serve", "mcp"]` with `"cwd"` set to the checkout. Give the host
 the environment the record needs and nothing more: no adapter key is read here, and none should be in reach.
 
 ## The tools
@@ -46,13 +49,13 @@ as its `--json` (or, for the three that read the lines themselves, as its text):
 | Tool | Arguments | The command |
 |---|---|---|
 | `day` | `date?` (YYYY-MM-DD; default today) | `logbook day --json` ([the Day](day.md)) |
-| `days` | `from?`, `to?` (both default to the days the record covers) | `logbook days --json`, one object per day |
-| `trips` | `year?` | `logbook trips --json` |
-| `places` | | `logbook places list`: `places.json`, one object per named place |
+| `days` | `from?`, `to?` (both default to the days the record covers) | `logbook show days --json`, one object per day |
+| `trips` | `year?` | `logbook show trips --json` |
+| `places` | | `logbook setup places list`: `places.json`, one object per named place |
 | `people` | | `logbook rollup people --json` |
 | `person` | `name` | `logbook show person <name> --json` |
 | `promises` | `open?`, `since?` | `logbook promises --json` ([promises](promises.md)) |
-| `gaps` | `since?` | `logbook sources --gaps --json` |
+| `gaps` | `since?` | `logbook doctor sources --gaps --json` |
 | `search` | `text`, `since?`, `until?`, `kinds?`, `limit?` | lines whose payload mentions `text`, through the index |
 | `day_lines` | `day?` (default today), `kinds?` | `logbook show DAY`, one object per line ([below](#the-lines-themselves)) |
 | `line` | `id` | one line in full, a transcript's text included ([below](#the-lines-themselves)) |
@@ -294,4 +297,4 @@ and never content.
 an expired entry and outside the window; `sign_day`'s line byte for byte the line `day sign` writes for the same
 flags and `--at`; a re-sign superseding; dispositions in the signature; `note_day` with each kind; another
 writer's lock and a moved head refused; a log with counts and never the persona's name.
-`logbook mcp --inspect` is the hand check: the table, and a request you can paste.
+`logbook serve mcp --inspect` is the hand check: the table, and a request you can paste.

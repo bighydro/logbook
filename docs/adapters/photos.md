@@ -1,6 +1,6 @@
 # Apple Photos: the library, its albums, favourites and faces
 
-One store, three kinds of line. `logbook add photos` (or `import-backup --only apple-photos`) reads
+One store, three kinds of line. `logbook add photos` (or `import backup --only apple-photos`) reads
 the `Photos.sqlite` an iPhone keeps under `CameraRollDomain` — the library's own record of every
 asset — and writes one `photo/v1` line per asset not in the trash (RFC 0002): what the camera wrote,
 where the library thinks it was taken, how it arrived, the owner's own albums and marks, and the
@@ -11,10 +11,10 @@ the library gave its faces are *proposed* company on the stay that holds the pho
 ```bash
 logbook add photos ~/backup/apple-photos/Photos.sqlite              # one photo/v1 line per asset, then the keepers
 logbook add photos ~/backup/apple-photos/Photos.sqlite --dry-run    # count both against the record; write nothing
-logbook import-backup ~/Library/Application\ Support/MobileSync/Backup/<udid> --only apple-photos
-logbook keepers                                                      # the marked photos, by day and lane
-logbook keepers --people                                             # who appears on them, per month, proposed
-logbook describe keepers --photos ~/Pictures/Photos\ Library.photoslibrary   # a local vision model's sentence per keeper, from the originals (docs/describe.md)
+logbook import backup ~/Library/Application\ Support/MobileSync/Backup/<udid> --only apple-photos
+logbook show keepers                                                      # the marked photos, by day and lane
+logbook show keepers --people                                             # who appears on them, per month, proposed
+logbook derive descriptions keepers --photos ~/Pictures/Photos\ Library.photoslibrary   # a local vision model's sentence per keeper, from the originals (docs/describe.md)
 logbook day 2026-03-01                                               # a face's name under `with … (proposed)`
 ```
 
@@ -67,7 +67,7 @@ A favourite is a `memory` keeper, a photo in an album named `Art` is an `art` ke
 line's id is looked up by `(source, raw_id)` through the index, the keeper is built from that line,
 and `append_many` skips a `(keeper-inference, <photo line id>:<lane>)` the record already holds,
 retracted or not. So a second import writes no keeper twice, an unmarked favourite the owner retracted
-stays retracted (rule 3), and `logbook infer keepers` run afterwards finds nothing left to write. The
+stays retracted (rule 3), and `logbook derive keepers` run afterwards finds nothing left to write. The
 run says what it did:
 
 ```
@@ -102,7 +102,7 @@ the confirmed set only, so a person the record knows by a face alone is in none 
       with         Ola Nordmann (note) · proposed Kari Nordmann (photo)
 ```
 
-## Who is on the keepers: `logbook keepers --people`
+## Who is on the keepers: `logbook show keepers --people`
 
 ```
 2026-03

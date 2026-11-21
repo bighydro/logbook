@@ -12,7 +12,7 @@ logbook add screentime --mac ~/copies/knowledgeC.db   # a copy, or another Mac's
 logbook add screentime --backup ~/Library/Application\ Support/MobileSync/Backup/<udid>   # the phone's store, copied out of the backup
 logbook add screentime --mac --dry-run             # count against the record; write nothing
 logbook add screentime <knowledgeC.db | RMAdminStore-Local.sqlite>   # either store by path; `logbook add <path>` sniffs them too
-logbook import-backup <backup> --only screentime   # the same phone store, as one source of the backup
+logbook import backup <backup> --only screentime   # the same phone store, as one source of the backup
 logbook rollup attention --year 2026               # hours by app and by category, the year as one period
 logbook rollup attention --year 2026 --by month    # … per calendar month; --by week for ISO weeks
 ```
@@ -98,7 +98,7 @@ Safari's own row, the sites are not. `ZUSAGECOUNTEDITEM` (notifications and pick
 
 `add screentime --backup DIR` finds the store through the backup's `Manifest.db`, copies it with its
 `-wal`/`-shm` into `inbox/ios-backup-<udid>/screentime/`, records the copy in `copies.json` and runs
-the adapter on the copy, exactly as `import-backup --only screentime` does; the backup itself is
+the adapter on the copy, exactly as `import backup --only screentime` does; the backup itself is
 only read. An encrypted backup is unlocked with `LOGBOOK_BACKUP_PASSWORD`, as `import-backup` does.
 A backup with no store is said so, and the command exits 1.
 

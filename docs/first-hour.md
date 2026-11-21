@@ -292,11 +292,11 @@ pass  owner             policy/owner.json names 2 names, 1 emails, 1 phones
 pass  places            1 place(s), home: Home
 pass  assets            no assets.json; nothing is tracked as a subject
 pass  dates             every line is dated inside its source's plausible range (policy/plausible.json)
-warn  extra:ais         websockets not installed: pipx inject openlogbook "openlogbook[ais]==0.7.1"
-warn  extra:crypto      cryptography not installed: pipx inject openlogbook "openlogbook[crypto]==0.7.1"
-warn  extra:sealed      pyrage not installed: pipx inject openlogbook "openlogbook[sealed]==0.7.1"
-warn  extra:speakers    pyannote.audio not installed: pipx inject openlogbook "openlogbook[speakers]==0.7.1"
-warn  extra:transcribe  mlx-whisper or faster-whisper not installed: pipx inject openlogbook "openlogbook[transcribe]==0.7.1"
+warn  extra:ais         websockets not installed: pipx inject openlogbook "openlogbook[ais]==X.Y.Z"
+warn  extra:crypto      cryptography not installed: pipx inject openlogbook "openlogbook[crypto]==X.Y.Z"
+warn  extra:sealed      pyrage not installed: pipx inject openlogbook "openlogbook[sealed]==X.Y.Z"
+warn  extra:speakers    pyannote.audio not installed: pipx inject openlogbook "openlogbook[speakers]==X.Y.Z"
+warn  extra:transcribe  mlx-whisper or faster-whisper not installed: pipx inject openlogbook "openlogbook[transcribe]==X.Y.Z"
 pass  crossing          mcp 1
 pass  world             export world shows tier 1 alone: policy/crossing.json names no world entry; {"world": {"max_tier": 2}} would add the chapters
 pass  export-day        export --day puts tier 1 alone in a folder: policy/crossing.json names no folder entry, so the default tier 1 applies; {"folder": {"max_tier": 2}} would let tier 2 go
@@ -318,7 +318,9 @@ docs/first-hour.md walks through the first hour.
 ```
 
 `warn` is advice, not a problem: here, the optional extras for transcribing voice memos and telling the
-voices of a recording apart are not installed, and no backup has had its restore test yet.
+voices of a recording apart are not installed, and no backup has had its restore test yet. `X.Y.Z`
+stands for the version installed; to add an extra, type the line with `--force` after `pipx inject`,
+without which pipx changes nothing ([optional extras](install.md#optional-extras)).
 `fail` names what to fix. `logbook doctor` runs these checks any time, and changes nothing.
 
 ## Stopping, skipping, and coming back

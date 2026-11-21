@@ -1,7 +1,7 @@
 # People
 
 `logbook people [--year YYYY] [--json]` is everyone the record knows and what it knows of each;
-`logbook person <name-or-ref> [--year YYYY] [--json]` is one of them on one page, with the timeline
+`logbook people <name-or-ref> [--year YYYY] [--json]` is one of them on one page, with the timeline
 of the days you spent together. Both are readers (ADR 0013): derived from the record at its head,
 every time, and never written. The owner is never listed: the record is yours, and you are not
 your own company. `people merge` finds the same person named twice, `people review` finds the people
@@ -14,10 +14,10 @@ to go?", from the record, with the evidence, by rules alone; neither writes anyt
 logbook people                          # everyone with evidence in the record, most days together first
 logbook people --year 2026              # one year
 logbook people --json                   # the report as one JSON object
-logbook person "Ola Nordmann"           # a label; a unique first or last name does too: `person Ola`
-logbook person ola@example.org          # an address the resolution lines know
-logbook person +447700900001            # a phone number
-logbook person provider_id:immich:f_01  # any ref as kind:value; the entity id works too
+logbook people "Ola Nordmann"           # a label; a unique first or last name does too: `people Ola`
+logbook people ola@example.org          # an address the resolution lines know
+logbook people +447700900001            # a phone number
+logbook people provider_id:immich:f_01  # any ref as kind:value; the entity id works too
 logbook people --priority               # everyone heard in the last year, ranked, with the score
 logbook people review                   # who the sources saw that the record has not placed
 logbook people drift                    # many days together once, no real contact for a year
@@ -479,7 +479,7 @@ a year with none is `no people` (and `window: null` under `--json`).
 
 Everything comes through `index.sqlite` and nothing sweeps the files. The resolution and retraction
 lines are read whole (`Index.resolutions`, `Index.retractions`); your stays and nights come from the
-index's own columns, no line read (`reading.owner_track`, the reader `places propose` uses); and the
+index's own columns, no line read (`reading.owner_track`, the reader `setup places propose` uses); and the
 lines of the six kinds above stream one kind at a time over the window (`Index.of_kind` with its day
 bounds), each read once and kept only when it names someone — a year of messages is counted as it
 streams and never held. A retracted line, and one another line of its kind `supersedes` (a calendar

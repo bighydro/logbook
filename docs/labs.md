@@ -107,7 +107,7 @@ A chapter opens where one of three things happens.
 of the file, in this order:
 
 - *Dated homes.* A home entry may carry `since` and `until`, local days as `YYYY-MM-DD`, either one
-  open. `logbook places` keeps the keys when it rewrites the file; no other reader uses them yet.
+  open. `logbook setup places` keeps the keys when it rewrites the file; no other reader uses them yet.
   When any home entry carries one, the dates decide: a chapter opens on each `since`, the home of a
   day is the dated home holding it (the latest `since` when two do), and a stretch no dated home
   holds is named after the home its nights slept at most. `home_history` is `places.json`.
@@ -168,7 +168,7 @@ Each chapter carries, under `--json`:
   to another home place, and the old home after a move, are places like any other. `people` are the
   confirmed company of those stays by days together inside the chapter, the top five.
 - `still_spoke` counts a gap chapter's lines by source; `trip` carries a trip chapter's id, route and
-  places (`logbook trip <id>` reads it back). Both are `null` elsewhere.
+  places (`logbook show trip <id>` reads it back). Both are `null` elsewhere.
 - `opened_by` says what opened the chapter: `record start`, `home change`, `track gap`,
   `track resumes`, `trip` or `return`, with a sentence and the lines that show it (the first point of
   the first night's stay; for a gap, the last point before it and the first after).
@@ -193,5 +193,5 @@ Three thresholds are settings on the command line, echoed under `settings`: `--m
   threshold.
 - **People and places are the stays'.** The top people are the confirmed company of the owner's
   stays (the blind spots of `introductions` above apply); the top places are named places only, so
-  a chapter spent somewhere unnamed lists nothing under places. `logbook places propose` names the
+  a chapter spent somewhere unnamed lists nothing under places. `logbook setup places propose` names the
   unnamed ones.

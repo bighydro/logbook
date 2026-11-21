@@ -41,7 +41,7 @@ find what they need by what a header or key says, and a column that is not there
 | `Tasks/` | `tasks` ([page](takeout-tasks.md)) | `task/v1` | 2 | on |
 | `Chrome/` | `chrome` | `browse/v1` | 2 | on |
 | `YouTube and YouTube Music/history/`, JSON or HTML | `youtube` ([page](takeout-youtube.md)) | `watch/v1` | 2 | on |
-| `Maps (your places)/` | `maps` ([page](takeout-maps.md)) | `highlight/v1` for the reviews; the saved places feed `places propose --takeout` | 2 | on |
+| `Maps (your places)/` | `maps` ([page](takeout-maps.md)) | `highlight/v1` for the reviews; the saved places feed `setup places propose --takeout` | 2 | on |
 | `Home App/` | `home` ([page](takeout-home.md)) | `event/v1` | 1 | on |
 | `Fit/` | `fit` ([page](takeout-fit.md)) | `health-sample/v1` | 3 | on |
 | `Google Pay/` | `pay` | `transaction/v1`, `event/v1` for tickets | 3, 1 | on |
@@ -54,7 +54,7 @@ find what they need by what a header or key says, and a column that is not there
 "Default" is `policy/import.json`: `logbook init` writes the two noisy products as disabled with a
 reason (`every sign-in to every Google service; opt in`, `every search and app opened; opt in`), and a
 record made before this file existed gets the same list on its first read. Remove the entry to opt in;
-`logbook sources` shows the state. An adapter existing is not a decision to run it.
+`logbook doctor sources` shows the state. An adapter existing is not a decision to run it.
 
 Location is described below; Calendar, Photos, Keep, Chrome and the rest of the first seven in the [adapters overview](README.md); Tasks, YouTube, Maps, the
 Home App and Fit have pages of their own, linked in the table. The rest:
