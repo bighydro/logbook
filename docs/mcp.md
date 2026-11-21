@@ -42,9 +42,10 @@ the environment the record needs and nothing more: no adapter key is read here, 
 
 ## The tools
 
-Twelve read tools, and four write tools that are each refused until your policy names it
+Thirteen read tools, and four write tools that are each refused until your policy names it
 ([Write tools](#write-tools)). Each read tool is one command you already know, with the same output
-as its `--json` (or, for the three that read the lines themselves, as its text):
+as its `--json` (or, for the three that read the lines themselves, as its text), and `held_mail`, which
+says what `export crossing --mail all-except-junk` would hold back:
 
 | Tool | Arguments | The command |
 |---|---|---|
@@ -60,6 +61,7 @@ as its `--json` (or, for the three that read the lines themselves, as its text):
 | `day_lines` | `day?` (default today), `kinds?` | `logbook show DAY`, one object per line ([below](#the-lines-themselves)) |
 | `line` | `id` | one line in full, a transcript's text included ([below](#the-lines-themselves)) |
 | `digest` | `period?` (`day`, `week`), `date?` | `logbook digest DATE`, the text as printed ([below](#the-lines-themselves)) |
+| `held_mail` | `day?` (default today), `destination?` | per mail line, whether your own junk rule would hold it back from a crossing ([below](#mail-held-back)) |
 | `add_note` | `text`, `at?` | `logbook add "<sentence>"`: one `note/v1` line, tier 2, source `mcp`; only when the policy names it |
 | `promise_done` | `id` | `logbook promises done <id>`: one `task/v1` line, source `mcp`; only when the policy names it |
 | `sign_day` | `day`, `confirm?`, `kept?`, `missed?`, `dropped?`, `carried?`, `note?`, `at?` | `logbook day sign DAY`: one `signed-day/v1` line, tier 1; a day signed before keeps its confirmations; never confirms a line above the ceiling of its own accord; only when the policy names it |
@@ -107,6 +109,28 @@ description, as the host lists it, says in one sentence what the ceiling does to
   it were not in the record* — so the digest at a ceiling of 1 is the digest of a record that holds only
   tier 1, and the test holds it to exactly that. The question bank and the state of what was asked are
   files beside the record, written as the command writes them; the record itself is untouched.
+
+### Mail held back
+
+**`held_mail(day?, destination?)`** says, for each destination whose entry in `policy/crossing.json` has a
+`mail_junk` rule (or the one `destination` names; one without a rule is refused), whether each mail line of
+the day would stay home under `export crossing --mail all-except-junk` ([the crossing](crossing.md#all-except-junk)):
+
+```json
+{"day": "2026-03-01", "above_ceiling": 2, "destinations": [
+  {"destination": "per-hansen", "held": 1, "first_time": 1, "mails": [
+    {"id": "019cadd3-…", "held": true, "reason": "junk_label", "first_time": true},
+    {"id": "019cadd3-…", "held": false, "reason": null, "first_time": false}]}]}
+```
+
+`reason` is `let_go`, `junk_category` or `junk_label`; `first_time` says the sender may be a new person
+writing (no earlier mail from the address in the record, not a no-reply address, not a list's mail). Each
+mail is its id and these words: never an address, a subject or a name; `day_lines` and `line` read the
+rest, under the same ceiling. *A mail above the ceiling is not judged, not listed and not counted among the
+held, only counted in `above_ceiling`*, and the first-time flag is read from the mails the ceiling shows.
+An org's portfolio is tier 3: below it no portfolio spares an org's mail here, so the answer may say an
+org's mail would be held that the crossing, which reads every tier, sends; it never tells which orgs a
+portfolio holds.
 
 Every answer is one JSON text:
 

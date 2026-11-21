@@ -159,9 +159,16 @@ def export_arguments(sub: Subparsers) -> None:
         help="crossing, letter: take the unsigned days too (default: signed days only; RFC 0034)",
     )
     s.add_argument(
+        "--mail",
+        choices=crossing.MAIL_MODES,
+        help="crossing: people (default), people's mail only; all, every mail the tiers and signed days let"
+        ' through; all-except-junk, every mail but a received one your own "mail_junk" rule in the'
+        " destination's entry calls junk (RFC 0045)",
+    )
+    s.add_argument(
         "--all-mail",
         action="store_true",
-        help="crossing: every mail the tiers and signed days let through, not people's mail only (RFC 0045)",
+        help="crossing: the same as --mail all (RFC 0045)",
     )
     s.add_argument(
         "--include-unsigned",
@@ -455,9 +462,12 @@ def _utc_text(instant: datetime) -> str:
 
 def _export_crossing(lb: Logbook, a: argparse.Namespace) -> None:
     """crossing --to DEST --since RFC3339|last [--until RFC3339] [--tier 1|1,2|1,2,3] [--kinds a,b]
-    [--unsigned] [--all-mail] [--out DIR] [--force] [--dry-run]: one crossing-package/v1 (RFC 0005)
-    under the destination's ceiling in policy/crossing.json (ADR 0016), the lines of signed days unless
-    `--unsigned` (RFC 0034), people's mail only unless `--all-mail` (RFC 0045), recorded as a
+    [--unsigned] [--mail people|all|all-except-junk] [--all-mail] [--out DIR] [--force] [--dry-run]: one
+    crossing-package/v1 (RFC 0005) under the destination's ceiling in policy/crossing.json (ADR 0016),
+    the lines of signed days unless `--unsigned` (RFC 0034), people's mail only unless `--mail all`
+    (`--all-mail`) or `--mail all-except-junk` (the destination's own `mail_junk` rule; refused without
+    one, nothing exported; the orgs in a portfolio read here, to spare their mail, and never said) (RFC
+    0045), recorded as a
     crossing/v1 line (RFC 0011). The bundle replaces DIR whole; a DIR that is not an earlier bundle is
     refused unless `--force` (docs/crossing.md)."""
     generated_at = now_utc()  # also the default window end, and the crossing line's `at`
@@ -466,6 +476,7 @@ def _export_crossing(lb: Logbook, a: argparse.Namespace) -> None:
             raise crossing.CrossingError(
                 "export crossing needs --to <destination> and --since <RFC3339|last>"
             )
+        mode = a.mail or (crossing.MAIL_ALL if a.all_mail else crossing.MAIL_PEOPLE)
         req = crossing.request(
             lb,
             a.to,
@@ -476,6 +487,8 @@ def _export_crossing(lb: Logbook, a: argparse.Namespace) -> None:
             open_sealed=a.open,
             signed_only=not a.unsigned,
             all_mail=a.all_mail,
+            mail=mode,
+            portfolio=_portfolio(lb) if mode == crossing.MAIL_EXCEPT_JUNK else frozenset(),
         )
     except crossing.EmptyWindow as e:
         print(f"{a.to}: {e}; nothing written")
@@ -524,6 +537,14 @@ def _export_crossing(lb: Logbook, a: argparse.Namespace) -> None:
         _tier3_warning(req, sel)
     seq, digest = result.line["seq"], result.package_sha256[:12]
     print(f"  recorded as #{seq} {crossing.LINE_SCHEMA}, package sha256 {digest}…; watermark {req.until}")
+
+
+def _portfolio(lb: Logbook) -> frozenset[tuple[str, str]]:
+    """The refs bound to an org in a portfolio, for `--mail all-except-junk` to spare their mail: read on
+    this machine to decide, never written, never printed (`orgs.portfolio_refs`)."""
+    from ..contrib import orgs
+
+    return orgs.portfolio_refs(lb)
 
 
 def _export_notion(lb: Logbook, a: argparse.Namespace) -> None:
@@ -926,7 +947,14 @@ def _crossing_rows(sel: crossing.Selection) -> Iterator[str]:
             f"  {c['held_back_by_entry']} draft(s) held back: the entry they were written under (the"
             " 'dream' entry, a person's the 'relationship' entry) no longer allows their tier"
         )
-    if c.get("mail_held_back"):
+    if "mail_held_by_reason" in c:  # all except junk: said whenever mail was read, 0 included
+        by = c["mail_held_by_reason"]
+        yield (
+            f"  {c['mail_held_back']} mail(s) held back by your mail_junk rule: {by['let_go']} let go in"
+            f" Hold, {by['junk_category']} junk by category, {by['junk_label']} junk by label;"
+            f" {c['mail_held_first_time']} from a first-time sender (--mail all sends them)"
+        )
+    elif c.get("mail_held_back"):
         yield (
             f"  {c['mail_held_back']} mail(s) held back: no person the record names is on them"
             " (--all-mail sends them)"

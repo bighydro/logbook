@@ -47,8 +47,64 @@ or one you sent to one, its sender not let go in Hold ([people's mail](mail-peop
 among the kinds (no `--kinds`, or `--kinds` naming `mail`), the rest stays home, its resolutions and
 attachments with it, and `counts` says how many as `mail_held_back`, written whenever the window held a
 mail the tiers and signed days let through (`0` when every one was a person's); a package with no mail is
-what it was, byte for byte. `--all-mail` crosses every mail the tiers and signed days let through, as
-before, and the manifest's `policy` says `"mail": "all"`.
+what it was, byte for byte. `--mail all` (or `--all-mail`, the same) crosses every mail the tiers and
+signed days let through, as before, and the manifest's `policy` says `"mail": "all"`.
+
+## All except junk
+
+`--mail` chooses one of three: `people` (the default, above), `all`, or `all-except-junk`: every mail
+crosses but a received one **your own rule** calls junk (RFC 0045, amended 20 November 2026). The rule is
+yours, written in the destination's entry of `policy/crossing.json` as `mail_junk`; Logbook names no label
+of anyone's mailbox:
+
+```json
+{
+  "per-hansen": {
+    "max_tier": 2,
+    "mail_junk": {
+      "categories": ["promotions"],
+      "labels": ["Triage/Unsubscribe"],
+      "never_labels": ["Triage/Action", "Triage/Reply", "Triage/Waiting"]
+    }
+  }
+}
+```
+
+A received mail stays home when its Gmail category (`extra.gmail_category`) is one of `categories`, or one
+of its `labels` is one of `labels` (case aside), and nothing spares it:
+
+- its sender is a person of the record (the sender only, never a cc; you and your own addresses never
+  count);
+- one of its labels is one of `never_labels`;
+- its sender is an invitation platform (`paperlesspost.com`, `evite.com`, `partiful.com`, `lu.ma`,
+  `eventbrite.com`, `greenvelope.com`, `punchbowl.com`, `zola.com`, `withjoy.com`, or a domain under one);
+- its sender is bound to an org a portfolio holds (read on this machine to decide; the portfolio is never
+  written in the package, printed or counted by name);
+- Hold keeps its sender (`keep`, RFC 0042 §4; Hold writes no fates yet, so nothing is kept yet).
+
+A sender Hold let go is held whatever spares it. A mail you sent always crosses, and a mail with neither a
+category nor a label crosses. The IMAP road never sees Gmail's category, so a label is what lets a mail
+read both ways be judged the same.
+
+Without a `mail_junk` rule in the destination's entry, `--mail all-except-junk` is refused in one sentence
+and nothing is exported. With one, the manifest's `policy` says `"mail": "all-except-junk"`, and `counts`
+says how many mails were held back (`mail_held_back`), by reason (`mail_held_by_reason`: `let_go`,
+`junk_category`, `junk_label`) and how many of those were from a first-time sender
+(`mail_held_first_time`: no earlier mail from the address in the record, not a no-reply address, not a
+list's mail): counts only, never an address, a subject or a name. The dry run prints the same counts:
+
+```
+  7 mail(s) held back by your mail_junk rule: 0 let go in Hold, 5 junk by category, 2 junk by label; 3 from a first-time sender (--mail all sends them)
+```
+
+`logbook day sign DAY` says the same of the day it signs, one line per destination with a rule, so a quick
+sign never hides what was held:
+
+```
+per-hansen: 7 mails held back (3 from a first-time sender)
+```
+
+An agent asks the same of a day through the door's `held_mail` tool ([MCP](mcp.md#mail-held-back)).
 
 ## The package
 

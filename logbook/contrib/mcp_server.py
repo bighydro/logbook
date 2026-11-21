@@ -5,18 +5,19 @@ as a child process and call its tools over the process's own stdin and stdout. T
 transport here: no TCP, no socket, nothing listening. The host runs on the owner's machine under
 the owner's command, and the record stays where it is.
 
-Twelve read tools answer from the index and the readers every command already uses — `day`, `days`,
-`trips`, `places`, `people`, `person`, `promises`, `gaps`, `search`, and the three that read the lines
+Thirteen read tools answer from the index and the readers every command already uses — `day`, `days`,
+`trips`, `places`, `people`, `person`, `promises`, `gaps`, `search`, and the four that read the lines
 themselves, `day_lines` (`logbook show DAY`, one object per line), `line` (one line in full, a
-transcript's text from the attachment store included) and `digest` (`logbook digest`, the text as the
-command prints it). Four write tools are refused unless the owner allows them by name in the `mcp`
-entry's `write` (ADR 0022: orchestrators reach the record only through the crossing): `add_note` is
-`logbook add "<sentence>"`, `promise_done` is `logbook promises done <id>`, `sign_day` is `logbook day
-sign`, through the same `signing.sign`, and `note_day` appends one `note/v1` line to a day. Each takes
-the writer lock without waiting and writes only to a day inside the write window (`policy.mcp_door`).
-The three that write words or close a promise write their line with source `mcp`, never `manual`: an
-agent never writes as the owner (R5), and what it wrote is pencil, which no signature confirms.
-`sign_day` alone writes `manual`, byte for byte what `day sign` writes (`signing` is the one
+transcript's text from the attachment store included), `digest` (`logbook digest`, the text as the command
+prints it) and `held_mail` (per mail line of a day, whether a destination's own `mail_junk` rule would
+hold it back from a crossing, RFC 0045's all except junk). Four write tools are refused unless the owner
+allows them by name in the `mcp` entry's `write` (ADR 0022: orchestrators reach the record only through
+the crossing): `add_note` is `logbook add "<sentence>"`, `promise_done` is `logbook promises done <id>`,
+`sign_day` is `logbook day sign`, through the same `signing.sign`, and `note_day` appends one `note/v1`
+line to a day. Each takes the writer lock without waiting and writes only to a day inside the write window
+(`policy.mcp_door`). The three that write words or close a promise write their line with source `mcp`,
+never `manual`: an agent never writes as the owner (R5), and what it wrote is pencil, which no signature
+confirms. `sign_day` alone writes `manual`, byte for byte what `day sign` writes (`signing` is the one
 implementation): the owner names it in the policy, and it never confirms pencil.
 
 Every tool's output passes the crossing gate of ADR 0016. `policy/crossing.json` names the `mcp`
@@ -60,6 +61,7 @@ from ..core import (
     notes,
     pages,
     people,
+    peoples_mail,
     policy,
     reading,
     rollup,
@@ -88,7 +90,7 @@ from ..core.store import (
     utc,
 )
 from . import digest as digest_reader
-from . import gaps, people_drift, promises, reflect, sign_again
+from . import gaps, orgs, people_drift, promises, reflect, sign_again
 from .rows import _attendee, _clock, _line_text, _mail_person, _name, _ref_value
 
 SERVER_NAME = "logbook"
@@ -1047,6 +1049,48 @@ def tool_day_lines(lb: GatedLogbook, a: Arguments) -> dict[str, Any]:
     }
 
 
+def tool_held_mail(lb: GatedLogbook, a: Arguments) -> dict[str, Any]:
+    """Per mail line of one local day, for each destination whose entry in policy/crossing.json has a
+    `mail_junk` rule (or the one `destination` names): whether `export crossing --mail all-except-junk`
+    would hold it back, the reason (`let_go`, `junk_category`, `junk_label`) and whether it is a
+    first-time sender's (RFC 0045, all except junk). Read through the gate like every tool: a mail
+    above the ceiling is not judged, not listed, not counted among the held, only counted in
+    `above_ceiling`; the rule spares an org's mail for its portfolio only when the gate reads tier 3,
+    so the answer never tells which orgs a portfolio holds. An id and two words a mail: never an
+    address, a subject or a name."""
+    day = _day(a, "day") or _today(lb)
+    day_start.of(lb.meta)  # the page is the day so defined: a boundary not a clock is refused (RFC 0036)
+    named = _string(a, "destination")
+    every = peoples_mail.junk_destinations(lb.root)
+    if named is not None and named not in every:
+        raise ToolError(
+            f"{named!r} has no mail_junk rule in {policy.POLICY_FILE.as_posix()}; the destinations with one:"
+            f" {', '.join(every) or 'none'}"
+        )
+    destinations = [named] if named is not None else every
+    rules: dict[str, peoples_mail.Junk] = {}
+    for destination in destinations:
+        rule = peoples_mail.junk_of(lb.root, destination)
+        assert rule is not None  # listed for its rule
+        rules[destination] = rule
+    judged = peoples_mail.day_verdicts(lb, day, rules, portfolio=orgs.portfolio_refs(lb)) if rules else {}
+    found: list[dict[str, Any]] = []
+    for destination, verdicts in judged.items():
+        counts = peoples_mail.held_counts(verdicts)
+        found.append(
+            {
+                "destination": destination,
+                "mails": [v.to_json() for v in verdicts],
+                "held": counts["held"],
+                "first_time": counts["first_time"],
+            }
+        )
+    with lb.index() as idx:
+        assert isinstance(idx, GatedIndex)
+        above = idx.day_above(day, [peoples_mail.KIND])
+    return {"day": day, "destinations": found, "above_ceiling": above}
+
+
 def _full_text(lb: Logbook, line: Line) -> str | None:
     """The whole text of a line, where it has one: a note's, a mail's body, a message's, and a
     transcript's turns from the attachment store as `promises` and the search index read them, one
@@ -1511,6 +1555,22 @@ TOOLS: dict[str, Tool] = {
             (),
             tool_digest,
             {"period": "day", "date": "2026-06-10"},
+        ),
+        Tool(
+            "held_mail",
+            "Per mail line of one local day, for each destination whose policy entry has a mail_junk rule"
+            " (or the one `destination` names): whether `export crossing --mail all-except-junk` would hold"
+            " it back from that destination, its reason (let_go, junk_category, junk_label) and whether it"
+            " is a first-time sender's. Each mail is its id and these words, never an address, a subject or"
+            " a name. A mail above the mcp ceiling is not judged and only counted in `above_ceiling`."
+            " Default: today.",
+            {
+                "day": DAY,
+                "destination": {"type": "string", "description": "a destination with a mail_junk rule"},
+            },
+            (),
+            tool_held_mail,
+            {"day": "2026-06-10"},
         ),
         Tool(
             "add_note",
