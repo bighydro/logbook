@@ -8,16 +8,16 @@ class Logbook < Formula
 
   desc "Diary that writes itself: your life, in one folder you hold"
   homepage "https://github.com/bighydro/logbook"
-  url "https://files.pythonhosted.org/packages/bc/d9/6e62258b6e59ad9837ab569efcb920bb27dab8ab912451c5168156fa592c/openlogbook-1.1.0.tar.gz"
-  sha256 "b89dee174fe645b26acf3fd262bc100c1067af8d8d59e592d4ef307f6a8435e8"
+  url "https://files.pythonhosted.org/packages/81/87/fd3f1fee183efe1e1b51a6f27e5a2a38fa32dfd5d416e40ce07b2309e065/openlogbook-1.2.0.tar.gz"
+  sha256 "61149149e83860d46f76464080ff393552728dc04e13a11afd68c82cb31f09bc"
   license "Apache-2.0"
   head "https://github.com/bighydro/logbook.git", branch: "main"
 
   depends_on "python@3.13"
 
   resource "ijson" do
-    url "https://files.pythonhosted.org/packages/3a/06/b31f040a8764336a11152e474a7abcb3782fedb0d1cdf78f442b82878c56/ijson-3.5.1.tar.gz"
-    sha256 "af40bd1a85f55db0b8b30715c858761306bd92d5590148636f75c3309e6e76bd"
+    url "https://files.pythonhosted.org/packages/75/61/4066af787ed25bfca02c3edd2d7fd489b1b5ca27b54b400b187e5f2865e7/ijson-3.6.0.tar.gz"
+    sha256 "ec8f9265524e724905ecf00bdd061c374baaa8d5045ef50425695fb06efb45f5"
   end
 
   def install
