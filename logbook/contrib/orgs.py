@@ -864,6 +864,29 @@ class Page:
         }
 
 
+def portfolio_refs(lb: Logbook) -> frozenset[Ref]:
+    """The refs bound to an org a portfolio holds (`entities.portfolios`, `entities.bindings`): its
+    domains and addresses, for the mail rule of RFC 0045's all except junk to spare (`peoples_mail.Rule
+    .portfolio`). Read through `lb.index()`, so a gated record (the door's) reads only the status lines
+    its gate shows, and below tier 3 finds no portfolio at all. The answer decides on this machine and
+    goes nowhere: never written, never printed, never counted by name."""
+    with lb.index() as idx:
+        marks = idx.retractions()
+        held = entities.portfolios([*marks, *idx.by_kind(entities.STATUS)])
+        if not held:
+            return frozenset()
+        named = [*marks, *idx.resolutions(), *idx.by_kind(entities.ENTITY)]
+    found: set[Ref] = set()
+    for (ref_kind, value), (kind, entity_id) in entities.bindings(named).items():
+        if kind != ORG or entity_id not in held:
+            continue
+        if ref_kind in ("email", "domain"):  # each spelling the mail rule looks a sender up by
+            found.update({(ref_kind, value.strip().lower()), (ref_kind, value.strip().casefold())})
+        else:
+            found.add((ref_kind, value))
+    return frozenset(found)
+
+
 def named(lb: Logbook, tiers: Sequence[int] | None = None) -> dict[str, entities.Entity]:
     """The orgs the record names through the gate of `tiers` (None: every tier), by id: its naming
     lines and its status lines alone, no touch swept (what a form or a name is checked against)."""

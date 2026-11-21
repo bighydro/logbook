@@ -3,7 +3,8 @@
 Status: draft · 2026-10-21 · comment period: two weeks · a mechanism RFC: it changes readers and the
 crossing's selection, and defines no line · builds on RFC 0006 (resolution), RFC 0015 (mail), RFC 0005
 (the crossing package), RFC 0011 (the crossing line) and RFC 0042 (Hold) · the mail filter RFC 0043 §9
-and §11 call "its own RFC"
+and §11 call "its own RFC" · amended 2026-11-20: a third mode of the crossing, all except junk, by a
+rule the owner writes ([the amendment](#all-except-junk-amendment-2026-11-20))
 
 Most of a mailbox is not people. A record that holds three years of mail holds a few hundred mails a
 month from the people of the owner's life and several thousand from shops, banks, newsletters and the
@@ -161,3 +162,96 @@ mail 2026-03-01 – 2026-03-01: 3 lines
 ```
 
 A crossing of that day with `--tier 1,2 --kinds mail` carries the first mail, `counts.mail_held_back: 2`.
+
+## All except junk (amendment, 2026-11-20)
+
+The crossing has had two mail modes (§6): people's mail only, the default, and every mail (`--all-mail`).
+Between them the owner wants a third: every mail crosses but what the owner's own rule calls junk. The
+record keeps every mail whatever the mode; a mode decides only what leaves.
+
+**The command.** `logbook export crossing --mail people|all|all-except-junk`; `--all-mail` is `--mail all`
+and stays, and the two given together disagreeing are refused.
+
+**The rule is data the owner writes**, in the destination's entry of `policy/crossing.json`, an optional
+key `mail_junk`:
+
+```json
+"per-hansen": {
+  "max_tier": 2,
+  "mail_junk": {
+    "categories": ["promotions"],
+    "labels": ["Triage/Unsubscribe"],
+    "never_labels": ["Triage/Action", "Triage/Reply", "Triage/Waiting"]
+  }
+}
+```
+
+Each key is optional and a list of names, compared case aside; any other key is refused naming the file,
+so a misspelt key never quietly lets more or less cross. The label names belong to the owner's mailbox:
+Logbook names none, and none is a constant of the reader (the names above are synthetic). Without the
+key, `--mail all-except-junk` is refused in one sentence that names the file, and nothing is exported.
+
+**A mail line is junk for that destination** only when all of these hold:
+
+1. it was received (§1's direction rule; a sent mail always crosses);
+2. its `extra.gmail_category` is one of `categories` (reason `junk_category`), or one of its `labels`
+   is one of `labels` (reason `junk_label`); a mail with neither a category nor a label crosses;
+3. and none of these spares it:
+   1. its sender is a person of the record in §1's exact sense: the sender only, never a cc; the owner
+      and the owner's addresses never count as a person, and neither does a no-reply address (§2);
+   2. one of its labels is one of `never_labels`;
+   3. its sender's domain is an invitation platform's, or under one: the reader's list
+      `logbook.core.peoples_mail.INVITATION_SENDERS`, beside `NO_REPLY_ADDRESS`, today `paperlesspost.com`,
+      `evite.com`, `partiful.com`, `lu.ma`, `eventbrite.com`, `greenvelope.com`, `punchbowl.com`,
+      `zola.com`, `withjoy.com`. A change to the list is a change to this RFC, as for `NO_REPLY_ADDRESS`;
+   4. its sender resolves to an org whose standing status line carries a portfolio (RFC 0037 §10.2,
+      `entities.portfolios`), by an address or a domain bound to the org (`entities.bindings`; the
+      sender's domain or any domain it is under). The portfolio is read on the owner's machine to decide
+      and nothing more: it never crosses, is never printed, and is never counted by name. Core reads no
+      org, so the caller reads the refs (`orgs.portfolio_refs`) and hands them to the rule
+      (`Rule.portfolio`); a caller that hands none holds such a mail back rather than send it;
+   5. its sender has a standing `keep` fate as a Hold item of sort `sender` (RFC 0042 §4). The rule takes
+      the kept senders as an input (`Rule.kept`, `email` or `domain` refs), exactly as it takes the senders
+      let go (§4). Hold writes no fate yet, so the set is empty; a later change fills it.
+
+A sender with a standing `let-go` fate is always held, whatever spares it (§4), reason `let_go`. Each mail
+held carries one reason: `let_go`, else `junk_category`, else `junk_label`.
+
+**A first-time sender.** A held mail is also said to be a first-time sender's when it was received, its
+sender is not a no-reply address nor the owner's, it carries no list mark (`extra.list`), and no earlier
+standing mail line in the record (by its `at`, then its seq) is from that address: a new person may be
+writing, and the owner may want to look before it goes.
+
+**What the package says.** The manifest's `policy` says `"mail": "all-except-junk"`, as it says `"all"`
+under `--mail all`, and the crossing line's `policy` the same. `counts` keeps `mail_held_back` (the mails
+held) and gains `mail_held_by_reason` (`let_go`, `junk_category`, `junk_label`) and
+`mail_held_first_time`: counts only, never an address, a subject or a name. The dry run prints the same
+counts. A package of another mode is byte for byte what it was.
+
+**What the owner sees.** `logbook day sign DAY` prints, after the signature, one line per destination whose
+entry has a `mail_junk` rule: `<destination>: N mails held back (M from a first-time sender)`, never a
+name, an address or a subject, so a quick sign never hides what was held. A rule that cannot be read is
+said in one line, never passed over.
+
+**The door.** The MCP server gains one read tool, `held_mail(day, destination?)`: per mail line of the day,
+for each destination with a rule, whether it would be held, its reason and its first-time flag, the line's
+id and nothing else of it. It reads through the gate like every tool the door has (#453): a mail the gate
+withholds is not judged, not listed and not counted among the held, only counted above the ceiling. A
+portfolio is tier 3, so through a gate below 3 no portfolio spares a mail; the door may then say an org's
+mail would be held that the crossing sends, and never tells which orgs a portfolio holds.
+
+**Why this does not contradict §3.** §3 says the category and the list mark are evidence for every reader,
+never a rule by themselves, and they stay so: the class of a mail (§1, §2), the Day page and every reader
+of this RFC read them as evidence only. Here the category and the labels are part of a rule *the owner
+wrote*, for *one crossing*, by name, in their own policy file: not a reader-wide rule that classes one mail
+two ways, but the owner's own word about what leaves for one destination, as `max_tier` is. The reader
+still never decides from a category on its own.
+
+**Why the labels matter.** The other road to the same mailbox, IMAP, never sees Gmail's category (§3; RFC
+0043 §14 item 12): a line written from IMAP carries the labels and no `extra.gmail_category`. A rule on the
+category alone would hold a mail read through the Takeout road and send the same mail read through IMAP.
+A label the owner's own mailbox puts on the mail (a filter, a triage habit) is on both roads' lines, so the
+rule can name it and both roads agree.
+
+**What this does not change.** No line is written and no profile changes; `mail/v1` and the envelope are
+untouched, and so is `conformance/`. People's mail stays the default.

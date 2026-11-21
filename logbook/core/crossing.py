@@ -10,11 +10,13 @@ per destination in `exports/crossing.json`. A second gate beside the tier (RFC 0
 lines of days the owner has signed cross, unless the request says `--unsigned`. A draft crosses
 only while the entry it was written under allows its tier (`drafts.Allowed.of`): a person's the
 `relationship` entry, every other unit's the `dream` entry, whatever the destination's ceiling. A
-mail crosses only when it is a person's (RFC 0045, `peoples_mail.Rule`), unless the request says
-`--all-mail`. What a podcast or a video said (`heard`, RFC 0046) crosses only to a destination whose
-entry says `"heard": true`, and is counted with the drafts held back by their entry otherwise. The two
-rules read different kinds, so a line passes both and neither decides for the other. Nothing here
-rewrites a line; the only write to the log is that one `Logbook.append`."""
+mail crosses only when it is a person's (RFC 0045, `peoples_mail.Rule`), unless the request says `--mail all`
+(`--all-mail`), or `--mail all-except-junk`: every mail but a received one the owner's own `mail_junk` rule
+for the destination calls junk (RFC 0045, amendment of 20 November 2026). What a podcast or a video said
+(`heard`, RFC 0046) crosses only to a destination whose entry says `"heard": true`, and is counted with the
+drafts held back by their entry otherwise. The two rules read different kinds, so a line passes both and
+neither decides for the other. Nothing here rewrites a line; the only write to the log is that one
+`Logbook.append`."""
 
 from __future__ import annotations
 
@@ -58,6 +60,9 @@ REF_KINDS = frozenset({"email", "phone", "handle", "provider_id", "device_id", "
 MAIL_HEADERS = ("from", "to", "cc", "bcc")  # RFC 0015: each an `{email, name?}`, or a list of them
 PARTICIPANT_REFS = ("email", "phone", "provider_id")  # RFC 0004: a transcript participant's identifiers
 COPY_CHUNK = 1 << 20
+# the crossing's mail modes (RFC 0045): people's mail only (the default), every mail, every mail but junk
+MAIL_PEOPLE, MAIL_ALL, MAIL_EXCEPT_JUNK = "people", "all", "all-except-junk"
+MAIL_MODES = (MAIL_PEOPLE, MAIL_ALL, MAIL_EXCEPT_JUNK)
 
 
 class CrossingError(ValueError):
@@ -111,11 +116,19 @@ class Request:
     recipient: str | None = None  # the destination's age recipient (policy), to reseal sealed lines to
     open_sealed: bool = False  # `--open`: ship sealed lines and files opened, when there is no recipient
     signed_only: bool = True  # RFC 0034: only the lines of signed days cross; `--unsigned` lifts it
-    all_mail: bool = False  # RFC 0045: every mail crosses, not people's mail only; `--all-mail`
+    mail_mode: str = MAIL_PEOPLE  # RFC 0045: `--mail people|all|all-except-junk` (`--all-mail` is `all`)
+    junk: peoples_mail.Junk | None = None  # the destination's `mail_junk` rule, under all-except-junk
+    kept: frozenset[Ref] = frozenset()  # the senders Hold keeps (RFC 0042 §4): empty until Hold writes fates
+    portfolio: frozenset[Ref] = frozenset()  # refs bound to an org in a portfolio; never written anywhere
 
     @property
     def tier3(self) -> bool:
         return 3 in self.tiers
+
+    @property
+    def all_mail(self) -> bool:
+        """`--mail all` (`--all-mail`): every mail the other gates let through crosses."""
+        return self.mail_mode == MAIL_ALL
 
     @property
     def mail(self) -> bool:
@@ -133,14 +146,26 @@ def request(
     open_sealed: bool = False,
     signed_only: bool = True,
     all_mail: bool = False,
+    mail: str | None = None,
+    kept: frozenset[Ref] = frozenset(),
+    portfolio: frozenset[Ref] = frozenset(),
 ) -> Request:
     """Resolve `--since last`, check the window, and hold the request against the policy: a tier
     above the destination's ceiling is refused naming the policy file. Tier 3 is in `tiers` only
     when `--tier 1,2,3` was typed, so a policy edit alone never lets it cross (ADR 0016). The
     destination's recipient, when the policy names one, is what sealed lines are resealed to.
     `signed_only` is the gate of RFC 0034: the lines of signed days, unless the owner lifts it;
-    `all_mail` lifts RFC 0045's, people's mail only. A destination the policy keeps for its own reader
-    (`policy.RESERVED`: `mcp`, `vault`, ...) is refused first, whatever the file says of it."""
+    `all_mail` lifts RFC 0045's, people's mail only, as `mail="all"` does; `mail="all-except-junk"` sends
+    every mail but the received ones the destination's `mail_junk` rule calls junk, and is refused, in
+    one sentence naming the file, when the entry has no such rule. `kept` and `portfolio` are the refs
+    that rule spares (`peoples_mail.Rule`): the senders Hold keeps, and those bound to an org in a
+    portfolio, which the caller reads (core reads no org). A destination the policy keeps for its own
+    reader (`policy.RESERVED`: `mcp`, `vault`, ...) is refused first, whatever the file says of it."""
+    mode = mail if mail is not None else (MAIL_ALL if all_mail else MAIL_PEOPLE)
+    if mode not in MAIL_MODES:
+        raise CrossingError(f"--mail must be {', '.join(MAIL_MODES)}, not {mode!r}")
+    if all_mail and mode != MAIL_ALL:
+        raise CrossingError(f"--all-mail is --mail all; it does not go with --mail {mode}")
     try:
         policy.check_destination(destination)
     except policy.PolicyError as e:
@@ -155,8 +180,15 @@ def request(
     try:
         max_tier = policy.ceiling(lb.root, destination)
         recipient = policy.recipient(lb.root, destination)
+        junk = peoples_mail.junk_of(lb.root, destination) if mode == MAIL_EXCEPT_JUNK else None
     except policy.PolicyError as e:
         raise CrossingError(str(e)) from e
+    if mode == MAIL_EXCEPT_JUNK and junk is None:
+        raise CrossingError(
+            f"--mail {MAIL_EXCEPT_JUNK} needs your own rule for junk: {policy.policy_path(lb.root)} has no"
+            f' "{peoples_mail.JUNK_KEY}" in {destination!r}\'s entry, so nothing is exported; add one'
+            ' ({"categories": [...], "labels": [...], "never_labels": [...]}), or choose --mail people or all'
+        )
     if max(tiers) > max_tier:
         raise CrossingError(
             f"--tier {','.join(map(str, tiers))} is above the ceiling for {destination!r}: "
@@ -165,7 +197,19 @@ def request(
             "raise it there if that is what you want"
         )
     return Request(
-        destination, since, until, tiers, kinds, max_tier, recipient, open_sealed, signed_only, all_mail
+        destination,
+        since,
+        until,
+        tiers,
+        kinds,
+        max_tier,
+        recipient,
+        open_sealed,
+        signed_only,
+        mode,
+        junk,
+        kept,
+        portfolio,
     )
 
 
@@ -218,6 +262,9 @@ class Selection:
         # `heard` lines of a destination whose entry does not name them (RFC 0046 §9)
     )
     mail_held_back: int | None = None  # mail no person is on (RFC 0045); None when the rule read no mail
+    # under all except junk: the mails held by reason (`peoples_mail.HELD_REASONS`) and how many were a
+    # first-time sender's; None under any other mode, or when the rule read no mail
+    mail_junk: dict[str, Any] | None = None
 
     @property
     def held_back(self) -> int:
@@ -244,6 +291,14 @@ class Selection:
             "held_back_unsigned": self.held_back_unsigned,
             **({"held_back_by_entry": self.held_back_by_entry} if self.held_back_by_entry else {}),
             **({"mail_held_back": self.mail_held_back} if self.mail_held_back is not None else {}),
+            **(
+                {
+                    "mail_held_by_reason": dict(self.mail_junk["by_reason"]),
+                    "mail_held_first_time": self.mail_junk["first_time"],
+                }
+                if self.mail_junk is not None
+                else {}
+            ),
             "by_tier": self.by_tier,
             "by_kind": self.by_kind,
             "resolutions": len(self.resolutions),
@@ -295,11 +350,16 @@ def select(lb: Logbook, req: Request) -> Selection:
             )
     lines = [lb.opened(line) for line in raw]
     resolution_lines = [lb.opened(line) for line in raw_resolutions]
-    # a mail crosses only when it is a person's (RFC 0045), unless the request says `--all-mail`; the
-    # count is written whenever the rule read a mail, so a package with none is what it was
+    # a mail crosses only when it is a person's (RFC 0045), unless the request says `--mail all`; under
+    # `--mail all-except-junk`, unless the owner's rule calls it junk. The count is written whenever the
+    # rule read a mail, so a package with none is what it was
     mail_held: int | None = None
-    if not req.all_mail:
+    mail_junk: dict[str, Any] | None = None
+    if req.mail_mode == MAIL_PEOPLE:
         lines, mail_held = peoples_mail_only(lb, retraction_lines, resolution_lines, lines)
+    elif req.mail_mode == MAIL_EXCEPT_JUNK:
+        lines, mail_junk = all_except_junk(lb, req, retraction_lines, resolution_lines, lines)
+        mail_held = None if mail_junk is None else int(mail_junk["held"])
     # a draft follows the entry it was written under, not the head (RFC 0036 amendment 1): once its
     # entry (the `relationship` entry's for a person, the `dream` entry's for every other unit) no
     # longer allows its tier it stays home, whatever this ceiling
@@ -320,7 +380,17 @@ def select(lb: Logbook, req: Request) -> Selection:
     crossed = {str(line["id"]) for line in [*lines, *overlay]}
     carried = {k: v for k, v in sealed.items() if k in crossed}
     return Selection(
-        lines, len(inside), overlay, held, found, missing, carried, unsigned_held, held_by_entry, mail_held
+        lines,
+        len(inside),
+        overlay,
+        held,
+        found,
+        missing,
+        carried,
+        unsigned_held,
+        held_by_entry,
+        mail_held,
+        mail_junk,
     )
 
 
@@ -364,6 +434,25 @@ def peoples_mail_only(
         raise CrossingError(str(e)) from e
     persons = [line for line in lines if line.get("kind") != peoples_mail.KIND or rule.classify(line).person]
     return persons, len(lines) - len(persons)
+
+
+def all_except_junk(
+    lb: Logbook, req: Request, marks: Iterable[Line], resolutions: Iterable[Line], lines: list[Line]
+) -> tuple[list[Line], dict[str, Any] | None]:
+    """RFC 0045's third mode: `lines` (opened) with every mail the destination's `mail_junk` rule holds
+    left out (`peoples_mail.Rule.junk`), and the counts (`peoples_mail.held_counts`: held, by reason,
+    how many a first-time sender's); None when there was no mail to read. Counts only: no address, no
+    subject, no name, and nothing of the portfolio the rule read to decide."""
+    if req.junk is None or not any(line.get("kind") == peoples_mail.KIND for line in lines):
+        return lines, None
+    try:
+        rule = peoples_mail.Rule.of(lb, marks, resolutions, kept=req.kept, portfolio=req.portfolio)
+    except policy.PolicyError as e:
+        raise CrossingError(str(e)) from e
+    with lb.index() as idx:
+        verdicts = rule.verdicts(idx, lines, req.junk)
+    held = {v.id for v in verdicts if v.held}
+    return [line for line in lines if str(line.get("id")) not in held], peoples_mail.held_counts(verdicts)
 
 
 def _overlay(lines: list[Line], last: dict[Ref, Line], tiers: tuple[int, ...]) -> tuple[list[Line], int]:
@@ -593,9 +682,10 @@ def build_manifest(
 
 
 def _all_mail(req: Request) -> dict[str, str]:
-    """`{"mail": "all"}` when `--all-mail` lifted RFC 0045's rule and mail is among the kinds; else
-    nothing, so the policy of every other package is what it was."""
-    return {"mail": "all"} if req.all_mail and req.mail else {}
+    """`{"mail": "all"}` when `--mail all` (`--all-mail`) lifted RFC 0045's rule, `{"mail":
+    "all-except-junk"}` under the owner's junk rule, and mail is among the kinds; else nothing, so the
+    policy of every other package is what it was."""
+    return {"mail": req.mail_mode} if req.mail_mode != MAIL_PEOPLE and req.mail else {}
 
 
 def write_bundle(

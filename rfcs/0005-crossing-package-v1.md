@@ -145,3 +145,7 @@ for it.
   gains `mail_held_back` (written whenever the window held a mail the other gates let through) and, under
   `--all-mail`, which crosses every mail as before, `policy` gains `"mail": "all"`. A package without mail is
   unchanged.
+- **2026-11-20, all except junk (RFC 0045, amendment).** Under `--mail all-except-junk`, every mail crosses but
+  a received one the destination's own `mail_junk` rule calls junk; `policy` gains `"mail": "all-except-junk"`
+  and `counts` gains `mail_held_by_reason` (`let_go`, `junk_category`, `junk_label`) and
+  `mail_held_first_time` beside `mail_held_back`: counts only. A package of another mode is unchanged.

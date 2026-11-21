@@ -37,6 +37,7 @@ from ..core import (
     keepers,
     notes,
     pages,
+    peoples_mail,
     policy,
     reading,
     search,
@@ -706,6 +707,47 @@ def _day_sign(lb: Logbook, a: argparse.Namespace) -> None:
             f"  {n} proposed event{'s' if n != 1 else ''} not written; `logbook day sign {day} --accept N`"
             " writes one into the record"
         )
+    for text in held_mail_rows(lb, day):
+        print(text)
+
+
+def held_mail_rows(lb: Logbook, day: str) -> list[str]:
+    """After a signature, one line per destination whose entry in policy/crossing.json has a
+    `mail_junk` rule (RFC 0045, all except junk): how many of the day's mails that rule would hold back,
+    and how many of those a first-time sender's. Counts only: never a name, an address or a subject. A
+    rule that cannot be read is said in one line, never passed over, so a quick sign hides nothing."""
+    from ..contrib import orgs
+
+    try:
+        destinations = peoples_mail.junk_destinations(lb.root)
+    except policy.PolicyError as e:
+        return [f"  mail held back: {e}"]
+    if not destinations:
+        return []
+    rules: dict[str, peoples_mail.Junk] = {}
+    unread: dict[str, str] = {}
+    for destination in destinations:
+        try:
+            rule = peoples_mail.junk_of(lb.root, destination)
+        except policy.PolicyError as e:
+            unread[destination] = str(e)
+            continue
+        assert rule is not None  # the destination was listed for its rule
+        rules[destination] = rule
+    judged = peoples_mail.day_verdicts(lb, day, rules, portfolio=orgs.portfolio_refs(lb)) if rules else {}
+    rows: list[str] = []
+    for destination in destinations:
+        if destination in unread:
+            why = unread[destination]
+            rows.append(f"{destination}: its mail_junk rule cannot be read, so nothing is counted: {why}")
+            continue
+        counts = peoples_mail.held_counts(judged[destination])
+        n = counts["held"]
+        rows.append(
+            f"{destination}: {n} mail{'s' if n != 1 else ''} held back"
+            f" ({counts['first_time']} from a first-time sender)"
+        )
+    return rows
 
 
 def _sign_with_events(

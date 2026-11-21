@@ -52,8 +52,11 @@ not), and never an address.
 ## The crossing
 
 `logbook export crossing` sends people's mail only, whenever mail is among the kinds it crosses, and
-counts the rest in the manifest as `mail_held_back`. `--all-mail` sends every mail the tier and the signed
-days let through, as before, and the manifest says so ([the crossing](crossing.md#peoples-mail)).
+counts the rest in the manifest as `mail_held_back`. `--mail all` (`--all-mail`) sends every mail the tier
+and the signed days let through, as before, and the manifest says so ([the crossing](crossing.md#peoples-mail)).
+`--mail all-except-junk` sends every mail but a received one your own `mail_junk` rule for the destination
+calls junk, by its Gmail category or its labels; there the category and the labels are part of a rule you
+wrote for that crossing, and still only evidence everywhere else ([all except junk](crossing.md#all-except-junk)).
 
 ## Requests
 

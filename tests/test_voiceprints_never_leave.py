@@ -83,6 +83,7 @@ ARGUMENTS: dict[str, dict[str, Any]] = {
     "day_lines": {"day": DINNER_DAY},
     "line": {"id": DINNER},
     "digest": {"period": "week", "date": DINNER_DAY},
+    "held_mail": {"day": DINNER_DAY},
     "add_note": {"text": "Called the yard about the crane.", "at": "2026-10-12T10:00:00+02:00"},
     "promise_done": {"id": "0000000000000000"},  # no such proposal: the refusal is the answer scanned
     "sign_day": {"day": CALL_DAY, "confirm": "none"},
