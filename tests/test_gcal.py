@@ -4,9 +4,9 @@ Every feed here is synthetic (the Nordmanns of Oslo do not exist), served by a s
 loopback interface from memory; no test reaches the network. The secret part of every URL is a made-up
 token, and the tests assert it never reaches the console.
 
-The suite runs in parallel, and on a busy machine: every wait here (the client's, the server's, the
-teardown's) is `TIMEOUT_S`, the server has answered a connection before the test makes its first request,
-and it and its threads are gone before the next test starts.
+The suite runs in parallel, and on a busy machine: every timeout here (the client's fetch, a read on a
+connection the server holds, the readiness probe) is `TIMEOUT_S`, the server has answered a connection
+before the test makes its first request, and it and its threads are joined before the next test starts.
 """
 
 from __future__ import annotations
@@ -90,9 +90,9 @@ NO_NAME = "\r\n".join(
 # -- the stub server ------------------------------------------------------------------------
 
 # The one place: how long any single step may take before a test gives up on it (the client's fetch,
-# a connection the server holds open, the readiness probe, each join at teardown). Loopback answers
-# in milliseconds, so this is never waited for on a healthy run; it is only how much patience a
-# machine busy with the rest of the suite gets before a wait becomes a failure rather than a hang.
+# a read on a connection the server holds open, the readiness probe, the serve thread's join).
+# Loopback answers in milliseconds, so this is never waited for on a healthy run; it is only how much
+# patience a machine busy with the rest of the suite gets before a wait becomes a failure, not a hang.
 TIMEOUT_S = 60.0
 
 
@@ -100,8 +100,9 @@ class _Feeds(ThreadingHTTPServer):
     routes: dict[str, tuple[int, bytes]]
     requests: list[str]
 
-    # The port is the kernel's choice (bind to 0) and this server's alone: without SO_REUSEADDR or
-    # SO_REUSEPORT no other socket, in this xdist worker or another, can be bound to it while it lives.
+    # The port is the kernel's choice (bind to 0), never one in use, and this server's alone: without
+    # SO_REUSEADDR or SO_REUSEPORT (and, on Windows, with SO_EXCLUSIVEADDRUSE, set by `_exclusive`) no
+    # other socket, in this xdist worker or another, can be bound to it while it lives.
     allow_reuse_address = False
     allow_reuse_port = False
     # `server_close` joins every handler thread, so none outlives its test.
@@ -111,9 +112,17 @@ class _Feeds(ThreadingHTTPServer):
     def server_bind(self) -> None:
         # HTTPServer's own asks the resolver for the host's full name (`socket.getfqdn`), a lookup
         # that can take seconds on a busy Mac; the name is known.
+        _exclusive(self.socket)
         socketserver.TCPServer.server_bind(self)
         self.server_name = "127.0.0.1"
         self.server_port = int(self.server_address[1])
+
+
+def _exclusive(sock: socket.socket) -> None:
+    """On Windows a socket that sets SO_REUSEADDR may bind over one that did not ask to be alone."""
+    option = getattr(socket, "SO_EXCLUSIVEADDRUSE", None)
+    if option is not None:
+        sock.setsockopt(socket.SOL_SOCKET, option, 1)
 
 
 class _Handler(BaseHTTPRequestHandler):
@@ -147,7 +156,9 @@ def feeds(monkeypatch: pytest.MonkeyPatch) -> Iterator[_Feeds]:
     finally:
         server.shutdown()  # returns once the serve loop has left
         thread.join(TIMEOUT_S)
-        server.server_close()  # closes the listening socket and joins the handler threads
+        # closes the listening socket and joins the handler threads, each of which ends with its
+        # response or, at the latest, when a read on its connection has waited TIMEOUT_S
+        server.server_close()
         assert not thread.is_alive(), "the stub server's thread outlived its test"
 
 
@@ -176,6 +187,7 @@ def closed_port() -> Iterator[int]:
     """A loopback port that refuses connections for the whole test: bound, never listening, and held
     until the test is over, so the number cannot be handed to another worker's server in between."""
     with socket.socket() as held:
+        _exclusive(held)
         held.bind(("127.0.0.1", 0))
         yield int(held.getsockname()[1])
 
