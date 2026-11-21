@@ -3,13 +3,19 @@
 Every feed here is synthetic (the Nordmanns of Oslo do not exist), served by a stub HTTP server on the
 loopback interface from memory; no test reaches the network. The secret part of every URL is a made-up
 token, and the tests assert it never reaches the console.
+
+The suite runs in parallel, and on a busy machine: every wait here (the client's, the server's, the
+teardown's) is `TIMEOUT_S`, the server has answered a connection before the test makes its first request,
+and it and its threads are gone before the next test starts.
 """
 
 from __future__ import annotations
 
 import json
 import socket
+import socketserver
 import threading
+from collections.abc import Iterator
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
@@ -83,14 +89,36 @@ NO_NAME = "\r\n".join(
 
 # -- the stub server ------------------------------------------------------------------------
 
+# The one place: how long any single step may take before a test gives up on it (the client's fetch,
+# a connection the server holds open, the readiness probe, each join at teardown). Loopback answers
+# in milliseconds, so this is never waited for on a healthy run; it is only how much patience a
+# machine busy with the rest of the suite gets before a wait becomes a failure rather than a hang.
+TIMEOUT_S = 60.0
+
 
 class _Feeds(ThreadingHTTPServer):
     routes: dict[str, tuple[int, bytes]]
     requests: list[str]
 
+    # The port is the kernel's choice (bind to 0) and this server's alone: without SO_REUSEADDR or
+    # SO_REUSEPORT no other socket, in this xdist worker or another, can be bound to it while it lives.
+    allow_reuse_address = False
+    allow_reuse_port = False
+    # `server_close` joins every handler thread, so none outlives its test.
+    daemon_threads = False
+    block_on_close = True
+
+    def server_bind(self) -> None:
+        # HTTPServer's own asks the resolver for the host's full name (`socket.getfqdn`), a lookup
+        # that can take seconds on a busy Mac; the name is known.
+        socketserver.TCPServer.server_bind(self)
+        self.server_name = "127.0.0.1"
+        self.server_port = int(self.server_address[1])
+
 
 class _Handler(BaseHTTPRequestHandler):
     server: _Feeds
+    timeout = TIMEOUT_S  # a connection that never sends its request cannot hold a thread for ever
 
     def do_GET(self) -> None:
         self.server.requests.append(self.path)
@@ -106,18 +134,29 @@ class _Handler(BaseHTTPRequestHandler):
 
 
 @pytest.fixture
-def feeds() -> Any:
+def feeds(monkeypatch: pytest.MonkeyPatch) -> Iterator[_Feeds]:
+    monkeypatch.setattr(gcal, "TIMEOUT_S", TIMEOUT_S)  # the client's patience is the test's, set above
     server = _Feeds(("127.0.0.1", 0), _Handler)
     server.routes = {SAILING_PATH: (200, CALENDAR.encode("utf-8")), WORK_PATH: (200, WORK.encode("utf-8"))}
     server.requests = []
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread = threading.Thread(target=server.serve_forever, name="gcal-feeds", daemon=True)
     thread.start()
     try:
+        _wait_until_serving(server)
         yield server
     finally:
-        server.shutdown()
-        server.server_close()
-        thread.join(timeout=5)
+        server.shutdown()  # returns once the serve loop has left
+        thread.join(TIMEOUT_S)
+        server.server_close()  # closes the listening socket and joins the handler threads
+        assert not thread.is_alive(), "the stub server's thread outlived its test"
+
+
+def _wait_until_serving(server: _Feeds) -> None:
+    """Returns once the serve loop has accepted a connection and its handler has closed it: the probe
+    sends nothing, so it is not a request (`server.requests` stays empty), and nothing here sleeps."""
+    with socket.create_connection(("127.0.0.1", server.server_port), timeout=TIMEOUT_S) as probe:
+        probe.shutdown(socket.SHUT_WR)
+        assert probe.recv(1) == b"", "the stub server answered a connection that asked nothing"
 
 
 def _url(server: _Feeds, path: str) -> str:
@@ -132,10 +171,13 @@ def _config(server: _Feeds, *paths: str, names: dict[str, str] | None = None, **
     return config
 
 
-def _closed_port() -> int:
-    with socket.socket() as s:
-        s.bind(("127.0.0.1", 0))
-        return int(s.getsockname()[1])
+@pytest.fixture
+def closed_port() -> Iterator[int]:
+    """A loopback port that refuses connections for the whole test: bound, never listening, and held
+    until the test is over, so the number cannot be handed to another worker's server in between."""
+    with socket.socket() as held:
+        held.bind(("127.0.0.1", 0))
+        yield int(held.getsockname()[1])
 
 
 def _no_secret(*texts: str) -> None:
@@ -348,8 +390,8 @@ def test_a_calendar_that_fails_is_reported_by_label_and_the_others_still_come(fe
     _no_secret(*failed)
 
 
-def test_a_server_that_cannot_be_reached_is_a_failure_line_too(feeds):
-    config = gcal.configure({URLS_ENV: f"Down=http://127.0.0.1:{_closed_port()}/{SECRET_A}/basic.ics"})
+def test_a_server_that_cannot_be_reached_is_a_failure_line_too(feeds, closed_port):
+    config = gcal.configure({URLS_ENV: f"Down=http://127.0.0.1:{closed_port}/{SECRET_A}/basic.ics"})
     assert config is not None
     failed: list[str] = []
     assert list(gcal.pull(config, failed=failed)) == []
