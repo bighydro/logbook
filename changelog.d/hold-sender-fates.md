@@ -6,3 +6,7 @@
   deleted.
 - `people mail` counts the mail let go in Hold and how many senders you let go, never naming one;
   `--json` carries `fates` in place of the old `let_go` sentence.
+- The Day page's Keep and sign carries *Held back* when a destination has a `mail_junk` rule and the
+  day held mail under it: first-time senders by address and subject, then the other senders by
+  address or domain with a count, each with a *keep* box that keeps the sender before the signature,
+  so its mail crosses from then on. `logbook day sign DAY --keep-sender ADDRESS` writes the same.

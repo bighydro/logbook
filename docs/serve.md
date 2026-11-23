@@ -874,6 +874,7 @@ the same lines, byte for byte, but for the line ids and the clock:
 | *the day in a word* | `--word WORD` | a `note/v1` labelled `word`, one on a day |
 | *done*, *tomorrow* or *let go* on a task of the day, shown by its title alone | `--done T,T`, `--tomorrow T,T`, `--let-go T,T` | a `note/v1` labelled `task` for each task answered |
 | a box on a delegation (the proposals, as above) | `--accept N,N` (`day reflect --sign`) | the delegation's `note/v1` |
+| *keep* on a sender under *Held back* | `--keep-sender ADDRESS,DOMAIN` (`day sign`) | a `keep` fate, `status/v1`, for each sender ([Hold](hold.md#sender-fates)) |
 | *Sign*, *Sign again* | `logbook day reflect DAY --sign` | the `signed-day/v1` line, the kept lines among those it confirms, never the draft |
 
 So `logbook day reflect 2026-10-20 --sign --keep 2,3,4 --revisit 4=2026-11-20 --word calm --done 1
@@ -900,6 +901,35 @@ Day reads it: a draft above the gate is neither shown, offered, named nor linked
 to exist, at a tier the page does not read), and a form that names one anyway keeps nothing of it,
 since `keep.prepared` reads the draft through the same gate. So with the day in a word, a note of tier 2: above the gate it is absent
 from the page, and the refusal of a second word says the day has one without quoting it.
+
+### Held back
+
+When a destination of `policy/crossing.json` has a `mail_junk` rule ([crossing](crossing.md)) and the
+day's mail held something back under it, Keep and sign carries a fieldset *Held back*, after the
+delegations and before the button; a day that held nothing shows nothing. Under each such destination,
+named as a heading with no number beside it:
+
+- first, the mail from senders writing for the first time (an address that never wrote before, never a
+  no-reply address, a list or you): each mail as its sender's address and its subject, one *keep* box
+  per sender;
+- below, the other senders, one row each by address, or by domain when two or more addresses of one
+  domain were held, with how many mails, and one *keep* box.
+
+A person of the record is never held by a junk rule, so no row is a person's, and a sender is shown by
+its address or its domain, never by a name the record resolves. A sender you let go in Hold is not
+offered again: you decided it. The section reads through the page's gate (the day's mail, the addresses
+that decide a first time, an org's portfolio only where tier 3 is read), fetches nothing, and only the
+owner's Library shows it. When `policy/crossing.json` or `policy/owner.json` cannot be read, the section
+says so in one sentence and offers nothing.
+
+A box ticked writes one `keep` fate for that sender, after the delegations and before the signature,
+under the same hold of the writer lock, and the signature confirms it. The sender is then kept: under
+`--mail all-except-junk` its mail is never junk again, so the day's mail from it crosses with the day's
+bundle, and its later mail too; there is nothing to resend. Untouched, the mail stays home. The form
+carries what it offered, digested: when the day's held mail changed since the page was read, a form
+that keeps a sender is a `409` and nothing is written; a sender the day did not hold back, or one kept
+already, is a `400`. `logbook day sign DAY --keep-sender letters@news.example.org,shop.example.org` writes
+the same lines.
 
 Every item is checked before the first line is written, by the code `--keep` runs (`keep.prepared`),
 and any refusal writes nothing and is a `400` in one sentence: a number the pencil does not give, an

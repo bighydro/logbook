@@ -153,6 +153,11 @@ What the fates do, today:
   ([crossing](crossing.md)), a sender you keep is never junk, whatever its category or labels say; a
   sender you let go is held there too.
 
+The Day page offers the same keep at the close of a day: under *Held back* in Keep and sign, each
+sender your junk rules held back that day has a *keep* box, written before the signature
+([serve](serve.md#held-back)); `logbook day sign DAY --keep-sender ADDRESS` is the same at the command
+line.
+
 `logbook people mail` counts the mail let go and how many senders you let go, never naming one.
 
 ## Drive
