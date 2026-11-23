@@ -725,6 +725,9 @@ def held_mail_rows(lb: Logbook, day: str) -> list[str]:
         return [f"  mail held back: {e}"]
     if not destinations:
         return []
+    problem = policy.owner_problem(lb.root)
+    if problem is not None:  # fail closed: no alias of the owner read, no mail judged, one sentence why
+        return [f"  mail held back is not counted, since {problem}; {policy.OWNER_FIX}"]
     rules: dict[str, peoples_mail.Junk] = {}
     unread: dict[str, str] = {}
     for destination in destinations:

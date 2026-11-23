@@ -560,6 +560,97 @@ def test_day_sign_says_nothing_of_mail_without_a_rule(
     assert "held back" not in capsys.readouterr().out
 
 
+# -- a bad policy/owner.json ---------------------------------------------------------------------------
+
+SECRET, ALIAS = "Per Hemmelig", "ines.alias@example.org"  # what a bad owner file holds: never echoed
+BAD_OWNER = ("missing", "a_folder", "not_utf8", "not_json", "wrong_shape")
+
+
+def _owner_file(lb: Logbook, bad: str) -> Path:
+    """policy/owner.json made bad in one of the ways of `BAD_OWNER`: gone, a folder where the file was
+    (unreadable on every system), bytes that are not UTF-8, text that is not JSON, JSON of the wrong
+    shape. Each holds a name and an address that must never be printed back."""
+    path = policy.owner_path(lb.root)
+    path.unlink()
+    if bad == "a_folder":
+        path.mkdir()
+    elif bad == "not_utf8":
+        path.write_bytes(b"\xff\xfe" + SECRET.encode("utf-16-le"))
+    elif bad == "not_json":
+        path.write_bytes(f'{{"names": ["{SECRET}"], "emails": ["{ALIAS}"'.encode())
+    elif bad == "wrong_shape":
+        path.write_bytes(json.dumps({"names": SECRET, "emails": [ALIAS]}).encode())
+    return path
+
+
+def _one_sentence_on_the_owner_file(text: str) -> str:
+    """The one row that names policy/owner.json: one sentence, and nothing of what the file holds."""
+    rows = [row.strip() for row in text.splitlines() if "owner.json" in row]
+    assert len(rows) == 1, text
+    assert SECRET not in text and SECRET.casefold() not in text.casefold() and ALIAS not in text
+    assert ". " not in rows[0].rstrip("."), rows[0]
+    return rows[0]
+
+
+@pytest.mark.parametrize("bad", BAD_OWNER)
+@pytest.mark.parametrize("mode", [crossing.MAIL_EXCEPT_JUNK, crossing.MAIL_ALL])
+def test_a_bad_owner_file_sends_people_s_mail_only(
+    lb: Logbook, tmp_path: Path, capsys: pytest.CaptureFixture[str], bad: str, mode: str
+) -> None:
+    """A missing, unreadable or malformed policy/owner.json fails closed: the mail of a crossing that
+    asked for more falls back to people's mail only, the strictest mode the crossing has, and the run
+    says in one sentence what is wrong with the file and how to fix it. A missing file is not written."""
+    _export(tmp_path / "people")
+    people = _manifest(tmp_path / "people")
+    path = _owner_file(lb, bad)
+    capsys.readouterr()
+    for out in (tmp_path / "dry", tmp_path / "out"):
+        _export(out, "--mail", mode, *(("--dry-run",) if out.name == "dry" else ()))
+        said = capsys.readouterr()
+        row = _one_sentence_on_the_owner_file(said.out + said.err)
+        assert "people's mail only" in row
+    assert _crossed(tmp_path / "out") == _crossed(tmp_path / "people")
+    manifest = _manifest(tmp_path / "out")
+    assert "mail" not in manifest["policy"] and "mail_held_by_reason" not in manifest["counts"]
+    assert manifest["counts"]["mail_held_back"] == people["counts"]["mail_held_back"]
+    assert path.exists() is (bad != "missing")
+
+
+def test_a_bad_owner_file_makes_no_mail_the_owner_s(lb: Logbook, tmp_path: Path) -> None:
+    """An alias the file lists, read, makes a mail from it (its direction unsaid) the owner's, sent to
+    Kari, a person: it crosses. The same alias in a file that is not the right shape confirms nothing:
+    the mail is a stranger's, and held."""
+    payload = _mail("2026-03-01T12:00:00Z", ALIAS, KARI)
+    del payload["payload"]["direction"]
+    mail = lb.append(**payload)
+    policy.owner_path(lb.root).write_text(json.dumps({"emails": [ALIAS]}), encoding="utf-8")
+    _export(tmp_path / "good", "--mail", "all-except-junk")
+    assert str(mail["id"]) in _crossed(tmp_path / "good")
+    _owner_file(lb, "wrong_shape")
+    _export(tmp_path / "bad", "--mail", "all-except-junk")
+    assert str(mail["id"]) not in _crossed(tmp_path / "bad")
+
+
+@pytest.mark.parametrize("bad", BAD_OWNER)
+def test_day_sign_with_a_bad_owner_file_counts_no_held_mail_and_says_why(
+    lb: Logbook, capsys: pytest.CaptureFixture[str], bad: str
+) -> None:
+    path = _owner_file(lb, bad)
+    cli.main(["day", "sign", DAY])
+    text = capsys.readouterr().out
+    _one_sentence_on_the_owner_file(text)
+    assert "mails held back (" not in text and "mail held back (" not in text
+    assert path.exists() is (bad != "missing")
+
+
+@pytest.mark.parametrize("bad", BAD_OWNER)
+def test_the_door_with_a_bad_owner_file_judges_no_mail(lb: Logbook, bad: str) -> None:
+    _owner_file(lb, bad)
+    with pytest.raises(mcp_server.ToolError) as refused:
+        _door(lb, 2)
+    _one_sentence_on_the_owner_file(str(refused.value))
+
+
 # -- no count beside a destination ------------------------------------------------------------------
 
 

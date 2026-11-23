@@ -110,6 +110,18 @@ since a key is often a person's name and no number stands beside a name:
 
 An agent asks the same of a day through the door's `held_mail` tool ([MCP](mcp.md#mail-held-back)).
 
+A missing, unreadable or malformed `policy/owner.json` fails closed. A crossing that asked for
+`--mail all-except-junk` or `--mail all` sends people's mail only, the strictest mode it has, with the owner
+known by `logbook.json` and the record alone: nothing in the bad file makes a mail yours. The run says in
+one sentence what is wrong with the file and how to mend it, and never a word of what it holds:
+
+```
+  mail: policy/owner.json is not valid JSON (line 1, column 64), so mail falls back to people's mail only; write it as {"names": [], "emails": [], "phones": [], "handles": []} with your own names, addresses, numbers and handles in the lists
+```
+
+`day sign` counts no held mail then and says the same in one line, and the door's `held_mail` is refused
+with it. A missing file is not written back.
+
 ## The package
 
 ```

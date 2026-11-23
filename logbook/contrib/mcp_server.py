@@ -1065,6 +1065,9 @@ def tool_held_mail(lb: GatedLogbook, a: Arguments) -> dict[str, Any]:
             f'held mail is not open to the door: add "{peoples_mail.DOOR_KEY}": true to the'
             f' "{policy.MCP_DESTINATION}" entry of {policy.POLICY_FILE.as_posix()} to let it read held mail'
         )
+    problem = policy.owner_problem(lb.root)
+    if problem is not None:  # fail closed: the owner's aliases cannot be trusted, so no mail is judged
+        raise ToolError(f"held mail is not judged, since {problem}; {policy.OWNER_FIX}")
     withheld = set(lb.gate.withheld)  # what the gate held back before held mail was read
     day = _day(a, "day") or _today(lb)
     day_start.of(lb.meta)  # the page is the day so defined: a boundary not a clock is refused (RFC 0036)

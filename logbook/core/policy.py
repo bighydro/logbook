@@ -577,6 +577,40 @@ def owner_aliases(root: Path) -> dict[str, list[str]]:
     return out
 
 
+OWNER_SHAPE = '{"names": [], "emails": [], "phones": [], "handles": []}'
+OWNER_FIX = f"write it as {OWNER_SHAPE} with your own names, addresses, numbers and handles in the lists"
+
+
+def owner_problem(root: Path) -> str | None:
+    """What is wrong with `policy/owner.json`, as a clause of one sentence (`OWNER_FIX` says how to mend
+    it), or None when it reads as `owner_aliases` reads it: missing, unreadable (a folder, a permission),
+    not UTF-8, not JSON, or not the documented shape. Read only, never written, and never a byte of the
+    file's contents in the words: a reader that cannot trust the owner's aliases falls back to the
+    strictest thing it does and says this instead."""
+    path = owner_path(root)
+    name = OWNER_FILE.as_posix()
+    if not path.exists():
+        return f"{name} is missing"
+    try:
+        raw = path.read_bytes()
+    except OSError as e:
+        return f"{name} cannot be read ({e.strerror or type(e).__name__})"
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError:
+        return f"{name} is not UTF-8 text"
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError as e:
+        return f"{name} is not valid JSON (line {e.lineno}, column {e.colno})"
+    if not isinstance(data, dict) or not all(
+        isinstance(values, list) and all(isinstance(v, str) for v in values)
+        for values in (data.get(key, []) for key in OWNER_KEYS)
+    ):
+        return f"{name} is JSON but not {{key: a list of strings}} for each of {', '.join(OWNER_KEYS)}"
+    return None
+
+
 def handle(text: str) -> str | None:
     """A handle as a ref carries it (RFC 0006 `handle`): stripped, without a leading `@`, case aside,
     since the services that show one (GitHub, X) read it so; a service prefix (`github:`) is kept.

@@ -120,6 +120,8 @@ class Request:
     junk: peoples_mail.Junk | None = None  # the destination's `mail_junk` rule, under all-except-junk
     kept: frozenset[Ref] = frozenset()  # the senders Hold keeps (RFC 0042 §4): empty until Hold writes fates
     portfolio: frozenset[Ref] = frozenset()  # refs bound to an org in a portfolio; never written anywhere
+    # why policy/owner.json cannot be trusted, when a mode that asked for more fell back to people's mail
+    owner_problem: str | None = None
 
     @property
     def tier3(self) -> bool:
@@ -189,6 +191,11 @@ def request(
             f' "{peoples_mail.JUNK_KEY}" in {destination!r}\'s entry, so nothing is exported; add one'
             ' ({"categories": [...], "labels": [...], "never_labels": [...]}), or choose --mail people or all'
         )
+    # a bad policy/owner.json fails closed: a mode that asked for more than people's mail falls back to
+    # it, the strictest mode the crossing has, and reads no alias of the owner (`fallback_sentence`)
+    problem = policy.owner_problem(lb.root) if mode != MAIL_PEOPLE else None
+    if problem is not None:
+        mode, junk = MAIL_PEOPLE, None
     if max(tiers) > max_tier:
         raise CrossingError(
             f"--tier {','.join(map(str, tiers))} is above the ceiling for {destination!r}: "
@@ -210,7 +217,14 @@ def request(
         junk,
         kept,
         portfolio,
+        problem,
     )
+
+
+def fallback_sentence(problem: str) -> str:
+    """The one sentence a crossing says when `policy/owner.json` cannot be trusted (`Request.owner_problem`):
+    what is wrong with the file, what the mail did, and how to mend it, never a byte of the file."""
+    return f"{problem}, so mail falls back to people's mail only; {policy.OWNER_FIX}"
 
 
 def _checked(stamp: str) -> str:
@@ -356,7 +370,8 @@ def select(lb: Logbook, req: Request) -> Selection:
     mail_held: int | None = None
     mail_junk: dict[str, Any] | None = None
     if req.mail_mode == MAIL_PEOPLE:
-        lines, mail_held = peoples_mail_only(lb, retraction_lines, resolution_lines, lines)
+        aliases: dict[str, list[str]] | None = {} if req.owner_problem is not None else None  # bad: none read
+        lines, mail_held = peoples_mail_only(lb, retraction_lines, resolution_lines, lines, aliases)
     elif req.mail_mode == MAIL_EXCEPT_JUNK:
         lines, mail_junk = all_except_junk(lb, req, retraction_lines, resolution_lines, lines)
         mail_held = None if mail_junk is None else int(mail_junk["held"])
@@ -420,16 +435,20 @@ def signed_gate(lb: Logbook, idx: Index) -> SignedGate:
 
 
 def peoples_mail_only(
-    lb: Logbook, marks: Iterable[Line], resolutions: Iterable[Line], lines: list[Line]
+    lb: Logbook,
+    marks: Iterable[Line],
+    resolutions: Iterable[Line],
+    lines: list[Line],
+    aliases: Mapping[str, Iterable[str]] | None = None,
 ) -> tuple[list[Line], int | None]:
     """RFC 0045's rule, the one `select` and `share day` both apply: `lines` (opened) with every mail
     no person is on left out (`peoples_mail.Rule`), and how many were; None when there was no mail to
     read, so a package with none is what it was. `CrossingError` names `policy/owner.json` when that
-    file is not what it should be."""
+    file is not what it should be; `aliases` stands in for the file (`{}`: a fallback reads none)."""
     if not any(line.get("kind") == peoples_mail.KIND for line in lines):
         return lines, None
     try:
-        rule = peoples_mail.Rule.of(lb, marks, resolutions)
+        rule = peoples_mail.Rule.of(lb, marks, resolutions, aliases=aliases)
     except policy.PolicyError as e:
         raise CrossingError(str(e)) from e
     persons = [line for line in lines if line.get("kind") != peoples_mail.KIND or rule.classify(line).person]

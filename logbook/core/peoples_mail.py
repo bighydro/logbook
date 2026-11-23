@@ -278,14 +278,17 @@ class Rule:
         let_go: frozenset[Ref] = frozenset(),
         kept: frozenset[Ref] = frozenset(),
         portfolio: frozenset[Ref] = frozenset(),
+        aliases: Mapping[str, Iterable[str]] | None = None,
     ) -> Rule:
         """From the retraction and resolution lines (opened), `logbook.json` and `policy/owner.json`
-        (`policy.PolicyError` when that file is not what it should be)."""
+        (`policy.PolicyError` when that file is not what it should be), or the `aliases` given in its
+        place: `{}` when the file cannot be trusted (`policy.owner_problem`), so the owner is who
+        `logbook.json` and the record say and nothing in a bad file makes a mail the owner's."""
         identities = resolve.identities_from([*marks, *resolutions])
         owner = present.owner_of(
             str(lb.meta.get("owner_id") or ""),
             [str(e) for e in lb.meta.get("owner_emails") or [] if isinstance(e, str)],
-            policy.owner_aliases(lb.root),
+            policy.owner_aliases(lb.root) if aliases is None else aliases,
             identities,
         )
         return cls(identities, owner, let_go, kept, portfolio)

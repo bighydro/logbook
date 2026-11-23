@@ -510,6 +510,7 @@ def _export_crossing(lb: Logbook, a: argparse.Namespace) -> None:
         state = "" if policy_file.exists() else " (default; the first export writes it)"
         print(f"dry run: to the destination {req.destination}, in {window}, tiers {tiers}; nothing written")
         print(f"  policy: {policy_file} {req.destination} max_tier {req.max_tier}{state}")
+        _owner_fallback(req)
         for text in _crossing_rows(sel):
             print(text)
         if req.tier3:
@@ -529,6 +530,7 @@ def _export_crossing(lb: Logbook, a: argparse.Namespace) -> None:
         f"{sel.counts()['crossed']} lines crossed to the destination {req.destination}, in {window},"
         f" tiers {tiers} → {out}"
     )
+    _owner_fallback(req)
     for text in _crossing_rows(sel):
         print(text)
     if sel.sealed:
@@ -541,6 +543,13 @@ def _export_crossing(lb: Logbook, a: argparse.Namespace) -> None:
         _tier3_warning(req, sel)
     seq, digest = result.line["seq"], result.package_sha256[:12]
     print(f"  recorded as #{seq} {crossing.LINE_SCHEMA}, package sha256 {digest}…; watermark {req.until}")
+
+
+def _owner_fallback(req: crossing.Request) -> None:
+    """The one sentence, when a bad policy/owner.json made a mode that asked for more send people's mail
+    only (`crossing.fallback_sentence`): what is wrong with the file and how to mend it, nothing of it."""
+    if req.owner_problem is not None and req.mail:
+        print(f"  mail: {crossing.fallback_sentence(req.owner_problem)}")
 
 
 def _portfolio(lb: Logbook, tiers: tuple[int, ...]) -> frozenset[tuple[str, str]]:
