@@ -183,8 +183,8 @@ def door_open(root: Path) -> bool:
     found = entry.get(DOOR_KEY, False) if isinstance(entry, dict) else False
     if not isinstance(found, bool):
         raise policy.PolicyError(
-            f'{policy.policy_path(root)}: the "{policy.MCP_DESTINATION}" entry has a "{DOOR_KEY}" that is not'
-            " true or false"
+            f'{policy.POLICY_FILE.as_posix()}: the "{policy.MCP_DESTINATION}" entry has a "{DOOR_KEY}"'
+            " that is not true or false"
         )
     return found
 
@@ -542,20 +542,27 @@ def day_verdicts(
     rules: Mapping[str, Junk],
     kept: frozenset[Ref] = frozenset(),
     portfolio: frozenset[Ref] = frozenset(),
+    tiers: Collection[int] | None = None,
 ) -> dict[str, list[Verdict]]:
     """Destination → every mail line of the local `day` that stands, under that destination's junk
     rule (`Rule.junk`), each with its first-time flag (read once, for every rule); read through
-    `lb.index()`, so a gated record (the door's) judges only the lines its gate shows. `kept` and
-    `portfolio` as `Rule` takes them."""
+    `lb.index()`, so a gated record (the door's) judges only the lines its gate shows, and at `tiers`
+    (None: every tier the index serves), so a reading for one destination's entry reads its mails, its
+    persons and its earlier mails at that entry's tiers alone. `kept` and `portfolio` as `Rule` takes
+    them (the caller reads the portfolio at the same tiers)."""
     if not rules:
         return {}
     days = day_start.of(lb.meta)
+
+    def at(lines: Iterable[Line]) -> list[Line]:
+        return [line for line in lines if tiers is None or int(line.get("tier") or 0) in tiers]
+
     with lb.index() as idx:
         marks = idx.retractions()
-        judge = Rule.of(lb, marks, idx.resolutions(), kept=kept, portfolio=portfolio)
+        judge = Rule.of(lb, marks, at(idx.resolutions()), kept=kept, portfolio=portfolio)
         retracted = frozenset(retractions(marks))
-        mails = [line for line, _day in _standing(idx, KIND, day, day, retracted, days)]
-        first = judge.first_times(idx, mails, day)
+        mails = at(line for line, _day in _standing(idx, KIND, day, day, retracted, days))
+        first = judge.first_times(idx, mails, day, tiers)
         return {name: judge.verdicts(idx, mails, rule, first) for name, rule in rules.items()}
 
 

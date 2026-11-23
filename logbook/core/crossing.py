@@ -193,7 +193,7 @@ def request(
         )
     # a bad policy/owner.json fails closed: a mode that asked for more than people's mail falls back to
     # it, the strictest mode the crossing has, and reads no alias of the owner (`fallback_sentence`)
-    problem = policy.owner_problem(lb.root) if mode != MAIL_PEOPLE else None
+    problem = policy.owner_problem(lb.root)
     if problem is not None:
         mode, junk = MAIL_PEOPLE, None
     if max(tiers) > max_tier:
@@ -370,8 +370,11 @@ def select(lb: Logbook, req: Request) -> Selection:
     mail_held: int | None = None
     mail_junk: dict[str, Any] | None = None
     if req.mail_mode == MAIL_PEOPLE:
-        aliases: dict[str, list[str]] | None = {} if req.owner_problem is not None else None  # bad: none read
-        lines, mail_held = peoples_mail_only(lb, retraction_lines, resolution_lines, lines, aliases)
+        if req.owner_problem is None:
+            lines, mail_held = peoples_mail_only(lb, retraction_lines, resolution_lines, lines)
+        else:  # a bad owner file: no alias read, and no person named above the tiers, never looser
+            at_tiers = [line for line in resolution_lines if int(line.get("tier") or 0) in req.tiers]
+            lines, mail_held = peoples_mail_only(lb, retraction_lines, at_tiers, lines, {})
     elif req.mail_mode == MAIL_EXCEPT_JUNK:
         lines, mail_junk = all_except_junk(lb, req, retraction_lines, resolution_lines, lines)
         mail_held = None if mail_junk is None else int(mail_junk["held"])
@@ -1023,6 +1026,7 @@ def write_watermark(lb: Logbook, destination: str, until: str, exported_at: str,
 
 
 def default_out(lb: Logbook, destination: str, generated_at: str) -> Path:
-    """`<root>/export/crossing/<destination>/<generated_at, compact>`: one folder per run."""
+    """`<root>/export/crossing/<destination>/at-<generated_at, compact>`: one folder per run, a word
+    between the destination's key (often a person's name) and the stamp, so no figure stands beside it."""
     stamp = generated_at.replace("-", "").replace(":", "")
-    return lb.root / EXPORT_DIR / KIND / destination / stamp
+    return lb.root / EXPORT_DIR / KIND / destination / f"at-{stamp}"

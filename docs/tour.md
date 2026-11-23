@@ -1201,7 +1201,7 @@ logbook export crossing --to kari --since last --tier 1,2 --kinds message,event 
 
 The window is `[--since, --until)`, `--until` defaulting to now; `--since last` starts where the last crossing
 to that destination ended (`exports/crossing.json`), and the first run must say where to start. The bundle
-lands under `export/crossing/<destination>/<time>/` unless `--out` says otherwise: `manifest.json`,
+lands under `export/crossing/<destination>/at-<time>/` unless `--out` says otherwise: `manifest.json`,
 `entries.jsonl`, `attachments/<sha256>` for every referenced file the store holds (a missing one stays a
 reference), and `resolution.jsonl` when any exported line names someone your contacts have resolved,
 alias hops included. A JSON parser is all a reader needs.

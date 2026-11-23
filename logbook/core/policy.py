@@ -564,6 +564,9 @@ def owner_aliases(root: Path) -> dict[str, list[str]]:
     )
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError):  # a folder, a permission, bytes that are not text: never a byte
+        problem = owner_problem(root) or f"{OWNER_FILE.as_posix()} cannot be read"
+        raise PolicyError(f"{problem}; {OWNER_FIX}") from None
     except ValueError as e:
         raise PolicyError(f"{path} is not JSON: {e}") from e
     if not isinstance(data, dict):
@@ -589,9 +592,9 @@ def owner_problem(root: Path) -> str | None:
     strictest thing it does and says this instead."""
     path = owner_path(root)
     name = OWNER_FILE.as_posix()
-    if not path.exists():
-        return f"{name} is missing"
     try:
+        if not path.exists():
+            return f"{name} is missing"
         raw = path.read_bytes()
     except OSError as e:
         return f"{name} cannot be read ({e.strerror or type(e).__name__})"

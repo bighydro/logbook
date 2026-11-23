@@ -714,7 +714,8 @@ def _day_sign(lb: Logbook, a: argparse.Namespace) -> None:
 def held_mail_rows(lb: Logbook, day: str) -> list[str]:
     """After a signature, one line per destination whose entry in policy/crossing.json has a
     `mail_junk` rule (RFC 0045, all except junk): how many of the day's mails that rule would hold back,
-    and how many of those a first-time sender's. Counts only: never a name, an address or a subject, and
+    and how many of those a first-time sender's, judged at the tiers the destination's entry lets cross
+    (held mail answers only at its entry's tiers). Counts only: never a name, an address or a subject, and
     the count never beside the destination's key, which is often a person's name (words between). A
     rule that cannot be read is said in one line, never passed over, so a quick sign hides nothing."""
     from ..contrib import orgs
@@ -728,28 +729,23 @@ def held_mail_rows(lb: Logbook, day: str) -> list[str]:
     problem = policy.owner_problem(lb.root)
     if problem is not None:  # fail closed: no alias of the owner read, no mail judged, one sentence why
         return [f"  mail held back is not counted, since {problem}; {policy.OWNER_FIX}"]
-    rules: dict[str, peoples_mail.Junk] = {}
-    unread: dict[str, str] = {}
+    rows: list[str] = []
     for destination in destinations:
         try:
             rule = peoples_mail.junk_of(lb.root, destination)
+            tiers = tuple(range(1, policy.ceiling(lb.root, destination) + 1))  # what its entry lets cross
         except policy.PolicyError as e:
-            unread[destination] = str(e)
+            rows.append(f"  {destination}: its mail_junk rule cannot be read, so nothing is counted: {e}")
             continue
         assert rule is not None  # the destination was listed for its rule
-        rules[destination] = rule
-    judged = peoples_mail.day_verdicts(lb, day, rules, portfolio=orgs.portfolio_refs(lb)) if rules else {}
-    rows: list[str] = []
-    for destination in destinations:
-        if destination in unread:
-            why = unread[destination]
-            rows.append(f"{destination}: its mail_junk rule cannot be read, so nothing is counted: {why}")
-            continue
+        judged = peoples_mail.day_verdicts(
+            lb, day, {destination: rule}, portfolio=orgs.portfolio_refs(lb, tiers), tiers=tiers
+        )
         counts = peoples_mail.held_counts(judged[destination])
         n = counts["held"]
-        rows.append(  # the count first, the destination's key last, words between: it may be a name
-            f"{n} mail{'s' if n != 1 else ''} held back ({counts['first_time']} from a first-time sender)"
-            f" by the mail_junk rule for {destination}"
+        rows.append(  # the key before words, the count after them: never a figure beside a name
+            f"  the mail_junk rule for {destination} holds back {n} mail{'s' if n != 1 else ''}"
+            f" ({counts['first_time']} from a first-time sender)"
         )
     return rows
 

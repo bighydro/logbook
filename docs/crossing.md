@@ -101,18 +101,20 @@ portfolio above them move no mail and no count. The dry run prints the same coun
 ```
 
 `logbook day sign DAY` says the same of the day it signs, one line per destination with a rule, so a quick
-sign never hides what was held. The count comes first and the destination's key last, words between them,
-since a key is often a person's name and no number stands beside a name:
+sign never hides what was held. Each destination is judged at the tiers its entry lets cross, as a crossing
+to it would judge the day. The destination's key comes first and the count after words, since a key is
+often a person's name and no number stands beside a name:
 
 ```
-7 mails held back (3 from a first-time sender) by the mail_junk rule for per-hansen
+  the mail_junk rule for per-hansen holds back 7 mails (3 from a first-time sender)
 ```
 
 An agent asks the same of a day through the door's `held_mail` tool ([MCP](mcp.md#mail-held-back)).
 
-A missing, unreadable or malformed `policy/owner.json` fails closed. A crossing that asked for
-`--mail all-except-junk` or `--mail all` sends people's mail only, the strictest mode it has, with the owner
-known by `logbook.json` and the record alone: nothing in the bad file makes a mail yours. The run says in
+A missing, unreadable or malformed `policy/owner.json` fails closed. Whatever mode was asked for, a crossing
+sends people's mail only, the strictest mode it has, with the owner known by `logbook.json` and the record
+alone, and the persons named at the crossing's own tiers alone: nothing in the bad file makes a mail yours,
+and the fallback is never looser than the mode it replaced. The run says in
 one sentence what is wrong with the file and how to mend it, and never a word of what it holds:
 
 ```
@@ -153,7 +155,7 @@ nothing else, and hashes each one.
 
 ## The output directory
 
-Without `--out`, every run writes a folder of its own, `<root>/export/crossing/<member>/<time>`. With
+Without `--out`, every run writes a folder of its own, `<root>/export/crossing/<member>/at-<time>`. With
 `--out DIR`, the bundle replaces DIR whole, so DIR never holds anything the new selection left out.
 
 The bundle is built from nothing in a hidden folder beside DIR, `.DIR.<random>.staging`, on the same
