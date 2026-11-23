@@ -686,7 +686,8 @@ def hold_arguments(sub: Subparsers) -> None:
         description="Hold's fates (RFC 0042 §4): one status/v1 line, tier 2, on a sender of mail, an"
         " address or a domain. --keep: you want its mail; --let-go: you do not, and say why (your words"
         " also as a tier-2 note beside it). A sender let go is never a person's mail and stays home from"
-        " a crossing (RFC 0045); an address kept stands against its domain let go. A later fate replaces"
+        " a crossing (RFC 0045), whatever keeps it; one kept is never junk under --mail all-except-junk. A"
+        " later fate replaces"
         " the earlier one; nothing is deleted. The censuses are `logbook lab hold`.",
     )
     verbs = h.add_subparsers(dest="hold_verb", required=True)

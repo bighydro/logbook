@@ -27,7 +27,7 @@ mail is **other mail**, and the reader says why:
 | `no_person` | nobody the record names as a person is where the rule looks: a stranger, a company's address, a person only in cc of a mail you received |
 | `no_reply` | the sender is a no-reply address (`no-reply@`, `noreply@`, `do-not-reply@`, `mailer-daemon@`, `notifications@` and the like), whatever resolves |
 | `agent` | an agent wrote it, or the sender resolves to an agent; no mail source marks one today |
-| `let_go` | you let the sender (its address, or its domain) go in Hold: `logbook hold sender … --let-go --reason "…"` ([sender fates](hold.md#sender-fates)); an address you kept stands against its domain let go |
+| `let_go` | you let the sender (its address, or its domain) go in Hold: `logbook hold sender … --let-go --reason "…"` ([sender fates](hold.md#sender-fates)), whatever keeps it |
 | `sealed` | a sealed mail this machine has no key to open: listed and said, never guessed |
 
 A company is never a person: an address you named as an org's or a company's stays other mail. A

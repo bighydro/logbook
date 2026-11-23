@@ -146,10 +146,12 @@ What the fates do, today:
 - **A sender let go is never a person's mail** ([people's mail](mail-people.md)), whatever its address
   resolves to, so its mail stays home from a crossing and from a shared day, counted with the other mail
   held back.
-- **The narrower fate decides.** An address kept on a domain let go is kept: let `example.org` go and
-  keep `kari@example.org`, and Kari's mail is hers again.
-- **The senders kept** are read with them, for the crossing's mode that sends all mail but junk, where
-  a kept sender is the exception. Until that mode lands, a keep only stands against a wider let-go.
+- **A let-go wins.** A sender let go is held whatever keeps it, so an address kept on a domain let go
+  is still let go: to have Kari's mail again after letting `example.org` go, keep `example.org`, or let
+  go only the addresses you meant.
+- **A sender kept crosses under all except junk.** In the crossing's third mail mode
+  ([crossing](crossing.md)), a sender you keep is never junk, whatever its category or labels say; a
+  sender you let go is held there too.
 
 `logbook people mail` counts the mail let go and how many senders you let go, never naming one.
 

@@ -469,8 +469,9 @@ written as §10.5 says for an idea: first the `note/v1`, then the line naming it
 The fate is the owner's word on the address, never on a person: a person still has no status, and the
 address of someone the record names as a person may be kept or let go like any other. The current fate
 of a sender is its last standing line in chain order; a retracted line counts for nothing, and the one
-before it stands again. Each line names the one it replaces in `supersedes`. **The narrower fate
-decides**: an address's own fate stands against its domain's. The writer is `logbook hold sender
+before it stands again. Each line names the one it replaces in `supersedes`. **A let-go wins**: a sender
+whose address or domain is let go is let go whatever keeps either (RFC 0045, the all-except-junk
+amendment). The writer is `logbook hold sender
 ADDRESS_OR_DOMAIN --keep | --let-go --reason TEXT`, under the writer lock; it refuses the fate that
 already stands. No reader of an org, an idea, a place or an asset reads an `item` line.
 
