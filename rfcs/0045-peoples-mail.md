@@ -229,9 +229,9 @@ held) and gains `mail_held_by_reason` (`let_go`, `junk_category`, `junk_label`) 
 counts. A package of another mode is byte for byte what it was.
 
 **What the owner sees.** `logbook day sign DAY` prints, after the signature, one line per destination whose
-entry has a `mail_junk` rule: `<destination>: N mails held back (M from a first-time sender)`, never a
-name, an address or a subject, so a quick sign never hides what was held. A rule that cannot be read is
-said in one line, never passed over.
+entry has a `mail_junk` rule, judged at the tiers that entry lets cross: `the mail_junk rule for
+<destination> holds back N mails (M from a first-time sender)`, never a name, an address or a subject, so a
+quick sign never hides what was held. A rule that cannot be read is said in one line, never passed over.
 
 **The door.** The MCP server gains one read tool, `held_mail(day, destination?)`: per mail line of the day,
 for each destination with a rule, whether it would be held, its reason and its first-time flag, the line's
@@ -239,6 +239,23 @@ id and nothing else of it. It reads through the gate like every tool the door ha
 withholds is not judged, not listed and not counted among the held, only counted above the ceiling. A
 portfolio is tier 3, so through a gate below 3 no portfolio spares a mail; the door may then say an org's
 mail would be held that the crossing sends, and never tells which orgs a portfolio holds.
+
+**Follow-up of 23 November 2026.** The desk's look at the amendment named three concerns; the owner ruled:
+- *Held mail answers only at its gate.* Through any door or export, held mail answers only at the entry's
+  tiers, like every other line. The door answers `held_mail` only when the `mcp` entry says
+  `"held_mail": true`; a mail above its ceiling is absent, not counted above the ceiling, not in the gate's
+  withheld, not in the log. A crossing judges a mail by the resolutions, the earlier mails and the portfolio
+  at its own tiers, so below tier 3 it reads no portfolio, as the door does not, and the two agree.
+- *No count beside a destination.* A destination's key is often a person's name, so no number stands
+  beside it: `day sign` puts words between the key and the count (above), `export crossing` names "the
+  destination" with words between its key and every figure, and a bundle's default folder is
+  `export/crossing/<destination>/at-<stamp>`.
+- *A bad `policy/owner.json` fails closed.* Missing, unreadable or malformed, it is read as no alias at
+  all: a crossing of any mode sends people's mail only, with the persons named at its own tiers alone,
+  `day sign` counts no
+  held mail, the door's `held_mail` is refused, each saying in one sentence what is wrong with the file and
+  how to mend it, never a byte of it; nothing in the file makes a mail the owner's, and a missing file is
+  not written back.
 
 **Why this does not contradict §3.** §3 says the category and the list mark are evidence for every reader,
 never a rule by themselves, and they stay so: the class of a mail (§1, §2), the Day page and every reader

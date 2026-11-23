@@ -1053,11 +1053,22 @@ def tool_held_mail(lb: GatedLogbook, a: Arguments) -> dict[str, Any]:
     """Per mail line of one local day, for each destination whose entry in policy/crossing.json has a
     `mail_junk` rule (or the one `destination` names): whether `export crossing --mail all-except-junk`
     would hold it back, the reason (`let_go`, `junk_category`, `junk_label`) and whether it is a
-    first-time sender's (RFC 0045, all except junk). Read through the gate like every tool: a mail
-    above the ceiling is not judged, not listed, not counted among the held, only counted in
-    `above_ceiling`; the rule spares an org's mail for its portfolio only when the gate reads tier 3,
-    so the answer never tells which orgs a portfolio holds. An id and two words a mail: never an
-    address, a subject or a name."""
+    first-time sender's (RFC 0045, all except junk). Only when the `mcp` entry names it
+    (`peoples_mail.DOOR_KEY`: `true`); otherwise refused in one sentence that says nothing of the mail.
+    Read through the gate like every tool, and held mail above the ceiling is absent: not judged, not
+    listed, not counted, not even in the gate's withheld, so neither the answer nor the log hints at it.
+    The rule spares an org's mail for its portfolio only when the gate reads tier 3, so the answer
+    never tells which orgs a portfolio holds. An id and two words a mail: never an address, a subject
+    or a name."""
+    if not peoples_mail.door_open(lb.root):
+        raise ToolError(
+            f'held mail is not open to the door: add "{peoples_mail.DOOR_KEY}": true to the'
+            f' "{policy.MCP_DESTINATION}" entry of {policy.POLICY_FILE.as_posix()} to let it read held mail'
+        )
+    problem = policy.owner_problem(lb.root)
+    if problem is not None:  # fail closed: the owner's aliases cannot be trusted, so no mail is judged
+        raise ToolError(f"held mail is not judged, since {problem}; {policy.OWNER_FIX}")
+    withheld = set(lb.gate.withheld)  # what the gate held back before held mail was read
     day = _day(a, "day") or _today(lb)
     day_start.of(lb.meta)  # the page is the day so defined: a boundary not a clock is refused (RFC 0036)
     named = _string(a, "destination")
@@ -1085,10 +1096,8 @@ def tool_held_mail(lb: GatedLogbook, a: Arguments) -> dict[str, Any]:
                 "first_time": counts["first_time"],
             }
         )
-    with lb.index() as idx:
-        assert isinstance(idx, GatedIndex)
-        above = idx.day_above(day, [peoples_mail.KIND])
-    return {"day": day, "destinations": found, "above_ceiling": above}
+    lb.gate.withheld.intersection_update(withheld)  # the mail above the ceiling is absent, not counted
+    return {"day": day, "destinations": found}
 
 
 def _full_text(lb: Logbook, line: Line) -> str | None:
@@ -1562,8 +1571,8 @@ TOOLS: dict[str, Tool] = {
             " (or the one `destination` names): whether `export crossing --mail all-except-junk` would hold"
             " it back from that destination, its reason (let_go, junk_category, junk_label) and whether it"
             " is a first-time sender's. Each mail is its id and these words, never an address, a subject or"
-            " a name. A mail above the mcp ceiling is not judged and only counted in `above_ceiling`."
-            " Default: today.",
+            ' a name. Only when the mcp entry says "held_mail": true; a mail above the mcp ceiling is'
+            " absent, not judged and not counted. Default: today.",
             {
                 "day": DAY,
                 "destination": {"type": "string", "description": "a destination with a mail_junk rule"},

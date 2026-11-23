@@ -79,7 +79,8 @@ of its `labels` is one of `labels` (case aside), and nothing spares it:
 - its sender is an invitation platform (`paperlesspost.com`, `evite.com`, `partiful.com`, `lu.ma`,
   `eventbrite.com`, `greenvelope.com`, `punchbowl.com`, `zola.com`, `withjoy.com`, or a domain under one);
 - its sender is bound to an org a portfolio holds (read on this machine to decide; the portfolio is never
-  written in the package, printed or counted by name);
+  written in the package, printed or counted by name). A portfolio is a tier-3 status line, so only a
+  crossing with `--tier 1,2,3` reads one;
 - Hold keeps its sender (`keep`, RFC 0042 §4; Hold writes no fates yet, so nothing is kept yet).
 
 A sender Hold let go is held whatever spares it. A mail you sent always crosses, and a mail with neither a
@@ -91,20 +92,37 @@ and nothing is exported. With one, the manifest's `policy` says `"mail": "all-ex
 says how many mails were held back (`mail_held_back`), by reason (`mail_held_by_reason`: `let_go`,
 `junk_category`, `junk_label`) and how many of those were from a first-time sender
 (`mail_held_first_time`: no earlier mail from the address in the record, not a no-reply address, not a
-list's mail): counts only, never an address, a subject or a name. The dry run prints the same counts:
+list's mail): counts only, never an address, a subject or a name. Held mail answers only at the tiers the
+crossing asks for, like every other line: a person named only above them, an earlier mail above them and a
+portfolio above them move no mail and no count. The dry run prints the same counts:
 
 ```
   7 mail(s) held back by your mail_junk rule: 0 let go in Hold, 5 junk by category, 2 junk by label; 3 from a first-time sender (--mail all sends them)
 ```
 
 `logbook day sign DAY` says the same of the day it signs, one line per destination with a rule, so a quick
-sign never hides what was held:
+sign never hides what was held. Each destination is judged at the tiers its entry lets cross, as a crossing
+to it would judge the day. The destination's key comes first and the count after words, since a key is
+often a person's name and no number stands beside a name:
 
 ```
-per-hansen: 7 mails held back (3 from a first-time sender)
+  the mail_junk rule for per-hansen holds back 7 mails (3 from a first-time sender)
 ```
 
 An agent asks the same of a day through the door's `held_mail` tool ([MCP](mcp.md#mail-held-back)).
+
+A missing, unreadable or malformed `policy/owner.json` fails closed. Whatever mode was asked for, a crossing
+sends people's mail only, the strictest mode it has, with the owner known by `logbook.json` and the record
+alone, and the persons named at the crossing's own tiers alone: nothing in the bad file makes a mail yours,
+and the fallback is never looser than the mode it replaced. The run says in
+one sentence what is wrong with the file and how to mend it, and never a word of what it holds:
+
+```
+  mail: policy/owner.json is not valid JSON (line 1, column 64), so mail falls back to people's mail only; write it as {"names": [], "emails": [], "phones": [], "handles": []} with your own names, addresses, numbers and handles in the lists
+```
+
+`day sign` counts no held mail then and says the same in one line, and the door's `held_mail` is refused
+with it. A missing file is not written back.
 
 ## The package
 
@@ -137,7 +155,7 @@ nothing else, and hashes each one.
 
 ## The output directory
 
-Without `--out`, every run writes a folder of its own, `<root>/export/crossing/<member>/<time>`. With
+Without `--out`, every run writes a folder of its own, `<root>/export/crossing/<member>/at-<time>`. With
 `--out DIR`, the bundle replaces DIR whole, so DIR never holds anything the new selection left out.
 
 The bundle is built from nothing in a hidden folder beside DIR, `.DIR.<random>.staging`, on the same

@@ -35,7 +35,7 @@ lines themselves."""
 from __future__ import annotations
 
 import re
-from collections.abc import Iterable, Iterator, Mapping, Sequence
+from collections.abc import Collection, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
@@ -70,6 +70,7 @@ INVITATION_SENDERS = (
     "withjoy.com",
 )
 JUNK_KEY = "mail_junk"  # a destination's entry in policy/crossing.json: the owner's rule for junk mail
+DOOR_KEY = "held_mail"  # the `mcp` entry of policy/crossing.json opens the door to held mail with `true`
 JUNK_FIELDS = ("categories", "labels", "never_labels")
 JUNK_CATEGORY, JUNK_LABEL = "junk_category", "junk_label"
 HELD_REASONS = (LET_GO, JUNK_CATEGORY, JUNK_LABEL)  # why a mail stays home under all except junk, in order
@@ -174,6 +175,20 @@ def junk_of(root: Path, destination: str) -> Junk | None:
     return Junk.of(entry[JUNK_KEY], f"{policy.policy_path(root)}: {destination!r}")
 
 
+def door_open(root: Path) -> bool:
+    """Whether the `mcp` entry of policy/crossing.json opens the door to held mail (`DOOR_KEY`: `true`),
+    as a write tool is named under `write`: absent or `false`, the door answers nothing of held mail.
+    Anything else is refused naming the file, so a typo never opens it."""
+    entry = policy.read(root).get(policy.MCP_DESTINATION)
+    found = entry.get(DOOR_KEY, False) if isinstance(entry, dict) else False
+    if not isinstance(found, bool):
+        raise policy.PolicyError(
+            f'{policy.POLICY_FILE.as_posix()}: the "{policy.MCP_DESTINATION}" entry has a "{DOOR_KEY}"'
+            " that is not true or false"
+        )
+    return found
+
+
 def junk_destinations(root: Path) -> list[str]:
     """The destinations whose entry in `policy/crossing.json` has a `mail_junk` rule, in the file's order."""
     return [d for d, entry in policy.read(root).items() if isinstance(entry, dict) and JUNK_KEY in entry]
@@ -263,14 +278,17 @@ class Rule:
         let_go: frozenset[Ref] = frozenset(),
         kept: frozenset[Ref] = frozenset(),
         portfolio: frozenset[Ref] = frozenset(),
+        aliases: Mapping[str, Iterable[str]] | None = None,
     ) -> Rule:
         """From the retraction and resolution lines (opened), `logbook.json` and `policy/owner.json`
-        (`policy.PolicyError` when that file is not what it should be)."""
+        (`policy.PolicyError` when that file is not what it should be), or the `aliases` given in its
+        place: `{}` when the file cannot be trusted (`policy.owner_problem`), so the owner is who
+        `logbook.json` and the record say and nothing in a bad file makes a mail the owner's."""
         identities = resolve.identities_from([*marks, *resolutions])
         owner = present.owner_of(
             str(lb.meta.get("owner_id") or ""),
             [str(e) for e in lb.meta.get("owner_emails") or [] if isinstance(e, str)],
-            policy.owner_aliases(lb.root),
+            policy.owner_aliases(lb.root) if aliases is None else aliases,
             identities,
         )
         return cls(identities, owner, let_go, kept, portfolio)
@@ -377,12 +395,20 @@ class Rule:
             return None
         return signal
 
-    def first_times(self, idx: Index, lines: Iterable[Line], last_day: str | None = None) -> frozenset[str]:
+    def first_times(
+        self,
+        idx: Index,
+        lines: Iterable[Line],
+        last_day: str | None = None,
+        tiers: Collection[int] | None = None,
+    ) -> frozenset[str]:
         """The ids of the received mails among `lines` that may be a new person writing: the sender is
         not a no-reply address nor the owner's, the mail carries no list mark (`extra.list`), and no
         standing mail line of the record from that address is earlier (by its `at`, then its seq).
         Reads every mail line the index serves up to `last_day` (a local day no line of `lines` is
-        after; None: every one), once (a gated index serves its gate's); writes nothing."""
+        after; None: every one) at `tiers` (None: every tier), once (a gated index serves its gate's);
+        writes nothing. A crossing passes its own tiers, so a mail that does not cross there makes no
+        sender a known one there."""
         wanted: dict[str, list[tuple[datetime, int, str]]] = {}
         for line in lines:
             payload = line.get("payload")
@@ -413,6 +439,8 @@ class Rule:
             sender = _address(payload.get("from")) if isinstance(payload, dict) else None
             at = stays.instant(line.get("at"))
             if sender is None or at is None or id_ in retracted or id_ in superseded:
+                continue
+            if tiers is not None and int(line.get("tier") or 0) not in tiers:
                 continue
             key = sender.casefold()
             if key in wanted:
@@ -514,20 +542,27 @@ def day_verdicts(
     rules: Mapping[str, Junk],
     kept: frozenset[Ref] = frozenset(),
     portfolio: frozenset[Ref] = frozenset(),
+    tiers: Collection[int] | None = None,
 ) -> dict[str, list[Verdict]]:
     """Destination → every mail line of the local `day` that stands, under that destination's junk
     rule (`Rule.junk`), each with its first-time flag (read once, for every rule); read through
-    `lb.index()`, so a gated record (the door's) judges only the lines its gate shows. `kept` and
-    `portfolio` as `Rule` takes them."""
+    `lb.index()`, so a gated record (the door's) judges only the lines its gate shows, and at `tiers`
+    (None: every tier the index serves), so a reading for one destination's entry reads its mails, its
+    persons and its earlier mails at that entry's tiers alone. `kept` and `portfolio` as `Rule` takes
+    them (the caller reads the portfolio at the same tiers)."""
     if not rules:
         return {}
     days = day_start.of(lb.meta)
+
+    def at(lines: Iterable[Line]) -> list[Line]:
+        return [line for line in lines if tiers is None or int(line.get("tier") or 0) in tiers]
+
     with lb.index() as idx:
         marks = idx.retractions()
-        judge = Rule.of(lb, marks, idx.resolutions(), kept=kept, portfolio=portfolio)
+        judge = Rule.of(lb, marks, at(idx.resolutions()), kept=kept, portfolio=portfolio)
         retracted = frozenset(retractions(marks))
-        mails = [line for line, _day in _standing(idx, KIND, day, day, retracted, days)]
-        first = judge.first_times(idx, mails, day)
+        mails = at(line for line, _day in _standing(idx, KIND, day, day, retracted, days))
+        first = judge.first_times(idx, mails, day, tiers)
         return {name: judge.verdicts(idx, mails, rule, first) for name, rule in rules.items()}
 
 

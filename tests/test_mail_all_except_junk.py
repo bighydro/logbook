@@ -13,6 +13,7 @@ would make up its own."""
 from __future__ import annotations
 
 import json
+import logging
 import re
 from pathlib import Path
 from typing import Any
@@ -21,7 +22,7 @@ import pytest
 
 from logbook import cli
 from logbook.contrib import entities, mcp_server, orgs
-from logbook.core import crossing, peoples_mail, policy, signing
+from logbook.core import crossing, figures, peoples_mail, policy, signing
 from logbook.core.chain import Line
 from logbook.core.store import Logbook
 
@@ -327,10 +328,17 @@ def _crossed(out: Path) -> set[str]:
     return {json.loads(row)["id"] for row in text.splitlines() if row.strip()}
 
 
+def _tier_3(lb: Logbook) -> None:
+    """The destination's entry raised to tier 3, so a crossing of tiers 1 to 3 reads the portfolio (a
+    tier-3 status line) as the owner's rule asks; below it the crossing reads none (the door's rule)."""
+    _write_policy(lb, {DESTINATION: {"max_tier": 3, peoples_mail.JUNK_KEY: RULE}, "kari": {"max_tier": 2}})
+
+
 def test_all_except_junk_sends_every_mail_but_junk_and_counts_by_reason(lb: Logbook, tmp_path: Path) -> None:
     mails = _day_mails(lb)
     out = tmp_path / "out"
-    _export(out, "--mail", "all-except-junk")
+    _tier_3(lb)
+    _export(out, "--mail", "all-except-junk", "--tier", "1,2,3")
     assert _crossed(out) == {str(line["id"]) for name, line in mails.items() if name not in HELD}
     manifest = _manifest(out)
     assert manifest["policy"]["mail"] == "all-except-junk"
@@ -346,8 +354,9 @@ def test_all_except_junk_sends_every_mail_but_junk_and_counts_by_reason(lb: Logb
 
 
 def test_the_dry_run_prints_the_same_counts(lb: Logbook, capsys: pytest.CaptureFixture[str]) -> None:
+    _tier_3(lb)
     cli.main(["export", "crossing", "--to", DESTINATION, "--since", SINCE, "--until", UNTIL,
-              "--tier", "1,2", "--mail", "all-except-junk", "--dry-run"])  # fmt: skip
+              "--tier", "1,2,3", "--mail", "all-except-junk", "--dry-run"])  # fmt: skip
     text = capsys.readouterr().out
     assert (
         "7 mail(s) held back by your mail_junk rule: 0 let go in Hold, 5 junk by category, 2 junk by label;"
@@ -401,8 +410,9 @@ def test_people_mode_is_what_it_was(lb: Logbook, tmp_path: Path) -> None:
 
 
 def _door(lb: Logbook, mcp_tier: int, allow_tier_3: bool = False, **arguments: str) -> dict[str, Any]:
+    """`held_mail` through the door, the `mcp` entry naming it (`"held_mail": true`) at `mcp_tier`."""
     _write_policy(lb, {DESTINATION: {"max_tier": 2, peoples_mail.JUNK_KEY: RULE}, "kari": {"max_tier": 2},
-                       "mcp": {"max_tier": mcp_tier}})  # fmt: skip
+                       "mcp": {"max_tier": mcp_tier, peoples_mail.DOOR_KEY: True}})  # fmt: skip
     return mcp_server.call(lb.root, "held_mail", {"day": DAY, **arguments}, allow_tier_3=allow_tier_3)
 
 
@@ -416,13 +426,15 @@ def test_the_door_says_per_mail_whether_it_would_be_held(lb: Logbook) -> None:
     assert by_name["club_imap"] == {"id": by_name["club_imap"]["id"], "held": True, "reason": "junk_label",
                                     "first_time": True}  # fmt: skip
     assert found["held"] == len(HELD) and found["first_time"] == len(FIRST_TIME_HELD)
-    assert answer["data"]["above_ceiling"] == 0
+    assert "above_ceiling" not in answer["data"]
     _no_one_in(json.dumps(answer))
 
 
 def test_the_door_never_reveals_a_mail_the_gate_withholds(lb: Logbook) -> None:
     """The ceiling at 1: one tier-1 mail is judged; the day's tier-2 mails are not listed, not counted
-    among the held, and only counted above the ceiling, nothing of them crossing, not even an id."""
+    among the held, and not counted at all, above the ceiling or in the gate's withheld (the owner, after
+    #465: held mail above the entry's tiers is absent, not counted, not hinted at), nothing of them
+    crossing, not even an id."""
     tier1 = lb.append(
         **_mail("2026-03-01T10:00:00Z", "deals@outlet.example.org", category="promotions", tier=1)
     )
@@ -430,7 +442,8 @@ def test_the_door_never_reveals_a_mail_the_gate_withholds(lb: Logbook) -> None:
     (found,) = answer["data"]["destinations"]
     assert [m["id"] for m in found["mails"]] == [str(tier1["id"])]
     assert found["mails"][0]["held"] is True and found["held"] == 1
-    assert answer["data"]["above_ceiling"] == len(MAILS)
+    assert "above_ceiling" not in answer["data"]
+    assert answer["gate"]["withheld"] == 0
     text = json.dumps(answer)
     assert all(str(line["id"]) not in text for line in _day_mails(lb).values())
 
@@ -451,6 +464,74 @@ def test_the_door_refuses_a_destination_without_a_rule(lb: Logbook) -> None:
         _door(lb, 2, destination="kari")
 
 
+def test_the_door_answers_held_mail_only_when_its_entry_names_it(lb: Logbook) -> None:
+    """Held mail through the door only when the `mcp` entry names it (`"held_mail": true`), as a write
+    tool is named under `write`: otherwise it is absent, the refusal one sentence that names the key and
+    the file and says nothing of the day's mail, not an id, not a count."""
+    for entry in ({"max_tier": 2}, {"max_tier": 2, peoples_mail.DOOR_KEY: False}):
+        _write_policy(lb, {DESTINATION: {"max_tier": 2, peoples_mail.JUNK_KEY: RULE}, "mcp": entry})
+        with pytest.raises(mcp_server.ToolError) as refused:
+            mcp_server.call(lb.root, "held_mail", {"day": DAY})
+        text = str(refused.value)
+        assert f'"{peoples_mail.DOOR_KEY}": true' in text and "crossing.json" in text
+        assert not re.search(r"\d", text.replace("crossing.json", "")), text
+    _write_policy(lb, {DESTINATION: {"max_tier": 2, peoples_mail.JUNK_KEY: RULE},
+                       "mcp": {"max_tier": 2, peoples_mail.DOOR_KEY: "yes"}})  # fmt: skip
+    with pytest.raises(mcp_server.ToolError, match=r"crossing\.json"):
+        mcp_server.call(lb.root, "held_mail", {"day": DAY})
+    assert _door(lb, 2)["data"]["destinations"]
+
+
+def test_held_mail_above_the_door_s_ceiling_leaves_no_trace_in_the_log(
+    lb: Logbook, caplog: pytest.LogCaptureFixture
+) -> None:
+    """The log line of a call counts what the answer holds and what the gate withheld: for held mail at
+    a ceiling below the day's mails, nothing is withheld that the log could count."""
+    caplog.set_level(logging.INFO, logger="logbook.mcp")
+    _door(lb, 1)
+    (logged,) = [r.getMessage() for r in caplog.records if r.name == "logbook.mcp"]
+    assert logged.startswith("held_mail") and "withheld=0" in logged and "above" not in logged
+
+
+HEMMELIG, HEMMELIG_ID = "per.hemmelig@example.org", "019cadd3-6bc0-7dcd-9133-04aa00000005"
+
+
+def test_a_crossing_below_tier_three_reads_no_portfolio(lb: Logbook, tmp_path: Path) -> None:
+    """The portfolio is a tier-3 status line: a crossing of tiers 1 and 2 reads none, so the org's
+    promotion is held like any other, and the counts tell nothing of the portfolio."""
+    out = tmp_path / "out"
+    _export(out, "--mail", "all-except-junk")
+    robotics = str(_day_mails(lb)["robotics"]["id"])
+    assert robotics not in _crossed(out)
+    counts = _manifest(out)["counts"]
+    assert counts["mail_held_back"] == len(HELD) + 1
+    assert counts["mail_held_by_reason"]["junk_category"] == 6
+
+
+def test_a_crossing_judges_a_first_time_sender_by_the_mails_at_its_tiers(lb: Logbook, tmp_path: Path) -> None:
+    """An earlier mail from the shop at tier 3 does not cross to a destination of tiers 1 and 2, so it
+    does not make the shop's mail of the day a known sender's there: the count is what it was."""
+    _export(tmp_path / "before", "--mail", "all-except-junk")
+    lb.append(**_mail("2026-02-25T09:00:00Z", SHOP, category="promotions", tier=3))
+    _export(tmp_path / "after", "--mail", "all-except-junk")
+    before = _manifest(tmp_path / "before")["counts"]["mail_held_first_time"]
+    assert _manifest(tmp_path / "after")["counts"]["mail_held_first_time"] == before
+
+
+def test_a_person_named_above_the_crossing_s_tiers_spares_no_mail(lb: Logbook, tmp_path: Path) -> None:
+    """Per Hemmelig is a person only on a tier-3 resolution: to a destination of tiers 1 and 2 their
+    promotion is a stranger's and held; with tier 3 asked for, it is a person's and crosses."""
+    secret = _resolution(HEMMELIG, "Per Hemmelig", HEMMELIG_ID)
+    secret["tier"] = 3
+    lb.append(**secret)
+    mail = lb.append(**_mail("2026-03-01T11:00:00Z", HEMMELIG, category="promotions"))
+    _export(tmp_path / "low", "--mail", "all-except-junk")
+    assert str(mail["id"]) not in _crossed(tmp_path / "low")
+    _tier_3(lb)
+    _export(tmp_path / "high", "--mail", "all-except-junk", "--tier", "1,2,3")
+    assert str(mail["id"]) in _crossed(tmp_path / "high")
+
+
 # -- day sign -------------------------------------------------------------------------------------------
 
 
@@ -459,7 +540,7 @@ def test_day_sign_says_per_destination_how_many_mails_were_held(
 ) -> None:
     cli.main(["day", "sign", DAY])
     text = capsys.readouterr().out
-    assert f"{DESTINATION}: 7 mails held back (3 from a first-time sender)" in text
+    assert f"the mail_junk rule for {DESTINATION} holds back 8 mails (4 from a first-time sender)" in text
     assert "kari:" not in text  # a destination with no rule has no line
     _no_one_in(text)
 
@@ -477,6 +558,214 @@ def test_day_sign_says_nothing_of_mail_without_a_rule(
     _write_policy(lb, {"kari": {"max_tier": 2}})
     cli.main(["day", "sign", DAY])
     assert "held back" not in capsys.readouterr().out
+
+
+# -- a bad policy/owner.json ---------------------------------------------------------------------------
+
+SECRET, ALIAS = "Per Hemmelig", "ines.alias@example.org"  # what a bad owner file holds: never echoed
+BAD_OWNER = ("missing", "a_folder", "not_utf8", "not_json", "wrong_shape")
+
+
+def _owner_file(lb: Logbook, bad: str) -> Path:
+    """policy/owner.json made bad in one of the ways of `BAD_OWNER`: gone, a folder where the file was
+    (unreadable on every system), bytes that are not UTF-8, text that is not JSON, JSON of the wrong
+    shape. Each holds a name and an address that must never be printed back."""
+    path = policy.owner_path(lb.root)
+    path.unlink()
+    if bad == "a_folder":
+        path.mkdir()
+    elif bad == "not_utf8":
+        path.write_bytes(b"\xff\xfe" + SECRET.encode("utf-16-le"))
+    elif bad == "not_json":
+        path.write_bytes(f'{{"names": ["{SECRET}"], "emails": ["{ALIAS}"'.encode())
+    elif bad == "wrong_shape":
+        path.write_bytes(json.dumps({"names": SECRET, "emails": [ALIAS]}).encode())
+    return path
+
+
+def _one_sentence_on_the_owner_file(text: str) -> str:
+    """The one row that names policy/owner.json: one sentence, and nothing of what the file holds."""
+    rows = [row.strip() for row in text.splitlines() if "owner.json" in row]
+    assert len(rows) == 1, text
+    assert SECRET not in text and SECRET.casefold() not in text.casefold() and ALIAS not in text
+    assert ". " not in rows[0].rstrip("."), rows[0]
+    return rows[0]
+
+
+@pytest.mark.parametrize("bad", BAD_OWNER)
+@pytest.mark.parametrize("mode", [crossing.MAIL_EXCEPT_JUNK, crossing.MAIL_ALL])
+def test_a_bad_owner_file_sends_people_s_mail_only(
+    lb: Logbook, tmp_path: Path, capsys: pytest.CaptureFixture[str], bad: str, mode: str
+) -> None:
+    """A missing, unreadable or malformed policy/owner.json fails closed: the mail of a crossing that
+    asked for more falls back to people's mail only, the strictest mode the crossing has, and the run
+    says in one sentence what is wrong with the file and how to fix it. A missing file is not written."""
+    _export(tmp_path / "people")
+    people = _manifest(tmp_path / "people")
+    path = _owner_file(lb, bad)
+    capsys.readouterr()
+    for out in (tmp_path / "dry", tmp_path / "out"):
+        _export(out, "--mail", mode, *(("--dry-run",) if out.name == "dry" else ()))
+        said = capsys.readouterr()
+        row = _one_sentence_on_the_owner_file(said.out + said.err)
+        assert "people's mail only" in row
+    assert _crossed(tmp_path / "out") == _crossed(tmp_path / "people")
+    manifest = _manifest(tmp_path / "out")
+    assert "mail" not in manifest["policy"] and "mail_held_by_reason" not in manifest["counts"]
+    assert manifest["counts"]["mail_held_back"] == people["counts"]["mail_held_back"]
+    assert path.exists() is (bad != "missing")
+
+
+def test_a_bad_owner_file_makes_no_mail_the_owner_s(lb: Logbook, tmp_path: Path) -> None:
+    """An alias the file lists, read, makes a mail from it (its direction unsaid) the owner's, sent to
+    Kari, a person: it crosses. The same alias in a file that is not the right shape confirms nothing:
+    the mail is a stranger's, and held."""
+    payload = _mail("2026-03-01T12:00:00Z", ALIAS, KARI)
+    del payload["payload"]["direction"]
+    mail = lb.append(**payload)
+    policy.owner_path(lb.root).write_text(json.dumps({"emails": [ALIAS]}), encoding="utf-8")
+    _export(tmp_path / "good", "--mail", "all-except-junk")
+    assert str(mail["id"]) in _crossed(tmp_path / "good")
+    _owner_file(lb, "wrong_shape")
+    _export(tmp_path / "bad", "--mail", "all-except-junk")
+    assert str(mail["id"]) not in _crossed(tmp_path / "bad")
+
+
+@pytest.mark.parametrize("bad", BAD_OWNER)
+def test_people_mode_with_a_bad_owner_file_says_why_and_writes_nothing(
+    lb: Logbook, tmp_path: Path, capsys: pytest.CaptureFixture[str], bad: str
+) -> None:
+    """The default mode, people's mail, with a bad owner file: no traceback, no byte of the file, the
+    file not written back; the one sentence, and people's mail with no alias read."""
+    _export(tmp_path / "good")
+    path = _owner_file(lb, bad)
+    capsys.readouterr()
+    _export(tmp_path / "bad")
+    said = capsys.readouterr()
+    _one_sentence_on_the_owner_file(said.out + said.err)
+    assert _crossed(tmp_path / "bad") <= _crossed(tmp_path / "good")
+    assert path.exists() is (bad != "missing")
+
+
+@pytest.mark.parametrize("mode", crossing.MAIL_MODES)
+def test_a_bad_owner_file_reads_no_person_above_the_crossing_s_tiers(
+    lb: Logbook, tmp_path: Path, mode: str
+) -> None:
+    """The fallback is never looser than the mode it replaced: Per Hemmelig, a person only on a tier-3
+    resolution, is a stranger to a crossing of tiers 1 and 2, with a bad owner file as with a good one."""
+    secret = _resolution(HEMMELIG, "Per Hemmelig", HEMMELIG_ID)
+    secret["tier"] = 3
+    lb.append(**secret)
+    mail = lb.append(**_mail("2026-03-01T11:00:00Z", HEMMELIG, category="promotions"))
+    _owner_file(lb, "not_json")
+    _export(tmp_path / "out", "--mail", mode)
+    assert str(mail["id"]) not in _crossed(tmp_path / "out")
+
+
+@pytest.mark.parametrize("bad", ["a_folder", "not_utf8"])
+def test_the_owner_s_aliases_refuse_a_bad_file_in_one_clean_sentence(lb: Logbook, bad: str) -> None:
+    """Every other reader of the aliases (`share day`, the adapters) is refused as cleanly: a
+    PolicyError naming policy/owner.json by its place in the record, no traceback, no byte of it."""
+    _owner_file(lb, bad)
+    with pytest.raises(policy.PolicyError) as refused:
+        policy.owner_aliases(lb.root)
+    text = str(refused.value)
+    assert "policy/owner.json" in text and str(lb.root) not in text and "0xff" not in text
+
+
+@pytest.mark.parametrize("bad", BAD_OWNER)
+def test_day_sign_with_a_bad_owner_file_counts_no_held_mail_and_says_why(
+    lb: Logbook, capsys: pytest.CaptureFixture[str], bad: str
+) -> None:
+    path = _owner_file(lb, bad)
+    cli.main(["day", "sign", DAY])
+    text = capsys.readouterr().out
+    _one_sentence_on_the_owner_file(text)
+    assert "mails held back (" not in text and "mail held back (" not in text
+    assert path.exists() is (bad != "missing")
+
+
+@pytest.mark.parametrize("bad", BAD_OWNER)
+def test_the_door_with_a_bad_owner_file_judges_no_mail(lb: Logbook, bad: str) -> None:
+    _owner_file(lb, bad)
+    with pytest.raises(mcp_server.ToolError) as refused:
+        _door(lb, 2)
+    _one_sentence_on_the_owner_file(str(refused.value))
+
+
+# -- no count beside a destination ------------------------------------------------------------------
+
+
+KEYS = (DESTINATION, "Per Hansen", "kari")  # a destination's key is often a person's name
+
+
+def _no_count_beside_the_key(text: str) -> None:
+    """No number beside a destination's key (the owner's rule: no number beside a person's name,
+    anywhere), as `figures.adjacent` reads it: a date and a clock are numbers too. The whole text at
+    once, so a key that ends one row and a count that opens the next are beside each other too, and the
+    folder a bundle is written to is held to it as every other word."""
+    assert not [key for key in KEYS if figures.adjacent(text, key)], text
+
+
+def test_no_output_of_held_mail_sets_a_count_beside_a_destination(
+    lb: Logbook, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """`day sign`, the crossing (its dry run, the run, an empty window, every mail mode) and the door:
+    the count stands apart from the destination's key, words between them."""
+    said: list[str] = []
+    cli.main(["day", "sign", DAY])
+    said.append(capsys.readouterr().out)
+    assert "holds back 8 mails (4 from a first-time sender)" in said[-1], "the count is still said"
+    for mode in crossing.MAIL_MODES:
+        cli.main(["export", "crossing", "--to", DESTINATION, "--since", SINCE, "--until", UNTIL,
+                  "--tier", "1,2", "--mail", mode, "--dry-run"])  # fmt: skip
+        _export(tmp_path / mode, "--mail", mode)
+        said.append(capsys.readouterr().out)
+    cli.main(["export", "crossing", "--to", DESTINATION, "--since", "2026-05-01T00:00:00Z",
+              "--until", "2026-05-02T00:00:00Z", "--tier", "1,2"])  # fmt: skip
+    said.append(capsys.readouterr().out)
+    cli.main(["export", "crossing", "--to", DESTINATION, "--since", SINCE, "--until", SINCE, "--tier", "1,2"])
+    said.append(capsys.readouterr().out)
+    assert "nothing to cross" in said[-1]
+    said.append(json.dumps(_door(lb, 2)))
+    for text in said:
+        _no_count_beside_the_key(text)
+
+
+def test_the_default_bundle_folder_sets_no_figure_beside_the_key(
+    lb: Logbook, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Without `--out` the bundle goes under the record, `export/crossing/<key>/at-<stamp>`: a word
+    between the key and the stamp, in the folder and in the line that names it."""
+    cli.main(["export", "crossing", "--to", DESTINATION, "--since", SINCE, "--until", UNTIL, "--tier", "1,2"])
+    _no_count_beside_the_key(capsys.readouterr().out)
+    (made,) = (lb.root / "export" / "crossing" / DESTINATION).iterdir()
+    assert made.name.startswith("at-") and (made / "manifest.json").exists()
+
+
+def test_day_sign_with_two_rules_sets_no_count_beside_either_key(
+    lb: Logbook, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Two destinations with a rule: one row's key never meets the next row's count."""
+    _write_policy(lb, {DESTINATION: {"max_tier": 2, peoples_mail.JUNK_KEY: RULE},
+                       "kari": {"max_tier": 2, peoples_mail.JUNK_KEY: RULE}})  # fmt: skip
+    cli.main(["day", "sign", DAY])
+    text = capsys.readouterr().out
+    assert text.count(" holds back ") == 2
+    _no_count_beside_the_key(text)
+
+
+def test_day_sign_judges_each_destination_at_its_entry_s_tiers(
+    lb: Logbook, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """`day sign` says what a crossing to each destination would hold, at the tiers its entry allows:
+    an entry of tier 2 reads no portfolio (a tier-3 status line), one of tier 3 does."""
+    _write_policy(lb, {DESTINATION: {"max_tier": 2, peoples_mail.JUNK_KEY: RULE},
+                       "kari": {"max_tier": 3, peoples_mail.JUNK_KEY: RULE}})  # fmt: skip
+    cli.main(["day", "sign", DAY])
+    text = capsys.readouterr().out
+    assert f"the mail_junk rule for {DESTINATION} holds back 8 mails (4 from a first-time sender)" in text
+    assert "the mail_junk rule for kari holds back 7 mails (3 from a first-time sender)" in text
 
 
 # -- no one in a count ----------------------------------------------------------------------------------

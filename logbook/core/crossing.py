@@ -120,6 +120,8 @@ class Request:
     junk: peoples_mail.Junk | None = None  # the destination's `mail_junk` rule, under all-except-junk
     kept: frozenset[Ref] = frozenset()  # the senders Hold keeps (RFC 0042 §4): empty until Hold writes fates
     portfolio: frozenset[Ref] = frozenset()  # refs bound to an org in a portfolio; never written anywhere
+    # why policy/owner.json cannot be trusted, when a mode that asked for more fell back to people's mail
+    owner_problem: str | None = None
 
     @property
     def tier3(self) -> bool:
@@ -189,6 +191,11 @@ def request(
             f' "{peoples_mail.JUNK_KEY}" in {destination!r}\'s entry, so nothing is exported; add one'
             ' ({"categories": [...], "labels": [...], "never_labels": [...]}), or choose --mail people or all'
         )
+    # a bad policy/owner.json fails closed: a mode that asked for more than people's mail falls back to
+    # it, the strictest mode the crossing has, and reads no alias of the owner (`fallback_sentence`)
+    problem = policy.owner_problem(lb.root)
+    if problem is not None:
+        mode, junk = MAIL_PEOPLE, None
     if max(tiers) > max_tier:
         raise CrossingError(
             f"--tier {','.join(map(str, tiers))} is above the ceiling for {destination!r}: "
@@ -210,7 +217,14 @@ def request(
         junk,
         kept,
         portfolio,
+        problem,
     )
+
+
+def fallback_sentence(problem: str) -> str:
+    """The one sentence a crossing says when `policy/owner.json` cannot be trusted (`Request.owner_problem`):
+    what is wrong with the file, what the mail did, and how to mend it, never a byte of the file."""
+    return f"{problem}, so mail falls back to people's mail only; {policy.OWNER_FIX}"
 
 
 def _checked(stamp: str) -> str:
@@ -356,7 +370,11 @@ def select(lb: Logbook, req: Request) -> Selection:
     mail_held: int | None = None
     mail_junk: dict[str, Any] | None = None
     if req.mail_mode == MAIL_PEOPLE:
-        lines, mail_held = peoples_mail_only(lb, retraction_lines, resolution_lines, lines)
+        if req.owner_problem is None:
+            lines, mail_held = peoples_mail_only(lb, retraction_lines, resolution_lines, lines)
+        else:  # a bad owner file: no alias read, and no person named above the tiers, never looser
+            at_tiers = [line for line in resolution_lines if int(line.get("tier") or 0) in req.tiers]
+            lines, mail_held = peoples_mail_only(lb, retraction_lines, at_tiers, lines, {})
     elif req.mail_mode == MAIL_EXCEPT_JUNK:
         lines, mail_junk = all_except_junk(lb, req, retraction_lines, resolution_lines, lines)
         mail_held = None if mail_junk is None else int(mail_junk["held"])
@@ -420,16 +438,20 @@ def signed_gate(lb: Logbook, idx: Index) -> SignedGate:
 
 
 def peoples_mail_only(
-    lb: Logbook, marks: Iterable[Line], resolutions: Iterable[Line], lines: list[Line]
+    lb: Logbook,
+    marks: Iterable[Line],
+    resolutions: Iterable[Line],
+    lines: list[Line],
+    aliases: Mapping[str, Iterable[str]] | None = None,
 ) -> tuple[list[Line], int | None]:
     """RFC 0045's rule, the one `select` and `share day` both apply: `lines` (opened) with every mail
     no person is on left out (`peoples_mail.Rule`), and how many were; None when there was no mail to
     read, so a package with none is what it was. `CrossingError` names `policy/owner.json` when that
-    file is not what it should be."""
+    file is not what it should be; `aliases` stands in for the file (`{}`: a fallback reads none)."""
     if not any(line.get("kind") == peoples_mail.KIND for line in lines):
         return lines, None
     try:
-        rule = peoples_mail.Rule.of(lb, marks, resolutions)
+        rule = peoples_mail.Rule.of(lb, marks, resolutions, aliases=aliases)
     except policy.PolicyError as e:
         raise CrossingError(str(e)) from e
     persons = [line for line in lines if line.get("kind") != peoples_mail.KIND or rule.classify(line).person]
@@ -442,15 +464,20 @@ def all_except_junk(
     """RFC 0045's third mode: `lines` (opened) with every mail the destination's `mail_junk` rule holds
     left out (`peoples_mail.Rule.junk`), and the counts (`peoples_mail.held_counts`: held, by reason,
     how many a first-time sender's); None when there was no mail to read. Counts only: no address, no
-    subject, no name, and nothing of the portfolio the rule read to decide."""
+    subject, no name, and nothing of the portfolio the rule read to decide. Held mail answers only at
+    the request's tiers, like every other line: a resolution above them names no person here, and a mail
+    above them makes no sender a known one (`Rule.first_times`), so nothing above the tiers moves a mail
+    or a count (the portfolio the caller read at the same tiers, `orgs.portfolio_refs`)."""
     if req.junk is None or not any(line.get("kind") == peoples_mail.KIND for line in lines):
         return lines, None
+    at_tiers = [line for line in resolutions if int(line.get("tier") or 0) in req.tiers]
     try:
-        rule = peoples_mail.Rule.of(lb, marks, resolutions, kept=req.kept, portfolio=req.portfolio)
+        rule = peoples_mail.Rule.of(lb, marks, at_tiers, kept=req.kept, portfolio=req.portfolio)
     except policy.PolicyError as e:
         raise CrossingError(str(e)) from e
     with lb.index() as idx:
-        verdicts = rule.verdicts(idx, lines, req.junk)
+        first = rule.first_times(idx, lines, tiers=req.tiers)
+        verdicts = rule.verdicts(idx, lines, req.junk, first)
     held = {v.id for v in verdicts if v.held}
     return [line for line in lines if str(line.get("id")) not in held], peoples_mail.held_counts(verdicts)
 
@@ -999,6 +1026,7 @@ def write_watermark(lb: Logbook, destination: str, until: str, exported_at: str,
 
 
 def default_out(lb: Logbook, destination: str, generated_at: str) -> Path:
-    """`<root>/export/crossing/<destination>/<generated_at, compact>`: one folder per run."""
+    """`<root>/export/crossing/<destination>/at-<generated_at, compact>`: one folder per run, a word
+    between the destination's key (often a person's name) and the stamp, so no figure stands beside it."""
     stamp = generated_at.replace("-", "").replace(":", "")
-    return lb.root / EXPORT_DIR / KIND / destination / stamp
+    return lb.root / EXPORT_DIR / KIND / destination / f"at-{stamp}"

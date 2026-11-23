@@ -1,0 +1,5 @@
+### Fixed
+
+- Held mail answers only at its gate: the door's `held_mail` answers only when the `mcp` entry says `"held_mail": true`, a mail above its ceiling is absent (no `above_ceiling`, nothing withheld in the log), and `export crossing --mail all-except-junk` below tier 3 reads no portfolio, no person and no earlier mail above its tiers.
+- No count beside a destination's key: `day sign` says `the mail_junk rule for per-hansen holds back 7 mails (3 from a first-time sender)`, judged at the tiers that destination's entry lets cross; `export crossing` names "the destination" with words between its key and every figure; a bundle's default folder is now `export/crossing/<destination>/at-<stamp>`.
+- A missing, unreadable or malformed `policy/owner.json` fails closed: a crossing of any mode sends people's mail only (no alias read, persons named at its own tiers alone) and says in one sentence what is wrong with the file, no traceback and no byte of it, `day sign` counts no held mail instead of failing after the signature, and the door's `held_mail` is refused.

@@ -477,21 +477,22 @@ def _export_crossing(lb: Logbook, a: argparse.Namespace) -> None:
                 "export crossing needs --to <destination> and --since <RFC3339|last>"
             )
         mode = a.mail or (crossing.MAIL_ALL if a.all_mail else crossing.MAIL_PEOPLE)
+        asked = crossing.parse_tiers("1" if a.tier is None else a.tier)
         req = crossing.request(
             lb,
             a.to,
             a.since,
             a.until or generated_at,
-            crossing.parse_tiers("1" if a.tier is None else a.tier),
+            asked,
             crossing.parse_kinds(a.kinds),
             open_sealed=a.open,
             signed_only=not a.unsigned,
             all_mail=a.all_mail,
             mail=mode,
-            portfolio=_portfolio(lb) if mode == crossing.MAIL_EXCEPT_JUNK else frozenset(),
+            portfolio=_portfolio(lb, asked) if mode == crossing.MAIL_EXCEPT_JUNK else frozenset(),
         )
     except crossing.EmptyWindow as e:
-        print(f"{a.to}: {e}; nothing written")
+        print(f"nothing written: {e} (to the destination {a.to})")  # no figure beside its key, a name maybe
         return
     except crossing.CrossingError as e:
         print(f"export crossing: {e}", file=sys.stderr)
@@ -507,8 +508,9 @@ def _export_crossing(lb: Logbook, a: argparse.Namespace) -> None:
     if a.dry_run:
         policy_file = policy.policy_path(lb.root)
         state = "" if policy_file.exists() else " (default; the first export writes it)"
-        print(f"dry run: {req.destination}, {window}, tiers {tiers}; nothing written")
+        print(f"dry run: to the destination {req.destination}, in {window}, tiers {tiers}; nothing written")
         print(f"  policy: {policy_file} {req.destination} max_tier {req.max_tier}{state}")
+        _owner_fallback(req)
         for text in _crossing_rows(sel):
             print(text)
         if req.tier3:
@@ -524,7 +526,11 @@ def _export_crossing(lb: Logbook, a: argparse.Namespace) -> None:
     except (crossing.CrossingError, OSError) as e:
         print(f"export crossing: {e}", file=sys.stderr)
         sys.exit(1)
-    print(f"{req.destination}: {sel.counts()['crossed']} lines crossed, {window}, tiers {tiers} → {out}")
+    print(  # the destination's key, often a person's name, with words between it and every figure
+        f"{sel.counts()['crossed']} lines crossed to the destination {req.destination}, in {window},"
+        f" tiers {tiers} → {out}"
+    )
+    _owner_fallback(req)
     for text in _crossing_rows(sel):
         print(text)
     if sel.sealed:
@@ -539,12 +545,20 @@ def _export_crossing(lb: Logbook, a: argparse.Namespace) -> None:
     print(f"  recorded as #{seq} {crossing.LINE_SCHEMA}, package sha256 {digest}…; watermark {req.until}")
 
 
-def _portfolio(lb: Logbook) -> frozenset[tuple[str, str]]:
+def _owner_fallback(req: crossing.Request) -> None:
+    """The one sentence, when a bad policy/owner.json made a mode that asked for more send people's mail
+    only (`crossing.fallback_sentence`): what is wrong with the file and how to mend it, nothing of it."""
+    if req.owner_problem is not None and req.mail:
+        print(f"  mail: {crossing.fallback_sentence(req.owner_problem)}")
+
+
+def _portfolio(lb: Logbook, tiers: tuple[int, ...]) -> frozenset[tuple[str, str]]:
     """The refs bound to an org in a portfolio, for `--mail all-except-junk` to spare their mail: read on
-    this machine to decide, never written, never printed (`orgs.portfolio_refs`)."""
+    this machine to decide, never written, never printed (`orgs.portfolio_refs`), and only from the lines
+    at the crossing's `tiers`, so a crossing below tier 3 reads no portfolio, as the door does not."""
     from ..contrib import orgs
 
-    return orgs.portfolio_refs(lb)
+    return orgs.portfolio_refs(lb, tiers)
 
 
 def _export_notion(lb: Logbook, a: argparse.Namespace) -> None:
