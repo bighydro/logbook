@@ -336,6 +336,11 @@ The Day page keeps and signs the same from one form, *Keep and sign*, in its eve
 signed day is signed again: every box, field and choice is one of these flags, and the page writes
 these lines byte for byte ([serve](serve.md#keep-and-sign)). `--mend` stays at the command line.
 
+`day sign` also takes **`--keep-sender ADDRESS[,ADDRESS]`**: senders of the day's mail your junk rules held
+back, as the Day page lists them under *Held back*, each kept with one `keep` fate before the signature,
+so their mail crosses from then on ([serve](serve.md#held-back), [Hold](hold.md#sender-fates)). A sender
+the day did not hold back, or one kept already, is refused and nothing is written.
+
 `--keep` sits one letter from `--kept`, the disposition: `--kept` says what became of a commitment on
 the page, `--keep` keeps the dream's pencil in ink. The door's `sign_day` takes neither `--keep` nor
 any of these: agents propose, you keep.

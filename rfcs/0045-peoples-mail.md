@@ -89,6 +89,14 @@ writes reports under `state/hold/` and no line; no reader may take a report for 
 lands (its own profile, under RFC 0042), the reader fills the set from the standing fates and this RFC
 gains a dated line naming it.
 
+*2026-11-20:* the fate line has landed: a `status/v1` line on an `item` of sort `sender` (RFC 0037
+§10.7, RFC 0042 §4), `keep` or `let-go`, written by `logbook hold sender`. The reader fills `Rule.let_go`
+from the standing `let-go` lines and `Rule.kept` from the standing `keep` lines (`sender_fates`), at
+every tier, for `people mail`, the crossing (all three modes), a shared day, the replies owed and the
+day's verdicts the door reads alike. A sender let go is held whatever keeps it, as the all-except-junk
+amendment below says: an address kept on a domain let go is still let go. `Rule.kept` is the exception
+5 of that amendment, filled by the same lines.
+
 ## 5. The reader
 
 `logbook.core.peoples_mail` (`docs/mail-people.md`):
@@ -158,7 +166,7 @@ to a person; `harbour@example.org` resolves to a `company`.
 mail 2026-03-01 – 2026-03-01: 3 lines
   people's mail: 1 (1 received, 0 sent), from or to 1 person
   other mail: 2 (1 no person on it, 1 a no-reply sender, 0 an agent's)
-  let go in Hold: nothing yet; Hold writes no fates
+  let go in Hold: no sender (`logbook hold sender ... --let-go`)
 ```
 
 A crossing of that day with `--tier 1,2 --kinds mail` carries the first mail, `counts.mail_held_back: 2`.
@@ -212,7 +220,7 @@ key, `--mail all-except-junk` is refused in one sentence that names the file, an
       (`Rule.portfolio`); a caller that hands none holds such a mail back rather than send it;
    5. its sender has a standing `keep` fate as a Hold item of sort `sender` (RFC 0042 §4). The rule takes
       the kept senders as an input (`Rule.kept`, `email` or `domain` refs), exactly as it takes the senders
-      let go (§4). Hold writes no fate yet, so the set is empty; a later change fills it.
+      let go (§4). Filled from the standing `keep` fates since 2026-11-20 (§4's dated line).
 
 A sender with a standing `let-go` fate is always held, whatever spares it (§4), reason `let_go`. Each mail
 held carries one reason: `let_go`, else `junk_category`, else `junk_label`.

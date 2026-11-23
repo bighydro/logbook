@@ -104,7 +104,10 @@ sign never hides what was held:
 per-hansen: 7 mails held back (3 from a first-time sender)
 ```
 
-An agent asks the same of a day through the door's `held_mail` tool ([MCP](mcp.md#mail-held-back)).
+An agent asks the same of a day through the door's `held_mail` tool ([MCP](mcp.md#mail-held-back)). The Day
+page lists the senders themselves in Keep and sign, under *Held back*, where a tick keeps one
+([serve](serve.md#held-back)); a sender you keep or let go in Hold ([sender fates](hold.md#sender-fates))
+is read by this rule at every export.
 
 ## The package
 

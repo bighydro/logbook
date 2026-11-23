@@ -34,7 +34,18 @@ from pathlib import Path, PurePosixPath
 from typing import Any
 
 from .. import __version__
-from . import attachments, day_start, drafts, heard, peoples_mail, policy, sealing, signing, stars
+from . import (
+    attachments,
+    day_start,
+    drafts,
+    heard,
+    peoples_mail,
+    policy,
+    sealing,
+    sender_fates,
+    signing,
+    stars,
+)
 from .chain import Line, is_sealed
 from .index import Index
 from .resolve import Ref, standing, walk
@@ -118,7 +129,7 @@ class Request:
     signed_only: bool = True  # RFC 0034: only the lines of signed days cross; `--unsigned` lifts it
     mail_mode: str = MAIL_PEOPLE  # RFC 0045: `--mail people|all|all-except-junk` (`--all-mail` is `all`)
     junk: peoples_mail.Junk | None = None  # the destination's `mail_junk` rule, under all-except-junk
-    kept: frozenset[Ref] = frozenset()  # the senders Hold keeps (RFC 0042 §4): empty until Hold writes fates
+    kept: frozenset[Ref] = frozenset()  # senders kept beside Hold's own fates, which `select` reads itself
     portfolio: frozenset[Ref] = frozenset()  # refs bound to an org in a portfolio; never written anywhere
 
     @property
@@ -336,6 +347,7 @@ def select(lb: Logbook, req: Request) -> Selection:
             wanted = kept
         raw = idx.read(((p.file, p.offset) for p in wanted), opened=False)
         raw_resolutions = idx.resolutions(opened=False)
+        fates = peoples_mail.fates(lb, idx, retraction_lines)
     sealed = {str(line["id"]): line for line in [*raw, *raw_resolutions] if is_sealed(line)}
     if sealed:
         if not lb.identities:
@@ -356,9 +368,9 @@ def select(lb: Logbook, req: Request) -> Selection:
     mail_held: int | None = None
     mail_junk: dict[str, Any] | None = None
     if req.mail_mode == MAIL_PEOPLE:
-        lines, mail_held = peoples_mail_only(lb, retraction_lines, resolution_lines, lines)
+        lines, mail_held = peoples_mail_only(lb, retraction_lines, resolution_lines, lines, fates)
     elif req.mail_mode == MAIL_EXCEPT_JUNK:
-        lines, mail_junk = all_except_junk(lb, req, retraction_lines, resolution_lines, lines)
+        lines, mail_junk = all_except_junk(lb, req, retraction_lines, resolution_lines, lines, fates)
         mail_held = None if mail_junk is None else int(mail_junk["held"])
     # a draft follows the entry it was written under, not the head (RFC 0036 amendment 1): once its
     # entry (the `relationship` entry's for a person, the `dream` entry's for every other unit) no
@@ -420,16 +432,21 @@ def signed_gate(lb: Logbook, idx: Index) -> SignedGate:
 
 
 def peoples_mail_only(
-    lb: Logbook, marks: Iterable[Line], resolutions: Iterable[Line], lines: list[Line]
+    lb: Logbook,
+    marks: Iterable[Line],
+    resolutions: Iterable[Line],
+    lines: list[Line],
+    fates: sender_fates.Fates,
 ) -> tuple[list[Line], int | None]:
     """RFC 0045's rule, the one `select` and `share day` both apply: `lines` (opened) with every mail
-    no person is on left out (`peoples_mail.Rule`), and how many were; None when there was no mail to
-    read, so a package with none is what it was. `CrossingError` names `policy/owner.json` when that
-    file is not what it should be."""
+    no person is on left out (`peoples_mail.Rule`), a sender the owner let go in Hold among them
+    (`fates`, `peoples_mail.fates`), and how many were; None when there was no mail to read, so a
+    package with none is what it was. `CrossingError` names `policy/owner.json` when that file is not
+    what it should be."""
     if not any(line.get("kind") == peoples_mail.KIND for line in lines):
         return lines, None
     try:
-        rule = peoples_mail.Rule.of(lb, marks, resolutions)
+        rule = peoples_mail.Rule.of(lb, marks, resolutions, fates.let_go, fates.kept)
     except policy.PolicyError as e:
         raise CrossingError(str(e)) from e
     persons = [line for line in lines if line.get("kind") != peoples_mail.KIND or rule.classify(line).person]
@@ -437,16 +454,25 @@ def peoples_mail_only(
 
 
 def all_except_junk(
-    lb: Logbook, req: Request, marks: Iterable[Line], resolutions: Iterable[Line], lines: list[Line]
+    lb: Logbook,
+    req: Request,
+    marks: Iterable[Line],
+    resolutions: Iterable[Line],
+    lines: list[Line],
+    fates: sender_fates.Fates,
 ) -> tuple[list[Line], dict[str, Any] | None]:
     """RFC 0045's third mode: `lines` (opened) with every mail the destination's `mail_junk` rule holds
     left out (`peoples_mail.Rule.junk`), and the counts (`peoples_mail.held_counts`: held, by reason,
     how many a first-time sender's); None when there was no mail to read. Counts only: no address, no
-    subject, no name, and nothing of the portfolio the rule read to decide."""
+    subject, no name, and nothing of the portfolio the rule read to decide. The standing sender fates
+    (`fates`, `peoples_mail.fates`) are the rule's: a sender let go is held, one kept spared, beside the
+    request's own `kept`."""
     if req.junk is None or not any(line.get("kind") == peoples_mail.KIND for line in lines):
         return lines, None
     try:
-        rule = peoples_mail.Rule.of(lb, marks, resolutions, kept=req.kept, portfolio=req.portfolio)
+        rule = peoples_mail.Rule.of(
+            lb, marks, resolutions, let_go=fates.let_go, kept=req.kept | fates.kept, portfolio=req.portfolio
+        )
     except policy.PolicyError as e:
         raise CrossingError(str(e)) from e
     with lb.index() as idx:

@@ -18,6 +18,7 @@ from ..contrib import (
     dream_events,
     dream_week,
     gaps,
+    held_mail,
     people_drift,
     print_layout,
     print_page,
@@ -507,6 +508,12 @@ def day_arguments(sub: Subparsers) -> None:
         kept.add_argument(
             flag, metavar="T,T", help=f"the plan's tasks {said}, by the numbers `show plan YYYY-MM-DD` prints"
         )
+    kept.add_argument(
+        "--keep-sender",
+        metavar="ADDRESS[,ADDRESS]",
+        help="`day sign` only: senders of the day's mail held back as junk that you keep (an address or a"
+        " domain, as the Day page lists them): a keep fate each (RFC 0042 §4), before the signature",
+    )
     s.add_argument(
         "--model",
         metavar="NAME",
@@ -579,7 +586,7 @@ def cmd_day(a: argparse.Namespace) -> None:
     if reflecting:
         print(f"day: {_listed(reflecting)} belong to `day reflect YYYY-MM-DD`", file=sys.stderr)
         sys.exit(2)
-    keeping = keep_sign.given(a)
+    keeping = keep_sign.given(a) + (["--keep-sender"] if getattr(a, "keep_sender", None) else [])
     if keeping:
         print(
             f"day: {_listed(keeping)} belong to `day sign YYYY-MM-DD` and `day reflect YYYY-MM-DD --sign`",
@@ -679,6 +686,7 @@ def _day_sign(lb: Logbook, a: argparse.Namespace) -> None:
         day = parse_day(a.signed_day).isoformat()
         wanted = [] if a.accept is None else reflect.numbers(a.accept)
         asking = keep_sign.from_args(a)
+        senders = held_mail.refs((a.keep_sender or "").split(",")) if a.keep_sender else []
         (confirm, keep), dispositions = _confirm(a), _dispositions(a)
         reflect.no_draft(lb, day, [*(confirm or []), *(e for found in dispositions.values() for e in found)])
         found = dream_events.listed(lb, day)  # the draft the Day shows: a withheld one proposes nothing
@@ -688,11 +696,18 @@ def _day_sign(lb: Logbook, a: argparse.Namespace) -> None:
                 f"--confirm {signing.NOTHING} confirms nothing, and what you keep is confirmed by keeping it;"
                 " give one or the other"
             )
-        if taken or asking:  # every flag checked before an event or a kept line is written
+        if senders and confirm == []:
+            raise keep_sign.KeepError(
+                f"--confirm {signing.NOTHING} confirms nothing, and a sender you keep is confirmed by keeping"
+                " it; give one or the other"
+            )
+        if taken or asking or senders:  # every flag checked before an event or a kept line is written
             dream_events.check_signature(lb, day, confirm, dispositions, a.at, a.note)
         for text in dream_events.rows(found):
             print(text)
-        line, kept = _sign_with_events(lb, day, taken, confirm, keep, a.note, a.at, dispositions, asking)
+        line, kept = _sign_with_events(
+            lb, day, taken, confirm, keep, a.note, a.at, dispositions, asking, senders
+        )
     except ValueError as e:  # SignError, EventError, a day that is not one, a day_start that is not a clock
         print(f"day sign: {e}", file=sys.stderr)
         sys.exit(2)
@@ -760,19 +775,26 @@ def _sign_with_events(
     at: str | None,
     dispositions: dict[str, list[str]],
     asking: keep_sign.Asked | None = None,
+    senders: Sequence[tuple[str, str]] = (),
 ) -> tuple[Line, str | None]:
     """Under one hold of the writer lock: what the owner keeps checked and made (`keep.prepared`), the
     proposals read again and every event line made before the first is written
     (`dream_events.prepared`), each written, then what is kept (`keep.write`: the kept sentences,
-    links and photo, the day in a word, the tasks answered), then the standing signature read
+    links and photo, the day in a word, the tasks answered), the senders of the day's mail held back
+    that the owner keeps (`held_mail`: checked before the first line, each a `keep` fate written after
+    the kept lines, as the Day page's Keep and sign writes them), then the standing signature read
     (`sign_again.again`: kept when `keep`) and the signature through `signing.sign`, the events and
     the kept lines among the lines confirmed and never a draft line (`reflect.ink`, RFC 0043 §6 rule
     3); with what was kept from the standing signature, said in a sentence."""
     with lb.writer():
         items = keep_sign.prepared(lb, day, asking) if asking else []
+        kept_senders = held_mail.checked(lb, day, senders)
         written = [_write_event(lb, p, line) for p, line in dream_events.prepared(lb, day, taken)]
         today = notes.today_in(day_start.of(lb.meta))
         written += [str(line["id"]) for line in keep_sign.write(lb, day, today, items, print, at)]
+        for fate in held_mail.write(lb, kept_senders, keep_sign.moment(lb, day, today, at)):
+            print(held_mail.wrote_text(fate))
+            written.append(str(fate["id"]))
         args = sign_again.again(lb, day, confirm, keep, dispositions, note)
         confirm = args.confirm
         if confirm is not None and (confirm or keep):
@@ -851,6 +873,7 @@ def _day_reflect(lb: Logbook, a: argparse.Namespace) -> None:
         if given
     ]
     signs += [f"--{value}" for value in _dispositions(a)]
+    signs += ["--keep-sender"] if a.keep_sender else []
     if signs:
         _refuse(
             f"{_listed(signs)} belong to `day sign`; a reflection signs with --sign and the proposals"

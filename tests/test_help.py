@@ -1,7 +1,8 @@
-"""`logbook --help` is one screen (the October 2026 audit, Decision 1): 50 lines at most,
-the 32 commands in their groups (RFC 0036 added `goal` and `chapter`, then `transcript`, RFC 0037
-`review` and `status`, RFC 0041 `star` and `unstar`, and `with`, then `videos`), one line per command,
-no prose paragraph; and the groups in `parser.py` name exactly the commands the parser has."""
+"""`logbook --help` is one screen (the October 2026 audit, Decision 1): 51 lines at most,
+the 33 commands in their groups (RFC 0036 added `goal` and `chapter`, then `transcript`, RFC 0037
+`review` and `status`, RFC 0041 `star` and `unstar`, and `with`, then `videos`, then RFC 0042
+`hold`), one line per command, no prose paragraph; and the groups in `parser.py` name exactly the
+commands the parser has."""
 
 from __future__ import annotations
 
@@ -12,10 +13,11 @@ import re
 from logbook import cli
 from logbook.commands import parser
 
-TOP_LEVEL = 32
+TOP_LEVEL = 33
 # it prints 50: 40 until RFC 0036, 42 until `transcript`, 43 until `review` and `status`, 45 until
-# `star`, `unstar` and `with`, 48 until `videos`, 49 until the line for a newcomer (#334)
-MAX_LINES = 51
+# `star`, `unstar` and `with`, 48 until `videos`, 49 until the line for a newcomer (#334), 50 until `hold`
+# (RFC 0042 §4, the sender fates)
+MAX_LINES = 52
 MAX_WIDTH = 80
 
 
@@ -31,7 +33,7 @@ def _commands() -> list[str]:
     return list(sub.choices)
 
 
-def test_there_are_thirty_two_commands() -> None:
+def test_there_are_thirty_three_commands() -> None:
     assert len(_commands()) == TOP_LEVEL, _commands()
 
 
