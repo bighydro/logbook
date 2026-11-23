@@ -115,61 +115,58 @@ class _Gated:
 
 
 def read(lb: Logbook, day: str, tiers: Sequence[int] | None = None) -> Reading:
-    """The day's mail held back, per destination with a `mail_junk` rule, through the gate `tiers` (None:
-    every tier, the command's); an empty reading when no destination has a rule or the day held nothing."""
+    """The day's mail held back, per destination with a `mail_junk` rule, each judged at the tiers its
+    entry lets cross (1 to its `max_tier`) within the gate `tiers` (None: every tier, the command's): its
+    mails, the resolutions that say who is a person, the earlier mail that decides a first time and, only
+    where tier 3 is among them, an org's portfolio. An empty reading when no destination has a rule or
+    the day held nothing."""
     try:
         destinations = peoples_mail.junk_destinations(lb.root)
     except policy.PolicyError as e:
         return Reading(day, problem=f"the mail held back cannot be read: {e}")
     if not destinations:
         return Reading(day)
-    rules: dict[str, peoples_mail.Junk] = {}
+    gate = None if tiers is None else {int(t) for t in tiers}
+    rules: dict[str, tuple[peoples_mail.Junk, tuple[int, ...]]] = {}
     unread: dict[str, str] = {}
     for destination in destinations:
         try:
             rule = peoples_mail.junk_of(lb.root, destination)
+            ceiling = policy.ceiling(lb.root, destination)
         except policy.PolicyError as e:
             unread[destination] = f"its mail_junk rule cannot be read, so nothing is offered: {e}"
             continue
-        if rule is not None:
-            rules[destination] = rule
-    portfolio: frozenset[Ref] = frozenset()
-    if tiers is None or TIER3 in {int(t) for t in tiers}:
-        from . import orgs  # an org's portfolio is tier 3: read only where the gate reads it
-
-        portfolio = orgs.portfolio_refs(lb)
+        if rule is not None:  # what its entry lets cross, within what this page reads
+            rules[destination] = (rule, tuple(t for t in range(1, ceiling + 1) if gate is None or t in gate))
     days = day_start.of(lb.meta)
+    verdicts: dict[str, list[peoples_mail.Verdict]] = {}
+    by_id: dict[str, Line] = {}
     with lb.index() as idx:
         marks = idx.retractions()
         fates = peoples_mail.fates(lb, idx, marks)
-        try:
-            judge = peoples_mail.Rule.of(
-                lb,
-                marks,
-                reading.crossing(idx.resolutions(), tiers),
-                let_go=fates.let_go,
-                kept=fates.kept,
-                portfolio=portfolio,
-            )
-        except policy.PolicyError as e:  # policy/owner.json: who the owner is decides who is a person
-            return Reading(day, problem=f"the mail held back cannot be read: {e}")
         retracted = frozenset(retractions(marks))
-        mails = [
+        standing = [
             line
-            for line in reading.crossing(
-                (
-                    line
-                    for line, _day in peoples_mail._standing(
-                        idx, peoples_mail.KIND, day, day, retracted, days
-                    )
-                ),
-                tiers,
-            )
+            for line, _day in peoples_mail._standing(idx, peoples_mail.KIND, day, day, retracted, days)
             if not is_sealed(line)
         ]
-        first = judge.first_times(cast(Index, _Gated(idx, tiers)), mails, day) if rules else frozenset()
-        verdicts = {name: judge.verdicts(idx, mails, rule, first) for name, rule in rules.items()}
-    by_id = {str(line["id"]): line for line in mails}
+        resolutions = idx.resolutions()
+        for destination, (rule, at) in rules.items():
+            try:
+                judge = peoples_mail.Rule.of(
+                    lb,
+                    marks,
+                    reading.crossing(resolutions, at),
+                    let_go=fates.let_go,
+                    kept=fates.kept,
+                    portfolio=_portfolio(lb, at),
+                )
+            except policy.PolicyError as e:  # policy/owner.json: who the owner is decides who is a person
+                return Reading(day, problem=f"the mail held back cannot be read: {e}")
+            mails = list(reading.crossing(standing, at))
+            by_id.update((str(line["id"]), line) for line in mails)
+            first = judge.first_times(cast(Index, _Gated(idx, at)), mails, day)
+            verdicts[destination] = judge.verdicts(idx, mails, rule, first)
     held = []
     for destination in destinations:
         if destination in unread:
@@ -177,6 +174,16 @@ def read(lb: Logbook, day: str, tiers: Sequence[int] | None = None) -> Reading:
         elif destination in verdicts:
             held.append(_grouped(destination, verdicts[destination], by_id))
     return Reading(day, tuple(h for h in held if h.any))
+
+
+def _portfolio(lb: Logbook, at: Sequence[int]) -> frozenset[Ref]:
+    """The refs an org in a portfolio binds, read only where `at` reaches tier 3, the tier of the org's
+    status line; below it no portfolio spares a mail, so nothing tells which orgs a portfolio holds."""
+    if TIER3 not in at:
+        return frozenset()
+    from . import orgs
+
+    return orgs.portfolio_refs(lb)
 
 
 def _grouped(destination: str, verdicts: Iterable[peoples_mail.Verdict], by_id: dict[str, Line]) -> Held:

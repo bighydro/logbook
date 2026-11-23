@@ -133,13 +133,32 @@ def test_a_day_that_held_nothing_shows_nothing(held: Logbook) -> None:
 
 
 def test_the_reader_holds_to_the_gate(held: Logbook) -> None:
-    """A mail above the gate is neither shown nor decides a first time."""
+    """A mail above the gate, or above the destination's entry, is neither shown nor decides a first
+    time: a mail that does not cross there makes no sender a known one there."""
     held.append(**_mail("2026-10-02T09:00:00Z", NEWCOMER, "An earlier word", tier=3))
-    assert [f.sender for f in held_mail.read(held, DAY).held[0].first] == []  # every tier: not a first time
+    assert [f.sender for f in held_mail.read(held, DAY).held[0].first] == [NEWCOMER]  # the entry stops at 2
+    entries = json.loads((held.root / "policy" / "crossing.json").read_text(encoding="utf-8"))
+    entries[DESTINATION]["max_tier"] = 3
+    (held.root / "policy" / "crossing.json").write_text(json.dumps(entries), encoding="utf-8")
+    assert [f.sender for f in held_mail.read(held, DAY).held[0].first] == []  # at 3 the earlier word counts
     gated = held_mail.read(held, DAY, (1, 2))
-    assert [f.sender for f in gated.held[0].first] == [NEWCOMER]
+    assert [f.sender for f in gated.held[0].first] == [NEWCOMER]  # the page's gate holds it back again
     held.append(**_mail(utc(DAY, "10:00"), "secret@hidden.example.org", "Above the gate", tier=3))
     assert ("email", "secret@hidden.example.org") not in held_mail.read(held, DAY, (1, 2)).offered
+
+
+def test_each_destination_is_judged_at_its_own_entrys_tiers(held: Logbook) -> None:
+    """Held mail answers only at the tiers the destination's entry lets cross: a destination of tier 1
+    holds back no mail of tier 2, so it offers nothing and is not shown; one of tier 2 still is."""
+    entries = json.loads((held.root / "policy" / "crossing.json").read_text(encoding="utf-8"))
+    entries["ola-nordmann"] = {"max_tier": 1, "mail_junk": RULE}
+    (held.root / "policy" / "crossing.json").write_text(json.dumps(entries), encoding="utf-8")
+    found = held_mail.read(held, DAY)
+    assert [h.destination for h in found.held] == [DESTINATION]
+    held.append(**_mail(utc(DAY, "10:30"), "promo@tier3.example.org", "Above the entry", tier=3))
+    assert ("email", "promo@tier3.example.org") not in held_mail.read(held, DAY).offered, (
+        "its entry stops at 2"
+    )
 
 
 def test_a_policy_that_cannot_be_read_fails_closed(held: Logbook) -> None:

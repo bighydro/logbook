@@ -917,9 +917,11 @@ named as a heading with no number beside it:
 
 A person of the record is never held by a junk rule, so no row is a person's, and a sender is shown by
 its address or its domain, never by a name the record resolves. A sender you let go in Hold is not
-offered again: you decided it. The section reads through the page's gate (the day's mail, the addresses
-that decide a first time, an org's portfolio only where tier 3 is read), fetches nothing, and only the
-owner's Library shows it. When `policy/crossing.json` or `policy/owner.json` cannot be read, the section
+offered again: you decided it. Each destination is judged at the tiers its entry lets cross, within the
+page's gate: its mail, the addresses that decide a first time (a mail that does not cross there makes no
+sender a known one there) and an org's portfolio only where tier 3 is among them. A destination whose
+entry crosses no mail the day held shows nothing. The section fetches nothing, and only the owner's
+Library shows it. When `policy/crossing.json` or `policy/owner.json` cannot be read, the section
 says so in one sentence and offers nothing.
 
 A box ticked writes one `keep` fate for that sender, after the delegations and before the signature,
