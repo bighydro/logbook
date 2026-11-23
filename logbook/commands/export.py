@@ -492,7 +492,7 @@ def _export_crossing(lb: Logbook, a: argparse.Namespace) -> None:
             portfolio=_portfolio(lb, asked) if mode == crossing.MAIL_EXCEPT_JUNK else frozenset(),
         )
     except crossing.EmptyWindow as e:
-        print(f"{a.to}: {e}; nothing written")
+        print(f"nothing written: {e} (to the destination {a.to})")  # no figure beside its key, a name maybe
         return
     except crossing.CrossingError as e:
         print(f"export crossing: {e}", file=sys.stderr)
@@ -508,7 +508,7 @@ def _export_crossing(lb: Logbook, a: argparse.Namespace) -> None:
     if a.dry_run:
         policy_file = policy.policy_path(lb.root)
         state = "" if policy_file.exists() else " (default; the first export writes it)"
-        print(f"dry run: {req.destination}, {window}, tiers {tiers}; nothing written")
+        print(f"dry run: to the destination {req.destination}, in {window}, tiers {tiers}; nothing written")
         print(f"  policy: {policy_file} {req.destination} max_tier {req.max_tier}{state}")
         for text in _crossing_rows(sel):
             print(text)
@@ -525,7 +525,10 @@ def _export_crossing(lb: Logbook, a: argparse.Namespace) -> None:
     except (crossing.CrossingError, OSError) as e:
         print(f"export crossing: {e}", file=sys.stderr)
         sys.exit(1)
-    print(f"{req.destination}: {sel.counts()['crossed']} lines crossed, {window}, tiers {tiers} → {out}")
+    print(  # the destination's key, often a person's name, with words between it and every figure
+        f"{sel.counts()['crossed']} lines crossed to the destination {req.destination}, in {window},"
+        f" tiers {tiers} → {out}"
+    )
     for text in _crossing_rows(sel):
         print(text)
     if sel.sealed:

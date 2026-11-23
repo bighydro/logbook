@@ -714,7 +714,8 @@ def _day_sign(lb: Logbook, a: argparse.Namespace) -> None:
 def held_mail_rows(lb: Logbook, day: str) -> list[str]:
     """After a signature, one line per destination whose entry in policy/crossing.json has a
     `mail_junk` rule (RFC 0045, all except junk): how many of the day's mails that rule would hold back,
-    and how many of those a first-time sender's. Counts only: never a name, an address or a subject. A
+    and how many of those a first-time sender's. Counts only: never a name, an address or a subject, and
+    the count never beside the destination's key, which is often a person's name (words between). A
     rule that cannot be read is said in one line, never passed over, so a quick sign hides nothing."""
     from ..contrib import orgs
 
@@ -743,9 +744,9 @@ def held_mail_rows(lb: Logbook, day: str) -> list[str]:
             continue
         counts = peoples_mail.held_counts(judged[destination])
         n = counts["held"]
-        rows.append(
-            f"{destination}: {n} mail{'s' if n != 1 else ''} held back"
-            f" ({counts['first_time']} from a first-time sender)"
+        rows.append(  # the count first, the destination's key last, words between: it may be a name
+            f"{n} mail{'s' if n != 1 else ''} held back ({counts['first_time']} from a first-time sender)"
+            f" by the mail_junk rule for {destination}"
         )
     return rows
 

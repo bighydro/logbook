@@ -22,7 +22,7 @@ import pytest
 
 from logbook import cli
 from logbook.contrib import entities, mcp_server, orgs
-from logbook.core import crossing, peoples_mail, policy, signing
+from logbook.core import crossing, figures, peoples_mail, policy, signing
 from logbook.core.chain import Line
 from logbook.core.store import Logbook
 
@@ -540,7 +540,7 @@ def test_day_sign_says_per_destination_how_many_mails_were_held(
 ) -> None:
     cli.main(["day", "sign", DAY])
     text = capsys.readouterr().out
-    assert f"{DESTINATION}: 7 mails held back (3 from a first-time sender)" in text
+    assert f"7 mails held back (3 from a first-time sender) by the mail_junk rule for {DESTINATION}" in text
     assert "kari:" not in text  # a destination with no rule has no line
     _no_one_in(text)
 
@@ -558,6 +558,47 @@ def test_day_sign_says_nothing_of_mail_without_a_rule(
     _write_policy(lb, {"kari": {"max_tier": 2}})
     cli.main(["day", "sign", DAY])
     assert "held back" not in capsys.readouterr().out
+
+
+# -- no count beside a destination ------------------------------------------------------------------
+
+
+KEYS = (DESTINATION, "Per Hansen")  # a destination's key is often a person's name: Per Hansen's
+
+
+def _no_count_beside_the_key(text: str) -> None:
+    """No number beside a destination's key, row by row (the owner's rule: no number beside a person's
+    name, anywhere), as `figures.adjacent` reads it: a date and a clock are numbers too. The folder a
+    bundle is written to (after `→`) is a path on the owner's disk, `export/crossing/<key>/<stamp>`, whose
+    layout this does not change; every word before it is held to the rule."""
+    said = [row.split(" → ")[0] for row in text.splitlines()]
+    rows = [row for row in said if any(figures.adjacent(row, key) for key in KEYS)]
+    assert rows == [], rows
+
+
+def test_no_output_of_held_mail_sets_a_count_beside_a_destination(
+    lb: Logbook, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """`day sign`, the crossing (its dry run, the run, an empty window, every mail mode) and the door:
+    the count stands apart from the destination's key, words between them."""
+    said: list[str] = []
+    cli.main(["day", "sign", DAY])
+    said.append(capsys.readouterr().out)
+    assert "7 mails held back (3 from a first-time sender)" in said[-1], "the count is still said"
+    for mode in crossing.MAIL_MODES:
+        cli.main(["export", "crossing", "--to", DESTINATION, "--since", SINCE, "--until", UNTIL,
+                  "--tier", "1,2", "--mail", mode, "--dry-run"])  # fmt: skip
+        _export(tmp_path / mode, "--mail", mode)
+        said.append(capsys.readouterr().out)
+    cli.main(["export", "crossing", "--to", DESTINATION, "--since", "2026-05-01T00:00:00Z",
+              "--until", "2026-05-02T00:00:00Z", "--tier", "1,2"])  # fmt: skip
+    said.append(capsys.readouterr().out)
+    cli.main(["export", "crossing", "--to", DESTINATION, "--since", SINCE, "--until", SINCE, "--tier", "1,2"])
+    said.append(capsys.readouterr().out)
+    assert "nothing to cross" in said[-1]
+    said.append(json.dumps(_door(lb, 2), indent=2))
+    for text in said:
+        _no_count_beside_the_key(text)
 
 
 # -- no one in a count ----------------------------------------------------------------------------------

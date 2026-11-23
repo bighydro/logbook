@@ -101,10 +101,11 @@ portfolio above them move no mail and no count. The dry run prints the same coun
 ```
 
 `logbook day sign DAY` says the same of the day it signs, one line per destination with a rule, so a quick
-sign never hides what was held:
+sign never hides what was held. The count comes first and the destination's key last, words between them,
+since a key is often a person's name and no number stands beside a name:
 
 ```
-per-hansen: 7 mails held back (3 from a first-time sender)
+7 mails held back (3 from a first-time sender) by the mail_junk rule for per-hansen
 ```
 
 An agent asks the same of a day through the door's `held_mail` tool ([MCP](mcp.md#mail-held-back)).
