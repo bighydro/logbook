@@ -114,10 +114,17 @@ description, as the host lists it, says in one sentence what the ceiling does to
 
 **`held_mail(day?, destination?)`** says, for each destination whose entry in `policy/crossing.json` has a
 `mail_junk` rule (or the one `destination` names; one without a rule is refused), whether each mail line of
-the day would stay home under `export crossing --mail all-except-junk` ([the crossing](crossing.md#all-except-junk)):
+the day would stay home under `export crossing --mail all-except-junk` ([the crossing](crossing.md#all-except-junk)).
+It answers only when the `mcp` entry names it, as a write tool is named under `write`:
 
 ```json
-{"day": "2026-03-01", "above_ceiling": 2, "destinations": [
+{"mcp": {"max_tier": 2, "held_mail": true}}
+```
+
+Without `"held_mail": true` the tool is refused in one sentence that says nothing of the day's mail. With it:
+
+```json
+{"day": "2026-03-01", "destinations": [
   {"destination": "per-hansen", "held": 1, "first_time": 1, "mails": [
     {"id": "019cadd3-…", "held": true, "reason": "junk_label", "first_time": true},
     {"id": "019cadd3-…", "held": false, "reason": null, "first_time": false}]}]}
@@ -126,11 +133,10 @@ the day would stay home under `export crossing --mail all-except-junk` ([the cro
 `reason` is `let_go`, `junk_category` or `junk_label`; `first_time` says the sender may be a new person
 writing (no earlier mail from the address in the record, not a no-reply address, not a list's mail). Each
 mail is its id and these words: never an address, a subject or a name; `day_lines` and `line` read the
-rest, under the same ceiling. *A mail above the ceiling is not judged, not listed and not counted among the
-held, only counted in `above_ceiling`*, and the first-time flag is read from the mails the ceiling shows.
-An org's portfolio is tier 3: below it no portfolio spares an org's mail here, so the answer may say an
-org's mail would be held that the crossing, which reads every tier, sends; it never tells which orgs a
-portfolio holds.
+rest, under the same ceiling. *A mail above the ceiling is absent: not judged, not listed, not counted*,
+neither in the answer nor in the gate's `withheld` nor in the log, and the first-time flag is read from the
+mails the ceiling shows. An org's portfolio is tier 3: below it no portfolio spares an org's mail here, as
+a crossing below tier 3 reads none either, so the answer never tells which orgs a portfolio holds.
 
 Every answer is one JSON text:
 

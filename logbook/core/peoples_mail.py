@@ -35,7 +35,7 @@ lines themselves."""
 from __future__ import annotations
 
 import re
-from collections.abc import Iterable, Iterator, Mapping, Sequence
+from collections.abc import Collection, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
@@ -70,6 +70,7 @@ INVITATION_SENDERS = (
     "withjoy.com",
 )
 JUNK_KEY = "mail_junk"  # a destination's entry in policy/crossing.json: the owner's rule for junk mail
+DOOR_KEY = "held_mail"  # the `mcp` entry of policy/crossing.json opens the door to held mail with `true`
 JUNK_FIELDS = ("categories", "labels", "never_labels")
 JUNK_CATEGORY, JUNK_LABEL = "junk_category", "junk_label"
 HELD_REASONS = (LET_GO, JUNK_CATEGORY, JUNK_LABEL)  # why a mail stays home under all except junk, in order
@@ -172,6 +173,20 @@ def junk_of(root: Path, destination: str) -> Junk | None:
     if not isinstance(entry, dict) or JUNK_KEY not in entry:
         return None
     return Junk.of(entry[JUNK_KEY], f"{policy.policy_path(root)}: {destination!r}")
+
+
+def door_open(root: Path) -> bool:
+    """Whether the `mcp` entry of policy/crossing.json opens the door to held mail (`DOOR_KEY`: `true`),
+    as a write tool is named under `write`: absent or `false`, the door answers nothing of held mail.
+    Anything else is refused naming the file, so a typo never opens it."""
+    entry = policy.read(root).get(policy.MCP_DESTINATION)
+    found = entry.get(DOOR_KEY, False) if isinstance(entry, dict) else False
+    if not isinstance(found, bool):
+        raise policy.PolicyError(
+            f'{policy.policy_path(root)}: the "{policy.MCP_DESTINATION}" entry has a "{DOOR_KEY}" that is not'
+            " true or false"
+        )
+    return found
 
 
 def junk_destinations(root: Path) -> list[str]:
@@ -377,12 +392,20 @@ class Rule:
             return None
         return signal
 
-    def first_times(self, idx: Index, lines: Iterable[Line], last_day: str | None = None) -> frozenset[str]:
+    def first_times(
+        self,
+        idx: Index,
+        lines: Iterable[Line],
+        last_day: str | None = None,
+        tiers: Collection[int] | None = None,
+    ) -> frozenset[str]:
         """The ids of the received mails among `lines` that may be a new person writing: the sender is
         not a no-reply address nor the owner's, the mail carries no list mark (`extra.list`), and no
         standing mail line of the record from that address is earlier (by its `at`, then its seq).
         Reads every mail line the index serves up to `last_day` (a local day no line of `lines` is
-        after; None: every one), once (a gated index serves its gate's); writes nothing."""
+        after; None: every one) at `tiers` (None: every tier), once (a gated index serves its gate's);
+        writes nothing. A crossing passes its own tiers, so a mail that does not cross there makes no
+        sender a known one there."""
         wanted: dict[str, list[tuple[datetime, int, str]]] = {}
         for line in lines:
             payload = line.get("payload")
@@ -413,6 +436,8 @@ class Rule:
             sender = _address(payload.get("from")) if isinstance(payload, dict) else None
             at = stays.instant(line.get("at"))
             if sender is None or at is None or id_ in retracted or id_ in superseded:
+                continue
+            if tiers is not None and int(line.get("tier") or 0) not in tiers:
                 continue
             key = sender.casefold()
             if key in wanted:

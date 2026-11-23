@@ -442,15 +442,20 @@ def all_except_junk(
     """RFC 0045's third mode: `lines` (opened) with every mail the destination's `mail_junk` rule holds
     left out (`peoples_mail.Rule.junk`), and the counts (`peoples_mail.held_counts`: held, by reason,
     how many a first-time sender's); None when there was no mail to read. Counts only: no address, no
-    subject, no name, and nothing of the portfolio the rule read to decide."""
+    subject, no name, and nothing of the portfolio the rule read to decide. Held mail answers only at
+    the request's tiers, like every other line: a resolution above them names no person here, and a mail
+    above them makes no sender a known one (`Rule.first_times`), so nothing above the tiers moves a mail
+    or a count (the portfolio the caller read at the same tiers, `orgs.portfolio_refs`)."""
     if req.junk is None or not any(line.get("kind") == peoples_mail.KIND for line in lines):
         return lines, None
+    at_tiers = [line for line in resolutions if int(line.get("tier") or 0) in req.tiers]
     try:
-        rule = peoples_mail.Rule.of(lb, marks, resolutions, kept=req.kept, portfolio=req.portfolio)
+        rule = peoples_mail.Rule.of(lb, marks, at_tiers, kept=req.kept, portfolio=req.portfolio)
     except policy.PolicyError as e:
         raise CrossingError(str(e)) from e
     with lb.index() as idx:
-        verdicts = rule.verdicts(idx, lines, req.junk)
+        first = rule.first_times(idx, lines, tiers=req.tiers)
+        verdicts = rule.verdicts(idx, lines, req.junk, first)
     held = {v.id for v in verdicts if v.held}
     return [line for line in lines if str(line.get("id")) not in held], peoples_mail.held_counts(verdicts)
 

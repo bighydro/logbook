@@ -79,7 +79,8 @@ of its `labels` is one of `labels` (case aside), and nothing spares it:
 - its sender is an invitation platform (`paperlesspost.com`, `evite.com`, `partiful.com`, `lu.ma`,
   `eventbrite.com`, `greenvelope.com`, `punchbowl.com`, `zola.com`, `withjoy.com`, or a domain under one);
 - its sender is bound to an org a portfolio holds (read on this machine to decide; the portfolio is never
-  written in the package, printed or counted by name);
+  written in the package, printed or counted by name). A portfolio is a tier-3 status line, so only a
+  crossing with `--tier 1,2,3` reads one;
 - Hold keeps its sender (`keep`, RFC 0042 §4; Hold writes no fates yet, so nothing is kept yet).
 
 A sender Hold let go is held whatever spares it. A mail you sent always crosses, and a mail with neither a
@@ -91,7 +92,9 @@ and nothing is exported. With one, the manifest's `policy` says `"mail": "all-ex
 says how many mails were held back (`mail_held_back`), by reason (`mail_held_by_reason`: `let_go`,
 `junk_category`, `junk_label`) and how many of those were from a first-time sender
 (`mail_held_first_time`: no earlier mail from the address in the record, not a no-reply address, not a
-list's mail): counts only, never an address, a subject or a name. The dry run prints the same counts:
+list's mail): counts only, never an address, a subject or a name. Held mail answers only at the tiers the
+crossing asks for, like every other line: a person named only above them, an earlier mail above them and a
+portfolio above them move no mail and no count. The dry run prints the same counts:
 
 ```
   7 mail(s) held back by your mail_junk rule: 0 let go in Hold, 5 junk by category, 2 junk by label; 3 from a first-time sender (--mail all sends them)

@@ -13,6 +13,7 @@ would make up its own."""
 from __future__ import annotations
 
 import json
+import logging
 import re
 from pathlib import Path
 from typing import Any
@@ -327,10 +328,17 @@ def _crossed(out: Path) -> set[str]:
     return {json.loads(row)["id"] for row in text.splitlines() if row.strip()}
 
 
+def _tier_3(lb: Logbook) -> None:
+    """The destination's entry raised to tier 3, so a crossing of tiers 1 to 3 reads the portfolio (a
+    tier-3 status line) as the owner's rule asks; below it the crossing reads none (the door's rule)."""
+    _write_policy(lb, {DESTINATION: {"max_tier": 3, peoples_mail.JUNK_KEY: RULE}, "kari": {"max_tier": 2}})
+
+
 def test_all_except_junk_sends_every_mail_but_junk_and_counts_by_reason(lb: Logbook, tmp_path: Path) -> None:
     mails = _day_mails(lb)
     out = tmp_path / "out"
-    _export(out, "--mail", "all-except-junk")
+    _tier_3(lb)
+    _export(out, "--mail", "all-except-junk", "--tier", "1,2,3")
     assert _crossed(out) == {str(line["id"]) for name, line in mails.items() if name not in HELD}
     manifest = _manifest(out)
     assert manifest["policy"]["mail"] == "all-except-junk"
@@ -346,8 +354,9 @@ def test_all_except_junk_sends_every_mail_but_junk_and_counts_by_reason(lb: Logb
 
 
 def test_the_dry_run_prints_the_same_counts(lb: Logbook, capsys: pytest.CaptureFixture[str]) -> None:
+    _tier_3(lb)
     cli.main(["export", "crossing", "--to", DESTINATION, "--since", SINCE, "--until", UNTIL,
-              "--tier", "1,2", "--mail", "all-except-junk", "--dry-run"])  # fmt: skip
+              "--tier", "1,2,3", "--mail", "all-except-junk", "--dry-run"])  # fmt: skip
     text = capsys.readouterr().out
     assert (
         "7 mail(s) held back by your mail_junk rule: 0 let go in Hold, 5 junk by category, 2 junk by label;"
@@ -401,8 +410,9 @@ def test_people_mode_is_what_it_was(lb: Logbook, tmp_path: Path) -> None:
 
 
 def _door(lb: Logbook, mcp_tier: int, allow_tier_3: bool = False, **arguments: str) -> dict[str, Any]:
+    """`held_mail` through the door, the `mcp` entry naming it (`"held_mail": true`) at `mcp_tier`."""
     _write_policy(lb, {DESTINATION: {"max_tier": 2, peoples_mail.JUNK_KEY: RULE}, "kari": {"max_tier": 2},
-                       "mcp": {"max_tier": mcp_tier}})  # fmt: skip
+                       "mcp": {"max_tier": mcp_tier, peoples_mail.DOOR_KEY: True}})  # fmt: skip
     return mcp_server.call(lb.root, "held_mail", {"day": DAY, **arguments}, allow_tier_3=allow_tier_3)
 
 
@@ -416,13 +426,15 @@ def test_the_door_says_per_mail_whether_it_would_be_held(lb: Logbook) -> None:
     assert by_name["club_imap"] == {"id": by_name["club_imap"]["id"], "held": True, "reason": "junk_label",
                                     "first_time": True}  # fmt: skip
     assert found["held"] == len(HELD) and found["first_time"] == len(FIRST_TIME_HELD)
-    assert answer["data"]["above_ceiling"] == 0
+    assert "above_ceiling" not in answer["data"]
     _no_one_in(json.dumps(answer))
 
 
 def test_the_door_never_reveals_a_mail_the_gate_withholds(lb: Logbook) -> None:
     """The ceiling at 1: one tier-1 mail is judged; the day's tier-2 mails are not listed, not counted
-    among the held, and only counted above the ceiling, nothing of them crossing, not even an id."""
+    among the held, and not counted at all, above the ceiling or in the gate's withheld (the owner, after
+    #465: held mail above the entry's tiers is absent, not counted, not hinted at), nothing of them
+    crossing, not even an id."""
     tier1 = lb.append(
         **_mail("2026-03-01T10:00:00Z", "deals@outlet.example.org", category="promotions", tier=1)
     )
@@ -430,7 +442,8 @@ def test_the_door_never_reveals_a_mail_the_gate_withholds(lb: Logbook) -> None:
     (found,) = answer["data"]["destinations"]
     assert [m["id"] for m in found["mails"]] == [str(tier1["id"])]
     assert found["mails"][0]["held"] is True and found["held"] == 1
-    assert answer["data"]["above_ceiling"] == len(MAILS)
+    assert "above_ceiling" not in answer["data"]
+    assert answer["gate"]["withheld"] == 0
     text = json.dumps(answer)
     assert all(str(line["id"]) not in text for line in _day_mails(lb).values())
 
@@ -449,6 +462,74 @@ def test_below_tier_three_the_door_tells_no_portfolio(lb: Logbook) -> None:
 def test_the_door_refuses_a_destination_without_a_rule(lb: Logbook) -> None:
     with pytest.raises(mcp_server.ToolError, match="no mail_junk rule"):
         _door(lb, 2, destination="kari")
+
+
+def test_the_door_answers_held_mail_only_when_its_entry_names_it(lb: Logbook) -> None:
+    """Held mail through the door only when the `mcp` entry names it (`"held_mail": true`), as a write
+    tool is named under `write`: otherwise it is absent, the refusal one sentence that names the key and
+    the file and says nothing of the day's mail, not an id, not a count."""
+    for entry in ({"max_tier": 2}, {"max_tier": 2, peoples_mail.DOOR_KEY: False}):
+        _write_policy(lb, {DESTINATION: {"max_tier": 2, peoples_mail.JUNK_KEY: RULE}, "mcp": entry})
+        with pytest.raises(mcp_server.ToolError) as refused:
+            mcp_server.call(lb.root, "held_mail", {"day": DAY})
+        text = str(refused.value)
+        assert f'"{peoples_mail.DOOR_KEY}": true' in text and "crossing.json" in text
+        assert not re.search(r"\d", text.replace("crossing.json", "")), text
+    _write_policy(lb, {DESTINATION: {"max_tier": 2, peoples_mail.JUNK_KEY: RULE},
+                       "mcp": {"max_tier": 2, peoples_mail.DOOR_KEY: "yes"}})  # fmt: skip
+    with pytest.raises(mcp_server.ToolError, match=r"crossing\.json"):
+        mcp_server.call(lb.root, "held_mail", {"day": DAY})
+    assert _door(lb, 2)["data"]["destinations"]
+
+
+def test_held_mail_above_the_door_s_ceiling_leaves_no_trace_in_the_log(
+    lb: Logbook, caplog: pytest.LogCaptureFixture
+) -> None:
+    """The log line of a call counts what the answer holds and what the gate withheld: for held mail at
+    a ceiling below the day's mails, nothing is withheld that the log could count."""
+    caplog.set_level(logging.INFO, logger="logbook.mcp")
+    _door(lb, 1)
+    (logged,) = [r.getMessage() for r in caplog.records if r.name == "logbook.mcp"]
+    assert logged.startswith("held_mail") and "withheld=0" in logged and "above" not in logged
+
+
+HEMMELIG, HEMMELIG_ID = "per.hemmelig@example.org", "019cadd3-6bc0-7dcd-9133-04aa00000005"
+
+
+def test_a_crossing_below_tier_three_reads_no_portfolio(lb: Logbook, tmp_path: Path) -> None:
+    """The portfolio is a tier-3 status line: a crossing of tiers 1 and 2 reads none, so the org's
+    promotion is held like any other, and the counts tell nothing of the portfolio."""
+    out = tmp_path / "out"
+    _export(out, "--mail", "all-except-junk")
+    robotics = str(_day_mails(lb)["robotics"]["id"])
+    assert robotics not in _crossed(out)
+    counts = _manifest(out)["counts"]
+    assert counts["mail_held_back"] == len(HELD) + 1
+    assert counts["mail_held_by_reason"]["junk_category"] == 6
+
+
+def test_a_crossing_judges_a_first_time_sender_by_the_mails_at_its_tiers(lb: Logbook, tmp_path: Path) -> None:
+    """An earlier mail from the shop at tier 3 does not cross to a destination of tiers 1 and 2, so it
+    does not make the shop's mail of the day a known sender's there: the count is what it was."""
+    _export(tmp_path / "before", "--mail", "all-except-junk")
+    lb.append(**_mail("2026-02-25T09:00:00Z", SHOP, category="promotions", tier=3))
+    _export(tmp_path / "after", "--mail", "all-except-junk")
+    before = _manifest(tmp_path / "before")["counts"]["mail_held_first_time"]
+    assert _manifest(tmp_path / "after")["counts"]["mail_held_first_time"] == before
+
+
+def test_a_person_named_above_the_crossing_s_tiers_spares_no_mail(lb: Logbook, tmp_path: Path) -> None:
+    """Per Hemmelig is a person only on a tier-3 resolution: to a destination of tiers 1 and 2 their
+    promotion is a stranger's and held; with tier 3 asked for, it is a person's and crosses."""
+    secret = _resolution(HEMMELIG, "Per Hemmelig", HEMMELIG_ID)
+    secret["tier"] = 3
+    lb.append(**secret)
+    mail = lb.append(**_mail("2026-03-01T11:00:00Z", HEMMELIG, category="promotions"))
+    _export(tmp_path / "low", "--mail", "all-except-junk")
+    assert str(mail["id"]) not in _crossed(tmp_path / "low")
+    _tier_3(lb)
+    _export(tmp_path / "high", "--mail", "all-except-junk", "--tier", "1,2,3")
+    assert str(mail["id"]) in _crossed(tmp_path / "high")
 
 
 # -- day sign -------------------------------------------------------------------------------------------

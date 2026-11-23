@@ -43,7 +43,7 @@ import json
 import os
 import re
 from collections import Counter
-from collections.abc import Collection, Iterator, Mapping, Sequence
+from collections.abc import Collection, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import date
 from typing import Any
@@ -864,18 +864,24 @@ class Page:
         }
 
 
-def portfolio_refs(lb: Logbook) -> frozenset[Ref]:
+def portfolio_refs(lb: Logbook, tiers: Collection[int] | None = None) -> frozenset[Ref]:
     """The refs bound to an org a portfolio holds (`entities.portfolios`, `entities.bindings`): its
     domains and addresses, for the mail rule of RFC 0045's all except junk to spare (`peoples_mail.Rule
     .portfolio`). Read through `lb.index()`, so a gated record (the door's) reads only the status lines
-    its gate shows, and below tier 3 finds no portfolio at all. The answer decides on this machine and
-    goes nowhere: never written, never printed, never counted by name."""
+    its gate shows, and below tier 3 finds no portfolio at all; `tiers` holds a crossing to its own the
+    same way (None: every tier, the owner's own reading), so held mail answers only at the tiers asked
+    for. The answer decides on this machine and goes nowhere: never written, never printed, never
+    counted by name."""
+
+    def at(lines: Iterable[Line]) -> list[Line]:
+        return [line for line in lines if tiers is None or int(line.get("tier") or 0) in tiers]
+
     with lb.index() as idx:
         marks = idx.retractions()
-        held = entities.portfolios([*marks, *idx.by_kind(entities.STATUS)])
+        held = entities.portfolios([*marks, *at(idx.by_kind(entities.STATUS))])
         if not held:
             return frozenset()
-        named = [*marks, *idx.resolutions(), *idx.by_kind(entities.ENTITY)]
+        named = [*marks, *at(idx.resolutions()), *at(idx.by_kind(entities.ENTITY))]
     found: set[Ref] = set()
     for (ref_kind, value), (kind, entity_id) in entities.bindings(named).items():
         if kind != ORG or entity_id not in held:
