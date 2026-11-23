@@ -377,7 +377,7 @@ def test_the_crossing_rule_reads_the_fates_given(lb: Logbook) -> None:
     assert held == 4 and [line["payload"]["from"]["email"] for line in kept] == [OLA_EMAIL]
 
 
-# -- the fates under all except junk (RFC 0045, amendment of 20 November 2026) --------------------------------
+# -- the fates under all except junk (RFC 0045, amendment of 20 November 2026) -------------------------------
 
 JUNK_RULE = {"categories": ["promotions"]}
 
