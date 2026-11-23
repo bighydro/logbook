@@ -132,6 +132,11 @@ An org's portfolio is tier 3: below it no portfolio spares an org's mail here, s
 org's mail would be held that the crossing, which reads every tier, sends; it never tells which orgs a
 portfolio holds.
 
+The senders you keep or let go in Hold ([sender fates](hold.md#sender-fates)) are read with the rule, as
+the crossing reads them: a sender let go is held (`let_go`), one kept is never junk. The answer never
+names a sender; the tool writes no fate, and no other tool does: a sender is kept by you, on the Day page
+or with `logbook hold sender`.
+
 Every answer is one JSON text:
 
 ```json
