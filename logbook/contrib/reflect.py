@@ -64,7 +64,7 @@ from ..core.drafts import KIND as DRAFT_KIND
 from ..core.drafts import is_pencil
 from ..core.export import parse_day
 from ..core.store import RETRACTION, HeadMoved, Logbook, retractions
-from . import dream_events, keep, promises
+from . import dream_events, held_mail, keep, promises
 
 SOURCE = "reflect"  # the `source` of the lines `day reflect` writes
 CUE = "reflect"  # the word a Wispr Flow dictation begins with when it is the reflection
@@ -853,6 +853,7 @@ def close(
     first: int = 1,
     keeping: keep.Asked | None = None,
     tiers: Sequence[int] | None = None,
+    senders: Sequence[tuple[str, str]] = (),
 ) -> Closed:
     """The day closed: `day reflect --sign`, and the Sign of the Day page. Under one hold of the
     writer lock: the page read again (a disposition's line retracted since the proposals were read
@@ -862,7 +863,9 @@ def close(
     `tiers` when the Day page reads through one) checked and made, the reflection
     written when it is new (`write`), the accepted events as event lines (`dream_events.write`), what
     is kept (`keep.write`), the accepted delegations written as notes (`delegate`), in RFC 0043 §5's
-    order, then the signature through `signing.sign` with what `signature` says, never a pencil line
+    order, the senders of the day's mail held back that the owner keeps (`senders`, `held_mail.checked`
+    before the first line and `held_mail.write` after the delegations, each a `keep` fate the signature
+    confirms), then the signature through `signing.sign` with what `signature` says, never a pencil line
     confirmed (`ink`), at `at` or now. `say` hears what the command prints as it goes. HeadMoved and
     another writer are the store's own errors; nothing is retried. A head moved while all of it was
     read and checked (by a writer that did not take the lock) is HeadMoved before the first line, and
@@ -877,6 +880,7 @@ def close(
             raise ReflectError(f"#{gone[0].seq} is no longer on the page of {day}; nothing was written")
         prepared = dream_events.prepared(lb, day, events, first)
         items = keep.prepared(lb, day, keeping, tiers) if keeping else []
+        kept_senders = held_mail.checked(lb, day, senders, tiers)
         with lb.index() as idx:
             earlier = signing.signature_of(idx, day, str(lb.meta["owner_id"]))
         now = lb.meta
@@ -908,6 +912,9 @@ def close(
                 joined.append(str(line["id"]))
                 delegations.append(line)
                 say(f"wrote delegation {p.number} to {p.counterpart} as #{line['seq']} {notes.SCHEMA}")
+        for line in held_mail.write(lb, kept_senders, keep.moment(lb, day, today, at)):
+            joined.append(str(line["id"]))
+            say(held_mail.wrote_text(line))
         args = signature(earlier, page | set(joined), joined, accepted, pencil(day_lines(lb, day)[0]))
         if args.kept is not None:
             say(f"  {args.kept}")

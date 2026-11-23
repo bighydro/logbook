@@ -201,6 +201,7 @@ from . import (
     entity_review,
     entity_status,
     gaps,
+    held_mail,
     ideas,
     journeys,
     keep,
@@ -1282,6 +1283,7 @@ class Site:
             day, today = self._closing_day(day)
             wanted = reflect.numbers(form.get("accept") or reflect.NONE)
             asking, answering = _keeping(form)
+            senders = held_mail.refs((form.get("sender") or "").split(","))
         except ValueError as e:
             return self._error(400, str(e))
         with self._write_lock:
@@ -1316,8 +1318,15 @@ class Site:
                                 " it stands, and nothing was written"
                             )
                         asking = dataclasses.replace(asking, tasks=_numbered(day, plan_now, answering))
+                    if senders and form.get("held", "") != held_mail.read(self.lb, day, self.tiers).digest:
+                        raise Stale(
+                            f"the mail held back on {day} changed since this page was read; /day/{day} is"
+                            " the day as it stands, and nothing was written"
+                        )
                     accepted = reflect.chosen(found.proposals, wanted)
-                    reflect.close(self.lb, day, today, r, accepted, keeping=asking, tiers=self.tiers)
+                    reflect.close(
+                        self.lb, day, today, r, accepted, keeping=asking, tiers=self.tiers, senders=senders
+                    )
             except (HeadMoved, Stale) as e:
                 return self._error(409, str(e))
             except ValueError as e:  # ReflectError, SignError, NoteError
@@ -2882,10 +2891,67 @@ class Site:
                 " lines it confirms."
             )
             button = "Sign again"
+        if keeping:
+            out.append(self._held_html(day))
         out.append(f'<p class="mute">{escape(said)}</p>\n')
         if keeping:
             out.append(_keep_cli_html(day))
         out.append(f'<button name="act" value="{SIGN}">{button}</button>\n</form>\n')
+        return "".join(out)
+
+    def _held_html(self, day: str) -> str:
+        """Held back (RFC 0045, all except junk), in Keep and sign after the delegations: for every
+        destination whose policy entry has a `mail_junk` rule and held some of the day's mail, its
+        heading with no number beside it, the first-time senders (address and subject, a keep box
+        each), then the other senders, one row each by address or domain with how many mails and a
+        box (`held_mail.read`, through the page's gate). Only when the day held something; a policy file
+        that cannot be read is said, and nothing is offered. A box ticked keeps the sender, written
+        before the signature; untouched, the mail stays home. Nothing is fetched: an address is text."""
+        found = held_mail.read(self.lb, day, self.tiers)
+        if not found.shown:
+            return ""
+        out = [
+            f'<fieldset class="held-mail">\n<legend>Held back</legend>\n'
+            f'<input type="hidden" name="held" value="{escape(found.digest)}">\n'
+        ]
+        if found.problem is not None:
+            out.append(f'<p class="mute">{escape(found.problem)}</p>\n</fieldset>\n')
+            return "".join(out)
+        out.append(
+            '<p class="mute">mail your own junk rules keep home from a crossing; tick a sender to keep it,'
+            " and its mail crosses from now on, this day's too. Untouched, it stays home.</p>\n"
+        )
+        for h in found.held:
+            out.append(f"<h3>{escape(h.destination)}</h3>\n")
+            if h.problem is not None:
+                out.append(f'<p class="mute">{escape(h.problem)}</p>\n')
+                continue
+            if h.first:
+                out.append('<p class="mute">writing for the first time:</p>\n<ul class="plain first">\n')
+                ticked: set[str] = set()
+                for f in h.first:
+                    box = ""
+                    if f.sender not in ticked:
+                        ticked.add(f.sender)
+                        value = escape(f"email:{f.sender}")
+                        box = f'<input type="checkbox" name="sender" value="{value}"> keep '
+                    out.append(
+                        f"<li><label>{box}<span><code>{escape(f.sender)}</code>"
+                        f" {escape(f.subject, quote=False)}</span></label></li>\n"
+                    )
+                out.append("</ul>\n")
+            if h.others:
+                out.append('<ul class="plain senders">\n')
+                for sender in h.others:
+                    kind, value = sender.ref
+                    n, tick = sender.mails, escape(f"{kind}:{value}")
+                    out.append(
+                        f'<li><label><input type="checkbox" name="sender" value="{tick}">'
+                        f" keep <span><code>{escape(value)}</code>"
+                        f" <small>({n} mail{'s' if n != 1 else ''})</small></span></label></li>\n"
+                    )
+                out.append("</ul>\n")
+        out.append("</fieldset>\n")
         return "".join(out)
 
     def _sign_hidden_html(self, day: str, found: Closing, keeping: bool) -> str:
@@ -2899,7 +2965,8 @@ class Site:
             button = "Sign"
         else:
             said, button = "Sign again, and the new signature supersedes the one standing.", "Sign again"
-        out = [f'<p class="mute">{escape(said)}</p>\n']
+        out = [self._held_html(day)] if keeping else []
+        out.append(f'<p class="mute">{escape(said)}</p>\n')
         if keeping:
             out.append(_keep_cli_html(day))
         out.append(f'<button name="act" value="{SIGN}">{button}</button>\n</form>\n')
